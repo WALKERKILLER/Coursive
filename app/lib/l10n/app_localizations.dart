@@ -118,11 +118,11 @@ abstract class AppLocalizations {
   /// **'高'**
   String get levelHigh;
 
-  /// No description provided for @colorAzureBlue.
+  /// No description provided for @colorAzure.
   ///
   /// In zh, this message translates to:
   /// **'湛蓝'**
-  String get colorAzureBlue;
+  String get colorAzure;
 
   /// No description provided for @colorIndigo.
   ///

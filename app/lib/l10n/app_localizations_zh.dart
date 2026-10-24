@@ -22,7 +22,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get levelHigh => '高';
 
   @override
-  String get colorAzureBlue => '湛蓝';
+  String get colorAzure => '湛蓝';
 
   @override
   String get colorIndigo => '黛青';

@@ -142,7 +142,7 @@ class UiPrefs extends ChangeNotifier {
 
 /// Curated seed colors shown in the appearance picker.
 final kSeedPalette = <(String, Color)>[
-  (l10n.colorAzureBlue, Color(0xFF3F6CB4)),
+  (l10n.colorAzure, Color(0xFF3F6CB4)),
   (l10n.colorIndigo, Color(0xFF2E6E6A)),
   (l10n.colorPine, Color(0xFF4F7A3A)),
   (l10n.colorAmber, Color(0xFFB0782A)),
