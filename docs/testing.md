@@ -1,0 +1,45 @@
+# Testing policy
+
+Tests are executable evidence that a meaningful regression becomes visible before delivery. Optimize for risk-adjusted signal over the test's lifetime, not test count, line coverage, or assertion volume. Repository-wide entry commands live in the root [AGENTS.md](../AGENTS.md); this document owns test selection and topology.
+
+## Test selection
+
+Name the behavior or invariant at risk before writing a test. Choose the lowest boundary that can observe it with production-like composition: pure decisions belong in unit tests, module contracts and stateful boundaries in integration tests, and public entry points or cross-system flows in end-to-end tests. One behavior has one primary evidence home; add defense in depth only when a public contract, security boundary, migration, escaped incident, or similarly costly risk justifies the duplication.
+
+| Risk shape | Primary evidence |
+|---|---|
+| Pure logic, decisions, and state transitions | Focused unit tests at the owning code area |
+| Module contracts, persistence, files, queues, or framework composition | Integration tests with real owned modules and only unstable external boundaries replaced |
+| Public CLI/API/UI entry points and cross-system flows | End-to-end tests through the shipped entry point with externally inspected results |
+| Security boundaries, migrations, and escaped incidents | The lowest sufficient primary test plus narrowly justified defense in depth |
+
+## Test topology
+
+- **Go (daemon)**: `*_test.go` beside the owning package. External services are replaced by `net/http/httptest` servers inside the test; fixtures live in the test file or `t.TempDir()`. CI adds `-race`.
+- **Source providers**: the daemon side of the protocol is tested against a fake provider executable built in the test; each provider tests its own platform client against recorded or fake servers in its plugin repository, never against a live account in CI.
+- **Flutter (app)**: `app/test/*_test.dart`, run by `flutter test`. Pages take an injectable fetch function or a stubbed API so widget tests need no daemon.
+- **Agent host**: colocated `src/*.test.mjs` files run by `node --test`, with fixtures in `os.tmpdir()`.
+- **Brand assets**: [check-brand-assets.mjs](../scripts/check-brand-assets.mjs) proves the exports were generated from the current master.
+- **Absent tiers**: there is no app–daemon process integration test and no end-to-end test against live external services; live checks are manual. Each migrated module records its own absent tiers here.
+
+Follow the ecosystem's discoverable convention rather than forcing a universal tree. Colocated unit tests are valid where idiomatic; cross-module and system tests belong in clearly named repository-level roots. Keep a fixture beside the test that owns it and promote it to shared infrastructure only when multiple contracts genuinely share it.
+
+## Evidence rules
+
+- Assert observable outcomes: return values, errors, persisted state, files, process exit status, rendered output, or externally visible side effects. Internal call counts and private ordering are evidence only when they are themselves a contract.
+- Test the real entry path where packaging, process setup, configuration, or wiring can fail. A hand-wired harness cannot prove the shipped entry point works.
+- Mock only expensive or non-deterministic boundaries such as the network, clock, or an external API; keep owned composition downstream of that boundary real.
+- Select representative equivalence classes, boundaries, invalid inputs, state transitions, and recovery points instead of enumerating incidental examples.
+- A regression test fails for the escaped behavior before the fix and passes afterward. It proves the cause, not merely that some nearby output changed.
+- When a change should preserve a file or state, assert it remains byte-identical or semantically identical as the contract requires.
+
+## Maintenance budget
+
+- Coverage reports locate unobserved code; they are not a target and do not establish test quality.
+- Remove or merge tests when their behavior disappears, another test becomes the primary evidence, or they constrain implementation without protecting a contract.
+- A flaky test is a broken signal. Fix its uncontrolled boundary or quarantine it with an owner and repair condition; never normalize blind retries.
+- Keep the fast path focused enough for local use. Expensive techniques such as fuzzing, mutation, visual regression, load testing, and large environment matrices require a repository risk that pays for their continuing cost.
+
+## When a test is required
+
+Every behavior change adds or updates the smallest test set that proves its affected contract. Every bug fix carries a regression test unless the failure is already deterministically reproduced by an existing test; document that existing evidence when no new test is needed. Documentation-only and mechanical changes use the relevant semantic review and gates rather than manufacturing behavior tests.

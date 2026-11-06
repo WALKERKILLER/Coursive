@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Each migrated module (app, daemon, agent) adds its job here, gated on the
+# paths it owns, together with its entry in the main ruleset's required checks.
+jobs:
+  governance:
+    name: governance (gates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: node scripts/run-gates.mjs
+      - name: Brand exports match the master
+        run: node scripts/check-brand-assets.mjs

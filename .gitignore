@@ -1,0 +1,21 @@
+# Dependencies and build outputs
+node_modules/
+build/
+dist/
+bin/
+
+# Runtime data stays outside the repo; never commit local state
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+.env.*
+session.json
+seal.key
+
+# Editors
+.idea/
+.vscode/
+*.iml
+.DS_Store
