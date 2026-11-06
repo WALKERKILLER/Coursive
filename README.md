@@ -70,12 +70,12 @@ Coursive keeps your courses on your own device, turns them into searchable, link
 
 ### From Releases
 
-Pre-release packages will appear on [Releases](https://github.com/WALKERKILLER/Coursive/releases) from the first pre-release on:
+Packages are attached to each release and pre-release on [Releases](https://github.com/WALKERKILLER/Coursive/releases):
 
 - **Linux**: AppImage, deb, rpm, Arch package and tarball, for x64 and arm64.
 - **Windows**: installer and portable zip.
-- **macOS**: dmg and zip.
-- **Android**: one APK per ABI (arm64-v8a, x86_64).
+- **macOS**: dmg and zip. The app is not notarized: the first time, right-click it and choose Open.
+- **Android**: one APK per ABI (arm64-v8a, x86_64). Pre-release APKs are signed with a temporary key, so installing a later one needs an uninstall first, which removes the app's data.
 
 ### From Source
 

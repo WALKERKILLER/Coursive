@@ -82,6 +82,6 @@ Follow [docs/testing.md](docs/testing.md). Name the regression risk, then choose
 
 ## Enabled optional capabilities
 
-- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes.
+- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes. Publishing a `v*` release or pre-release builds the Linux, Windows, macOS and Android packages and attaches them through [.github/workflows/release.yml](.github/workflows/release.yml).
 - Path-level owners live in [CODEOWNERS](CODEOWNERS). The `main` branch ruleset requires an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request.
 - Security vulnerabilities are reported per [SECURITY.md](SECURITY.md).

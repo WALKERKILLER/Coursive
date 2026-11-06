@@ -20,7 +20,7 @@ Coursive's code comes from a predecessor project and moves here as it is refacto
    - move plugin install state and consent into the daemon and add the marketplace, mirrors and speed test;
    - apply the [renames](#renames).
 5. **Merge into `main`** (done 2026-11-06 in #5): `git merge --allow-unrelated-histories import/app` as one merge commit; the daemon, assistant-host, app and Linux-build jobs are required checks.
-6. **First release** (current): the release workflow (restored from the imported history with `vX.Y.Z` tags), signing keys and the first `v0.x` pre-release.
+6. **First release** (current): the release workflow, restored from the imported history with `vX.Y.Z` tags, and the first `v0.x` pre-release; the Android signing key and the plugin-index signing key follow.
 
 ## History
 
