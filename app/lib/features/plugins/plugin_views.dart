@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api.dart';
 import '../../core/plugins.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../widgets/states.dart';
 import '../library/note_reader.dart' show openRef;
 import '../practice/quiz.dart' show askInSheet;
@@ -22,7 +22,7 @@ final Map<String, PluginViewBuilder> pluginViewBuilders = {
   'checklist': (context, data) => ChecklistView(data: data),
 };
 
-/// A view from a tool result, an action or a `look-view` block.
+/// A view from a tool result, an action or a `coursive-view` block.
 class PluginView extends StatelessWidget {
   const PluginView({super.key, required this.view});
   final Map<String, dynamic> view;
@@ -72,7 +72,7 @@ Future<void> runPluginEntry(BuildContext context, PluginEntry e, Map<String, dyn
       onPrompt != null ? onPrompt('${r['prompt']}') : await askInSheet(context, '${r['prompt']}');
     } else if (r['open'] is String) {
       final url = '${r['open']}';
-      final ref = LookRef.parse(url);
+      final ref = CoursiveRef.parse(url);
       if (ref != null) {
         openRef(context, ref);
       } else if (url.startsWith('https://') || url.startsWith('http://')) {
@@ -174,10 +174,10 @@ class _UnknownView extends StatelessWidget {
   }
 }
 
-/// A fenced ```look-view block (`{"kind": ..., "data": ...}`) in Markdown,
+/// A fenced ```coursive-view block (`{"kind": ..., "data": ...}`) in Markdown,
 /// drawn when an active plugin declares the kind in `contributes.blocks`.
-Widget? lookViewBlock(BuildContext context, String lang, String code) {
-  if (lang != 'look-view') return null;
+Widget? coursiveViewBlock(BuildContext context, String lang, String code) {
+  if (lang != 'coursive-view') return null;
   Object? v;
   try {
     v = jsonDecode(code);

@@ -1,6 +1,6 @@
 {
   "@@locale": "zh",
-  "appTitle": "Look Studio",
+  "appTitle": "Coursive",
   "levelStandard": "标准",
   "levelMedium": "中",
   "levelHigh": "高",
@@ -188,7 +188,7 @@
     }
   },
   "backgroundSyncing": "正在同步数据",
-  "daemonNotFound": "找不到后台服务 lookd。开发环境请先构建：cd lookd && go build -o bin/lookd ./cmd/lookd",
+  "daemonNotFound": "找不到后台服务 coursive-daemon。开发环境请先构建：cd daemon && go build -o bin/coursive-daemon ./cmd/coursive-daemon",
   "daemonCannotReadAppDir": "无法读取应用目录：{e}",
   "@daemonCannotReadAppDir": {
     "placeholders": {
@@ -312,30 +312,11 @@
   "pickerSaveToFolder": "保存到哪个文件夹",
   "pickerFolderPath": "文件夹路径",
   "commonCancel": "取消",
-  "loginHeadline": "课堂录像，\n变成你的知识库。",
-  "loginFeatureDownload": "高速下载录像、PPT 与课件，断点续传",
-  "loginFeatureTranscribe": "自动转写，按时间轴全文检索",
-  "loginFeatureAssistant": "常驻助手帮你梳理每一节课",
-  "loginMissingCredentials": "请输入学号和密码",
   "loginSignInAgain": "重新登录",
   "loginSignIn": "登录",
-  "loginChooseSchool": "选择学校，用统一身份认证账号登录",
-  "loginHintSchoolA": "连接学校 A Look 录课平台（look.schoola.edu.cn）",
-  "loginHintSchoolB": "经学校 B CampusVPN 连接 PlatformB，登录约需半分钟",
-  "loginSchoolsFailed": "无法读取学校列表：{e}",
-  "@loginSchoolsFailed": {
-    "placeholders": {
-      "e": {}
-    }
-  },
-  "loginStudentId": "学号 / 工号",
   "commonPassword": "密码",
   "commonShowPassword": "显示密码",
   "commonHidePassword": "隐藏密码",
-  "loginCaptcha": "验证码",
-  "loginStaySignedIn": "保持登录",
-  "loginStaySignedInHint": "登录过期时自动续期，密码加密保存在本机",
-  "loginPrivacy": "学号和密码只发送给学校的统一身份认证，保持登录时加密保存在本机。",
   "homeGreetingNight": "夜深了",
   "homeGreetingMorning": "早上好",
   "homeGreetingNoon": "中午好",
@@ -351,6 +332,10 @@
   "commonCourses": "课程",
   "homeThisTermCourses": "本学期课程",
   "homeAllCourses": "全部课程",
+  "homeFirstCourseTitle": "添加第一门课",
+  "homeFirstCourseBody": "从本机导入课堂录像，或连接学校的课程平台，就能开始看课、记笔记和复习。",
+  "homeFirstCourseConnect": "连接课程平台",
+  "homeFirstCourseLocal": "录像、转写和笔记都保存在本机",
   "commonLibrary": "课程库",
   "homeGreeting": "{greeting}，",
   "@homeGreeting": {
@@ -360,10 +345,7 @@
   },
   "profileEdit": "编辑个人资料",
   "homeNextQuote": "换一句",
-  "homeStatLecturesSaved": "节已存本地",
   "homeStatStorage": "占用空间",
-  "homeStatSegments": "句转写",
-  "homeStatNotes": "篇笔记",
   "listSeparator": "、",
   "courseLectureCount": "{lectureTotal} 节",
   "@courseLectureCount": {
@@ -371,7 +353,7 @@
       "lectureTotal": {}
     }
   },
-  "coursesSync": "从平台同步",
+  "coursesSync": "从来源同步课程",
   "coursesSearchHint": "搜索课程或老师",
   "coursesAllTerms": "全部学期",
   "coursesHiddenCount": "已隐藏 {hiddenCount}",
@@ -380,7 +362,7 @@
       "hiddenCount": {}
     }
   },
-  "coursesSyncing": "正在同步课程",
+  "coursesSyncing": "正在加载课程",
   "coursesEmptyTerm": "这个学期没有课程",
   "coursesNoMatch": "没有匹配“{text}”的课程",
   "@coursesNoMatch": {
@@ -965,7 +947,7 @@
       "value2": {}
     }
   },
-  "botDefaultName": "小 Look",
+  "botDefaultName": "小 C",
   "chatOpenFailed": "无法打开对话：{e}",
   "@chatOpenFailed": {
     "placeholders": {
@@ -1090,7 +1072,7 @@
   "tasksDeletedSuffix": "（已删除）",
   "commonNewBadge": "新",
   "tasksIntroTitle": "让助手按计划替你做事",
-  "tasksIntroBody": "每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Look Studio 打开时执行；错过的时间可以在 12 小时内启动时补跑。",
+  "tasksIntroBody": "每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Coursive 打开时执行；错过的时间可以在 12 小时内启动时补跑。",
   "tasksFromBlank": "从空白开始",
   "tasksWriteNotes": "保存笔记与大纲",
   "tasksWriteSchedule": "标记与修改日程",
@@ -1132,7 +1114,7 @@
   "commonView": "查看",
   "runtimeReady": "运行环境已就绪",
   "runtimeInstallTitle": "安装助手运行环境",
-  "runtimeIntro": "助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Look Studio 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。",
+  "runtimeIntro": "助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Coursive 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。",
   "runtimeReadFailed": "无法读取运行环境：{error}",
   "@runtimeReadFailed": {
     "placeholders": {
@@ -2080,7 +2062,7 @@
   },
   "asrSourceHfMirror": "无需任何配置。hf-mirror.com 是社区维护的 Hugging Face 镜像，国内大多数网络可以直连，目录里的全部模型都能从这里下载。",
   "asrSourceModelscope": "无需账号或 Token，公开模型直接下载。魔搭上目前只有 Qwen3-ASR 0.6B 和语音检测模型有与原版逐字节相同的副本（社区用户上传），选它们时走魔搭；其余文件自动改用 HF-Mirror，下载时会提示。",
-  "asrSourceHuggingface": "官方源，文件最全，但国内通常需要代理。Look Studio 的后台服务会使用系统的 HTTPS_PROXY 环境变量。",
+  "asrSourceHuggingface": "官方源，文件最全，但国内通常需要代理。Coursive 的后台服务会使用系统的 HTTPS_PROXY 环境变量。",
   "asrSourceCustom": "适合学校、实验室或自建的 Hugging Face 兼容镜像。填写地址模板，'{'repo'}' 会换成模型仓库名，'{'file'}' 换成文件路径，例如 https://hf-mirror.com/'{'repo'}'/resolve/main/'{'file'}'。",
   "asrSourceTemplate": "地址模板",
   "asrEngineSource": "识别引擎（GitHub）",
@@ -2101,7 +2083,7 @@
   },
   "watchCheckStarted": "已开始检查，有变化会马上通知你",
   "watchTitle": "后台自动检查新回放和新课次",
-  "watchBody": "刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；已连接的 Canvas 每 15 分钟同步作业和公告。有变化时立即提醒，课程页也会自动刷新。",
+  "watchBody": "登录来源后自动检查：刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；学习平台每 30 分钟同步作业和通知。有变化时立即提醒，课程页也会自动刷新。",
   "watchAwaiting": "正在等待 {awaiting} 节课的回放",
   "@watchAwaiting": {
     "placeholders": {
@@ -2133,7 +2115,7 @@
       "value3": {}
     }
   },
-  "obsidianConflicts": "{conflicts} 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Look Studio)」副本）",
+  "obsidianConflicts": "{conflicts} 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Coursive)」副本）",
   "@obsidianConflicts": {
     "placeholders": {
       "conflicts": {}
@@ -2147,7 +2129,7 @@
       "e": {}
     }
   },
-  "linkRegistered": "已注册：点击 lookstudio:// 链接会打开 Look Studio",
+  "linkRegistered": "已注册：点击 coursive-app:// 链接会打开 Coursive",
   "linkRegisterPartial": "已写入 {name}，但 xdg-mime 失败：{stderr}",
   "@linkRegisterPartial": {
     "placeholders": {
@@ -2170,7 +2152,7 @@
     }
   },
   "commonAutoSuffix": " · 自动",
-  "obsidianBody": "把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Look Studio；在 Obsidian 里改过的文件不会被覆盖。",
+  "obsidianBody": "把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Coursive；在 Obsidian 里改过的文件不会被覆盖。",
   "commonLocation": "位置",
   "obsidianFolder": "仓库内的文件夹",
   "obsidianFolderHelper": "只写入这个文件夹，仓库里的其他笔记不受影响",
@@ -2180,9 +2162,9 @@
   "obsidianAutoExportHint": "保存或删除笔记后几秒内刷新",
   "commonExporting": "正在导出",
   "commonExportNow": "立即导出",
-  "obsidianBackLinks": "回到 Look Studio",
-  "obsidianBackLinksBody": "导出的时间戳和课次链接是 lookstudio:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。",
-  "linkRegister": "注册 lookstudio:// 链接",
+  "obsidianBackLinks": "回到 Coursive",
+  "obsidianBackLinksBody": "导出的时间戳和课次链接是 coursive-app:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。",
+  "linkRegister": "注册 coursive-app:// 链接",
   "notionSubtitle": "同步到你的 Notion 工作区",
   "commonSyncing": "正在同步…",
   "notionNoParent": "已连接 · 还没选同步位置",
@@ -2207,9 +2189,9 @@
   },
   "notionWorkspace": "工作区",
   "commonNotConnected": "未连接",
-  "notionBody": "把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Look Studio 创建的页面；在 Notion 里改过的页面不会被覆盖。",
+  "notionBody": "把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Coursive 创建的页面；在 Notion 里改过的页面不会被覆盖。",
   "notionCreateIntegration": "创建集成",
-  "notionStep1": "在 Notion 的「集成」页新建一个 Internal 集成，名称填 Look Studio，选择要同步到的工作区",
+  "notionStep1": "在 Notion 的「集成」页新建一个 Internal 集成，名称填 Coursive，选择要同步到的工作区",
   "notionStep2": "在「功能」里保留读取、更新和插入内容，其余可以关闭",
   "notionStep3": "复制「Internal Integration Secret」，粘贴到下面",
   "notionOpenIntegrations": "打开 Notion 集成页",
@@ -2222,7 +2204,7 @@
   "notionParentStep2": "点右上角「···」→「连接」，选择你的集成",
   "notionParentStep3": "回到这里选择这个页面",
   "notionChoosePage": "选择页面",
-  "notionParentHint": "课程库在这个页面下的「Look Studio 课程库」里",
+  "notionParentHint": "课程库在这个页面下的「Coursive 课程库」里",
   "notionOpenInNotion": "在 Notion 中打开",
   "notionIntegration": "集成",
   "notionSecretTail": "集成密钥 ••••{value}",
@@ -2310,7 +2292,7 @@
   "notionShareSteps": "在 Notion 打开目标页面，点右上角「···」→「连接」，选择你的集成，然后刷新。",
   "commonRefresh": "刷新",
   "knowledgeConnectApps": "连接到笔记应用",
-  "knowledgeObsidianSubtitle": "导出到本地仓库，时间戳可点回 Look Studio",
+  "knowledgeObsidianSubtitle": "导出到本地仓库，时间戳可点回 Coursive",
   "knowledgeAutoExportSuffix": " · 自动导出",
   "commonOpen": "打开",
   "knowledgeFolderTemplates": "文件夹命名模板",
@@ -2318,11 +2300,11 @@
   "knowledgeCourseFolder": "课程文件夹",
   "knowledgeLectureFolder": "课次文件夹",
   "knowledgeTemplatesSaved": "模板已保存",
-  "knowledgeSkillExport": "导出为 Coursive 技能格式",
+  "knowledgeSkillExport": "导出为课程笔记技能格式",
   "knowledgeSkillExportHint": "以硬链接生成 raw/<课程>/<节次>/原始数据/ 目录，不额外占空间",
   "knowledgeSkillExportAction": "导出到技能目录",
   "knowledgeTargetFolder": "目标文件夹",
-  "knowledgeTargetFolderHelper": "Coursive 技能所在的文件夹",
+  "knowledgeTargetFolderHelper": "课程笔记技能所在的文件夹",
   "knowledgeExported": "已导出 {value} 节课",
   "@knowledgeExported": {
     "placeholders": {
@@ -2402,8 +2384,8 @@
     }
   },
   "syncInSync": "两边已经一致",
-  "backupTypeLabel": "Look Studio 备份",
-  "backupFileName": "LookStudio-备份-{year}{value}{value2}.zip",
+  "backupTypeLabel": "Coursive 备份",
+  "backupFileName": "Coursive-备份-{year}{value}{value2}.zip",
   "@backupFileName": {
     "placeholders": {
       "year": {},
@@ -2605,14 +2587,9 @@
   "commonCopyAll": "复制全部",
   "diagLogCopied": "已复制日志",
   "diagLogNothing": "后台还没有写下任何记录",
-  "settingsAccount": "账户与学校",
-  "settingsAccountHint": "统一身份认证、Canvas",
-  "authSchoolA": "统一身份认证",
-  "authRenewNow": "立即续期",
-  "authSignOut": "退出登录",
+  "settingsAccount": "账户与来源",
+  "settingsAccountHint": "个人资料、来源插件",
   "settingsProfileKeyword": "昵称和头像",
-  "commonSchool": "学校",
-  "settingsCanvasKeyword": "作业与课件",
   "settingsAppearance": "外观与播放",
   "settingsAppearanceHint": "主题、字体、播放器",
   "settingsDarkMode": "深色模式",
@@ -2677,7 +2654,6 @@
       "value": {}
     }
   },
-  "settingsSchoolCanvas": "学校与 Canvas",
   "settingsAppearanceGroup": "外观",
   "settingsWatchGroup": "通知与自动刷新",
   "commonUnlimited": "不限",
@@ -2700,23 +2676,7 @@
   "streamTeacher": "教师",
   "streamStudent": "学生",
   "settingsStreamHint": "自动：优先屏幕（含 PPT），没有时用第一个画面。",
-  "settingsAccountSummary": "{value} · 学校 A · Canvas",
-  "@settingsAccountSummary": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "authSignedIn": "已登录",
-  "authSignedOut": "未登录",
-  "authRenewing": "正在续期…",
-  "authNeedsSignIn": "需要重新登录",
-  "authMethodPassword": "密码登录",
-  "authMethodSso": "统一认证静默续期",
-  "authMethodSavedPassword": "已保存的密码续期",
-  "authMethodRestored": "从本地会话恢复",
   "profileEditTooltip": "编辑昵称和头像",
-  "schoolSchoolA": "学校 A",
-  "schoolSchoolB": "学校 B",
   "settingsAbout": "关于",
   "settingsAboutHint": "版本、更新和反馈",
   "aboutVersion": "版本 {value}",
@@ -2761,31 +2721,6 @@
       "os": {}
     }
   },
-  "authExpires": "凭证 {value}后到期，会在到期前自动续期",
-  "@authExpires": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "authLastRenewed": "上次续期 {value}（{method}）",
-  "@authLastRenewed": {
-    "placeholders": {
-      "value": {},
-      "method": {}
-    }
-  },
-  "authPasswordSaved": "已在本机加密保存密码，统一认证失效时用于自动登录",
-  "authPasswordNotSaved": "未保存密码：统一认证会话失效后需要手动登录",
-  "authRenewed": "已续期",
-  "authRenewFailed": "续期失败：{e}",
-  "@authRenewFailed": {
-    "placeholders": {
-      "e": {}
-    }
-  },
-  "authSignOutTitle": "退出登录？",
-  "authSignOutBody": "会清除本机保存的会话和密码。已下载的文件不受影响。",
-  "authSignOutAction": "退出",
   "themeSystem": "跟随系统",
   "themeLight": "浅色",
   "themeDark": "深色",
@@ -2965,7 +2900,6 @@
   },
   "scheduleHiddenFromSchedule": "已从日程隐藏",
   "commonDeleted": "已删除",
-  "scheduleOpenInCanvas": "在 Canvas 打开",
   "scheduleHide": "从日程隐藏",
   "scheduleJumpToSource": "跳到老师提到的地方",
   "scheduleNew": "新建日程",
@@ -3007,7 +2941,7 @@
     }
   },
   "coursewareUploadTitle": "上传这节课的课件",
-  "coursewareUploadBody": "Look 不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。",
+  "coursewareUploadBody": "课程来源通常不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。",
   "commonChooseFiles": "选择文件",
   "coursewareParsing": "正在解析…",
   "commonFilesCount": "{length} 个文件",
@@ -3441,7 +3375,7 @@
   "pluginSlotAssignment": "作业页",
   "pluginSlotComposer": "输入框的「+」菜单",
   "pluginsAllowThirdPartyTitle": "允许第三方插件？",
-  "pluginsAllowThirdPartyBody": "第三方插件不是 Look Studio 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。",
+  "pluginsAllowThirdPartyBody": "第三方插件不是 Coursive 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。",
   "commonAllow": "允许",
   "pluginsInstalled": "已安装的插件",
   "pluginsAfterAssistant": "助手启动后可用",
@@ -3503,7 +3437,7 @@
   },
   "pluginsNoMatch": "没有找到插件",
   "pluginsNoMatchBody": "换个关键词，或在「来源」里添加更多插件目录",
-  "pluginsOfficial": "Look Studio 官方",
+  "pluginsOfficial": "Coursive 官方",
   "pluginsMoreHint": "想要更多？允许第三方插件后，可以添加社区的插件目录，或从文件夹、npm、Git 安装。安装前都会列出它需要的权限。",
   "pluginsEmptyBody": "在「发现」里挑几个：换一种方式讲题、把笔记画成导图、连接你常用的工具。",
   "pluginsGoDiscover": "去发现",
@@ -3529,7 +3463,7 @@
       "value": {}
     }
   },
-  "pluginsCatalogHint": "owner/repo 或 https://…/look-catalog.json",
+  "pluginsCatalogHint": "owner/repo 或 https://…/coursive-catalog.json",
   "pluginsFetching": "正在获取插件…",
   "pluginsFetchFailed": "无法获取插件：{value}",
   "@pluginsFetchFailed": {
@@ -3644,110 +3578,10 @@
   },
   "notificationsClose": "关闭通知",
   "notificationsMarkAllRead": "全部已读",
-  "notificationsIntro": "新回放、新课次、Canvas 作业和公告会出现在这里。Look Studio 打开时在后台自动检查。",
+  "notificationsIntro": "新回放、新课次，以及学习平台的作业和通知会出现在这里。应用打开时在后台自动检查。",
   "notificationsEmpty": "暂时没有通知",
   "notificationsEmptyBody": "有新回放或新作业时会第一时间提醒你",
   "notificationsUnread": "未读",
-  "schoolEmblem": "{name}校徽",
-  "@schoolEmblem": {
-    "placeholders": {
-      "name": {}
-    }
-  },
-  "schoolOther": "其他学校",
-  "canvasConnected": "已连接 Canvas，正在同步课程和作业",
-  "canvasDisconnectTitle": "断开 Canvas？",
-  "canvasDisconnectBody": "日程里的 Canvas 作业和课程关联会一起移除，已下载的课件保留。{value}",
-  "@canvasDisconnectBody": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "canvasRevokesToken": "Look Studio 创建的访问令牌也会被撤销。",
-  "canvasConnectTitle": "连接你学校的 Canvas",
-  "canvasConnectBody": "作业会进入日程，截止前一天提醒你；课件可以直接下载到对应课程的文件夹。Look Studio 只读取，不会提交或修改任何内容。",
-  "canvasUrl": "Canvas 地址",
-  "canvasSignInMethod": "登录方式",
-  "canvasAccessToken": "访问令牌",
-  "canvasSchoolBId": "学校 B SSO 学号",
-  "canvasSchoolBPassword": "SSO 密码",
-  "canvasSchoolBPasswordHelper": "用本机密钥加密保存，只用来登录学校 B SSO",
-  "canvasNeedsSchoolA": "需要先在 Look Studio 登录学校 A统一身份认证。",
-  "canvasSchoolATitle": "沿用 Look Studio 的学校 A登录",
-  "canvasSchoolBTitle": "用学校 B SSO 登录 Canvas",
-  "canvasSchoolABody": "不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用和 Look 相同的方式自动续上：先静默单点登录，必要时用你记住的密码。",
-  "canvasSchoolBBody": "不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用保存的 SSO 账号自动重新登录。",
-  "canvasAutoTokenTitle": "由 Look Studio 创建并自动续期",
-  "canvasAutoTokenBody": "通过统一身份认证在你的 Canvas 账户里新建一个 90 天的访问令牌，到期前 14 天自动换新，断开时撤销",
-  "canvasManualToken": "手动获取令牌",
-  "canvasTokenStep1": "打开 Canvas，进入「账户 → 设置」",
-  "canvasTokenStep2": "在「已批准的集成」下点「新建访问许可证」，用途填 Look Studio；过期日期可以留空",
-  "canvasTokenStep3": "复制生成的令牌（只显示一次），粘贴到下面",
-  "canvasOpenSettings": "打开 Canvas 设置页",
-  "canvasTokenHelper": "加密保存在本机，界面上只显示末 4 位。令牌到期或被撤销时会提醒你重新粘贴",
-  "canvasSessionAuth": "统一身份认证会话 · 过期自动续上",
-  "canvasTokenTail": "访问令牌 ····{value}",
-  "@canvasTokenTail": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "canvasAutoRenew": "自动续期",
-  "canvasTokenExpires": "{value}到期 {value2}",
-  "@canvasTokenExpires": {
-    "placeholders": {
-      "value": {},
-      "value2": {}
-    }
-  },
-  "canvasCurrentToken": "当前令牌",
-  "canvasConnectedAs": "已连接为 {value}",
-  "@canvasConnectedAs": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "canvasNotSynced": "还没有同步",
-  "canvasSyncInterval": "每 15 分钟自动同步",
-  "canvasSummary": "{length} 门课程 · {open} 项作业待交",
-  "@canvasSummary": {
-    "placeholders": {
-      "length": {},
-      "open": {}
-    }
-  },
-  "canvasChangeMethod": "更改登录方式",
-  "canvasCourseLinks": "课程关联",
-  "canvasCourseLinksBody": "作业按关联的 Look 课程归类，课件会下载到那门课的文件夹。同名课程会自动关联。",
-  "canvasLoadingCourses": "正在读取课程…",
-  "canvasNoCourses": "这个学期在 Canvas 上没有课程",
-  "canvasLookReplay": "Look 录播",
-  "canvasAnySite": "任意 Canvas 站点，用访问令牌",
-  "canvasNoLink": "不关联",
-  "canvasAutoNoMatch": "自动：未找到同名课程",
-  "canvasAutoMatch": "自动：{title}",
-  "@canvasAutoMatch": {
-    "placeholders": {
-      "title": {}
-    }
-  },
-  "canvasOpenAssignments": "{open} 项作业待交",
-  "@canvasOpenAssignments": {
-    "placeholders": {
-      "open": {}
-    }
-  },
-  "canvasNoOpenAssignments": "没有待交作业",
-  "canvasLinkCourse": "关联到 Look 课程",
-  "canvasAutoLink": "自动匹配同名课程",
-  "canvasSchoolConnected": "{value} Canvas 已连接",
-  "@canvasSchoolConnected": {
-    "placeholders": {
-      "value": {}
-    }
-  },
-  "canvasConnect": "连接 Canvas",
-  "canvasEntryHint": "学校 A、学校 B或其他学校的 Canvas：作业进日程，课件下载到课程文件夹",
   "dateMonthDayTime": "{month}月{day}日 {value}:{value2}",
   "@dateMonthDayTime": {
     "placeholders": {
@@ -3785,28 +3619,12 @@
       "label": {}
     }
   },
-  "canvasAssignmentsTab": "作业 {length}",
-  "@canvasAssignmentsTab": {
-    "placeholders": {
-      "length": {}
-    }
-  },
-  "canvasAnnouncementsTab": "公告 {length}",
-  "@canvasAnnouncementsTab": {
-    "placeholders": {
-      "length": {}
-    }
-  },
-  "canvasSavedToCourse": "已保存到课程文件夹",
   "commonDownloadFailed": "下载失败：{e}",
   "@commonDownloadFailed": {
     "placeholders": {
       "e": {}
     }
   },
-  "canvasAnnouncement": "公告",
-  "canvasNoAssignments": "没有作业",
-  "canvasNoAssignmentsBody": "老师在 Canvas 上布置作业后，会出现在这里和日程里。",
   "assignmentDueShort": "截止 {value}",
   "@assignmentDueShort": {
     "placeholders": {
@@ -3819,21 +3637,8 @@
       "pts": {}
     }
   },
-  "canvasLoadingFiles": "正在读取 Canvas 课件",
-  "canvasNoFiles": "没有可见的课件",
-  "canvasNoFilesBody": "这门课的文件页和单元里都没有你能下载的文件。",
-  "canvasFileUpdated": "{month}月{day}日更新",
-  "@canvasFileUpdated": {
-    "placeholders": {
-      "month": {},
-      "day": {}
-    }
-  },
-  "canvasFileLocked": "老师已锁定",
-  "canvasDownloadToCourse": "下载到课程文件夹",
-  "canvasNoAnnouncements": "最近 30 天没有公告",
   "workspaceTitle": "准备 Linux 工作区",
-  "workspaceBody": "Look Studio 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。",
+  "workspaceBody": "Coursive 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。",
   "workspacePreparing": "正在准备",
   "workspaceStart": "开始准备",
   "workspaceUninstallNote": "需要联网。卸载应用会删除工作区和其中的课程库；可以先在「设置 → 数据与同步」导出备份。",
@@ -3847,7 +3652,6 @@
       "value": {}
     }
   },
-  "shellSessionExpired": "登录已过期，自动续期没有成功。点这里重新登录。",
   "appDaemonFailed": "后台服务无法启动",
   "appRestart": "重新启动",
   "homeDate": "{month}月{day}日 · 周{wd}",
@@ -3943,74 +3747,15 @@
   "aboutTagline": "课堂录像的回放、转写与笔记",
   "aboutPreview": "预览版",
   "aboutLicenses": "开源许可",
-  "aboutLicensesHint": "Look Studio 用到的开源组件",
+  "aboutLicensesHint": "Coursive 用到的开源组件",
   "aboutReward": "赞赏",
   "aboutRewardTitle": "请作者喝杯咖啡",
-  "aboutRewardBody": "觉得 Look Studio 有用，可以用微信扫码赞赏。",
+  "aboutRewardBody": "觉得 Coursive 有用，可以用微信扫码赞赏。",
   "aboutRewardPhoneHint": "在本机上可以先截屏，再在微信「扫一扫」里从相册识别。",
   "aboutRewardImage": "微信赞赏码",
-  "colorAzureBlue": "湛蓝",
   "toolPrepareDownload": "准备下载",
   "toolPrepareTask": "准备定时任务",
   "toolPreparePlugin": "准备开关插件",
-  "loginWithSchoolA": "使用学校 A统一身份认证",
-  "nasTitle": "课程工作台",
-  "nasRunHomework": "运行一轮作业任务",
-  "nasRunCalendar": "刷新 NAS 日历",
-  "nasHomeworkConfirm": "将使用 NAS 已配置的 Codex 服务，处理最多两项符合条件的作业。已有稿件保护和任务锁继续生效。生成完成后仍需检查，不会自动提交。",
-  "nasCalendarConfirm": "请求 NAS 刷新日历。当天已成功同步时，现有程序可能跳过重复更新；不会运行作业生成。",
-  "nasRun": "开始运行",
-  "nasTextTruncated": "仅展示前 12000 字；全文保留在同步目录中。",
-  "nasReady": "已生成，待检查",
-  "nasSubmitted": "平台已提交",
-  "nasFailed": "生成失败",
-  "nasExisting": "已有文件",
-  "nasRunning": "生成中",
-  "nasQueued": "排队中",
-  "nasNeedsInput": "需要补充材料或查看 NAS 运行记录",
-  "nasRefresh": "刷新状态",
-  "nasOnline": "NAS 已连接 · 资料来自本机同步目录",
-  "nasOffline": "NAS 未连接 · 展示已有资料和上次状态",
-  "nasObserved": "NAS 状态采集时间",
-  "nasAllCourses": "全部课程",
-  "nasSearch": "搜索资料与作业",
-  "nasLinkCourse": "关联录播课程",
-  "nasUnlinked": "未关联录播课程",
-  "nasOpenRecording": "打开课程录像",
-  "nasHomework": "作业",
-  "nasDeadlines": "截止日程",
-  "nasMaterials": "资料与成果",
-  "nasServices": "后台服务",
-  "nasSeparateStates": "生成状态与平台提交状态分别显示；生成稿请检查后使用。",
-  "nasUnconfirmed": "提交待确认",
-  "nasDue": "截止",
-  "nasTimeout": "上次生成超过 45 分钟限制，需要处理后重试。",
-  "nasViewSource": "查看学校原页面",
-  "nasNoReport": "暂无已同步的报告入口，可在资料与成果中查找。",
-  "nasServicesHint": "后台任务由 NAS 独立运行，关闭本页面不影响原有定时任务。状态刷新不会启动生成。",
-  "nasServiceState": "服务状态",
-  "nasLastRun": "最近完成",
-  "nasNextRun": "下次计划",
-  "nasEntry": "课程工作台",
-  "nasDeadlineCompleted": "日历标记已完成",
-  "nasHomeworkService": "作业生成",
-  "nasCalendarService": "日历同步定时任务",
-  "nasLectureService": "录课订阅",
-  "nasCalendarContainer": "日历同步运行环境",
-  "nasRelatedFiles": "查看本课程资料与代码",
-  "nasFullFile": "打开完整文件",
-  "nasCalendarSource": "NAS 同步",
-  "nasScanResult": "最近扫描：任务数 / 失败数",
-  "nasCampusOffline": "PlatformB 尚未登录：已同步资料、笔记和 NAS 任务仍可使用。点击登录以获取受保护的录课。",
-  "nasGenerationUnknown": "生成状态未单独记录",
-  "schoolLabel": "学校",
-  "schoolSchoolBLogin": "登录学校 B PlatformB",
-  "schoolSchoolBHint": "在浏览器中完成学校 B统一身份认证，密码仅在学校 B认证页面输入。",
-  "schoolBrowserWaiting": "等待浏览器登录完成",
-  "schoolBrowserLogin": "打开浏览器登录",
-  "schoolSwitching": "正在切换学校…",
-  "schoolReconnectFailed": "学校已保存，但连接尚未恢复，请重新打开应用。",
-  "schoolChange": "切换学校",
   "catalogCourseware": "课件",
   "catalogHomework": "作业",
   "catalogLab": "Lab / 实验",
@@ -4026,23 +3771,6 @@
   "catalogEmpty": "没有符合筛选条件的资料。",
   "catalogSearchHint": "搜索文件名；同时检索文字稿与笔记正文",
   "catalogTitle": "资料 · {count} 项",
-  "catalogFulltextTitle": "正文检索（按课程）· {count} 条",
-  "catalogLoadFailed": "无法读取资料列表：{error}",
-  "reviewStart": "AI 审校",
-  "reviewCancel": "取消审校",
-  "reviewShow": "显示 AI 旁注",
-  "reviewHint": "保留原文，自动检查整节课的疑似识别错误。",
-  "reviewConsent": "将这节课的完整文字稿、课程信息，以及可用的该节课堂 OCR / 课件文字发送给已配置的模型服务。按段检查可能产生模型费用。结果以「AI 推测」旁注显示，原文、字幕和时间戳保持不变；模型推测需要你核对。未完成的同版本审校会从已保存进度继续；重新审校已完成稿会替换已有旁注。",
-  "reviewStale": "文字稿已变化，这份旁注已过期。请重新审校。",
-  "reviewProgress": "正在审校：{done} / {total} 段",
-  "reviewCompleted": "整节课已审校 · {count} 条推测，供核对",
-  "reviewCancelled": "已取消，保留已检查部分的旁注。",
-  "reviewFailed": "审校未完成，请检查模型服务后重试；已保存部分结果。",
-  "reviewInterrupted": "审校进程已停止，可以重新审校。",
-  "reviewLoadFailed": "无法读取或更新审校结果：{error}",
-  "reviewGuess": "（AI 推测：{guess}）",
-  "reviewDetails": "原文：{original}\n\n推测理由：{reason}\n\n依据：{evidence}\n\n这是模型推测，请结合录音核对。",
-  "reviewDismiss": "忽略这条建议",
   "@catalogTitle": {
     "placeholders": {
       "count": {
@@ -4050,6 +3778,7 @@
       }
     }
   },
+  "catalogFulltextTitle": "正文检索（按课程）· {count} 条",
   "@catalogFulltextTitle": {
     "placeholders": {
       "count": {
@@ -4057,6 +3786,7 @@
       }
     }
   },
+  "catalogLoadFailed": "无法读取资料列表：{error}",
   "@catalogLoadFailed": {
     "placeholders": {
       "error": {
@@ -4064,6 +3794,13 @@
       }
     }
   },
+  "reviewStart": "AI 审校",
+  "reviewCancel": "取消审校",
+  "reviewShow": "显示 AI 旁注",
+  "reviewHint": "保留原文，自动检查整节课的疑似识别错误。",
+  "reviewConsent": "将这节课的完整文字稿、课程信息，以及可用的该节课堂 OCR / 课件文字发送给已配置的模型服务。按段检查可能产生模型费用。结果以「AI 推测」旁注显示，原文、字幕和时间戳保持不变；模型推测需要你核对。未完成的同版本审校会从已保存进度继续；重新审校已完成稿会替换已有旁注。",
+  "reviewStale": "文字稿已变化，这份旁注已过期。请重新审校。",
+  "reviewProgress": "正在审校：{done} / {total} 段",
   "@reviewProgress": {
     "placeholders": {
       "done": {
@@ -4074,6 +3811,7 @@
       }
     }
   },
+  "reviewCompleted": "整节课已审校 · {count} 条推测，供核对",
   "@reviewCompleted": {
     "placeholders": {
       "count": {
@@ -4081,6 +3819,10 @@
       }
     }
   },
+  "reviewCancelled": "已取消，保留已检查部分的旁注。",
+  "reviewFailed": "审校未完成，请检查模型服务后重试；已保存部分结果。",
+  "reviewInterrupted": "审校进程已停止，可以重新审校。",
+  "reviewLoadFailed": "无法读取或更新审校结果：{error}",
   "@reviewLoadFailed": {
     "placeholders": {
       "error": {
@@ -4088,6 +3830,7 @@
       }
     }
   },
+  "reviewGuess": "（AI 推测：{guess}）",
   "@reviewGuess": {
     "placeholders": {
       "guess": {
@@ -4095,6 +3838,7 @@
       }
     }
   },
+  "reviewDetails": "原文：{original}\n\n推测理由：{reason}\n\n依据：{evidence}\n\n这是模型推测，请结合录音核对。",
   "@reviewDetails": {
     "placeholders": {
       "original": {
@@ -4108,6 +3852,7 @@
       }
     }
   },
+  "reviewDismiss": "忽略这条建议",
   "reviewFiltered": "已过滤 {count} 条无法匹配原文或依据的候选建议。",
   "@reviewFiltered": {
     "placeholders": {
@@ -4226,18 +3971,16 @@
     }
   },
   "localCourse": "本地课程",
-  "localCourseCreate": "新建本地课程",
+  "localCourseCreate": "新建课程",
   "localCourseName": "课程名称",
   "localCourseNameRequired": "请填写课程名称",
-  "localCourseTeacher": "讲师或来源（可选）",
-  "localCourseImportHint": "视频按文件名顺序生成独立课次。也可以先创建课程，稍后添加视频。",
+  "localCourseTeacher": "讲师或出处（选填）",
   "localVideosChoose": "选择视频",
   "localVideosAdd": "添加视频",
-  "localVideosImporting": "正在导入",
-  "localVideosPartialSaved": "已创建的课程和成功导入的课次已保留。重试会从失败的文件继续。",
-  "localVideoLimit": "单个视频不能超过 4 GiB",
+  "localVideosPartialSaved": "课程和已导入的课次都已保留。继续导入会从这个视频开始。",
+  "localVideoLimit": "超过 4 GiB，请移除后再导入",
   "folderSyncTitle": "课程同步",
-  "folderSyncBody": "把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；学校登录、模型密钥和本机设置留在本机。",
+  "folderSyncBody": "把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。",
   "folderSyncAccount": "NAS 账号",
   "folderSyncAccountHint": "和整库同步共用一个账号与目录，课程放在 courses/ 下",
   "folderSyncCourses": "同步的课程",
@@ -4287,24 +4030,6 @@
   },
   "folderSyncSubtitle": "选择课程，把学习成果同步到 NAS",
   "folderSyncUsingCourseSync": "当前按课程同步；整库 WebDAV 同步尚未启用",
-  "nasWorkspaceIntro": "资料、作业和日程都在本机；NAS 只负责在多台设备之间搬运课程文件夹。",
-  "nasEmptyHomework": "还没有作业记录",
-  "nasEmptyHomeworkBody": "在 NAS 上运行一次作业扫描，或等自动同步完成后，这里会列出每份作业的生成与提交状态。",
-  "nasEmptyDeadlines": "还没有截止日程",
-  "nasEmptyDeadlinesBody": "运行日程同步后，课程截止日期会汇总到这里。",
-  "nasEmptyMaterials": "还没有资料",
-  "nasEmptyMaterialsBody": "课程文件夹里的讲义、PDF 和笔记同步到本机后会出现在这里。",
-  "nasFilesUnavailable": "本机课程目录还不可用",
-  "nasOpenSync": "打开课程同步",
-  "nasServicesOptional": "NAS 服务是可选的：不连接也能浏览本机资料。连接后可以在这里手动触发作业扫描和日程同步。",
-  "nasEntryHint": "连接 NAS 后，资料、作业和日程会同步到本机",
-  "nasEntryConnected": "{host} · 同步 {n} 门课程",
-  "@nasEntryConnected": {
-    "placeholders": {
-      "host": {},
-      "n": {}
-    }
-  },
   "folderSyncSettingsGroup": "课程同步",
   "studyConversationEmpty": "围绕指定资料持续提问，回答和整理结果都保留在此对话中。",
   "studyOpenCanvas": "打开画布",
@@ -4486,5 +4211,260 @@
     "placeholders": {
       "letter": {}
     }
-  }
+  },
+  "coursesEmptyTitle": "还没有课程",
+  "coursesEmptyBody": "新建一门课程，从本机导入课堂录像，就能开始看课、记笔记和复习。",
+  "coursesEmptySources": "安装来源插件",
+  "coursesClearSearch": "清除搜索",
+  "coursesViewAllTerms": "查看全部学期",
+  "coursesAllHidden": "课程都已隐藏",
+  "coursesShowHidden": "显示已隐藏的课程",
+  "localCourseCreateBody": "课程保存在本机。课堂录像可以现在导入，也可以稍后添加。",
+  "localCourseNameHint": "例如：线性代数",
+  "localCourseSubmit": "创建课程",
+  "localCourseSubmitWithVideos": "{count, plural, other{创建并导入 {count} 个视频}}",
+  "@localCourseSubmitWithVideos": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "localCourseCreateFailed": "无法创建课程：{error}",
+  "@localCourseCreateFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "localVideosSection": "课堂录像",
+  "localVideosSectionHint": "视频按文件名顺序导入，每个视频成为一个课次。单个视频不超过 4 GiB。",
+  "localVideosRechoose": "重新选择",
+  "localVideosSummary": "{count} 个视频 · 共 {size}",
+  "@localVideosSummary": {
+    "placeholders": {
+      "count": {},
+      "size": {}
+    }
+  },
+  "localVideosSubmit": "{count, plural, =0{导入视频} other{导入 {count} 个视频}}",
+  "@localVideosSubmit": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "localVideosProgress": "已导入 {done}/{total}",
+  "@localVideosProgress": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "localVideoImportFailed": "无法导入“{name}”：{error}",
+  "@localVideoImportFailed": {
+    "placeholders": {
+      "name": {},
+      "error": {}
+    }
+  },
+  "localVideosPickFailed": "无法选择视频：{error}",
+  "@localVideosPickFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "localVideosResume": "继续导入",
+  "localVideosLater": "稍后添加",
+  "sourcesTitle": "来源",
+  "sourcesEmptyTitle": "还没有来源插件",
+  "sourcesEmptyBody": "来源插件可以接入课程平台，同步课程、回放和作业。选择插件所在的文件夹即可安装。",
+  "sourcesInstall": "从文件夹安装",
+  "sourcesIntro": "每个插件提供一个或多个来源。登录信息只保存在本机。",
+  "sourcesChooseFolder": "选择插件文件夹",
+  "sourcesCannotRead": "无法读取插件：{error}",
+  "@sourcesCannotRead": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "sourcesCannotInstall": "无法安装插件：{error}",
+  "@sourcesCannotInstall": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "sourcesInstalled": "已安装「{name}」",
+  "@sourcesInstalled": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourcesConsentTitle": "安装「{name}」？",
+  "@sourcesConsentTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourcesVersion": "版本 {version}",
+  "@sourcesVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "sourcesConsentHosts": "插件会访问的网站",
+  "sourcesConsentBody": "插件会用你的账号访问上面列出的网站。只安装你信任的插件。",
+  "sourcesUnavailable": "这个插件不支持本机的系统，无法安装。",
+  "sourcesInstallPlugin": "安装插件",
+  "sourcesRemoveTitle": "卸载「{name}」？",
+  "@sourcesRemoveTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourcesRemoveBody": "插件和它保存的登录信息会被删除。已同步的课程和课次留在本机，但不能再刷新。",
+  "sourcesRemovePlugin": "卸载插件",
+  "sourcesMarketTitle": "来源插件",
+  "sourcesMarketEmpty": "插件目录里还没有来源插件，也可以从文件夹安装。",
+  "sourcesMarketFailed": "无法读取插件目录：{error}",
+  "@sourcesMarketFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "sourcesMarketUnsupported": "不支持本机",
+  "sourcesMarketUpdate": "更新到 {version}",
+  "@sourcesMarketUpdate": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "sourcesMarketVerifying": "正在下载并校验…",
+  "sourcesDisabled": "已停用",
+  "sourcesNone": "未安装来源插件",
+  "sourcesSummary": "{count} 个来源 · {signed} 个已登录",
+  "@sourcesSummary": {
+    "placeholders": {
+      "count": {},
+      "signed": {}
+    }
+  },
+  "sourceFailed": "无法启动：{error}",
+  "@sourceFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "sourceExpired": "登录已过期",
+  "sourceSignedInPlain": "已登录",
+  "sourceSignedInAs": "已登录为 {account}",
+  "@sourceSignedInAs": {
+    "placeholders": {
+      "account": {}
+    }
+  },
+  "sourceSignedOut": "未登录",
+  "sourceRestart": "重新启动",
+  "sourceSignOut": "退出登录",
+  "sourceSignedIn": "已登录「{name}」",
+  "@sourceSignedIn": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourceExpiredBanner": "「{name}」的登录已过期，重新登录后继续同步",
+  "@sourceExpiredBanner": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourceSignInTitle": "登录「{name}」",
+  "@sourceSignInTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourceSignInBody": "由插件完成登录，账号信息只保存在本机。",
+  "sourceSignInContinue": "继续登录",
+  "sourceSignInIncomplete": "无法完成登录：插件没有给出下一步。请重试。",
+  "sourceFieldNotStored": "不会保存，下次登录需要重新填写",
+  "sourceFieldRequired": "请填写{field}",
+  "@sourceFieldRequired": {
+    "placeholders": {
+      "field": {}
+    }
+  },
+  "sourceChallengeAnswer": "验证码",
+  "lmsTitle": "作业与通知",
+  "lmsBadge": "学习平台",
+  "lmsEmptyTitle": "没有可用的学习平台",
+  "lmsEmptyBody": "登录提供学习平台的来源后，作业、文件和通知会显示在这里。",
+  "lmsEntryHint": "学习平台的作业、文件和通知",
+  "lmsSignedOut": "未登录",
+  "lmsNotSynced": "尚未同步",
+  "lmsSummary": "{courses} 门课程 · {open} 项待交作业",
+  "@lmsSummary": {
+    "placeholders": {
+      "courses": {},
+      "open": {}
+    }
+  },
+  "lmsSyncFailed": "无法同步：{error}",
+  "@lmsSyncFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "lmsCourseLinks": "课程对应",
+  "lmsCourseLinksBody": "把平台课程对应到资料库里的课程，作业和文件就会出现在课程页。",
+  "lmsLoadingCourses": "正在加载平台课程",
+  "lmsNoCourses": "这个平台没有课程",
+  "lmsNoLink": "不对应",
+  "lmsAutoNoMatch": "自动：没有匹配的课程",
+  "lmsAutoMatch": "自动：{title}",
+  "@lmsAutoMatch": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "lmsLinkCourse": "选择对应的课程",
+  "lmsAutoLink": "自动匹配",
+  "lmsNoOpenAssignments": "没有待交作业",
+  "lmsCourseHeading": "{name} · 学习平台",
+  "@lmsCourseHeading": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "lmsAssignmentsTab": "作业 {count}",
+  "@lmsAssignmentsTab": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "lmsFiles": "文件",
+  "lmsAnnouncementsTab": "通知 {count}",
+  "@lmsAnnouncementsTab": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "lmsAnnouncements": "通知",
+  "lmsSavedToCourse": "已保存到课程文件夹",
+  "lmsNoAssignments": "没有作业",
+  "lmsNoAssignmentsBody": "平台发布作业后会显示在这里。",
+  "lmsLoadingFiles": "正在加载文件",
+  "lmsNoFiles": "没有文件",
+  "lmsNoFilesBody": "平台上传课程文件后会显示在这里。",
+  "lmsFileUpdated": "{month} 月 {day} 日更新",
+  "@lmsFileUpdated": {
+    "placeholders": {
+      "month": {},
+      "day": {}
+    }
+  },
+  "lmsDownloadToCourse": "下载到课程文件夹",
+  "lmsNoAnnouncements": "没有通知",
+  "scheduleOpenOnPlatform": "在学习平台打开",
+  "settingsProfileLocal": "资料只保存在本机"
 }

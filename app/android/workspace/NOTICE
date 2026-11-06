@@ -1,4 +1,4 @@
-Third-party programs in the Look Studio Android app
+Third-party programs in the Coursive Android app
 
 The APK carries these unmodified Termux builds as native libraries
 (lib/<abi>/), downloaded and verified by android/workspace/prepare.py:

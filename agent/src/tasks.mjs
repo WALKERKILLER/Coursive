@@ -175,7 +175,7 @@ export class TaskScheduler {
 
 	async save() {
 		const tmp = `${this.file}.tmp`;
-		await writeFile(tmp, JSON.stringify({ schema: "look-studio/tasks@1", tasks: this.tasks }, null, 1), { mode: PRIVATE });
+		await writeFile(tmp, JSON.stringify({ schema: "coursive/tasks@1", tasks: this.tasks }, null, 1), { mode: PRIVATE });
 		await chmod(tmp, PRIVATE);
 		await rename(tmp, this.file);
 	}

@@ -20,7 +20,7 @@ import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../theme/glass.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
 import '../player/video_card_hold.dart';

@@ -28,7 +28,7 @@ enum AvatarFrame {
 }
 
 /// The local user's display profile: nickname, avatar and home greeting
-/// options. Kept on this device only; the SchoolA account is untouched.
+/// options. Kept on this device only; source accounts are untouched.
 class UserProfile extends ChangeNotifier {
   UserProfile._(this._sp);
   final SharedPreferences _sp;
@@ -49,7 +49,7 @@ class UserProfile extends ChangeNotifier {
   /// Hitokoto categories: d 文学, i 诗词, k 哲学, h 影视, a 动画, j 网易云.
   List<String> quoteTypes = const ['d', 'i', 'k'];
 
-  /// Nickname, else the SchoolA real name, else the student id.
+  /// Nickname, else the signed-in account name.
   String displayName(String fallback) => nickname.isNotEmpty ? nickname : fallback;
 
   void _read() {

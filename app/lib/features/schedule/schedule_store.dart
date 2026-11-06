@@ -10,7 +10,7 @@ String isoDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-$
 
 DateTime dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
 
-/// All schedule items, kept in sync with lookd's schedule_changed events.
+/// All schedule items, kept in sync with daemon's schedule_changed events.
 class ScheduleStore extends ChangeNotifier {
   ScheduleStore(this.app) {
     app.addListener(_onApp);
@@ -109,10 +109,10 @@ class ScheduleStore extends ChangeNotifier {
     }
   }
 
-  /// Puts back an item removed by mistake (same fields, new id). A Canvas
+  /// Puts back an item removed by mistake (same fields, new id). A learning-platform
   /// assignment is only hidden, so it is shown again.
   Future<ScheduleItem> restore(ScheduleItem it) async {
-    if (!it.isCanvas) return add({...it.j}..remove('id'));
+    if (!it.isLms) return add({...it.j}..remove('id'));
     final back = ScheduleItem((await app.api.patch('/api/schedule/${it.id}', {'hidden': false}) as Map).cast<String, dynamic>());
     _replace(back);
     return back;

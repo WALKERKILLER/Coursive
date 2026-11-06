@@ -9,7 +9,7 @@ import 'android_bridge.dart';
 import '../l10n/l10n.dart';
 
 // The Android app's Linux workspace: an Ubuntu base system run with proot,
-// where lookd, Node.js and the assistant run as on desktop Linux.
+// where daemon, Node.js and the assistant run as on desktop Linux.
 // Contract: docs/specs/draft-android-app.md
 
 class WorkspaceMirror {
@@ -76,7 +76,7 @@ class Workspace extends ChangeNotifier {
   /// Where the native library folder appears in the guest. Its real path
   /// (`/data/app/~~…==/…`) contains `=`, which `env` would read as a
   /// variable assignment instead of the command.
-  static const guestNative = '/opt/look';
+  static const guestNative = '/opt/coursive';
 
   /// The phone's maker and model, which names this device in sync and backups.
   String device = '';
@@ -92,10 +92,10 @@ class Workspace extends ChangeNotifier {
   final List<String> log = [];
 
   String get rootfs => '$filesDir/ubuntu';
-  String get dataDir => '$filesDir/look-data';
-  String get library => '$filesDir/LookStudio';
+  String get dataDir => '$filesDir/coursive-data';
+  String get library => '$filesDir/Coursive';
   String get agentDir => '$filesDir/agent';
-  String get _marker => '$rootfs/.look-workspace';
+  String get _marker => '$rootfs/.coursive-workspace';
 
   bool get installed => File(_marker).existsSync();
   bool get hasFFmpeg => File('$rootfs/usr/bin/ffmpeg').existsSync();
@@ -208,7 +208,7 @@ class Workspace extends ChangeNotifier {
     }
   }
 
-  /// lookd unpacks: it runs straight from the native library folder and
+  /// daemon unpacks: it runs straight from the native library folder and
   /// keeps file modes, which Dart cannot set.
   Future<void> _unpack(
     String archive,
@@ -216,7 +216,7 @@ class Workspace extends ChangeNotifier {
     String sha,
     void Function(int) onBytes,
   ) async {
-    final p = await Process.start('$nativeDir/liblookd.so', [
+    final p = await Process.start('$nativeDir/libcoursive_daemon.so', [
       'unpack',
       archive,
       dir,
@@ -265,14 +265,14 @@ class Workspace extends ChangeNotifier {
     );
     // apt drops to the _apt user, which proot's fake root cannot do.
     await write(
-      'etc/apt/apt.conf.d/01-look',
+      'etc/apt/apt.conf.d/01-coursive',
       'APT::Sandbox::User "root";\nAcquire::Retries "3";\n',
     );
     for (final d in ['root', 'tmp']) {
       await Directory('$rootfs/$d').create(recursive: true);
     }
     await write(
-      '.look-workspace',
+      '.coursive-workspace',
       jsonEncode({'release': _release, 'arch': _arch, 'mirror': mirror.id}),
     );
   }
@@ -280,19 +280,19 @@ class Workspace extends ChangeNotifier {
   /// Unpacks the assistant's sources the APK carries when they changed.
   Future<void> ensureAgent() async {
     final sum = File('$cacheDir/agent.sha256');
-    await AndroidBridge.extractAsset('look/agent.sha256', sum.path);
+    await AndroidBridge.extractAsset('coursive/agent.sha256', sum.path);
     final want = (await sum.readAsString()).trim();
     final have = File('$agentDir/.sha256');
     if (have.existsSync() && have.readAsStringSync().trim() == want) return;
     final tar = '$cacheDir/agent.tgz';
-    await AndroidBridge.extractAsset('look/agent.tgz', tar);
+    await AndroidBridge.extractAsset('coursive/agent.tgz', tar);
     await _unpack(tar, agentDir, '', (_) {});
     await have.writeAsString(want);
     await File(tar).delete();
   }
 
   /// proot's command line for running [command] in the guest. The app's
-  /// files folder appears at the same path inside, so paths lookd reports
+  /// files folder appears at the same path inside, so paths daemon reports
   /// work in the app too; native libraries appear at [guestNative].
   (String, List<String>, Map<String, String>) guest(
     List<String> command, {

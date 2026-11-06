@@ -4,21 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { DefaultResourceLoader } from "@earendil-works/pi-coding-agent";
-import { applySettings, bundledPluginsDir, engineSatisfied, lookdRoute, PluginHost, validateManifest } from "./plugins.mjs";
+import { applySettings, bundledPluginsDir, engineSatisfied, daemonRoute, PluginHost, validateManifest } from "./plugins.mjs";
 
-const pkg = (lookStudio, extra = {}) => ({ name: `p-${lookStudio.id}`, version: "1.0.0", ...extra, lookStudio: { title: "测试", summary: "测试插件", engine: "^1.0.0", ...lookStudio } });
+const pkg = (coursive, extra = {}) => ({ name: `p-${coursive.id}`, version: "1.0.0", ...extra, coursive: { title: "测试", summary: "测试插件", engine: "^1.0.0", ...coursive } });
 
 const AGENT = `
-export function activate(look) {
-	look.effect(() => { globalThis.__disposed = (globalThis.__disposed ?? 0) + 1; });
-	look.action("hello", async (ctx) => ({ toast: "hi " + (ctx.name ?? ""), state: { n: 1 } }));
-	look.action("show", async () => ({ view: { kind: "checklist", data: { items: [] } } }));
-	look.action("bad_view", async () => ({ view: { kind: "graph", data: {} } }));
-	look.action("slow", async (_ctx, { signal }) => {
+export function activate(coursive) {
+	coursive.effect(() => { globalThis.__disposed = (globalThis.__disposed ?? 0) + 1; });
+	coursive.action("hello", async (ctx) => ({ toast: "hi " + (ctx.name ?? ""), state: { n: 1 } }));
+	coursive.action("show", async () => ({ view: { kind: "checklist", data: { items: [] } } }));
+	coursive.action("bad_view", async () => ({ view: { kind: "graph", data: {} } }));
+	coursive.action("slow", async (_ctx, { signal }) => {
 		globalThis.__slowSignal = signal;
 		await new Promise((r) => (globalThis.__slowGo = r));
 		try {
-			await look.lookd.get("/api/courses");
+			await coursive.daemon.get("/api/courses");
 		} catch (e) {
 			globalThis.__slowError = e;
 			throw e;
@@ -26,7 +26,7 @@ export function activate(look) {
 		return { toast: "late" };
 	});
 }
-export default function (pi, look) {
+export default function (pi, coursive) {
 	pi.registerTool({
 		name: "ping",
 		label: "Ping",
@@ -39,20 +39,20 @@ export default function (pi, look) {
 		label: "Read",
 		description: "Reads a course.",
 		parameters: { type: "object", properties: {} },
-		execute: async () => look.lookd.get("/api/courses"),
+		execute: async () => coursive.daemon.get("/api/courses"),
 	});
 	pi.registerTool({
 		name: "secret",
 		label: "Secret",
 		description: "Reads settings.",
 		parameters: { type: "object", properties: {} },
-		execute: async () => look.lookd.get("/api/settings"),
+		execute: async () => coursive.daemon.get("/api/settings"),
 	});
 }
 `;
 
 async function fixture(t) {
-	const root = await mkdtemp(join(tmpdir(), "look-plugins-"));
+	const root = await mkdtemp(join(tmpdir(), "coursive-plugins-"));
 	t.after(() => rm(root, { recursive: true, force: true }));
 	const bundled = join(root, "bundled");
 	const write = async (dir, files) => {
@@ -86,7 +86,7 @@ async function fixture(t) {
 		dataDir: join(root, "data"),
 		libraryRoot: join(root, "lib"),
 		bundledDir: bundled,
-		lookd: async (method, path) => (calls.push(`${method} ${path}`), { content: [{ type: "text", text: "ok" }] }),
+		daemon: async (method, path) => (calls.push(`${method} ${path}`), { content: [{ type: "text", text: "ok" }] }),
 		notify: (e) => events.push(e),
 	});
 	await host.init();
@@ -97,7 +97,7 @@ const install = async (host, source) => host.confirm((await host.preview(source)
 
 test("manifest validation", () => {
 	assert.equal(validateManifest(pkg({ id: "ok-id" })).id, "ok-id");
-	const bad = (lookStudio, re) => assert.throws(() => validateManifest(pkg({ id: "x1", ...lookStudio })), re);
+	const bad = (coursive, re) => assert.throws(() => validateManifest(pkg({ id: "x1", ...coursive })), re);
 	bad({ id: "Bad" }, /id/);
 	bad({ id: "install" }, /保留名/);
 	bad({ engine: "^2.0.0" }, /插件接口/);
@@ -144,7 +144,7 @@ test("install, tools, groups, actions and uninstall", async (t) => {
 	await assert.rejects(host.runAction("demo", "bad_view"), /没有声明视图/);
 	await assert.rejects(host.runAction("demo", "nope"), /没有动作/);
 
-	// Real Pi loader: tools are prefixed, deferred and namespaced; permissions gate the Look API.
+	// Real Pi loader: tools are prefixed, deferred and namespaced; permissions gate the Coursive API.
 	const loader = new DefaultResourceLoader({ cwd: root, agentDir: root, noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true, extensionFactories: host.extensionFactories() });
 	await loader.reload();
 	const ext = loader.getExtensions();
@@ -162,7 +162,7 @@ test("install, tools, groups, actions and uninstall", async (t) => {
 	assert.deepEqual(host.groups(), {});
 });
 
-test("an action that times out is aborted and its later look calls are refused", async (t) => {
+test("an action that times out is aborted and its later Coursive API calls are refused", async (t) => {
 	const { host, calls } = await fixture(t);
 	host.actionTimeoutMs = 50;
 	await install(host, "bundled:demo");
@@ -171,7 +171,7 @@ test("an action that times out is aborted and its later look calls are refused",
 	globalThis.__slowGo(); // the handler carries on after the caller got 504
 	await new Promise((r) => setImmediate(r));
 	assert.match(globalThis.__slowError?.message ?? "", /已超时/);
-	assert.deepEqual(calls, []); // its lookd read never ran
+	assert.deepEqual(calls, []); // its daemon read never ran
 	assert.equal((await host.runAction("demo", "hello", { name: "B" })).toast, "hi B"); // other actions unaffected
 });
 
@@ -211,25 +211,25 @@ test("scheduled task runs only get read-only plugin tools", async (t) => {
 
 	// A read-only plugin's tool cannot write its own storage in a run either.
 	await install(host, "bundled:demo");
-	const { look } = host.loaded.get("demo");
+	const { coursive } = host.loaded.get("demo");
 	const saver = host.guardedExecute(host.loaded.get("demo"), "demo__save", async () => {
 		await new Promise((r) => setImmediate(r));
-		await look.storage.set("k", 1);
+		await coursive.storage.set("k", 1);
 		return ok();
 	});
 	await assert.rejects(saver("1", {}, undefined, undefined, ctx("task")), /不能写入自己的存储/);
-	assert.equal(await look.storage.get("k"), undefined);
+	assert.equal(await coursive.storage.get("k"), undefined);
 	await saver("1", {}, undefined, undefined, ctx("chat"));
-	assert.equal(await look.storage.get("k"), 1);
+	assert.equal(await coursive.storage.get("k"), 1);
 });
 
-test("plugin lookd paths must be normal and on the route list", () => {
-	assert.ok(lookdRoute("GET", "/api/courses"));
-	assert.ok(lookdRoute("GET", "/api/courses/c%201/lectures"));
-	assert.ok(lookdRoute("GET", "/api/search?q=%E6%A0%88&limit=5"));
-	assert.ok(lookdRoute("PUT", "/api/notes"));
-	assert.ok(lookdRoute("DELETE", "/api/schedule/s1"));
-	assert.ok(lookdRoute("POST", "/api/lectures/l1/bookmarks"));
+test("plugin daemon paths must be normal and on the route list", () => {
+	assert.ok(daemonRoute("GET", "/api/courses"));
+	assert.ok(daemonRoute("GET", "/api/courses/c%201/lectures"));
+	assert.ok(daemonRoute("GET", "/api/search?q=%E6%A0%88&limit=5"));
+	assert.ok(daemonRoute("PUT", "/api/notes"));
+	assert.ok(daemonRoute("DELETE", "/api/schedule/s1"));
+	assert.ok(daemonRoute("POST", "/api/lectures/l1/bookmarks"));
 	for (const path of [
 		"/api/notes/../library/export",
 		"/api/notes/%2e%2e/library/export",
@@ -238,21 +238,21 @@ test("plugin lookd paths must be normal and on the route list", () => {
 		"/api/notes%2fx",
 		"/api/notes\\..\\settings",
 		"/api//notes",
-		"//lookd/api/notes",
+		"//daemon/api/notes",
 		"/api/notes/",
 		"/api/settings",
 		"/api/lectures/l1/media",
 		"/api/lectures/l1/slides/0/image",
 		"/api/notes/n1#x",
-		"http://lookd/api/notes",
+		"http://daemon/api/notes",
 		"/api/notes/\u6808",
 	]) {
-		assert.equal(lookdRoute("GET", path), false, path);
-		assert.equal(lookdRoute("DELETE", path), false, path);
+		assert.equal(daemonRoute("GET", path), false, path);
+		assert.equal(daemonRoute("DELETE", path), false, path);
 	}
-	assert.equal(lookdRoute("DELETE", "/api/courses"), false); // a read route is not writable
-	assert.equal(lookdRoute("PATCH", "/api/notes"), false); // nor with another method
-	assert.equal(lookdRoute("GET", "/api/notes/a/b"), false); // * is one segment
+	assert.equal(daemonRoute("DELETE", "/api/courses"), false); // a read route is not writable
+	assert.equal(daemonRoute("PATCH", "/api/notes"), false); // nor with another method
+	assert.equal(daemonRoute("GET", "/api/notes/a/b"), false); // * is one segment
 });
 
 test("user catalogs are capped in bytes and entries", async (t) => {
@@ -327,9 +327,9 @@ test("the bundled catalog's plugins are valid", async () => {
 });
 
 test("socratic toggles a mode that extends the system prompt", async (t) => {
-	const root = await mkdtemp(join(tmpdir(), "look-socratic-"));
+	const root = await mkdtemp(join(tmpdir(), "coursive-socratic-"));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	const host = new PluginHost({ dataDir: root, libraryRoot: root, bundledDir: bundledPluginsDir, lookd: async () => ({}) });
+	const host = new PluginHost({ dataDir: root, libraryRoot: root, bundledDir: bundledPluginsDir, daemon: async () => ({}) });
 	await host.init();
 	const v = await install(host, "bundled:socratic");
 	assert.deepEqual(v.status, { active: false });

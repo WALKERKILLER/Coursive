@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
-  /// **'Look Studio'**
+  /// **'Coursive'**
   String get appTitle;
 
   /// No description provided for @levelStandard.
@@ -529,7 +529,7 @@ abstract class AppLocalizations {
   /// No description provided for @daemonNotFound.
   ///
   /// In zh, this message translates to:
-  /// **'找不到后台服务 lookd。开发环境请先构建：cd lookd && go build -o bin/lookd ./cmd/lookd'**
+  /// **'找不到后台服务 coursive-daemon。开发环境请先构建：cd daemon && go build -o bin/coursive-daemon ./cmd/coursive-daemon'**
   String get daemonNotFound;
 
   /// No description provided for @daemonCannotReadAppDir.
@@ -844,36 +844,6 @@ abstract class AppLocalizations {
   /// **'取消'**
   String get commonCancel;
 
-  /// No description provided for @loginHeadline.
-  ///
-  /// In zh, this message translates to:
-  /// **'课堂录像，\n变成你的知识库。'**
-  String get loginHeadline;
-
-  /// No description provided for @loginFeatureDownload.
-  ///
-  /// In zh, this message translates to:
-  /// **'高速下载录像、PPT 与课件，断点续传'**
-  String get loginFeatureDownload;
-
-  /// No description provided for @loginFeatureTranscribe.
-  ///
-  /// In zh, this message translates to:
-  /// **'自动转写，按时间轴全文检索'**
-  String get loginFeatureTranscribe;
-
-  /// No description provided for @loginFeatureAssistant.
-  ///
-  /// In zh, this message translates to:
-  /// **'常驻助手帮你梳理每一节课'**
-  String get loginFeatureAssistant;
-
-  /// No description provided for @loginMissingCredentials.
-  ///
-  /// In zh, this message translates to:
-  /// **'请输入学号和密码'**
-  String get loginMissingCredentials;
-
   /// No description provided for @loginSignInAgain.
   ///
   /// In zh, this message translates to:
@@ -885,36 +855,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'登录'**
   String get loginSignIn;
-
-  /// No description provided for @loginChooseSchool.
-  ///
-  /// In zh, this message translates to:
-  /// **'选择学校，用统一身份认证账号登录'**
-  String get loginChooseSchool;
-
-  /// No description provided for @loginHintSchoolA.
-  ///
-  /// In zh, this message translates to:
-  /// **'连接学校 A Look 录课平台（look.schoola.edu.cn）'**
-  String get loginHintSchoolA;
-
-  /// No description provided for @loginHintSchoolB.
-  ///
-  /// In zh, this message translates to:
-  /// **'经学校 B CampusVPN 连接 PlatformB，登录约需半分钟'**
-  String get loginHintSchoolB;
-
-  /// No description provided for @loginSchoolsFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'无法读取学校列表：{e}'**
-  String loginSchoolsFailed(Object e);
-
-  /// No description provided for @loginStudentId.
-  ///
-  /// In zh, this message translates to:
-  /// **'学号 / 工号'**
-  String get loginStudentId;
 
   /// No description provided for @commonPassword.
   ///
@@ -933,30 +873,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'隐藏密码'**
   String get commonHidePassword;
-
-  /// No description provided for @loginCaptcha.
-  ///
-  /// In zh, this message translates to:
-  /// **'验证码'**
-  String get loginCaptcha;
-
-  /// No description provided for @loginStaySignedIn.
-  ///
-  /// In zh, this message translates to:
-  /// **'保持登录'**
-  String get loginStaySignedIn;
-
-  /// No description provided for @loginStaySignedInHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'登录过期时自动续期，密码加密保存在本机'**
-  String get loginStaySignedInHint;
-
-  /// No description provided for @loginPrivacy.
-  ///
-  /// In zh, this message translates to:
-  /// **'学号和密码只发送给学校的统一身份认证，保持登录时加密保存在本机。'**
-  String get loginPrivacy;
 
   /// No description provided for @homeGreetingNight.
   ///
@@ -1048,6 +964,30 @@ abstract class AppLocalizations {
   /// **'全部课程'**
   String get homeAllCourses;
 
+  /// No description provided for @homeFirstCourseTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加第一门课'**
+  String get homeFirstCourseTitle;
+
+  /// No description provided for @homeFirstCourseBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'从本机导入课堂录像，或连接学校的课程平台，就能开始看课、记笔记和复习。'**
+  String get homeFirstCourseBody;
+
+  /// No description provided for @homeFirstCourseConnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接课程平台'**
+  String get homeFirstCourseConnect;
+
+  /// No description provided for @homeFirstCourseLocal.
+  ///
+  /// In zh, this message translates to:
+  /// **'录像、转写和笔记都保存在本机'**
+  String get homeFirstCourseLocal;
+
   /// No description provided for @commonLibrary.
   ///
   /// In zh, this message translates to:
@@ -1072,29 +1012,11 @@ abstract class AppLocalizations {
   /// **'换一句'**
   String get homeNextQuote;
 
-  /// No description provided for @homeStatLecturesSaved.
-  ///
-  /// In zh, this message translates to:
-  /// **'节已存本地'**
-  String get homeStatLecturesSaved;
-
   /// No description provided for @homeStatStorage.
   ///
   /// In zh, this message translates to:
   /// **'占用空间'**
   String get homeStatStorage;
-
-  /// No description provided for @homeStatSegments.
-  ///
-  /// In zh, this message translates to:
-  /// **'句转写'**
-  String get homeStatSegments;
-
-  /// No description provided for @homeStatNotes.
-  ///
-  /// In zh, this message translates to:
-  /// **'篇笔记'**
-  String get homeStatNotes;
 
   /// No description provided for @listSeparator.
   ///
@@ -1111,7 +1033,7 @@ abstract class AppLocalizations {
   /// No description provided for @coursesSync.
   ///
   /// In zh, this message translates to:
-  /// **'从平台同步'**
+  /// **'从来源同步课程'**
   String get coursesSync;
 
   /// No description provided for @coursesSearchHint.
@@ -1135,7 +1057,7 @@ abstract class AppLocalizations {
   /// No description provided for @coursesSyncing.
   ///
   /// In zh, this message translates to:
-  /// **'正在同步课程'**
+  /// **'正在加载课程'**
   String get coursesSyncing;
 
   /// No description provided for @coursesEmptyTerm.
@@ -2647,7 +2569,7 @@ abstract class AppLocalizations {
   /// No description provided for @botDefaultName.
   ///
   /// In zh, this message translates to:
-  /// **'小 Look'**
+  /// **'小 C'**
   String get botDefaultName;
 
   /// No description provided for @chatOpenFailed.
@@ -2977,7 +2899,7 @@ abstract class AppLocalizations {
   /// No description provided for @tasksIntroBody.
   ///
   /// In zh, this message translates to:
-  /// **'每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Look Studio 打开时执行；错过的时间可以在 12 小时内启动时补跑。'**
+  /// **'每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Coursive 打开时执行；错过的时间可以在 12 小时内启动时补跑。'**
   String get tasksIntroBody;
 
   /// No description provided for @tasksFromBlank.
@@ -3157,7 +3079,7 @@ abstract class AppLocalizations {
   /// No description provided for @runtimeIntro.
   ///
   /// In zh, this message translates to:
-  /// **'助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Look Studio 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。'**
+  /// **'助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Coursive 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。'**
   String get runtimeIntro;
 
   /// No description provided for @runtimeReadFailed.
@@ -6036,7 +5958,7 @@ abstract class AppLocalizations {
   /// No description provided for @asrSourceHuggingface.
   ///
   /// In zh, this message translates to:
-  /// **'官方源，文件最全，但国内通常需要代理。Look Studio 的后台服务会使用系统的 HTTPS_PROXY 环境变量。'**
+  /// **'官方源，文件最全，但国内通常需要代理。Coursive 的后台服务会使用系统的 HTTPS_PROXY 环境变量。'**
   String get asrSourceHuggingface;
 
   /// No description provided for @asrSourceCustom.
@@ -6102,7 +6024,7 @@ abstract class AppLocalizations {
   /// No description provided for @watchBody.
   ///
   /// In zh, this message translates to:
-  /// **'刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；已连接的 Canvas 每 15 分钟同步作业和公告。有变化时立即提醒，课程页也会自动刷新。'**
+  /// **'登录来源后自动检查：刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；学习平台每 30 分钟同步作业和通知。有变化时立即提醒，课程页也会自动刷新。'**
   String get watchBody;
 
   /// No description provided for @watchAwaiting.
@@ -6162,7 +6084,7 @@ abstract class AppLocalizations {
   /// No description provided for @obsidianConflicts.
   ///
   /// In zh, this message translates to:
-  /// **'{conflicts} 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Look Studio)」副本）'**
+  /// **'{conflicts} 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Coursive)」副本）'**
   String obsidianConflicts(Object conflicts);
 
   /// No description provided for @obsidianNotVault.
@@ -6186,7 +6108,7 @@ abstract class AppLocalizations {
   /// No description provided for @linkRegistered.
   ///
   /// In zh, this message translates to:
-  /// **'已注册：点击 lookstudio:// 链接会打开 Look Studio'**
+  /// **'已注册：点击 coursive-app:// 链接会打开 Coursive'**
   String get linkRegistered;
 
   /// No description provided for @linkRegisterPartial.
@@ -6222,7 +6144,7 @@ abstract class AppLocalizations {
   /// No description provided for @obsidianBody.
   ///
   /// In zh, this message translates to:
-  /// **'把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Look Studio；在 Obsidian 里改过的文件不会被覆盖。'**
+  /// **'把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Coursive；在 Obsidian 里改过的文件不会被覆盖。'**
   String get obsidianBody;
 
   /// No description provided for @commonLocation.
@@ -6282,19 +6204,19 @@ abstract class AppLocalizations {
   /// No description provided for @obsidianBackLinks.
   ///
   /// In zh, this message translates to:
-  /// **'回到 Look Studio'**
+  /// **'回到 Coursive'**
   String get obsidianBackLinks;
 
   /// No description provided for @obsidianBackLinksBody.
   ///
   /// In zh, this message translates to:
-  /// **'导出的时间戳和课次链接是 lookstudio:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。'**
+  /// **'导出的时间戳和课次链接是 coursive-app:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。'**
   String get obsidianBackLinksBody;
 
   /// No description provided for @linkRegister.
   ///
   /// In zh, this message translates to:
-  /// **'注册 lookstudio:// 链接'**
+  /// **'注册 coursive-app:// 链接'**
   String get linkRegister;
 
   /// No description provided for @notionSubtitle.
@@ -6372,7 +6294,7 @@ abstract class AppLocalizations {
   /// No description provided for @notionBody.
   ///
   /// In zh, this message translates to:
-  /// **'把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Look Studio 创建的页面；在 Notion 里改过的页面不会被覆盖。'**
+  /// **'把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Coursive 创建的页面；在 Notion 里改过的页面不会被覆盖。'**
   String get notionBody;
 
   /// No description provided for @notionCreateIntegration.
@@ -6384,7 +6306,7 @@ abstract class AppLocalizations {
   /// No description provided for @notionStep1.
   ///
   /// In zh, this message translates to:
-  /// **'在 Notion 的「集成」页新建一个 Internal 集成，名称填 Look Studio，选择要同步到的工作区'**
+  /// **'在 Notion 的「集成」页新建一个 Internal 集成，名称填 Coursive，选择要同步到的工作区'**
   String get notionStep1;
 
   /// No description provided for @notionStep2.
@@ -6462,7 +6384,7 @@ abstract class AppLocalizations {
   /// No description provided for @notionParentHint.
   ///
   /// In zh, this message translates to:
-  /// **'课程库在这个页面下的「Look Studio 课程库」里'**
+  /// **'课程库在这个页面下的「Coursive 课程库」里'**
   String get notionParentHint;
 
   /// No description provided for @notionOpenInNotion.
@@ -6654,7 +6576,7 @@ abstract class AppLocalizations {
   /// No description provided for @knowledgeObsidianSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'导出到本地仓库，时间戳可点回 Look Studio'**
+  /// **'导出到本地仓库，时间戳可点回 Coursive'**
   String get knowledgeObsidianSubtitle;
 
   /// No description provided for @knowledgeAutoExportSuffix.
@@ -6702,7 +6624,7 @@ abstract class AppLocalizations {
   /// No description provided for @knowledgeSkillExport.
   ///
   /// In zh, this message translates to:
-  /// **'导出为 Coursive 技能格式'**
+  /// **'导出为课程笔记技能格式'**
   String get knowledgeSkillExport;
 
   /// No description provided for @knowledgeSkillExportHint.
@@ -6726,7 +6648,7 @@ abstract class AppLocalizations {
   /// No description provided for @knowledgeTargetFolderHelper.
   ///
   /// In zh, this message translates to:
-  /// **'Coursive 技能所在的文件夹'**
+  /// **'课程笔记技能所在的文件夹'**
   String get knowledgeTargetFolderHelper;
 
   /// No description provided for @knowledgeExported.
@@ -6990,13 +6912,13 @@ abstract class AppLocalizations {
   /// No description provided for @backupTypeLabel.
   ///
   /// In zh, this message translates to:
-  /// **'Look Studio 备份'**
+  /// **'Coursive 备份'**
   String get backupTypeLabel;
 
   /// No description provided for @backupFileName.
   ///
   /// In zh, this message translates to:
-  /// **'LookStudio-备份-{year}{value}{value2}.zip'**
+  /// **'Coursive-备份-{year}{value}{value2}.zip'**
   String backupFileName(Object year, Object value, Object value2);
 
   /// No description provided for @backupSaved.
@@ -7549,50 +7471,20 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAccount.
   ///
   /// In zh, this message translates to:
-  /// **'账户与学校'**
+  /// **'账户与来源'**
   String get settingsAccount;
 
   /// No description provided for @settingsAccountHint.
   ///
   /// In zh, this message translates to:
-  /// **'统一身份认证、Canvas'**
+  /// **'个人资料、来源插件'**
   String get settingsAccountHint;
-
-  /// No description provided for @authSchoolA.
-  ///
-  /// In zh, this message translates to:
-  /// **'统一身份认证'**
-  String get authSchoolA;
-
-  /// No description provided for @authRenewNow.
-  ///
-  /// In zh, this message translates to:
-  /// **'立即续期'**
-  String get authRenewNow;
-
-  /// No description provided for @authSignOut.
-  ///
-  /// In zh, this message translates to:
-  /// **'退出登录'**
-  String get authSignOut;
 
   /// No description provided for @settingsProfileKeyword.
   ///
   /// In zh, this message translates to:
   /// **'昵称和头像'**
   String get settingsProfileKeyword;
-
-  /// No description provided for @commonSchool.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校'**
-  String get commonSchool;
-
-  /// No description provided for @settingsCanvasKeyword.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业与课件'**
-  String get settingsCanvasKeyword;
 
   /// No description provided for @settingsAppearance.
   ///
@@ -7948,12 +7840,6 @@ abstract class AppLocalizations {
   /// **'没有和「{value}」相关的设置'**
   String settingsNoMatch(Object value);
 
-  /// No description provided for @settingsSchoolCanvas.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校与 Canvas'**
-  String get settingsSchoolCanvas;
-
   /// No description provided for @settingsAppearanceGroup.
   ///
   /// In zh, this message translates to:
@@ -8026,77 +7912,11 @@ abstract class AppLocalizations {
   /// **'自动：优先屏幕（含 PPT），没有时用第一个画面。'**
   String get settingsStreamHint;
 
-  /// No description provided for @settingsAccountSummary.
-  ///
-  /// In zh, this message translates to:
-  /// **'{value} · 学校 A · Canvas'**
-  String settingsAccountSummary(Object value);
-
-  /// No description provided for @authSignedIn.
-  ///
-  /// In zh, this message translates to:
-  /// **'已登录'**
-  String get authSignedIn;
-
-  /// No description provided for @authSignedOut.
-  ///
-  /// In zh, this message translates to:
-  /// **'未登录'**
-  String get authSignedOut;
-
-  /// No description provided for @authRenewing.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在续期…'**
-  String get authRenewing;
-
-  /// No description provided for @authNeedsSignIn.
-  ///
-  /// In zh, this message translates to:
-  /// **'需要重新登录'**
-  String get authNeedsSignIn;
-
-  /// No description provided for @authMethodPassword.
-  ///
-  /// In zh, this message translates to:
-  /// **'密码登录'**
-  String get authMethodPassword;
-
-  /// No description provided for @authMethodSso.
-  ///
-  /// In zh, this message translates to:
-  /// **'统一认证静默续期'**
-  String get authMethodSso;
-
-  /// No description provided for @authMethodSavedPassword.
-  ///
-  /// In zh, this message translates to:
-  /// **'已保存的密码续期'**
-  String get authMethodSavedPassword;
-
-  /// No description provided for @authMethodRestored.
-  ///
-  /// In zh, this message translates to:
-  /// **'从本地会话恢复'**
-  String get authMethodRestored;
-
   /// No description provided for @profileEditTooltip.
   ///
   /// In zh, this message translates to:
   /// **'编辑昵称和头像'**
   String get profileEditTooltip;
-
-  /// No description provided for @schoolSchoolA.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校 A'**
-  String get schoolSchoolA;
-
-  /// No description provided for @schoolSchoolB.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校 B'**
-  String get schoolSchoolB;
 
   /// No description provided for @settingsAbout.
   ///
@@ -8199,60 +8019,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'请描述遇到的问题和复现步骤：\n\n\n---\n版本：{version}\n系统：{os}'**
   String aboutFeedbackBody(Object version, Object os);
-
-  /// No description provided for @authExpires.
-  ///
-  /// In zh, this message translates to:
-  /// **'凭证 {value}后到期，会在到期前自动续期'**
-  String authExpires(Object value);
-
-  /// No description provided for @authLastRenewed.
-  ///
-  /// In zh, this message translates to:
-  /// **'上次续期 {value}（{method}）'**
-  String authLastRenewed(Object value, Object method);
-
-  /// No description provided for @authPasswordSaved.
-  ///
-  /// In zh, this message translates to:
-  /// **'已在本机加密保存密码，统一认证失效时用于自动登录'**
-  String get authPasswordSaved;
-
-  /// No description provided for @authPasswordNotSaved.
-  ///
-  /// In zh, this message translates to:
-  /// **'未保存密码：统一认证会话失效后需要手动登录'**
-  String get authPasswordNotSaved;
-
-  /// No description provided for @authRenewed.
-  ///
-  /// In zh, this message translates to:
-  /// **'已续期'**
-  String get authRenewed;
-
-  /// No description provided for @authRenewFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'续期失败：{e}'**
-  String authRenewFailed(Object e);
-
-  /// No description provided for @authSignOutTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'退出登录？'**
-  String get authSignOutTitle;
-
-  /// No description provided for @authSignOutBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'会清除本机保存的会话和密码。已下载的文件不受影响。'**
-  String get authSignOutBody;
-
-  /// No description provided for @authSignOutAction.
-  ///
-  /// In zh, this message translates to:
-  /// **'退出'**
-  String get authSignOutAction;
 
   /// No description provided for @themeSystem.
   ///
@@ -8830,12 +8596,6 @@ abstract class AppLocalizations {
   /// **'已删除'**
   String get commonDeleted;
 
-  /// No description provided for @scheduleOpenInCanvas.
-  ///
-  /// In zh, this message translates to:
-  /// **'在 Canvas 打开'**
-  String get scheduleOpenInCanvas;
-
   /// No description provided for @scheduleHide.
   ///
   /// In zh, this message translates to:
@@ -8946,7 +8706,7 @@ abstract class AppLocalizations {
   /// No description provided for @coursewareUploadBody.
   ///
   /// In zh, this message translates to:
-  /// **'Look 不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。'**
+  /// **'课程来源通常不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。'**
   String get coursewareUploadBody;
 
   /// No description provided for @commonChooseFiles.
@@ -9902,7 +9662,7 @@ abstract class AppLocalizations {
   /// No description provided for @pluginsAllowThirdPartyBody.
   ///
   /// In zh, this message translates to:
-  /// **'第三方插件不是 Look Studio 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。'**
+  /// **'第三方插件不是 Coursive 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。'**
   String get pluginsAllowThirdPartyBody;
 
   /// No description provided for @commonAllow.
@@ -10028,7 +9788,7 @@ abstract class AppLocalizations {
   /// No description provided for @pluginsOfficial.
   ///
   /// In zh, this message translates to:
-  /// **'Look Studio 官方'**
+  /// **'Coursive 官方'**
   String get pluginsOfficial;
 
   /// No description provided for @pluginsMoreHint.
@@ -10154,7 +9914,7 @@ abstract class AppLocalizations {
   /// No description provided for @pluginsCatalogHint.
   ///
   /// In zh, this message translates to:
-  /// **'owner/repo 或 https://…/look-catalog.json'**
+  /// **'owner/repo 或 https://…/coursive-catalog.json'**
   String get pluginsCatalogHint;
 
   /// No description provided for @pluginsFetching.
@@ -10388,7 +10148,7 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsIntro.
   ///
   /// In zh, this message translates to:
-  /// **'新回放、新课次、Canvas 作业和公告会出现在这里。Look Studio 打开时在后台自动检查。'**
+  /// **'新回放、新课次，以及学习平台的作业和通知会出现在这里。应用打开时在后台自动检查。'**
   String get notificationsIntro;
 
   /// No description provided for @notificationsEmpty.
@@ -10408,324 +10168,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'未读'**
   String get notificationsUnread;
-
-  /// No description provided for @schoolEmblem.
-  ///
-  /// In zh, this message translates to:
-  /// **'{name}校徽'**
-  String schoolEmblem(Object name);
-
-  /// No description provided for @schoolOther.
-  ///
-  /// In zh, this message translates to:
-  /// **'其他学校'**
-  String get schoolOther;
-
-  /// No description provided for @canvasConnected.
-  ///
-  /// In zh, this message translates to:
-  /// **'已连接 Canvas，正在同步课程和作业'**
-  String get canvasConnected;
-
-  /// No description provided for @canvasDisconnectTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'断开 Canvas？'**
-  String get canvasDisconnectTitle;
-
-  /// No description provided for @canvasDisconnectBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'日程里的 Canvas 作业和课程关联会一起移除，已下载的课件保留。{value}'**
-  String canvasDisconnectBody(Object value);
-
-  /// No description provided for @canvasRevokesToken.
-  ///
-  /// In zh, this message translates to:
-  /// **'Look Studio 创建的访问令牌也会被撤销。'**
-  String get canvasRevokesToken;
-
-  /// No description provided for @canvasConnectTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'连接你学校的 Canvas'**
-  String get canvasConnectTitle;
-
-  /// No description provided for @canvasConnectBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业会进入日程，截止前一天提醒你；课件可以直接下载到对应课程的文件夹。Look Studio 只读取，不会提交或修改任何内容。'**
-  String get canvasConnectBody;
-
-  /// No description provided for @canvasUrl.
-  ///
-  /// In zh, this message translates to:
-  /// **'Canvas 地址'**
-  String get canvasUrl;
-
-  /// No description provided for @canvasSignInMethod.
-  ///
-  /// In zh, this message translates to:
-  /// **'登录方式'**
-  String get canvasSignInMethod;
-
-  /// No description provided for @canvasAccessToken.
-  ///
-  /// In zh, this message translates to:
-  /// **'访问令牌'**
-  String get canvasAccessToken;
-
-  /// No description provided for @canvasSchoolBId.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校 B SSO 学号'**
-  String get canvasSchoolBId;
-
-  /// No description provided for @canvasSchoolBPassword.
-  ///
-  /// In zh, this message translates to:
-  /// **'SSO 密码'**
-  String get canvasSchoolBPassword;
-
-  /// No description provided for @canvasSchoolBPasswordHelper.
-  ///
-  /// In zh, this message translates to:
-  /// **'用本机密钥加密保存，只用来登录学校 B SSO'**
-  String get canvasSchoolBPasswordHelper;
-
-  /// No description provided for @canvasNeedsSchoolA.
-  ///
-  /// In zh, this message translates to:
-  /// **'需要先在 Look Studio 登录学校 A统一身份认证。'**
-  String get canvasNeedsSchoolA;
-
-  /// No description provided for @canvasSchoolATitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'沿用 Look Studio 的学校 A登录'**
-  String get canvasSchoolATitle;
-
-  /// No description provided for @canvasSchoolBTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'用学校 B SSO 登录 Canvas'**
-  String get canvasSchoolBTitle;
-
-  /// No description provided for @canvasSchoolABody.
-  ///
-  /// In zh, this message translates to:
-  /// **'不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用和 Look 相同的方式自动续上：先静默单点登录，必要时用你记住的密码。'**
-  String get canvasSchoolABody;
-
-  /// No description provided for @canvasSchoolBBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用保存的 SSO 账号自动重新登录。'**
-  String get canvasSchoolBBody;
-
-  /// No description provided for @canvasAutoTokenTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'由 Look Studio 创建并自动续期'**
-  String get canvasAutoTokenTitle;
-
-  /// No description provided for @canvasAutoTokenBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'通过统一身份认证在你的 Canvas 账户里新建一个 90 天的访问令牌，到期前 14 天自动换新，断开时撤销'**
-  String get canvasAutoTokenBody;
-
-  /// No description provided for @canvasManualToken.
-  ///
-  /// In zh, this message translates to:
-  /// **'手动获取令牌'**
-  String get canvasManualToken;
-
-  /// No description provided for @canvasTokenStep1.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开 Canvas，进入「账户 → 设置」'**
-  String get canvasTokenStep1;
-
-  /// No description provided for @canvasTokenStep2.
-  ///
-  /// In zh, this message translates to:
-  /// **'在「已批准的集成」下点「新建访问许可证」，用途填 Look Studio；过期日期可以留空'**
-  String get canvasTokenStep2;
-
-  /// No description provided for @canvasTokenStep3.
-  ///
-  /// In zh, this message translates to:
-  /// **'复制生成的令牌（只显示一次），粘贴到下面'**
-  String get canvasTokenStep3;
-
-  /// No description provided for @canvasOpenSettings.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开 Canvas 设置页'**
-  String get canvasOpenSettings;
-
-  /// No description provided for @canvasTokenHelper.
-  ///
-  /// In zh, this message translates to:
-  /// **'加密保存在本机，界面上只显示末 4 位。令牌到期或被撤销时会提醒你重新粘贴'**
-  String get canvasTokenHelper;
-
-  /// No description provided for @canvasSessionAuth.
-  ///
-  /// In zh, this message translates to:
-  /// **'统一身份认证会话 · 过期自动续上'**
-  String get canvasSessionAuth;
-
-  /// No description provided for @canvasTokenTail.
-  ///
-  /// In zh, this message translates to:
-  /// **'访问令牌 ····{value}'**
-  String canvasTokenTail(Object value);
-
-  /// No description provided for @canvasAutoRenew.
-  ///
-  /// In zh, this message translates to:
-  /// **'自动续期'**
-  String get canvasAutoRenew;
-
-  /// No description provided for @canvasTokenExpires.
-  ///
-  /// In zh, this message translates to:
-  /// **'{value}到期 {value2}'**
-  String canvasTokenExpires(Object value, Object value2);
-
-  /// No description provided for @canvasCurrentToken.
-  ///
-  /// In zh, this message translates to:
-  /// **'当前令牌'**
-  String get canvasCurrentToken;
-
-  /// No description provided for @canvasConnectedAs.
-  ///
-  /// In zh, this message translates to:
-  /// **'已连接为 {value}'**
-  String canvasConnectedAs(Object value);
-
-  /// No description provided for @canvasNotSynced.
-  ///
-  /// In zh, this message translates to:
-  /// **'还没有同步'**
-  String get canvasNotSynced;
-
-  /// No description provided for @canvasSyncInterval.
-  ///
-  /// In zh, this message translates to:
-  /// **'每 15 分钟自动同步'**
-  String get canvasSyncInterval;
-
-  /// No description provided for @canvasSummary.
-  ///
-  /// In zh, this message translates to:
-  /// **'{length} 门课程 · {open} 项作业待交'**
-  String canvasSummary(Object length, Object open);
-
-  /// No description provided for @canvasChangeMethod.
-  ///
-  /// In zh, this message translates to:
-  /// **'更改登录方式'**
-  String get canvasChangeMethod;
-
-  /// No description provided for @canvasCourseLinks.
-  ///
-  /// In zh, this message translates to:
-  /// **'课程关联'**
-  String get canvasCourseLinks;
-
-  /// No description provided for @canvasCourseLinksBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业按关联的 Look 课程归类，课件会下载到那门课的文件夹。同名课程会自动关联。'**
-  String get canvasCourseLinksBody;
-
-  /// No description provided for @canvasLoadingCourses.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在读取课程…'**
-  String get canvasLoadingCourses;
-
-  /// No description provided for @canvasNoCourses.
-  ///
-  /// In zh, this message translates to:
-  /// **'这个学期在 Canvas 上没有课程'**
-  String get canvasNoCourses;
-
-  /// No description provided for @canvasLookReplay.
-  ///
-  /// In zh, this message translates to:
-  /// **'Look 录播'**
-  String get canvasLookReplay;
-
-  /// No description provided for @canvasAnySite.
-  ///
-  /// In zh, this message translates to:
-  /// **'任意 Canvas 站点，用访问令牌'**
-  String get canvasAnySite;
-
-  /// No description provided for @canvasNoLink.
-  ///
-  /// In zh, this message translates to:
-  /// **'不关联'**
-  String get canvasNoLink;
-
-  /// No description provided for @canvasAutoNoMatch.
-  ///
-  /// In zh, this message translates to:
-  /// **'自动：未找到同名课程'**
-  String get canvasAutoNoMatch;
-
-  /// No description provided for @canvasAutoMatch.
-  ///
-  /// In zh, this message translates to:
-  /// **'自动：{title}'**
-  String canvasAutoMatch(Object title);
-
-  /// No description provided for @canvasOpenAssignments.
-  ///
-  /// In zh, this message translates to:
-  /// **'{open} 项作业待交'**
-  String canvasOpenAssignments(Object open);
-
-  /// No description provided for @canvasNoOpenAssignments.
-  ///
-  /// In zh, this message translates to:
-  /// **'没有待交作业'**
-  String get canvasNoOpenAssignments;
-
-  /// No description provided for @canvasLinkCourse.
-  ///
-  /// In zh, this message translates to:
-  /// **'关联到 Look 课程'**
-  String get canvasLinkCourse;
-
-  /// No description provided for @canvasAutoLink.
-  ///
-  /// In zh, this message translates to:
-  /// **'自动匹配同名课程'**
-  String get canvasAutoLink;
-
-  /// No description provided for @canvasSchoolConnected.
-  ///
-  /// In zh, this message translates to:
-  /// **'{value} Canvas 已连接'**
-  String canvasSchoolConnected(Object value);
-
-  /// No description provided for @canvasConnect.
-  ///
-  /// In zh, this message translates to:
-  /// **'连接 Canvas'**
-  String get canvasConnect;
-
-  /// No description provided for @canvasEntryHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校 A、学校 B或其他学校的 Canvas：作业进日程，课件下载到课程文件夹'**
-  String get canvasEntryHint;
 
   /// No description provided for @dateMonthDayTime.
   ///
@@ -10780,47 +10222,11 @@ abstract class AppLocalizations {
   /// **'截止 {value} · {label}'**
   String assignmentDue(Object value, Object label);
 
-  /// No description provided for @canvasAssignmentsTab.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业 {length}'**
-  String canvasAssignmentsTab(Object length);
-
-  /// No description provided for @canvasAnnouncementsTab.
-  ///
-  /// In zh, this message translates to:
-  /// **'公告 {length}'**
-  String canvasAnnouncementsTab(Object length);
-
-  /// No description provided for @canvasSavedToCourse.
-  ///
-  /// In zh, this message translates to:
-  /// **'已保存到课程文件夹'**
-  String get canvasSavedToCourse;
-
   /// No description provided for @commonDownloadFailed.
   ///
   /// In zh, this message translates to:
   /// **'下载失败：{e}'**
   String commonDownloadFailed(Object e);
-
-  /// No description provided for @canvasAnnouncement.
-  ///
-  /// In zh, this message translates to:
-  /// **'公告'**
-  String get canvasAnnouncement;
-
-  /// No description provided for @canvasNoAssignments.
-  ///
-  /// In zh, this message translates to:
-  /// **'没有作业'**
-  String get canvasNoAssignments;
-
-  /// No description provided for @canvasNoAssignmentsBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'老师在 Canvas 上布置作业后，会出现在这里和日程里。'**
-  String get canvasNoAssignmentsBody;
 
   /// No description provided for @assignmentDueShort.
   ///
@@ -10834,48 +10240,6 @@ abstract class AppLocalizations {
   /// **'{pts} 分'**
   String assignmentPoints(Object pts);
 
-  /// No description provided for @canvasLoadingFiles.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在读取 Canvas 课件'**
-  String get canvasLoadingFiles;
-
-  /// No description provided for @canvasNoFiles.
-  ///
-  /// In zh, this message translates to:
-  /// **'没有可见的课件'**
-  String get canvasNoFiles;
-
-  /// No description provided for @canvasNoFilesBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'这门课的文件页和单元里都没有你能下载的文件。'**
-  String get canvasNoFilesBody;
-
-  /// No description provided for @canvasFileUpdated.
-  ///
-  /// In zh, this message translates to:
-  /// **'{month}月{day}日更新'**
-  String canvasFileUpdated(Object month, Object day);
-
-  /// No description provided for @canvasFileLocked.
-  ///
-  /// In zh, this message translates to:
-  /// **'老师已锁定'**
-  String get canvasFileLocked;
-
-  /// No description provided for @canvasDownloadToCourse.
-  ///
-  /// In zh, this message translates to:
-  /// **'下载到课程文件夹'**
-  String get canvasDownloadToCourse;
-
-  /// No description provided for @canvasNoAnnouncements.
-  ///
-  /// In zh, this message translates to:
-  /// **'最近 30 天没有公告'**
-  String get canvasNoAnnouncements;
-
   /// No description provided for @workspaceTitle.
   ///
   /// In zh, this message translates to:
@@ -10885,7 +10249,7 @@ abstract class AppLocalizations {
   /// No description provided for @workspaceBody.
   ///
   /// In zh, this message translates to:
-  /// **'Look Studio 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。'**
+  /// **'Coursive 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。'**
   String get workspaceBody;
 
   /// No description provided for @workspacePreparing.
@@ -10935,12 +10299,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'{value} · 个人资料'**
   String shellProfileTooltip(Object value);
-
-  /// No description provided for @shellSessionExpired.
-  ///
-  /// In zh, this message translates to:
-  /// **'登录已过期，自动续期没有成功。点这里重新登录。'**
-  String get shellSessionExpired;
 
   /// No description provided for @appDaemonFailed.
   ///
@@ -11155,7 +10513,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutLicensesHint.
   ///
   /// In zh, this message translates to:
-  /// **'Look Studio 用到的开源组件'**
+  /// **'Coursive 用到的开源组件'**
   String get aboutLicensesHint;
 
   /// No description provided for @aboutReward.
@@ -11173,7 +10531,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutRewardBody.
   ///
   /// In zh, this message translates to:
-  /// **'觉得 Look Studio 有用，可以用微信扫码赞赏。'**
+  /// **'觉得 Coursive 有用，可以用微信扫码赞赏。'**
   String get aboutRewardBody;
 
   /// No description provided for @aboutRewardPhoneHint.
@@ -11187,12 +10545,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'微信赞赏码'**
   String get aboutRewardImage;
-
-  /// No description provided for @colorAzureBlue.
-  ///
-  /// In zh, this message translates to:
-  /// **'湛蓝'**
-  String get colorAzureBlue;
 
   /// No description provided for @toolPrepareDownload.
   ///
@@ -11211,354 +10563,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'准备开关插件'**
   String get toolPreparePlugin;
-
-  /// No description provided for @loginWithSchoolA.
-  ///
-  /// In zh, this message translates to:
-  /// **'使用学校 A统一身份认证'**
-  String get loginWithSchoolA;
-
-  /// No description provided for @nasTitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'课程工作台'**
-  String get nasTitle;
-
-  /// No description provided for @nasRunHomework.
-  ///
-  /// In zh, this message translates to:
-  /// **'运行一轮作业任务'**
-  String get nasRunHomework;
-
-  /// No description provided for @nasRunCalendar.
-  ///
-  /// In zh, this message translates to:
-  /// **'刷新 NAS 日历'**
-  String get nasRunCalendar;
-
-  /// No description provided for @nasHomeworkConfirm.
-  ///
-  /// In zh, this message translates to:
-  /// **'将使用 NAS 已配置的 Codex 服务，处理最多两项符合条件的作业。已有稿件保护和任务锁继续生效。生成完成后仍需检查，不会自动提交。'**
-  String get nasHomeworkConfirm;
-
-  /// No description provided for @nasCalendarConfirm.
-  ///
-  /// In zh, this message translates to:
-  /// **'请求 NAS 刷新日历。当天已成功同步时，现有程序可能跳过重复更新；不会运行作业生成。'**
-  String get nasCalendarConfirm;
-
-  /// No description provided for @nasRun.
-  ///
-  /// In zh, this message translates to:
-  /// **'开始运行'**
-  String get nasRun;
-
-  /// No description provided for @nasTextTruncated.
-  ///
-  /// In zh, this message translates to:
-  /// **'仅展示前 12000 字；全文保留在同步目录中。'**
-  String get nasTextTruncated;
-
-  /// No description provided for @nasReady.
-  ///
-  /// In zh, this message translates to:
-  /// **'已生成，待检查'**
-  String get nasReady;
-
-  /// No description provided for @nasSubmitted.
-  ///
-  /// In zh, this message translates to:
-  /// **'平台已提交'**
-  String get nasSubmitted;
-
-  /// No description provided for @nasFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'生成失败'**
-  String get nasFailed;
-
-  /// No description provided for @nasExisting.
-  ///
-  /// In zh, this message translates to:
-  /// **'已有文件'**
-  String get nasExisting;
-
-  /// No description provided for @nasRunning.
-  ///
-  /// In zh, this message translates to:
-  /// **'生成中'**
-  String get nasRunning;
-
-  /// No description provided for @nasQueued.
-  ///
-  /// In zh, this message translates to:
-  /// **'排队中'**
-  String get nasQueued;
-
-  /// No description provided for @nasNeedsInput.
-  ///
-  /// In zh, this message translates to:
-  /// **'需要补充材料或查看 NAS 运行记录'**
-  String get nasNeedsInput;
-
-  /// No description provided for @nasRefresh.
-  ///
-  /// In zh, this message translates to:
-  /// **'刷新状态'**
-  String get nasRefresh;
-
-  /// No description provided for @nasOnline.
-  ///
-  /// In zh, this message translates to:
-  /// **'NAS 已连接 · 资料来自本机同步目录'**
-  String get nasOnline;
-
-  /// No description provided for @nasOffline.
-  ///
-  /// In zh, this message translates to:
-  /// **'NAS 未连接 · 展示已有资料和上次状态'**
-  String get nasOffline;
-
-  /// No description provided for @nasObserved.
-  ///
-  /// In zh, this message translates to:
-  /// **'NAS 状态采集时间'**
-  String get nasObserved;
-
-  /// No description provided for @nasAllCourses.
-  ///
-  /// In zh, this message translates to:
-  /// **'全部课程'**
-  String get nasAllCourses;
-
-  /// No description provided for @nasSearch.
-  ///
-  /// In zh, this message translates to:
-  /// **'搜索资料与作业'**
-  String get nasSearch;
-
-  /// No description provided for @nasLinkCourse.
-  ///
-  /// In zh, this message translates to:
-  /// **'关联录播课程'**
-  String get nasLinkCourse;
-
-  /// No description provided for @nasUnlinked.
-  ///
-  /// In zh, this message translates to:
-  /// **'未关联录播课程'**
-  String get nasUnlinked;
-
-  /// No description provided for @nasOpenRecording.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开课程录像'**
-  String get nasOpenRecording;
-
-  /// No description provided for @nasHomework.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业'**
-  String get nasHomework;
-
-  /// No description provided for @nasDeadlines.
-  ///
-  /// In zh, this message translates to:
-  /// **'截止日程'**
-  String get nasDeadlines;
-
-  /// No description provided for @nasMaterials.
-  ///
-  /// In zh, this message translates to:
-  /// **'资料与成果'**
-  String get nasMaterials;
-
-  /// No description provided for @nasServices.
-  ///
-  /// In zh, this message translates to:
-  /// **'后台服务'**
-  String get nasServices;
-
-  /// No description provided for @nasSeparateStates.
-  ///
-  /// In zh, this message translates to:
-  /// **'生成状态与平台提交状态分别显示；生成稿请检查后使用。'**
-  String get nasSeparateStates;
-
-  /// No description provided for @nasUnconfirmed.
-  ///
-  /// In zh, this message translates to:
-  /// **'提交待确认'**
-  String get nasUnconfirmed;
-
-  /// No description provided for @nasDue.
-  ///
-  /// In zh, this message translates to:
-  /// **'截止'**
-  String get nasDue;
-
-  /// No description provided for @nasTimeout.
-  ///
-  /// In zh, this message translates to:
-  /// **'上次生成超过 45 分钟限制，需要处理后重试。'**
-  String get nasTimeout;
-
-  /// No description provided for @nasViewSource.
-  ///
-  /// In zh, this message translates to:
-  /// **'查看学校原页面'**
-  String get nasViewSource;
-
-  /// No description provided for @nasNoReport.
-  ///
-  /// In zh, this message translates to:
-  /// **'暂无已同步的报告入口，可在资料与成果中查找。'**
-  String get nasNoReport;
-
-  /// No description provided for @nasServicesHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'后台任务由 NAS 独立运行，关闭本页面不影响原有定时任务。状态刷新不会启动生成。'**
-  String get nasServicesHint;
-
-  /// No description provided for @nasServiceState.
-  ///
-  /// In zh, this message translates to:
-  /// **'服务状态'**
-  String get nasServiceState;
-
-  /// No description provided for @nasLastRun.
-  ///
-  /// In zh, this message translates to:
-  /// **'最近完成'**
-  String get nasLastRun;
-
-  /// No description provided for @nasNextRun.
-  ///
-  /// In zh, this message translates to:
-  /// **'下次计划'**
-  String get nasNextRun;
-
-  /// No description provided for @nasEntry.
-  ///
-  /// In zh, this message translates to:
-  /// **'课程工作台'**
-  String get nasEntry;
-
-  /// No description provided for @nasDeadlineCompleted.
-  ///
-  /// In zh, this message translates to:
-  /// **'日历标记已完成'**
-  String get nasDeadlineCompleted;
-
-  /// No description provided for @nasHomeworkService.
-  ///
-  /// In zh, this message translates to:
-  /// **'作业生成'**
-  String get nasHomeworkService;
-
-  /// No description provided for @nasCalendarService.
-  ///
-  /// In zh, this message translates to:
-  /// **'日历同步定时任务'**
-  String get nasCalendarService;
-
-  /// No description provided for @nasLectureService.
-  ///
-  /// In zh, this message translates to:
-  /// **'录课订阅'**
-  String get nasLectureService;
-
-  /// No description provided for @nasCalendarContainer.
-  ///
-  /// In zh, this message translates to:
-  /// **'日历同步运行环境'**
-  String get nasCalendarContainer;
-
-  /// No description provided for @nasRelatedFiles.
-  ///
-  /// In zh, this message translates to:
-  /// **'查看本课程资料与代码'**
-  String get nasRelatedFiles;
-
-  /// No description provided for @nasFullFile.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开完整文件'**
-  String get nasFullFile;
-
-  /// No description provided for @nasCalendarSource.
-  ///
-  /// In zh, this message translates to:
-  /// **'NAS 同步'**
-  String get nasCalendarSource;
-
-  /// No description provided for @nasScanResult.
-  ///
-  /// In zh, this message translates to:
-  /// **'最近扫描：任务数 / 失败数'**
-  String get nasScanResult;
-
-  /// No description provided for @nasCampusOffline.
-  ///
-  /// In zh, this message translates to:
-  /// **'PlatformB 尚未登录：已同步资料、笔记和 NAS 任务仍可使用。点击登录以获取受保护的录课。'**
-  String get nasCampusOffline;
-
-  /// No description provided for @nasGenerationUnknown.
-  ///
-  /// In zh, this message translates to:
-  /// **'生成状态未单独记录'**
-  String get nasGenerationUnknown;
-
-  /// No description provided for @schoolLabel.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校'**
-  String get schoolLabel;
-
-  /// No description provided for @schoolSchoolBLogin.
-  ///
-  /// In zh, this message translates to:
-  /// **'登录学校 B PlatformB'**
-  String get schoolSchoolBLogin;
-
-  /// No description provided for @schoolSchoolBHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'在浏览器中完成学校 B统一身份认证，密码仅在学校 B认证页面输入。'**
-  String get schoolSchoolBHint;
-
-  /// No description provided for @schoolBrowserWaiting.
-  ///
-  /// In zh, this message translates to:
-  /// **'等待浏览器登录完成'**
-  String get schoolBrowserWaiting;
-
-  /// No description provided for @schoolBrowserLogin.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开浏览器登录'**
-  String get schoolBrowserLogin;
-
-  /// No description provided for @schoolSwitching.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在切换学校…'**
-  String get schoolSwitching;
-
-  /// No description provided for @schoolReconnectFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'学校已保存，但连接尚未恢复，请重新打开应用。'**
-  String get schoolReconnectFailed;
-
-  /// No description provided for @schoolChange.
-  ///
-  /// In zh, this message translates to:
-  /// **'切换学校'**
-  String get schoolChange;
 
   /// No description provided for @catalogCourseware.
   ///
@@ -12127,7 +11131,7 @@ abstract class AppLocalizations {
   /// No description provided for @localCourseCreate.
   ///
   /// In zh, this message translates to:
-  /// **'新建本地课程'**
+  /// **'新建课程'**
   String get localCourseCreate;
 
   /// No description provided for @localCourseName.
@@ -12145,14 +11149,8 @@ abstract class AppLocalizations {
   /// No description provided for @localCourseTeacher.
   ///
   /// In zh, this message translates to:
-  /// **'讲师或来源（可选）'**
+  /// **'讲师或出处（选填）'**
   String get localCourseTeacher;
-
-  /// No description provided for @localCourseImportHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'视频按文件名顺序生成独立课次。也可以先创建课程，稍后添加视频。'**
-  String get localCourseImportHint;
 
   /// No description provided for @localVideosChoose.
   ///
@@ -12166,22 +11164,16 @@ abstract class AppLocalizations {
   /// **'添加视频'**
   String get localVideosAdd;
 
-  /// No description provided for @localVideosImporting.
-  ///
-  /// In zh, this message translates to:
-  /// **'正在导入'**
-  String get localVideosImporting;
-
   /// No description provided for @localVideosPartialSaved.
   ///
   /// In zh, this message translates to:
-  /// **'已创建的课程和成功导入的课次已保留。重试会从失败的文件继续。'**
+  /// **'课程和已导入的课次都已保留。继续导入会从这个视频开始。'**
   String get localVideosPartialSaved;
 
   /// No description provided for @localVideoLimit.
   ///
   /// In zh, this message translates to:
-  /// **'单个视频不能超过 4 GiB'**
+  /// **'超过 4 GiB，请移除后再导入'**
   String get localVideoLimit;
 
   /// No description provided for @folderSyncTitle.
@@ -12193,7 +11185,7 @@ abstract class AppLocalizations {
   /// No description provided for @folderSyncBody.
   ///
   /// In zh, this message translates to:
-  /// **'把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；学校登录、模型密钥和本机设置留在本机。'**
+  /// **'把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。'**
   String get folderSyncBody;
 
   /// No description provided for @folderSyncAccount.
@@ -12344,78 +11336,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前按课程同步；整库 WebDAV 同步尚未启用'**
   String get folderSyncUsingCourseSync;
-
-  /// No description provided for @nasWorkspaceIntro.
-  ///
-  /// In zh, this message translates to:
-  /// **'资料、作业和日程都在本机；NAS 只负责在多台设备之间搬运课程文件夹。'**
-  String get nasWorkspaceIntro;
-
-  /// No description provided for @nasEmptyHomework.
-  ///
-  /// In zh, this message translates to:
-  /// **'还没有作业记录'**
-  String get nasEmptyHomework;
-
-  /// No description provided for @nasEmptyHomeworkBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'在 NAS 上运行一次作业扫描，或等自动同步完成后，这里会列出每份作业的生成与提交状态。'**
-  String get nasEmptyHomeworkBody;
-
-  /// No description provided for @nasEmptyDeadlines.
-  ///
-  /// In zh, this message translates to:
-  /// **'还没有截止日程'**
-  String get nasEmptyDeadlines;
-
-  /// No description provided for @nasEmptyDeadlinesBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'运行日程同步后，课程截止日期会汇总到这里。'**
-  String get nasEmptyDeadlinesBody;
-
-  /// No description provided for @nasEmptyMaterials.
-  ///
-  /// In zh, this message translates to:
-  /// **'还没有资料'**
-  String get nasEmptyMaterials;
-
-  /// No description provided for @nasEmptyMaterialsBody.
-  ///
-  /// In zh, this message translates to:
-  /// **'课程文件夹里的讲义、PDF 和笔记同步到本机后会出现在这里。'**
-  String get nasEmptyMaterialsBody;
-
-  /// No description provided for @nasFilesUnavailable.
-  ///
-  /// In zh, this message translates to:
-  /// **'本机课程目录还不可用'**
-  String get nasFilesUnavailable;
-
-  /// No description provided for @nasOpenSync.
-  ///
-  /// In zh, this message translates to:
-  /// **'打开课程同步'**
-  String get nasOpenSync;
-
-  /// No description provided for @nasServicesOptional.
-  ///
-  /// In zh, this message translates to:
-  /// **'NAS 服务是可选的：不连接也能浏览本机资料。连接后可以在这里手动触发作业扫描和日程同步。'**
-  String get nasServicesOptional;
-
-  /// No description provided for @nasEntryHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'连接 NAS 后，资料、作业和日程会同步到本机'**
-  String get nasEntryHint;
-
-  /// No description provided for @nasEntryConnected.
-  ///
-  /// In zh, this message translates to:
-  /// **'{host} · 同步 {n} 门课程'**
-  String nasEntryConnected(Object host, Object n);
 
   /// No description provided for @folderSyncSettingsGroup.
   ///
@@ -12920,6 +11840,606 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'答案：{letter}'**
   String studyAnswerLabel(Object letter);
+
+  /// No description provided for @coursesEmptyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有课程'**
+  String get coursesEmptyTitle;
+
+  /// No description provided for @coursesEmptyBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建一门课程，从本机导入课堂录像，就能开始看课、记笔记和复习。'**
+  String get coursesEmptyBody;
+
+  /// No description provided for @coursesEmptySources.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装来源插件'**
+  String get coursesEmptySources;
+
+  /// No description provided for @coursesClearSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'清除搜索'**
+  String get coursesClearSearch;
+
+  /// No description provided for @coursesViewAllTerms.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看全部学期'**
+  String get coursesViewAllTerms;
+
+  /// No description provided for @coursesAllHidden.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程都已隐藏'**
+  String get coursesAllHidden;
+
+  /// No description provided for @coursesShowHidden.
+  ///
+  /// In zh, this message translates to:
+  /// **'显示已隐藏的课程'**
+  String get coursesShowHidden;
+
+  /// No description provided for @localCourseCreateBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程保存在本机。课堂录像可以现在导入，也可以稍后添加。'**
+  String get localCourseCreateBody;
+
+  /// No description provided for @localCourseNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：线性代数'**
+  String get localCourseNameHint;
+
+  /// No description provided for @localCourseSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建课程'**
+  String get localCourseSubmit;
+
+  /// No description provided for @localCourseSubmitWithVideos.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count, plural, other{创建并导入 {count} 个视频}}'**
+  String localCourseSubmitWithVideos(int count);
+
+  /// No description provided for @localCourseCreateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法创建课程：{error}'**
+  String localCourseCreateFailed(Object error);
+
+  /// No description provided for @localVideosSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'课堂录像'**
+  String get localVideosSection;
+
+  /// No description provided for @localVideosSectionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频按文件名顺序导入，每个视频成为一个课次。单个视频不超过 4 GiB。'**
+  String get localVideosSectionHint;
+
+  /// No description provided for @localVideosRechoose.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新选择'**
+  String get localVideosRechoose;
+
+  /// No description provided for @localVideosSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个视频 · 共 {size}'**
+  String localVideosSummary(Object count, Object size);
+
+  /// No description provided for @localVideosSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count, plural, =0{导入视频} other{导入 {count} 个视频}}'**
+  String localVideosSubmit(int count);
+
+  /// No description provided for @localVideosProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导入 {done}/{total}'**
+  String localVideosProgress(Object done, Object total);
+
+  /// No description provided for @localVideoImportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法导入“{name}”：{error}'**
+  String localVideoImportFailed(Object name, Object error);
+
+  /// No description provided for @localVideosPickFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法选择视频：{error}'**
+  String localVideosPickFailed(Object error);
+
+  /// No description provided for @localVideosResume.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续导入'**
+  String get localVideosResume;
+
+  /// No description provided for @localVideosLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'稍后添加'**
+  String get localVideosLater;
+
+  /// No description provided for @sourcesTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源'**
+  String get sourcesTitle;
+
+  /// No description provided for @sourcesEmptyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有来源插件'**
+  String get sourcesEmptyTitle;
+
+  /// No description provided for @sourcesEmptyBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源插件可以接入课程平台，同步课程、回放和作业。选择插件所在的文件夹即可安装。'**
+  String get sourcesEmptyBody;
+
+  /// No description provided for @sourcesInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'从文件夹安装'**
+  String get sourcesInstall;
+
+  /// No description provided for @sourcesIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'每个插件提供一个或多个来源。登录信息只保存在本机。'**
+  String get sourcesIntro;
+
+  /// No description provided for @sourcesChooseFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择插件文件夹'**
+  String get sourcesChooseFolder;
+
+  /// No description provided for @sourcesCannotRead.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取插件：{error}'**
+  String sourcesCannotRead(Object error);
+
+  /// No description provided for @sourcesCannotInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法安装插件：{error}'**
+  String sourcesCannotInstall(Object error);
+
+  /// No description provided for @sourcesInstalled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已安装「{name}」'**
+  String sourcesInstalled(Object name);
+
+  /// No description provided for @sourcesConsentTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装「{name}」？'**
+  String sourcesConsentTitle(Object name);
+
+  /// No description provided for @sourcesVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本 {version}'**
+  String sourcesVersion(Object version);
+
+  /// No description provided for @sourcesConsentHosts.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件会访问的网站'**
+  String get sourcesConsentHosts;
+
+  /// No description provided for @sourcesConsentBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件会用你的账号访问上面列出的网站。只安装你信任的插件。'**
+  String get sourcesConsentBody;
+
+  /// No description provided for @sourcesUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个插件不支持本机的系统，无法安装。'**
+  String get sourcesUnavailable;
+
+  /// No description provided for @sourcesInstallPlugin.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装插件'**
+  String get sourcesInstallPlugin;
+
+  /// No description provided for @sourcesRemoveTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载「{name}」？'**
+  String sourcesRemoveTitle(Object name);
+
+  /// No description provided for @sourcesRemoveBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件和它保存的登录信息会被删除。已同步的课程和课次留在本机，但不能再刷新。'**
+  String get sourcesRemoveBody;
+
+  /// No description provided for @sourcesRemovePlugin.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载插件'**
+  String get sourcesRemovePlugin;
+
+  /// No description provided for @sourcesMarketTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源插件'**
+  String get sourcesMarketTitle;
+
+  /// No description provided for @sourcesMarketEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件目录里还没有来源插件，也可以从文件夹安装。'**
+  String get sourcesMarketEmpty;
+
+  /// No description provided for @sourcesMarketFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取插件目录：{error}'**
+  String sourcesMarketFailed(Object error);
+
+  /// No description provided for @sourcesMarketUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'不支持本机'**
+  String get sourcesMarketUnsupported;
+
+  /// No description provided for @sourcesMarketUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新到 {version}'**
+  String sourcesMarketUpdate(Object version);
+
+  /// No description provided for @sourcesMarketVerifying.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在下载并校验…'**
+  String get sourcesMarketVerifying;
+
+  /// No description provided for @sourcesDisabled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停用'**
+  String get sourcesDisabled;
+
+  /// No description provided for @sourcesNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'未安装来源插件'**
+  String get sourcesNone;
+
+  /// No description provided for @sourcesSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个来源 · {signed} 个已登录'**
+  String sourcesSummary(Object count, Object signed);
+
+  /// No description provided for @sourceFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法启动：{error}'**
+  String sourceFailed(Object error);
+
+  /// No description provided for @sourceExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录已过期'**
+  String get sourceExpired;
+
+  /// No description provided for @sourceSignedInPlain.
+  ///
+  /// In zh, this message translates to:
+  /// **'已登录'**
+  String get sourceSignedInPlain;
+
+  /// No description provided for @sourceSignedInAs.
+  ///
+  /// In zh, this message translates to:
+  /// **'已登录为 {account}'**
+  String sourceSignedInAs(Object account);
+
+  /// No description provided for @sourceSignedOut.
+  ///
+  /// In zh, this message translates to:
+  /// **'未登录'**
+  String get sourceSignedOut;
+
+  /// No description provided for @sourceRestart.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新启动'**
+  String get sourceRestart;
+
+  /// No description provided for @sourceSignOut.
+  ///
+  /// In zh, this message translates to:
+  /// **'退出登录'**
+  String get sourceSignOut;
+
+  /// No description provided for @sourceSignedIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'已登录「{name}」'**
+  String sourceSignedIn(Object name);
+
+  /// No description provided for @sourceExpiredBanner.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{name}」的登录已过期，重新登录后继续同步'**
+  String sourceExpiredBanner(Object name);
+
+  /// No description provided for @sourceSignInTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录「{name}」'**
+  String sourceSignInTitle(Object name);
+
+  /// No description provided for @sourceSignInBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'由插件完成登录，账号信息只保存在本机。'**
+  String get sourceSignInBody;
+
+  /// No description provided for @sourceSignInContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续登录'**
+  String get sourceSignInContinue;
+
+  /// No description provided for @sourceSignInIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法完成登录：插件没有给出下一步。请重试。'**
+  String get sourceSignInIncomplete;
+
+  /// No description provided for @sourceFieldNotStored.
+  ///
+  /// In zh, this message translates to:
+  /// **'不会保存，下次登录需要重新填写'**
+  String get sourceFieldNotStored;
+
+  /// No description provided for @sourceFieldRequired.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写{field}'**
+  String sourceFieldRequired(Object field);
+
+  /// No description provided for @sourceChallengeAnswer.
+  ///
+  /// In zh, this message translates to:
+  /// **'验证码'**
+  String get sourceChallengeAnswer;
+
+  /// No description provided for @lmsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'作业与通知'**
+  String get lmsTitle;
+
+  /// No description provided for @lmsBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'学习平台'**
+  String get lmsBadge;
+
+  /// No description provided for @lmsEmptyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可用的学习平台'**
+  String get lmsEmptyTitle;
+
+  /// No description provided for @lmsEmptyBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录提供学习平台的来源后，作业、文件和通知会显示在这里。'**
+  String get lmsEmptyBody;
+
+  /// No description provided for @lmsEntryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'学习平台的作业、文件和通知'**
+  String get lmsEntryHint;
+
+  /// No description provided for @lmsSignedOut.
+  ///
+  /// In zh, this message translates to:
+  /// **'未登录'**
+  String get lmsSignedOut;
+
+  /// No description provided for @lmsNotSynced.
+  ///
+  /// In zh, this message translates to:
+  /// **'尚未同步'**
+  String get lmsNotSynced;
+
+  /// No description provided for @lmsSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'{courses} 门课程 · {open} 项待交作业'**
+  String lmsSummary(Object courses, Object open);
+
+  /// No description provided for @lmsSyncFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法同步：{error}'**
+  String lmsSyncFailed(Object error);
+
+  /// No description provided for @lmsCourseLinks.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程对应'**
+  String get lmsCourseLinks;
+
+  /// No description provided for @lmsCourseLinksBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'把平台课程对应到资料库里的课程，作业和文件就会出现在课程页。'**
+  String get lmsCourseLinksBody;
+
+  /// No description provided for @lmsLoadingCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加载平台课程'**
+  String get lmsLoadingCourses;
+
+  /// No description provided for @lmsNoCourses.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个平台没有课程'**
+  String get lmsNoCourses;
+
+  /// No description provided for @lmsNoLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'不对应'**
+  String get lmsNoLink;
+
+  /// No description provided for @lmsAutoNoMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动：没有匹配的课程'**
+  String get lmsAutoNoMatch;
+
+  /// No description provided for @lmsAutoMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动：{title}'**
+  String lmsAutoMatch(Object title);
+
+  /// No description provided for @lmsLinkCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择对应的课程'**
+  String get lmsLinkCourse;
+
+  /// No description provided for @lmsAutoLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动匹配'**
+  String get lmsAutoLink;
+
+  /// No description provided for @lmsNoOpenAssignments.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有待交作业'**
+  String get lmsNoOpenAssignments;
+
+  /// No description provided for @lmsCourseHeading.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name} · 学习平台'**
+  String lmsCourseHeading(Object name);
+
+  /// No description provided for @lmsAssignmentsTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'作业 {count}'**
+  String lmsAssignmentsTab(Object count);
+
+  /// No description provided for @lmsFiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件'**
+  String get lmsFiles;
+
+  /// No description provided for @lmsAnnouncementsTab.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知 {count}'**
+  String lmsAnnouncementsTab(Object count);
+
+  /// No description provided for @lmsAnnouncements.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知'**
+  String get lmsAnnouncements;
+
+  /// No description provided for @lmsSavedToCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到课程文件夹'**
+  String get lmsSavedToCourse;
+
+  /// No description provided for @lmsNoAssignments.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有作业'**
+  String get lmsNoAssignments;
+
+  /// No description provided for @lmsNoAssignmentsBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台发布作业后会显示在这里。'**
+  String get lmsNoAssignmentsBody;
+
+  /// No description provided for @lmsLoadingFiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在加载文件'**
+  String get lmsLoadingFiles;
+
+  /// No description provided for @lmsNoFiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有文件'**
+  String get lmsNoFiles;
+
+  /// No description provided for @lmsNoFilesBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台上传课程文件后会显示在这里。'**
+  String get lmsNoFilesBody;
+
+  /// No description provided for @lmsFileUpdated.
+  ///
+  /// In zh, this message translates to:
+  /// **'{month} 月 {day} 日更新'**
+  String lmsFileUpdated(Object month, Object day);
+
+  /// No description provided for @lmsDownloadToCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载到课程文件夹'**
+  String get lmsDownloadToCourse;
+
+  /// No description provided for @lmsNoAnnouncements.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有通知'**
+  String get lmsNoAnnouncements;
+
+  /// No description provided for @scheduleOpenOnPlatform.
+  ///
+  /// In zh, this message translates to:
+  /// **'在学习平台打开'**
+  String get scheduleOpenOnPlatform;
+
+  /// No description provided for @settingsProfileLocal.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料只保存在本机'**
+  String get settingsProfileLocal;
 }
 
 class _AppLocalizationsDelegate

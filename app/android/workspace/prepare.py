@@ -8,12 +8,12 @@ src/main/jniLibs/<abi>/ and extracted at install (useLegacyPackaging):
   libproot.so          proot (Termux build, GPL-2.0), runs the Ubuntu guest
   libproot_loader.so   proot's loader; maps guest programs instead of exec
   libtalloc.so, libandroid-shmem.so   proot's libraries
-  liblookd.so          lookd for linux/<arch>, run inside the guest
+  libcoursive_daemon.so          daemon for linux/<arch>, run inside the guest
 
-The agent's sources go to src/main/assets/look/agent.tgz; its npm
-dependencies are installed on the device by lookd's runtime setup.
+The agent's sources go to src/main/assets/coursive/agent.tgz; its npm
+dependencies are installed on the device by daemon's runtime setup.
 
-Usage: prepare.py [--abi arm64-v8a,x86_64] [--skip-lookd] [--skip-agent]
+Usage: prepare.py [--abi arm64-v8a,x86_64] [--skip-daemon] [--skip-agent]
 Outputs are build artifacts and stay out of Git (see .gitignore).
 Contract: docs/specs/draft-android-app.md
 """
@@ -31,8 +31,8 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-APP = HERE.parent.parent  # look-studio/app
-REPO = APP.parent  # look-studio
+APP = HERE.parent.parent  # coursive/app
+REPO = APP.parent  # coursive
 MAIN = APP / "android" / "app" / "src" / "main"
 
 MIRRORS = [
@@ -145,18 +145,18 @@ def runtime(abi: str, out: Path) -> None:
         os.chmod(out / name, 0o755)
 
 
-def lookd(abi: str, out: Path, version: str) -> None:
+def daemon(abi: str, out: Path, version: str) -> None:
     env = dict(os.environ, GOOS="linux", GOARCH=ABIS[abi][1], CGO_ENABLED="0")
     # timetzdata: ubuntu-base has no /usr/share/zoneinfo, and the app
     # passes the phone's zone as TZ.
     subprocess.run(["go", "build", "-trimpath", "-tags", "timetzdata", "-ldflags",
-                    f"-s -w -X lookstudio/lookd/internal/server.Version={version}",
-                    "-o", str(out / "liblookd.so"), "./cmd/lookd"], cwd=REPO / "lookd", env=env, check=True)
+                    f"-s -w -X github.com/walkerkiller/coursive/daemon/internal/server.Version={version}",
+                    "-o", str(out / "libcoursive_daemon.so"), "./cmd/coursive-daemon"], cwd=REPO / "daemon", env=env, check=True)
 
 
 def agent() -> None:
     """The agent's sources and lockfile; dependencies install on device."""
-    dest = MAIN / "assets" / "look"
+    dest = MAIN / "assets" / "coursive"
     dest.mkdir(parents=True, exist_ok=True)
     src = REPO / "agent"
     buf = io.BytesIO()
@@ -174,7 +174,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--abi", default="arm64-v8a,x86_64")
     ap.add_argument("--version", default="0.1.0")
-    ap.add_argument("--skip-lookd", action="store_true")
+    ap.add_argument("--skip-daemon", action="store_true")
     ap.add_argument("--skip-agent", action="store_true")
     a = ap.parse_args()
     for abi in a.abi.split(","):
@@ -183,15 +183,15 @@ def main() -> None:
         out = MAIN / "jniLibs" / abi
         out.mkdir(parents=True, exist_ok=True)
         runtime(abi, out)
-        if not a.skip_lookd:
-            lookd(abi, out, a.version)
+        if not a.skip_daemon:
+            daemon(abi, out, a.version)
         print(f"{abi}: " + ", ".join(f"{f.name} {f.stat().st_size // 1024} KB" for f in sorted(out.iterdir())))
     if not a.skip_agent:
         agent()
-        print(f"agent: {(MAIN / 'assets' / 'look' / 'agent.tgz').stat().st_size // 1024} KB")
+        print(f"agent: {(MAIN / 'assets' / 'coursive' / 'agent.tgz').stat().st_size // 1024} KB")
     # proot and talloc are (L)GPL; their notice ships inside the APK.
-    (MAIN / "assets" / "look").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(HERE / "NOTICE", MAIN / "assets" / "look" / "NOTICE")
+    (MAIN / "assets" / "coursive").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(HERE / "NOTICE", MAIN / "assets" / "coursive" / "NOTICE")
 
 
 if __name__ == "__main__":

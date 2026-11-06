@@ -1,7 +1,7 @@
-// Timeline outlines (时间轴大纲) as in the Coursive skill: one model
-// call over the (uniformly sampled) transcript, then lookd normalizes the
+// Timeline outlines (时间轴大纲) as in the course-notes skill: one model
+// call over the (uniformly sampled) transcript, then daemon normalizes the
 // chapters so they tile the lecture from 00:00 to its end.
-import { api, get } from "./lookd.mjs";
+import { api, get } from "./daemon.mjs";
 import { entryFrom } from "./usage.mjs";
 
 const enc = encodeURIComponent;

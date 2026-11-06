@@ -7,13 +7,13 @@ import '../../core/api.dart';
 import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart' show openPlainLink;
+import '../../widgets/coursive_markdown.dart' show openPlainLink;
 import '../../widgets/states.dart';
 import '../courses/course_page.dart';
 import '../player/player_page.dart';
 import '../../l10n/l10n.dart';
 
-/// Icon per notification kind (lookd/internal/notify).
+/// Icon per notification kind (daemon/internal/notify).
 IconData notificationIcon(String kind) => switch (kind) {
   'lecture_ready' => Icons.smart_display_outlined,
   'lecture_added' => Icons.event_available_outlined,

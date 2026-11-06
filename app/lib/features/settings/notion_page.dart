@@ -7,7 +7,7 @@ import '../../core/api.dart';
 import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../widgets/states.dart';
 import 'settings_common.dart';
 import '../../l10n/l10n.dart';

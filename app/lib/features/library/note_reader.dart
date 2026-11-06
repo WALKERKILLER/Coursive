@@ -10,7 +10,7 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../widgets/md_reader.dart';
 import '../../widgets/report_screen.dart';
 import '../../widgets/states.dart';
@@ -36,7 +36,7 @@ class _NotePageState extends State<NotePage> {
   bool _editing = false;
   bool _search = false;
   Object? _error;
-  LookRef? _ref;
+  CoursiveRef? _ref;
   final _reader = MdReaderController();
 
   @override
@@ -74,7 +74,7 @@ class _NotePageState extends State<NotePage> {
 
   String get _lectureId => _note?.lectureId ?? '';
 
-  void _open(LookRef ref, bool wide) {
+  void _open(CoursiveRef ref, bool wide) {
     if (ref is LectureRef || ref is FileRef) {
       openRef(context, ref);
       return;
@@ -302,7 +302,7 @@ class _NoteHeader extends StatelessWidget {
 /// and what was said), a slide, or a courseware passage.
 class SourcePane extends StatelessWidget {
   const SourcePane({super.key, required this.ref, required this.lectureId, this.onClose});
-  final LookRef ref;
+  final CoursiveRef ref;
 
   /// Lecture that references without one belong to.
   final String lectureId;
@@ -470,7 +470,7 @@ class _SegmentLine extends StatelessWidget {
   }
 }
 
-/// Loads a parsed courseware file's Markdown through lookd.
+/// Loads a parsed courseware file's Markdown through daemon.
 Future<(CoursewareFile, String)> loadParsedCourseware(Api api, String lectureId, String file) async {
   final list = jsonList(await api.get('/api/lectures/$lectureId/courseware')).map((e) => CoursewareFile((e as Map).cast<String, dynamic>()));
   final f = list.where((x) => x.path == file || x.name == file).firstOrNull;
@@ -648,7 +648,7 @@ class _CoursewareReaderPageState extends State<_CoursewareReaderPage> {
 /// Opens a reference where no supporting pane exists (chat, player panel):
 /// timestamps seek, slides and courseware open in a sheet, lectures in the
 /// player and library files in the viewer or the system's app.
-void openRef(BuildContext context, LookRef ref, {String lectureId = '', void Function(TimeRef)? onSeek}) {
+void openRef(BuildContext context, CoursiveRef ref, {String lectureId = '', void Function(TimeRef)? onSeek}) {
   if (ref is LectureRef) {
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: ref.lectureId)));
     return;

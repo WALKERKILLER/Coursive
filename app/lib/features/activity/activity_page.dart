@@ -27,7 +27,7 @@ String activityKindLabel(String k) => switch (k) {
       _ => k,
     };
 
-/// Fetches a lookd path; a seam for widget tests.
+/// Fetches a daemon path; a seam for widget tests.
 typedef ActivityFetch = Future<dynamic> Function(String path, Map<String, String> query);
 
 ActivityFetch _apiFetch(BuildContext context) {
@@ -53,7 +53,7 @@ class ActivityDay {
   /// Minutes per timed kind.
   int kindMinutes(String k) => (_int((j['by_kind'] as Map?)?[k]) / 60).round();
 
-  /// Same rule as lookd's ActivityDay.Active: study time or any event.
+  /// Same rule as daemon's ActivityDay.Active: study time or any event.
   bool get active => minutes >= 1 || asks > 0 || notesCreated > 0 || notesEdited > 0 || transcripts > 0 || quizzes > 0;
 
   /// Heatmap intensity: minutes, with days of only events (questions, notes,
@@ -107,7 +107,7 @@ class ActivityData {
   bool get isEmpty => days.values.every((d) => !d.active);
 }
 
-/// Reloads when lookd reports new activity or notes, at most every 2 s.
+/// Reloads when daemon reports new activity or notes, at most every 2 s.
 mixin _LiveActivity<T extends StatefulWidget> on State<T> {
   StreamSubscription? _sub;
   Timer? _debounce;

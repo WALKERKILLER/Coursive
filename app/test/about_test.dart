@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/settings/about_page.dart';
-import 'package:look_studio/widgets/look_logo.dart';
+import 'package:coursive/features/settings/about_page.dart';
+import 'package:coursive/widgets/coursive_logo.dart';
 
 Map<String, dynamic> release(String tag, {bool pre = false, bool draft = false}) => {
       'tag_name': tag,
@@ -10,7 +10,7 @@ Map<String, dynamic> release(String tag, {bool pre = false, bool draft = false})
       'html_url': 'https://github.com/$repoSlug/releases/tag/$tag',
       'published_at': '2026-10-20T00:00:00Z',
       'assets': [
-        {'name': 'look-studio-x-windows-x64-setup.exe', 'browser_download_url': 'https://example.com/$tag.exe'},
+        {'name': 'coursive-x-windows-x64-setup.exe', 'browser_download_url': 'https://example.com/$tag.exe'},
       ],
     };
 
@@ -23,11 +23,11 @@ void main() {
 
   test('the newest newer release; pre-releases only for pre-release users', () {
     final list = [
-      release('studio-v0.3.0-beta.1', pre: true),
-      release('studio-v0.2.1'),
-      release('studio-v0.4.0', draft: true),
+      release('v0.3.0-beta.1', pre: true),
+      release('v0.2.1'),
+      release('v0.4.0', draft: true),
       release('skill-v9.0.0'),
-      release('studio-v0.2.0'),
+      release('v0.2.0'),
     ];
     expect(newerRelease(list, '0.2.0')?.version, '0.2.1');
     expect(newerRelease(list, '0.2.0-beta.1')?.version, '0.3.0-beta.1');
@@ -43,16 +43,16 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: ListView(children: [
-          AboutSection(fetchReleases: () async => [release('studio-v9.0.0')], open: (u) async => opened.add(u)),
+          AboutSection(fetchReleases: () async => [release('v9.0.0')], open: (u) async => opened.add(u)),
         ]),
       ),
     ));
-    expect(find.text('Look Studio'), findsOneWidget);
+    expect(find.text('Coursive'), findsOneWidget);
     await tester.tap(find.text('检查更新'));
     await tester.pumpAndSettle();
     expect(find.textContaining('有新版本 9.0.0'), findsOneWidget);
     await tester.tap(find.text('查看更新说明'));
-    expect(opened.single, 'https://github.com/$repoSlug/releases/tag/studio-v9.0.0');
+    expect(opened.single, 'https://github.com/$repoSlug/releases/tag/v9.0.0');
 
     await tester.tap(find.text('反馈问题'));
     expect(Uri.parse(opened.last).path, '/$repoSlug/issues/new');
@@ -66,9 +66,9 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(body: ListView(children: [AboutSection(fetchReleases: () async => [], open: (_) async {})])),
     ));
-    expect(find.byType(LookLogo), findsOneWidget);
+    expect(find.byType(CoursiveLogo), findsOneWidget);
     expect(find.text('开源许可'), findsOneWidget);
-    expect(find.byType(Image), findsNothing, reason: 'the code is not on the page');
+    expect(find.bySemanticsLabel('微信赞赏码'), findsNothing, reason: 'the code is not on the page');
     await tester.scrollUntilVisible(find.text('赞赏'), 100, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('赞赏'));
     await tester.pumpAndSettle();

@@ -1,27 +1,17 @@
 import 'dart:async';
 
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
 import 'android_bridge.dart';
-import 'lookd_service.dart';
+import 'daemon_service.dart';
 import 'models.dart';
 import '../l10n/l10n.dart';
 
-/// Global app state fed by lookd's SSE event stream.
+/// Global app state fed by daemon's SSE event stream.
 class AppState extends ChangeNotifier with WidgetsBindingObserver {
-  bool localMode = false;
-  Future<void> enterLocalMode() async {
-    localMode = true;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('look-local-mode', true);
-    notifyListeners();
-    unawaited(loadCourses());
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && connected) {
@@ -41,14 +31,14 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   AppState(this.daemon);
-  final LookdService daemon;
+  final DaemonService daemon;
 
   Api? _api;
   Api get api => _api!;
   bool get connected => _api != null;
 
-  AuthState auth = AuthState.empty;
-  bool authKnown = false;
+  /// Installed source plugins with their sources' state (`GET /api/sources`).
+  List<SourcePlugin> plugins = [];
   Map<String, dynamic> agent = const {'state': 'starting'};
   Map<String, dynamic> health = const {};
 
@@ -58,7 +48,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   final Map<String, Job> jobs = {};
 
-  /// Unread items in lookd's notification feed (new replays, assignments …).
+  /// Unread items in daemon's notification feed (new replays, assignments …).
   int unreadNotifications = 0;
   final _events = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -70,8 +60,6 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> init() async {
     WidgetsBinding.instance.addObserver(this);
-    final prefs = await SharedPreferences.getInstance();
-    localMode = prefs.getBool('look-local-mode') ?? false;
     daemon.addListener(_onDaemon);
     await _onDaemon();
   }
@@ -105,10 +93,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
           } catch (_) {}
         }
       }
-      auth = AuthState(
-        (await api.get('/api/auth') as Map).cast<String, dynamic>(),
-      );
-      authKnown = true;
+      await loadSources(notify: false);
       final js = jsonList(await api.get('/api/jobs'));
       jobs
         ..clear()
@@ -126,7 +111,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     }
     _connectEvents();
     notifyListeners();
-    if (auth.signedIn || localMode) unawaited(loadCourses());
+    unawaited(loadCourses());
   }
 
   void _connectEvents() {
@@ -148,15 +133,10 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     switch (e['type']) {
       case 'hello':
         final m = (data as Map).cast<String, dynamic>();
-        auth = AuthState((m['auth'] as Map).cast<String, dynamic>());
         agent = (m['agent'] as Map).cast<String, dynamic>();
-        authKnown = true;
         notifyListeners();
-      case 'auth':
-        final was = auth.signedIn;
-        auth = AuthState((data as Map).cast<String, dynamic>());
-        notifyListeners();
-        if (!was && auth.signedIn) unawaited(loadCourses());
+      case 'sources':
+        unawaited(loadSources());
       case 'agent':
         agent = (data as Map).cast<String, dynamic>();
         notifyListeners();
@@ -179,7 +159,7 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     _events.add(e);
   }
 
-  /// Reads lookd's health again, e.g. after installing ffmpeg.
+  /// Reads daemon's health again, e.g. after installing ffmpeg.
   Future<void> refreshHealth() async {
     if (!connected) return;
     try {
@@ -218,25 +198,35 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
     return null;
   }
 
-  /// Signs in to a school's lecture platform; [body] is lookd's
-  /// `{school, username, password, captcha, remember}`.
-  Future<void> login(Map<String, Object> body) async {
-    // SchoolB signs in twice (CampusVPN, then PlatformB through it) and can take a while.
-    final r = await api.post(
-      '/api/auth/login',
-      body,
-      const Duration(seconds: 130),
-    );
-    auth = AuthState((r as Map).cast<String, dynamic>());
-    notifyListeners();
+  Future<void> loadSources({bool notify = true}) async {
+    if (!connected) return;
+    try {
+      final r = (await api.get('/api/sources') as Map).cast<String, dynamic>();
+      plugins = jsonList(r['plugins'])
+          .map((e) => SourcePlugin((e as Map).cast<String, dynamic>()))
+          .toList();
+      if (notify) notifyListeners();
+    } catch (e) {
+      debugPrint('sources: $e');
+    }
   }
 
-  Future<void> logout() async {
-    final r = await api.post('/api/auth/logout');
-    auth = AuthState((r as Map).cast<String, dynamic>());
-    courses = [];
-    notifyListeners();
+  /// Every source of every installed plugin.
+  List<Source> get sources => [for (final p in plugins) ...p.sources];
+
+  /// A source by id (`<plugin>/<source>`).
+  Source? source(String id) {
+    for (final s in sources) {
+      if (s.id == id) return s;
+    }
+    return null;
   }
+
+  bool get anySignedIn => sources.any((s) => s.signedIn);
+
+  /// The first signed-in source account's name, as a profile fallback.
+  String get accountName =>
+      sources.where((s) => s.signedIn && s.account.isNotEmpty).firstOrNull?.account ?? '';
 
   Future<void> patchCourse(String id, Map<String, dynamic> patch) async {
     await api.patch('/api/courses/$id', patch);

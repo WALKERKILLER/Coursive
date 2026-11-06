@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/practice/practice_page.dart';
-import 'package:look_studio/theme/prefs.dart';
+import 'package:coursive/features/practice/practice_page.dart';
+import 'package:coursive/theme/prefs.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,7 +23,7 @@ Map<String, dynamic> _quiz() => {
             {'text': '冲激函数', 'rationale': '那是直流信号的频谱'},
           ],
           'answer': 0,
-          'ref': 'look://lecture/L1?t=120',
+          'ref': 'coursive://lecture/L1?t=120',
         },
         {
           'stem': '时域卷积对应频域的？',
@@ -33,7 +33,7 @@ Map<String, dynamic> _quiz() => {
             {'text': '相加', 'rationale': '相加对应线性'},
           ],
           'answer': 0,
-          'ref': 'look://slide/L1/3',
+          'ref': 'coursive://slide/L1/3',
         },
       ],
     };

@@ -2,7 +2,7 @@ import 'android_bridge.dart';
 import 'app_state.dart';
 import '../l10n/l10n.dart';
 
-/// On Android, keeps the app (and lookd in its workspace) running in the
+/// On Android, keeps the app (and daemon in its workspace) running in the
 /// background while there is work: downloads or transcriptions queued or
 /// running, or a sync. A low-priority notification says what is going on;
 /// it goes away when the work is done.

@@ -94,7 +94,7 @@ class _WebDavPageState extends State<WebDavPage> {
   final _url = TextEditingController(text: _presets.first.url);
   final _user = TextEditingController();
   final _pass = TextEditingController();
-  final _folder = TextEditingController(text: 'LookStudio');
+  final _folder = TextEditingController(text: 'Coursive');
   StreamSubscription? _sub;
 
   ApiCall get _call => widget.api ?? context.read<AppState>().api.call;
@@ -162,7 +162,7 @@ class _WebDavPageState extends State<WebDavPage> {
       _url.text = url;
       _user.text = '${st['user'] ?? ''}';
       _pass.clear();
-      _folder.text = '${st['folder'] ?? 'LookStudio'}';
+      _folder.text = '${st['folder'] ?? 'Coursive'}';
       _auto = st['auto'] == true;
       _media = st['media'] == true;
       final i = _presets.indexWhere(

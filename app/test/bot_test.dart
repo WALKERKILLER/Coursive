@@ -3,11 +3,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/assistant/bot_avatar.dart';
-import 'package:look_studio/features/assistant/bot_page.dart';
-import 'package:look_studio/features/assistant/bot_widgets.dart';
-import 'package:look_studio/theme/prefs.dart';
-import 'package:look_studio/widgets/organic_shapes.dart';
+import 'package:coursive/features/assistant/bot_avatar.dart';
+import 'package:coursive/features/assistant/bot_page.dart';
+import 'package:coursive/features/assistant/bot_widgets.dart';
+import 'package:coursive/theme/prefs.dart';
+import 'package:coursive/widgets/organic_shapes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _host(Widget child, {bool reduceMotion = false}) => MaterialApp(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/usage/usage_page.dart';
-import 'package:look_studio/widgets/charts.dart';
+import 'package:coursive/features/usage/usage_page.dart';
+import 'package:coursive/widgets/charts.dart';
 
 Map<String, dynamic> _summary({required bool empty}) {
   final day = {'input': 100, 'output': 20, 'cache_read': 300, 'cache_write': 0, 'cost': 0.002, 'calls': 1, 'errors': 0};

@@ -11,7 +11,7 @@ struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
   GtkWindow* window;
-  // "look/links" channel: lookstudio:// links handed to the app by the
+  // "coursive/links" channel: coursive-app:// links handed to the app by the
   // desktop (see app/lib/core/deep_links.dart).
   FlMethodChannel* links;
   // Links received before Dart asked for them with "initial".
@@ -45,7 +45,7 @@ static void links_method_cb(FlMethodChannel* channel, FlMethodCall* call,
     fl_method_call_respond_not_implemented(call, &error);
   }
   if (error != nullptr) {
-    g_warning("look/links: %s", error->message);
+    g_warning("coursive/links: %s", error->message);
   }
 }
 
@@ -95,11 +95,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "look_studio");
+    gtk_header_bar_set_title(header_bar, "Coursive");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "look_studio");
+    gtk_window_set_title(window, "Coursive");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -127,7 +127,7 @@ static void my_application_activate(GApplication* application) {
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   self->links = fl_method_channel_new(
-      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "look/links",
+      fl_engine_get_binary_messenger(fl_view_get_engine(view)), "coursive/links",
       FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(self->links, links_method_cb, self,
                                             nullptr);
@@ -140,12 +140,12 @@ static gboolean my_application_local_command_line(GApplication* application,
                                                   gchar*** arguments,
                                                   int* exit_status) {
   MyApplication* self = MY_APPLICATION(application);
-  // Strip out the first argument as it is the binary name; lookstudio://
+  // Strip out the first argument as it is the binary name; coursive-app://
   // links are opened rather than passed to Dart.
   g_autoptr(GPtrArray) args = g_ptr_array_new();
   g_autoptr(GPtrArray) links = g_ptr_array_new_with_free_func(g_object_unref);
   for (gchar** arg = *arguments + 1; *arg != nullptr; arg++) {
-    if (g_str_has_prefix(*arg, "lookstudio:")) {
+    if (g_str_has_prefix(*arg, "coursive-app:")) {
       g_ptr_array_add(links, g_file_new_for_uri(*arg));
     } else {
       g_ptr_array_add(args, *arg);
@@ -175,7 +175,7 @@ static gboolean my_application_local_command_line(GApplication* application,
   return TRUE;
 }
 
-// Implements GApplication::open, for lookstudio:// links.
+// Implements GApplication::open, for coursive-app:// links.
 static void my_application_open(GApplication* application, GFile** files,
                                 gint n_files, const gchar* hint) {
   MyApplication* self = MY_APPLICATION(application);

@@ -1,5 +1,5 @@
 // Plugin platform: manifests, install state, catalogs, and loading enabled
-// plugins as Pi inline extensions with a permission-gated Look API.
+// plugins as Pi inline extensions with a permission-gated Coursive API.
 // Contract: docs/specs/0004-plugin-platform.md; why Pi extensions:
 // docs/decisions/0005-plugins-as-pi-extensions-with-declarative-views.md
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -38,7 +38,7 @@ const MAX_VIEW_BYTES = 256 * 1024;
 const ACTION_TIMEOUT_MS = 60_000;
 
 // The abort signal of the action whose code is running (it follows awaits),
-// so the look API refuses work an action attempts after it timed out.
+// so the Coursive API refuses work an action attempts after it timed out.
 const actionScope = new AsyncLocalStorage();
 
 function checkNotTimedOut() {
@@ -46,7 +46,7 @@ function checkNotTimedOut() {
 }
 
 // Set while a plugin tool runs in a scheduled task (it follows awaits), so the
-// look API refuses the plugin's own persistent writes there.
+// Coursive API refuses the plugin's own persistent writes there.
 const taskScope = new AsyncLocalStorage();
 
 function checkNotInTask() {
@@ -58,8 +58,8 @@ const MAX_CATALOG_ENTRIES = 500;
 // Permissions that cannot change anything outside the conversation.
 const READ_ONLY = new Set(["library.read", "views"]);
 
-// lookd routes plugins may call, by method; * is one path segment.
-const LOOKD_ROUTES = {
+// daemon routes plugins may call, by method; * is one path segment.
+const DAEMON_ROUTES = {
 	GET: [
 		"/api/courses",
 		"/api/courses/*/lectures",
@@ -87,25 +87,25 @@ const LOOKD_ROUTES = {
 };
 
 /**
- * Whether a plugin may call lookd with method and path. The path must already
+ * Whether a plugin may call daemon with method and path. The path must already
  * be in normal form (no dot segments, encoded slashes or dots, backslashes or
- * empty segments) so the route checked is the route lookd serves.
+ * empty segments) so the route checked is the route daemon serves.
  */
-export function lookdRoute(method, path) {
+export function daemonRoute(method, path) {
 	if (typeof path !== "string" || path.length > 2048 || /[\\#\s\x00-\x1f\x7f]/.test(path)) return false;
 	const q = path.indexOf("?");
 	const pathname = q < 0 ? path : path.slice(0, q);
 	if (/%(2e|2f|5c)/i.test(pathname)) return false;
 	let url;
 	try {
-		url = new URL(path, "http://lookd");
+		url = new URL(path, "http://daemon");
 	} catch {
 		return false;
 	}
-	if (url.origin !== "http://lookd" || url.pathname !== pathname) return false;
+	if (url.origin !== "http://daemon" || url.pathname !== pathname) return false;
 	const segs = pathname.split("/");
 	if (segs[0] !== "" || segs.slice(1).some((x) => !x || x === "." || x === "..")) return false;
-	return (LOOKD_ROUTES[method] ?? []).some((r) => {
+	return (DAEMON_ROUTES[method] ?? []).some((r) => {
 		const parts = r.split("/");
 		return parts.length === segs.length && parts.every((x, i) => x === "*" || x === segs[i]);
 	});
@@ -213,8 +213,8 @@ export function applySettings(schema, input = {}, old = {}) {
 
 /** Validates a plugin's package.json; returns the normalized manifest. */
 export function validateManifest(pkg) {
-	const m = pkg?.lookStudio;
-	if (!m || typeof m !== "object") throw bad("package.json 缺少 lookStudio 字段");
+	const m = pkg?.coursive;
+	if (!m || typeof m !== "object") throw bad("package.json 缺少 coursive 字段");
 	if (!ID.test(m.id ?? "") || RESERVED.has(m.id)) throw bad("id 应为 2–32 位小写字母、数字或 -，以字母开头，且不能是保留名");
 	if (!SEMVER.test(pkg.version ?? "")) throw bad("version 应为 semver，例如 1.0.0");
 	const permissions = list(m.permissions, "permissions");
@@ -317,19 +317,19 @@ export class PluginHost {
 	 * @param {string} o.dataDir agent data directory
 	 * @param {string} o.libraryRoot library root (workspaces live there)
 	 * @param {string} o.bundledDir official plugins and catalog.json
-	 * @param {(method: string, path: string, body?: any) => Promise<any>} o.lookd lookd client
+	 * @param {(method: string, path: string, body?: any) => Promise<any>} o.daemon daemon client
 	 * @param {(e: object) => void} [o.notify] plugin events for the app
 	 * @param {(sessionId: string) => any} [o.convOf] conversation for a session id (tool guard)
 	 * @param {(conv: any, tool: object) => object} [o.guard] wraps a tool with the turn budget
 	 * @param {Function} [o.fetch] for user catalogs
 	 * @param {number} [o.actionTimeoutMs] how long an action may run
 	 */
-	constructor({ dataDir, libraryRoot, bundledDir, lookd, notify = () => {}, convOf = () => null, guard = (_c, t) => t, fetch = globalThis.fetch, actionTimeoutMs = ACTION_TIMEOUT_MS }) {
+	constructor({ dataDir, libraryRoot, bundledDir, daemon, notify = () => {}, convOf = () => null, guard = (_c, t) => t, fetch = globalThis.fetch, actionTimeoutMs = ACTION_TIMEOUT_MS }) {
 		this.root = join(dataDir, "plugins");
 		this.stateFile = join(dataDir, "plugins.json");
 		this.libraryRoot = libraryRoot;
 		this.bundledDir = bundledDir;
-		this.lookd = lookd;
+		this.daemon = daemon;
 		this.notify = notify;
 		this.convOf = convOf;
 		this.guard = guard;
@@ -357,7 +357,7 @@ export class PluginHost {
 
 	async save() {
 		const tmp = `${this.stateFile}.tmp`;
-		await writeFile(tmp, JSON.stringify({ schema: "look-studio/plugins@1", ...this.state }, null, 1), { mode: PRIVATE });
+		await writeFile(tmp, JSON.stringify({ schema: "coursive/plugins@1", ...this.state }, null, 1), { mode: PRIVATE });
 		await chmod(tmp, PRIVATE);
 		await rename(tmp, this.stateFile);
 	}
@@ -438,7 +438,7 @@ export class PluginHost {
 		let u;
 		const gh = /^([\w.-]+)\/([\w.-]+)$/.exec(String(url ?? "").trim());
 		try {
-			u = new URL(gh ? `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/HEAD/look-catalog.json` : url);
+			u = new URL(gh ? `https://raw.githubusercontent.com/${gh[1]}/${gh[2]}/HEAD/coursive-catalog.json` : url);
 		} catch {
 			throw bad("目录地址应为 https:// 链接或 owner/repo");
 		}
@@ -626,7 +626,7 @@ export class PluginHost {
 
 	/**
 	 * Disposes the current generation and loads enabled plugins again: runs
-	 * each `activate(look)` once and dry-runs its Pi factory to learn its tools.
+	 * each `activate(coursive)` once and dry-runs its Pi factory to learn its tools.
 	 * Conversations opened afterwards get the new set (see extensionFactories).
 	 */
 	async reload() {
@@ -636,7 +636,7 @@ export class PluginHost {
 		for (const [id, s] of Object.entries(this.state.plugins)) {
 			if (!s.enabled) continue;
 			const dir = this.dirOf(id);
-			const rec = { manifest: null, dir, mod: null, tools: [], skills: [], actions: new Map(), effects: [], error: null, look: null, status: null };
+			const rec = { manifest: null, dir, mod: null, tools: [], skills: [], actions: new Map(), effects: [], error: null, coursive: null, status: null };
 			this.loaded.set(id, rec);
 			try {
 				rec.manifest = await this.readManifest(dir);
@@ -647,11 +647,11 @@ export class PluginHost {
 				}
 				rec.skills = await readSkills(dir, rec.manifest.skills);
 				if (!rec.manifest.agent) continue;
-				rec.look = this.lookApi(rec);
+				rec.coursive = this.coursiveApi(rec);
 				const mod = await import(`${pathToFileURL(join(dir, rec.manifest.agent)).href}?g=${this.generation}`);
-				if (mod.default !== undefined && typeof mod.default !== "function") throw new Error("agent 模块的 default 导出应为函数 (pi, look)");
-				if (typeof mod.activate === "function") await mod.activate(rec.look);
-				if (typeof mod.default === "function") await mod.default(this.wrapPi(stubPi(), rec, true), rec.look);
+				if (mod.default !== undefined && typeof mod.default !== "function") throw new Error("agent 模块的 default 导出应为函数 (pi, coursive)");
+				if (typeof mod.activate === "function") await mod.activate(rec.coursive);
+				if (typeof mod.default === "function") await mod.default(this.wrapPi(stubPi(), rec, true), rec.coursive);
 				rec.mod = mod;
 			} catch (e) {
 				rec.error = `加载失败：${e.message}`;
@@ -667,7 +667,7 @@ export class PluginHost {
 		const out = [];
 		for (const [id, rec] of this.loaded) {
 			if (rec.error || typeof rec.mod?.default !== "function") continue;
-			out.push({ name: id, factory: (pi) => rec.mod.default(this.wrapPi(pi, rec, false), rec.look) });
+			out.push({ name: id, factory: (pi) => rec.mod.default(this.wrapPi(pi, rec, false), rec.coursive) });
 		}
 		return out;
 	}
@@ -722,7 +722,7 @@ export class PluginHost {
 		};
 	}
 
-	lookApi(rec) {
+	coursiveApi(rec) {
 		const m = rec.manifest;
 		const id = m.id;
 		const host = this;
@@ -744,19 +744,19 @@ export class PluginHost {
 		const write = (method) => (path, body) => {
 			checkNotTimedOut();
 			need("library.write");
-			if (!lookdRoute(method, path)) throw new Error(`插件不能写入 ${method} ${path}`);
-			return host.lookd(method, path, body);
+			if (!daemonRoute(method, path)) throw new Error(`插件不能写入 ${method} ${path}`);
+			return host.daemon(method, path, body);
 		};
 		return Object.freeze({
 			id,
 			version: m.version,
 			settings,
-			lookd: Object.freeze({
+			daemon: Object.freeze({
 				get: (path) => {
 					checkNotTimedOut();
 					need("library.read");
-					if (!lookdRoute("GET", path)) throw new Error(`插件不能读取 ${path}`);
-					return host.lookd("GET", path);
+					if (!daemonRoute("GET", path)) throw new Error(`插件不能读取 ${path}`);
+					return host.daemon("GET", path);
 				},
 				post: write("POST"),
 				put: write("PUT"),
@@ -822,7 +822,7 @@ export class PluginHost {
 				checkNotTimedOut();
 				need("exec");
 				if (!m.exec.includes(command)) throw new Error(`插件没有声明命令 ${command}`);
-				const child = spawnProcess(command, args, { cwd: opts.cwd, env: { ...process.env, LOOKD_TOKEN: "", ...(opts.env ?? {}) }, stdio: opts.stdio ?? "pipe", shell: false });
+				const child = spawnProcess(command, args, { cwd: opts.cwd, env: { ...process.env, COURSIVE_TOKEN: "", ...(opts.env ?? {}) }, stdio: opts.stdio ?? "pipe", shell: false });
 				rec.effects.push(() => child.exitCode === null && child.kill());
 				return child;
 			},
@@ -861,8 +861,8 @@ export class PluginHost {
 
 	/**
 	 * Runs a contributed action for the app. The handler gets `{signal}`; on
-	 * timeout the signal aborts, its plugin fetches are cancelled, and look
-	 * API calls it makes afterwards are refused.
+	 * timeout the signal aborts, its plugin fetches are cancelled, and the
+	 * Coursive API API calls it makes afterwards are refused.
 	 */
 	async runAction(id, name, context = {}) {
 		const rec = this.loaded.get(id);

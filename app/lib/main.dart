@@ -11,7 +11,7 @@ import 'core/activity_tracker.dart';
 import 'core/app_state.dart';
 import 'core/deep_links.dart';
 import 'core/background_work.dart';
-import 'core/lookd_service.dart';
+import 'core/daemon_service.dart';
 import 'core/plugins.dart';
 import 'core/profile.dart';
 import 'features/assistant/assistant_controller.dart';
@@ -27,7 +27,7 @@ Future<void> main() async {
   if (desktop) {
     await windowManager.ensureInitialized();
     await windowManager.waitUntilReadyToShow(
-      const WindowOptions(size: Size(1320, 860), minimumSize: Size(380, 560), title: 'Look Studio', center: true),
+      const WindowOptions(size: Size(1320, 860), minimumSize: Size(380, 560), title: 'Coursive', center: true),
       () async {
         await windowManager.show();
         await windowManager.focus();
@@ -36,7 +36,7 @@ Future<void> main() async {
   }
   final prefs = await UiPrefs.load();
   final profile = await UserProfile.load();
-  final daemon = LookdService();
+  final daemon = DaemonService();
   unawaited(daemon.start());
   final app = AppState(daemon);
   unawaited(app.init());
@@ -59,7 +59,7 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (_) => PluginStore(app)),
       ChangeNotifierProvider(create: (_) => ScheduleFocus()),
     ],
-    child: const LookApp(),
+    child: const CoursiveApp(),
   ));
   unawaited(DeepLinks.start());
 }

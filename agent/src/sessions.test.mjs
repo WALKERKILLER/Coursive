@@ -21,7 +21,7 @@ async function syncedSession(dir, id, cwd) {
 test("a conversation synced from another device is listed, found and continues in this library", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "sessions-"));
 	const here = await mkdtemp(join(tmpdir(), "library-"));
-	const path = await syncedSession(dir, "phone-1", "/data/user/0/cn.lookstudio.look_studio/files/LookStudio");
+	const path = await syncedSession(dir, "phone-1", "/data/user/0/io.github.walkerkiller.coursive/files/Coursive");
 	// What Pi does on its own: the other device's conversation is invisible.
 	assert.equal(SessionManager.findById(here, "phone-1", dir), undefined);
 

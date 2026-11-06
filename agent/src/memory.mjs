@@ -47,7 +47,7 @@ function luhn(digits) {
 
 /** The kind of sensitive data in text, or null. Links into the library are skipped. */
 export function sensitiveKind(text) {
-	const t = String(text).replace(/look:\/\/\S+/g, " ");
+	const t = String(text).replace(/coursive:\/\/\S+/g, " ");
 	for (const m of t.matchAll(/(?<![\dA-Za-z])\d{17}[\dXx](?![\dA-Za-z])/g)) if (validId(m[0])) return "身份证号";
 	for (const m of t.matchAll(/(?<!\d)[3-6](?:[ -]?\d){14,18}(?!\d)/g)) {
 		const d = m[0].replace(/[ -]/g, "");

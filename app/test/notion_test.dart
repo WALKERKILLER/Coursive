@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/settings/notion_page.dart';
+import 'package:coursive/features/settings/notion_page.dart';
 
 class Fake {
   Map<String, dynamic> status = {'connected': false, 'bot': {}, 'auto': false, 'pages': 0, 'running': false};
@@ -15,7 +15,7 @@ class Fake {
         status = {
           ...status,
           'connected': true,
-          'bot': {'name': 'Look Studio', 'workspace': '我的工作区'},
+          'bot': {'name': 'Coursive', 'workspace': '我的工作区'},
           'token_last4': '1234',
         };
       case ('PUT', '/api/notion'):
@@ -65,7 +65,7 @@ void main() {
     await tester.tap(find.text('学习'));
     await tester.pumpAndSettle();
     expect((api.calls.last.$1, api.calls.last.$2, (api.calls.last.$3 as Map)['parent']), ('PUT', '/api/notion', 'p1'));
-    expect(find.text('课程库在这个页面下的「Look Studio 课程库」里'), findsOneWidget);
+    expect(find.text('课程库在这个页面下的「Coursive 课程库」里'), findsOneWidget);
 
     await tester.tap(find.text('开始同步'));
     await tester.pump();

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/assistant/thinking_control.dart';
-import 'package:look_studio/widgets/step_slider.dart';
+import 'package:coursive/features/assistant/thinking_control.dart';
+import 'package:coursive/widgets/step_slider.dart';
 
 void main() {
   Future<List<String>> pump(WidgetTester tester, {String start = 'medium', double width = 320}) async {

@@ -860,7 +860,7 @@ class _StageViewState extends State<_StageView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectionArea(child: LookMarkdown(answer)),
+                  SelectionArea(child: CoursiveMarkdown(answer)),
                   if (raw['state'] == 'done')
                     Align(
                       alignment: AlignmentDirectional.centerEnd,

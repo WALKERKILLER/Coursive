@@ -5,7 +5,7 @@ import '../../core/api.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
 
-/// lookd's settings (`/api/settings`), shared by the settings panes and the
+/// daemon's settings (`/api/settings`), shared by the settings panes and the
 /// pages they open so both stay in step.
 class ServerSettings extends ChangeNotifier {
   ServerSettings(this._api);
@@ -18,7 +18,7 @@ class ServerSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Shows [value] at once, then takes what lookd saved.
+  /// Shows [value] at once, then takes what daemon saved.
   Future<void> put(String key, Object? value) async {
     set(key, value);
     final r = await _api.put('/api/settings', {key: value}) as Map?;

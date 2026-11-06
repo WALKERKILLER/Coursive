@@ -10,7 +10,7 @@ import '../../widgets/horizontal_scroller.dart';
 import '../../widgets/states.dart';
 import '../player/player_page.dart';
 import '../plugins/plugin_views.dart';
-import '../../widgets/look_markdown.dart' show openPlainLink;
+import '../../widgets/coursive_markdown.dart' show openPlainLink;
 import 'schedule_store.dart';
 import '../../l10n/l10n.dart';
 
@@ -111,9 +111,9 @@ class KindLabel extends StatelessWidget {
       );
 }
 
-/// Marks an item that comes from Canvas (read-only, opened on Canvas).
-class CanvasBadge extends StatelessWidget {
-  const CanvasBadge({super.key});
+/// Marks an item that comes from a learning platform (read-only, opened there).
+class LmsBadge extends StatelessWidget {
+  const LmsBadge({super.key});
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -123,7 +123,7 @@ class CanvasBadge extends StatelessWidget {
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.cloud_sync_outlined, size: 13, color: cs.onSurfaceVariant),
         const SizedBox(width: 3),
-        Text('Canvas', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+        Text(l10n.lmsBadge, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
       ]),
     );
   }
@@ -199,7 +199,7 @@ class ScheduleTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(Corners.lg),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: () => item.isCanvas ? openPlainLink(context, item.url) : showScheduleEditor(context, item: item),
+          onTap: () => item.isLms ? openPlainLink(context, item.url) : showScheduleEditor(context, item: item),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(Space.xs, Space.sm, Space.xs, Space.sm),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -222,7 +222,7 @@ class ScheduleTile extends StatelessWidget {
                     const SizedBox(height: Space.xs),
                     Wrap(spacing: Space.sm, runSpacing: Space.xs, crossAxisAlignment: WrapCrossAlignment.center, children: [
                       KindLabel(style: st),
-                      if (item.isCanvas) const CanvasBadge(),
+                      if (item.isLms) const LmsBadge(),
                       if (meta.isNotEmpty) Text(meta.join(' · '), style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                       if (item.overdue) Text(fmtCountdown(item), style: tt.labelSmall?.copyWith(color: cs.error)),
                     ]),
@@ -246,14 +246,14 @@ class ScheduleTile extends StatelessWidget {
                   if (v == 'delete') {
                     await store.remove(item);
                     if (context.mounted) {
-                      showSnack(context, l10n.scheduleRemovedNotice(item.isCanvas ? l10n.scheduleHiddenFromSchedule : l10n.commonDeleted, item.title), action: l10n.commonUndo, onAction: () => store.restore(item));
+                      showSnack(context, l10n.scheduleRemovedNotice(item.isLms ? l10n.scheduleHiddenFromSchedule : l10n.commonDeleted, item.title), action: l10n.commonUndo, onAction: () => store.restore(item));
                     }
                   }
                 },
-                itemBuilder: (_) => item.isCanvas
+                itemBuilder: (_) => item.isLms
                     ? [
                         if (item.url.isNotEmpty)
-                          PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new_rounded), title: Text(l10n.scheduleOpenInCanvas), contentPadding: EdgeInsets.zero)),
+                          PopupMenuItem(value: 'open', child: ListTile(leading: Icon(Icons.open_in_new_rounded), title: Text(l10n.scheduleOpenOnPlatform), contentPadding: EdgeInsets.zero)),
                         PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.visibility_off_outlined), title: Text(l10n.scheduleHide), contentPadding: EdgeInsets.zero)),
                       ]
                     : [
@@ -302,7 +302,7 @@ class _Mention extends StatelessWidget {
 
 /// Create or edit an item. Returns when the sheet closes.
 Future<void> showScheduleEditor(BuildContext context, {ScheduleItem? item, DateTime? day}) {
-  if (item != null && item.isCanvas) return openPlainLink(context, item.url); // edited on Canvas
+  if (item != null && item.isLms) return openPlainLink(context, item.url); // edited on the learning platform
   final wide = !context.isCompact;
   final editor = _Editor(item: item, day: day);
   if (wide) {

@@ -13,7 +13,7 @@ import '../l10n/l10n.dart';
 Future<String?> pickDirectory(BuildContext context, {String? initial, String? confirm, String? title}) async {
   final confirmLabel = confirm ?? l10n.commonChoose, titleText = title ?? l10n.pickerChooseFolder;
   final start = initial != null && initial.isNotEmpty && Directory(initial).existsSync() ? initial : null;
-  // Android's picker answers with content:// addresses, not paths lookd
+  // Android's picker answers with content:// addresses, not paths daemon
   // could use.
   if (Platform.isAndroid) return _askPath(context, initial ?? '', confirmLabel, titleText);
   try {

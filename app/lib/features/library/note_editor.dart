@@ -11,11 +11,11 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import 'note_reader.dart';
 import '../../l10n/l10n.dart';
 
-/// Markdown note editor with live preview. Saves through lookd, which writes
+/// Markdown note editor with live preview. Saves through daemon, which writes
 /// the note as a Markdown file with front matter and indexes it.
 class NoteEditor extends StatefulWidget {
   const NoteEditor({
@@ -231,7 +231,7 @@ class _NoteEditorState extends State<NoteEditor> {
                       borderRadius: BorderRadius.circular(Corners.lg),
                     ),
                     child: SingleChildScrollView(
-                      child: LookMarkdown(
+                      child: CoursiveMarkdown(
                         _body.text.isEmpty ? l10n.noteEmptyPreview : _body.text,
                         style: tt.bodyMedium?.copyWith(height: 1.7),
                         lectureId: _lectureId,

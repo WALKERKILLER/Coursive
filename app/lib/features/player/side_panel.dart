@@ -22,7 +22,7 @@ import 'player_page.dart';
 import '../library/note_reader.dart';
 import '../plugins/plugin_views.dart';
 import '../practice/quiz.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../l10n/l10n.dart';
 
 /// Outline / transcript / materials / notes (and the assistant) beside or

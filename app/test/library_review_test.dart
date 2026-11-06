@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/library/catalog_browser.dart';
-import 'package:look_studio/features/player/transcript_review.dart';
+import 'package:coursive/features/library/catalog_browser.dart';
+import 'package:coursive/features/player/transcript_review.dart';
 
 void main() {
   testWidgets(

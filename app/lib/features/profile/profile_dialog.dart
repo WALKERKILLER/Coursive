@@ -51,8 +51,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
     final p = context.watch<UserProfile>();
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final a = context.select<AppState, (String, String)>((s) => (s.auth.realname, s.auth.username));
-    final fallback = a.$1.isNotEmpty ? a.$1 : a.$2;
+    final fallback = context.select<AppState, String>((s) => s.accountName);
     final toned = p.kind == AvatarKind.emoji || p.kind == AvatarKind.initial;
 
     final menuItems = [
@@ -114,7 +113,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               decoration: InputDecoration(
                 labelText: l10n.profileNickname,
                 hintText: fallback,
-                helperText: l10n.profileNicknameHelper(fallback),
+                helperText: fallback.isEmpty ? null : l10n.profileNicknameHelper(fallback),
                 prefixIcon: const Icon(Icons.badge_outlined),
               ),
               onChanged: p.setNickname,

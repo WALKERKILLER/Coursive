@@ -5,7 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../../core/app_state.dart';
-import '../../core/lookd_service.dart';
+import '../../core/daemon_service.dart';
 import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/pickers.dart';
@@ -67,7 +67,7 @@ class _KnowledgeSettingsState extends State<KnowledgeSettings> {
 
   @override
   Widget build(BuildContext context) {
-    final daemon = context.watch<LookdService>();
+    final daemon = context.watch<DaemonService>();
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
     final v = widget.settings.values;

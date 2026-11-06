@@ -1,11 +1,11 @@
 {
-	"name": "@look-studio/plugin-socratic",
+	"name": "@coursive/plugin-socratic",
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
 	"license": "MIT",
-	"author": "Look Studio",
-	"lookStudio": {
+	"author": "Coursive",
+	"coursive": {
 		"id": "socratic",
 		"title": "引导式提问",
 		"summary": "助手不直接给答案，而是用一连串提问引导你自己想出来",

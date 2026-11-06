@@ -1,3 +1,3 @@
-# look_studio
+# coursive
 
-Look Studio — 学校 A Look 录课平台客户端
+Coursive — 录播课学习客户端

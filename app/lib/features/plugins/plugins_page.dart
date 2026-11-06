@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,6 +12,7 @@ import '../../widgets/horizontal_scroller.dart';
 import '../../widgets/pickers.dart';
 import '../../widgets/states.dart';
 import '../practice/quiz.dart' show askInSheet;
+import '../sources/source_market.dart';
 import 'plugin_views.dart';
 import '../../l10n/l10n.dart';
 
@@ -197,7 +199,17 @@ class _PluginsPageState extends State<PluginsPage> {
         final pad = compact ? Space.lg : Space.xl;
         final view = pluginsView.value;
         final Widget body;
-        if (!store.ready) {
+        if (!store.ready && view == 0) {
+          // Source plugins run in the daemon, so they install without the assistant.
+          body = ContentWidth(
+            max: kMaxContentWidth + 200,
+            child: ListView(padding: EdgeInsets.fromLTRB(pad, 0, pad, Space.huge + MediaQuery.paddingOf(context).bottom), children: [
+              const SourceMarketSection(),
+              const SizedBox(height: Space.xxl),
+              EmptyState(icon: Icons.extension_outlined, title: l10n.pluginsAfterAssistant, body: l10n.pluginsNeedAssistant),
+            ]),
+          );
+        } else if (!store.ready) {
           body = EmptyState(icon: Icons.extension_outlined, title: l10n.pluginsAfterAssistant, body: l10n.pluginsNeedAssistant);
         } else if (view == 0) {
           body = _discover(store, pad, box.maxWidth, wide);
@@ -357,6 +369,7 @@ class _PluginsPageState extends State<PluginsPage> {
           const SizedBox(height: Space.xl),
           _Featured(plugins: featured, onOpen: open),
         ],
+        SourceMarketSection(query: _query, category: _category),
         if (shown.isEmpty)
           Padding(
             padding: EdgeInsets.only(top: Space.xxl),
@@ -656,6 +669,23 @@ class PluginGlyph extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final shape = size >= 64
+        ? const StarBorder(points: 9, innerRadiusRatio: 0.86, pointRounding: 0.55, valleyRounding: 0.45)
+        : RoundedRectangleBorder(borderRadius: BorderRadius.circular(size * 0.32)) as ShapeBorder;
+    final image = pluginIconImage(icon);
+    if (image != null) {
+      // A logo keeps its own colors on white, in light and dark themes.
+      final mark = image.svg
+          ? SvgPicture.memory(image.bytes, fit: BoxFit.contain)
+          : Image.memory(image.bytes, fit: BoxFit.contain, gaplessPlayback: true, filterQuality: FilterQuality.medium);
+      return Container(
+        width: size,
+        height: size,
+        padding: EdgeInsets.all(size * (size >= 64 ? 0.2 : 0.12)),
+        decoration: ShapeDecoration(color: Colors.white, shape: shape),
+        child: Opacity(opacity: muted ? 0.5 : 1, child: mark),
+      );
+    }
     final (bg, fg) = muted
         ? (cs.surfaceContainerHighest, cs.outline)
         : color != null
@@ -668,12 +698,7 @@ class PluginGlyph extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      decoration: ShapeDecoration(
-        color: bg,
-        shape: size >= 64
-            ? const StarBorder(points: 9, innerRadiusRatio: 0.86, pointRounding: 0.55, valleyRounding: 0.45)
-            : RoundedRectangleBorder(borderRadius: BorderRadius.circular(size * 0.32)),
-      ),
+      decoration: ShapeDecoration(color: bg, shape: shape),
       child: Icon(pluginIcon(icon), size: size * 0.5, color: fg),
     );
   }
@@ -856,7 +881,7 @@ class _SourceDialogState extends State<_SourceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final hints = ['/home/me/my-plugin', '@scope/look-plugin@1.0.0', 'https://github.com/me/plugin#v1.0.0'];
+    final hints = ['/home/me/my-plugin', '@scope/coursive-plugin@1.0.0', 'https://github.com/me/plugin#v1.0.0'];
     return AlertDialog(
       title: Text(l10n.pluginsInstallOther),
       content: SizedBox(

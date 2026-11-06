@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/notifications/notification_center.dart';
+import 'package:coursive/features/notifications/notification_center.dart';
 
 void main() {
   testWidgets('lists notifications, marks one read on open and all read at once', (tester) async {

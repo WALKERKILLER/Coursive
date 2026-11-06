@@ -19,7 +19,7 @@ typedef ApiCall = Future<dynamic> Function(
   Object? body,
 ]);
 
-/// HTTP client for lookd (and the agent host behind /agent).
+/// HTTP client for daemon (and the agent host behind /agent).
 class Api {
   Api(this.baseUrl, this.token);
   final String baseUrl;
@@ -189,12 +189,6 @@ class Api {
       patch('/api/lectures/${Uri.encodeComponent(id)}/transcript-review', {
         'suggestion_id': suggestionId,
       });
-
-  Future<dynamic> nasSnapshot() => get('/api/nas');
-  String nasFileUrl(String id) => uri(
-    '/api/nas/files/${Uri.encodeComponent(id)}',
-    {'token': token},
-  ).toString();
 
   /// Streams a file as the raw request body (courseware upload).
   Future<dynamic> upload(

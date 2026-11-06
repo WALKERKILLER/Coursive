@@ -7,11 +7,11 @@ import { Bot } from "./bot.mjs";
 import { checkSetting, MAX_DOWNLOAD, operateTools, runOp, SETTINGS } from "./operate.mjs";
 
 async function setup(over = {}) {
-	const dir = await mkdtemp(join(tmpdir(), "look-operate-"));
+	const dir = await mkdtemp(join(tmpdir(), "coursive-operate-"));
 	const bot = new Bot(dir);
 	await bot.load();
 	const calls = [];
-	const lookd = {
+	const daemon = {
 		"GET /api/settings": { "download.video_parallel": 2, "asr.concurrency": 2 },
 		"GET /api/jobs": [
 			{ id: "j1", state: "running", title: "第 1 节", kind: "video" },
@@ -30,12 +30,12 @@ async function setup(over = {}) {
 				{ id: "l5", title: "第 5 节", date: "2026-09-29", has_playback: false, assets: [], segments: 0 },
 			],
 		},
-		...over.lookd,
+		...over.daemon,
 	};
 	const api = async (method, path, body) => {
 		calls.push({ method, path, body });
 		const k = `${method} ${path}`;
-		if (k in lookd) return lookd[k];
+		if (k in daemon) return daemon[k];
 		if (k === "POST /api/jobs") return body.lecture_ids.flatMap((id) => body.kinds.map((kind) => ({ id: `${id}-${kind}`, lecture_id: id, kind, state: "queued" })));
 		if (method === "GET") throw Object.assign(new Error("not found"), { status: 404 });
 		return { ok: true, changed: body?.ids?.length ?? 0 };
@@ -67,7 +67,7 @@ test("the registry validates values and lists no secret", () => {
 	for (const k of Object.keys(SETTINGS)) assert.doesNotMatch(k, /token|key|password|secret|auth|root/i);
 });
 
-test("settings apply at once with undo, across the app, lookd and the assistant", async () => {
+test("settings apply at once with undo, across the app, daemon and the assistant", async () => {
 	const { tools, bot, calls, prefs, done } = await setup();
 	try {
 		const r = await tools.change_settings.execute("1", {
@@ -83,7 +83,7 @@ test("settings apply at once with undo, across the app, lookd and the assistant"
 		assert.equal(prefs.model, "m2");
 		const p = bot.proposal(r.details.app.proposal_id);
 		assert.equal(p.state, "applied");
-		assert.deepEqual(p.undo, { type: "settings", app: { textScale: 1 }, lookd: { "download.video_parallel": 2 }, agent: { model: "p/m1" } });
+		assert.deepEqual(p.undo, { type: "settings", app: { textScale: 1 }, daemon: { "download.video_parallel": 2 }, agent: { model: "p/m1" } });
 		await assert.rejects(tools.change_settings.execute("2", { changes: [{ key: "model", value: "p/m3" }] }), /不可用/);
 	} finally {
 		await done();
@@ -97,7 +97,7 @@ test("ask mode turns a change into a card and sends nothing first", async () => 
 		assert.equal(r.details.proposal.state, "pending");
 		assert.equal(r.details.app, undefined);
 		assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
-		assert.deepEqual(bot.proposal(r.details.proposal.id).op, { type: "settings", app: { textScale: 1.2 }, lookd: { "asr.concurrency": 3 }, agent: {} });
+		assert.deepEqual(bot.proposal(r.details.proposal.id).op, { type: "settings", app: { textScale: 1.2 }, daemon: { "asr.concurrency": 3 }, agent: {} });
 		const d = await tools.download.execute("2", { course_id: "c1", latest: 1, kinds: ["video"] });
 		assert.equal(d.details.proposal.state, "pending");
 		assert.equal(calls.filter((c) => c.method === "POST").length, 0);
@@ -107,10 +107,10 @@ test("ask mode turns a change into a card and sends nothing first", async () => 
 	}
 });
 
-test("applying a settings card writes lookd and the assistant prefs", async () => {
+test("applying a settings card writes daemon and the assistant prefs", async () => {
 	const { deps, calls, prefs, done } = await setup();
 	try {
-		const r = await runOp({ type: "settings", app: { contrast: "high" }, lookd: { "asr.concurrency": 3 }, agent: { model: "p/m2", thinking: "low" } }, deps);
+		const r = await runOp({ type: "settings", app: { contrast: "high" }, daemon: { "asr.concurrency": 3 }, agent: { model: "p/m2", thinking: "low" } }, deps);
 		assert.deepEqual(r, { app: { contrast: "high" } });
 		assert.deepEqual(calls.at(-1), { method: "PUT", path: "/api/settings", body: { "asr.concurrency": 3 } });
 		assert.equal(prefs.provider, "p");
@@ -169,7 +169,7 @@ test("download picks a course's lectures by date or latest and skips what is loc
 });
 
 test("download undo leaves jobs that were already running", async () => {
-	const { tools, bot, done } = await setup({ lookd: { "GET /api/jobs": [{ id: "l3-video", state: "running", kind: "video" }] } });
+	const { tools, bot, done } = await setup({ daemon: { "GET /api/jobs": [{ id: "l3-video", state: "running", kind: "video" }] } });
 	try {
 		const r = await tools.download.execute("1", { lecture_ids: ["l1"], kinds: ["video"], redownload: true });
 		assert.deepEqual(bot.proposal(r.details.app.proposal_id).undo, { type: "jobs", action: "cancel", ids: ["l1-video"] });
@@ -226,7 +226,7 @@ test("tasks and plugins are created and switched at once with undo", async () =>
 
 test("list_downloads reports states, progress and errors", async () => {
 	const { tools, done } = await setup({
-		lookd: {
+		daemon: {
 			"GET /api/jobs": [
 				{ id: "a", state: "running", title: "第 1 节", kind: "video", progress: 0.426, course_id: "c1" },
 				{ id: "b", state: "failed", title: "第 2 节", kind: "transcript", error: "网络中断", course_id: "c1" },

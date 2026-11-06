@@ -6,7 +6,7 @@
 #
 # formats is a space-separated subset of "tar deb rpm archlinux appimage"
 # (all by default).
-# The bundle must already hold lookd and agent/ (see the workflow). nfpm
+# The bundle must already hold daemon and agent/ (see the workflow). nfpm
 # and linuxdeploy are taken from PATH; a format whose tool is missing is
 # skipped with a warning.
 set -euo pipefail
@@ -24,13 +24,13 @@ case $(uname -m) in
   aarch64) arch=arm64 nfpm_arch=arm64 appimage_arch=aarch64 ;;
   *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
 esac
-base="look-studio-$version-linux-$arch"
+base="coursive-$version-linux-$arch"
 
 # Plain archive: the bundle plus the desktop entry and icons for a manual install.
 if want tar; then
   mkdir -p "$work/$base/share/applications" "$work/$base/share/icons"
   cp -a "$bundle/." "$work/$base/"
-  cp "$here/cn.lookstudio.look_studio.desktop" "$work/$base/share/applications/"
+  cp "$here/io.github.walkerkiller.coursive.desktop" "$work/$base/share/applications/"
   cp -a "$icons" "$work/$base/share/icons/"
   tar -C "$work" -czf "$out/$base.tar.gz" "$base"
 fi
@@ -55,21 +55,21 @@ else
   echo "warning: nfpm not found, skipping deb, rpm and Arch packages" >&2
 fi
 
-# AppImage: the bundle under look-studio/, libmpv and its libraries under
+# AppImage: the bundle under coursive/, libmpv and its libraries under
 # usr/lib (deployed by linuxdeploy, which leaves the GTK stack to the host).
 if ! want appimage; then
   :
 elif command -v linuxdeploy >/dev/null; then
   app="$work/AppDir"
-  mkdir -p "$app/look-studio" "$app/usr/lib"
-  cp -a "$bundle/." "$app/look-studio/"
+  mkdir -p "$app/coursive" "$app/usr/lib"
+  cp -a "$bundle/." "$app/coursive/"
   mpv=$(ldconfig -p | awk '/libmpv\.so\.[12] /{print $NF; exit}')
   [ -n "$mpv" ] || { echo "libmpv not found on the build host" >&2; exit 1; }
-  icon="$work/cn.lookstudio.look_studio.png"
-  cp "$icons/256x256/apps/cn.lookstudio.look_studio.png" "$icon"
+  icon="$work/io.github.walkerkiller.coursive.png"
+  cp "$icons/256x256/apps/io.github.walkerkiller.coursive.png" "$icon"
   (cd "$work" && APPIMAGE_EXTRACT_AND_RUN=1 LINUXDEPLOY_OUTPUT_VERSION=$version OUTPUT="$out/$base.AppImage" ARCH=$appimage_arch \
     linuxdeploy --appdir "$app" --library "$mpv" \
-      --desktop-file "$here/cn.lookstudio.look_studio.desktop" --icon-file "$icon" \
+      --desktop-file "$here/io.github.walkerkiller.coursive.desktop" --icon-file "$icon" \
       --custom-apprun "$here/AppRun" --output appimage >/dev/null)
 else
   echo "warning: linuxdeploy not found, skipping AppImage" >&2

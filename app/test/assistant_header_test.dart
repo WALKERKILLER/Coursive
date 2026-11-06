@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/assistant/assistant_panel.dart';
+import 'package:coursive/features/assistant/assistant_panel.dart';
 
 Widget _host(Widget child, {double width = 360, double textScale = 1}) => MaterialApp(
       home: MediaQuery(
@@ -16,8 +16,8 @@ Widget _header(String name, ValueChanged<String> on) => SizedBox(width: 252, chi
 void main() {
   testWidgets('the bot name shows in full on a phone', (tester) async {
     final picked = <String>[];
-    await tester.pumpWidget(_host(_header('小Look', picked.add)));
-    final name = tester.renderObject<RenderParagraph>(find.text('小Look'));
+    await tester.pumpWidget(_host(_header('小 C', picked.add)));
+    final name = tester.renderObject<RenderParagraph>(find.text('小 C'));
     expect(name.size.width, greaterThanOrEqualTo(name.getMaxIntrinsicWidth(double.infinity) - 0.5), reason: 'not cut off');
     await tester.tap(find.text('会话'));
     expect(picked, ['sessions']);
@@ -25,12 +25,12 @@ void main() {
   });
 
   testWidgets('where the names do not fit, the segments become icons with tooltips', (tester) async {
-    await tester.pumpWidget(_host(_header('一个很长很长的助手名字叫小Look', (_) {})));
+    await tester.pumpWidget(_host(_header('一个很长很长的助手名字叫小 C', (_) {})));
     expect(find.textContaining('很长'), findsNothing);
     expect(find.byIcon(Icons.smart_toy_outlined), findsOneWidget);
-    expect(find.byTooltip('一个很长很长的助手名字叫小Look'), findsOneWidget);
+    expect(find.byTooltip('一个很长很长的助手名字叫小 C'), findsOneWidget);
 
-    await tester.pumpWidget(_host(_header('小Look', (_) {}), textScale: 2));
+    await tester.pumpWidget(_host(_header('课程小助手', (_) {}), textScale: 2));
     expect(find.byIcon(Icons.forum_outlined), findsOneWidget, reason: 'large text falls back too');
     expect(tester.takeException(), isNull);
   });

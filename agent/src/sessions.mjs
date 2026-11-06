@@ -1,4 +1,4 @@
-// Conversations sync between devices (lookd's data sync carries
+// Conversations sync between devices (daemon's data sync carries
 // agent/sessions), and each device keeps its library at another path. Pi's
 // SessionManager filters a custom session folder by the cwd recorded in each
 // file, which hides a conversation started on another device ("会话不存在").

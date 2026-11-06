@@ -8,7 +8,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
 import '../../l10n/l10n.dart';
 
-/// Background refresh of Look (and Canvas) with in-app notifications.
+/// Background refresh of signed-in sources with in-app notifications.
 /// Contract: docs/specs/0010-live-refresh.md
 class WatchSettings extends StatefulWidget {
   const WatchSettings({super.key, required this.server, required this.put});

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Look Studio" "\0"
-            VALUE "FileDescription", "Look Studio" "\0"
+            VALUE "CompanyName", "Coursive" "\0"
+            VALUE "FileDescription", "Coursive" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "look_studio" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Look Studio contributors" "\0"
-            VALUE "OriginalFilename", "look_studio.exe" "\0"
-            VALUE "ProductName", "Look Studio" "\0"
+            VALUE "InternalName", "coursive" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Coursive contributors" "\0"
+            VALUE "OriginalFilename", "coursive.exe" "\0"
+            VALUE "ProductName", "Coursive" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -1,5 +1,5 @@
 {
 	"name": "official",
-	"owner": { "name": "Look Studio" },
+	"owner": { "name": "Coursive" },
 	"plugins": [{ "source": "socratic", "featured": true }]
 }
