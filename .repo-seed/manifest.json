@@ -4,7 +4,7 @@
   "lastSyncCommit": null,
   "config": {
     "license": "MIT",
-    "branchConvention": "app",
+    "branchConvention": "main",
     "monorepo": false
   },
   "governance": {
@@ -43,20 +43,23 @@
       },
       "monorepo": {
         "state": "deferred",
-        "reason": "root AGENTS.md lists per-package commands; revisit when app, lookd and agent get separate owners or policies",
+        "reason": "the app, daemon and assistant host migrate as separate modules; revisit when they get separate owners or policies",
         "assessmentHash": "5acff04a918585ade6a8960f9cc5668be06e98571a9ae5602540d1cfdb8a020b"
       },
       "hook": {
         "state": "deferred",
         "reason": "local Git hooks need separate authorization; CI runs the same gates on every push and pull request",
         "assessmentHash": "c089576a2cd9274c313fa1b8aa371b637a1ceab9dc15541ce648141bbe815bb1"
+      },
+      "community": {
+        "state": "enabled"
       }
     }
   },
   "files": [
     {
       "path": "AGENTS.md",
-      "sha256": "e6915861953a00da5eb5b03b00f379d18ef9233c8434719b61db85978b633405",
+      "sha256": "acb11864a3dc9f6f39690fde292d58c3b534d4facab9d23cd85e23796fe15a37",
       "category": "instruction",
       "capability": "baseline",
       "userModified": true
@@ -75,28 +78,28 @@
     },
     {
       "path": "docs/architecture.md",
-      "sha256": "d6f984b1ec8173a944b3cc330c1de6eca08aca680226afe70da1dfb4e70cc074",
+      "sha256": "9a8b8676214f84fed61b54191bd371a85739cd0a68280a8e6530759d09f9e8ac",
       "category": "docs",
       "capability": "baseline",
       "userModified": true
     },
     {
       "path": "docs/development.md",
-      "sha256": "2fbad9553a6266da268704843464787f15b26fb698b9646c6e76ec2af0b6c263",
+      "sha256": "accd051469dd4ca748e176a482ac94452a8c8233d4cfd06122b3b8069077d9f8",
       "category": "docs",
       "capability": "baseline",
       "userModified": true
     },
     {
       "path": "docs/testing.md",
-      "sha256": "f412b319307086b577274c4127423524779482d41f8ad39f87047b194654ab77",
+      "sha256": "9ccbab075288d4f85b26b436d402de06e447a0c3fb3b014c8d7b043957b37174",
       "category": "docs",
       "capability": "baseline",
       "userModified": true
     },
     {
       "path": ".agents/skills/repo-review/SKILL.md",
-      "sha256": "5b1df5408bbfe82c3ea9f39b8e310edce445a90c2461deffd5592ca6de2b5ba9",
+      "sha256": "fc5807ed08cbd1ac726201f4c2a1ba42acc936c40d826536413dab9713ea9f85",
       "category": "skill",
       "capability": "baseline",
       "userModified": true
@@ -157,7 +160,7 @@
     },
     {
       "path": "CONTRIBUTING.md",
-      "sha256": "4779d042b35dbc4aba9cefc1a60512c79ecfb1e292f492ee703b0e3f56fd17ae",
+      "sha256": "a717eae6fbe0edea61ce5986ff4f039c5c1bda751511c43b33cd5c5b67ac9837",
       "category": "meta",
       "capability": "baseline",
       "userModified": true
@@ -189,7 +192,7 @@
     },
     {
       "path": ".github/pull_request_template.md",
-      "sha256": "923eba703ddbdcf892a2ea2c51181d7c62b8d424e32b2f91f74bd697023e5b96",
+      "sha256": "59c71cce736e6c2d33e14b355b955d98d67273d7db40c9165e791a8218348109",
       "category": "github",
       "capability": "baseline",
       "userModified": true
@@ -220,7 +223,7 @@
     },
     {
       "path": "docs/decisions/README.md",
-      "sha256": "97da82361617740929b1244c37f31090a2803e23a10811307ebd00e8bcecda95",
+      "sha256": "e7e0fbaa0891e55c1971d22d9a702b82d12fd8e6f40635ddd69d5348fb04f78d",
       "category": "docs",
       "capability": "decisions",
       "userModified": true
@@ -280,6 +283,13 @@
       "category": "meta",
       "extension": "codeowners",
       "capability": "codeowners"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "bb7a194da321ac17c14f069418d5ff7e8d6c8a0bb487639eb27923326674cb08",
+      "category": "meta",
+      "capability": "community",
+      "userModified": true
     }
   ],
   "artifactPolicy": {

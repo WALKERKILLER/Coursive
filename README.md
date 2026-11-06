@@ -1,110 +1,149 @@
-<img src="app/branding/icon-512.png" width="96" alt="Look Studio icon">
+<a id="readme-top"></a>
 
-# Look Studio
+<div align="right">
+<strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
+</div>
 
-> [!IMPORTANT]
-> **This branch is no longer updated.** Development has moved to **[Coursive](https://github.com/WALKERKILLER/Coursive)**. The code and releases here stay available for reference; please open new issues and pull requests in Coursive.
->
-> **本分支已停止更新。** 开发已迁移至 **[Coursive](https://github.com/WALKERKILLER/Coursive)**。这里的代码和已发布版本保留，仅供参考。新的 Issue 和 Pull Request 请提交到 Coursive。
+<div align="center">
 
-> 🚧 开发中 / Work in progress — UI, APIs and data layout may change without notice.
+<h1>Coursive</h1>
 
-Desktop client for SchoolA's lecture-recording platform (look.schoola.edu.cn), built on the [Coursive](https://github.com/WALKERKILLER/Coursive) skill: browse and download lectures, transcribe them, and write notes with an embedded assistant.
+<p><strong>A local-first study canvas for recorded lectures</strong><br />
+<sub>Weave subtitles, frames, notes and AI understanding into one knowledge network, written as freely as cursive</sub></p>
 
-| Directory | Contents |
-| --- | --- |
-| `app/` | Flutter UI (Material 3) |
-| `lookd/` | Go daemon: login, Look API, downloads, transcription, SQLite index |
-| `agent/` | Node.js host for the assistant (Pi Agent SDK) |
+<p>
+<a href="https://github.com/WALKERKILLER/Coursive/stargazers"><img height="22" src="https://m3-markdown-badges.vercel.app/stars/3/3/WALKERKILLER/Coursive" alt="Stars" /></a>
+&nbsp;
+<a href="https://flutter.dev"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Flutter/flutter3.svg" alt="Flutter" /></a>
+&nbsp;
+<a href="https://go.dev"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Go/go3.svg" alt="Go" /></a>
+&nbsp;
+<a href="https://nodejs.org"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/NodeJS/nodejs3.svg" alt="Node.js" /></a>
+&nbsp;
+<a href="LICENSE"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/LicenceMIT/licencemit3.svg" alt="MIT" /></a>
+</p>
 
-The app starts `lookd`, and `lookd` starts the agent. The app finds them through `LOOKD_BIN`, `LOOK_AGENT` and `LOOK_NODE`, then next to its executable (`Contents/Resources/agent` in the macOS app), then by walking up to `lookd/bin/lookd` and `agent/src/host.mjs` in a source checkout.
+<p>
+<img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Linux/linux3.svg" alt="Linux" />
+&nbsp;
+<img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Windows/windows3.svg" alt="Windows" />
+&nbsp;
+<img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/macOS/macos3.svg" alt="macOS" />
+&nbsp;
+<img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Android/android3.svg" alt="Android" />
+</p>
 
-## Local study workspace
+<a href="assets/brand/social/coursive-social-1280x640.png?v=3604f8dd">
+<img src="assets/brand/social/coursive-social-1280x640.png?v=3604f8dd" alt="Coursive Preview" width="92%" />
+</a>
 
-Lectures can open in a [study canvas](docs/study-canvas.md) with video, PDF pages, text, handwriting and scoped assistant conversations. [Drawing controls](docs/drawing-controls.md) cover dockable pen presets, pressure erasing, hold-to-shape and optional Android stylus prediction. The conventional player remains available from the canvas menu.
+<p>
+<sub><em>Read the <a href="docs/overview.md">Docs</a> · Browse the <a href="https://github.com/WALKERKILLER/coursive-plugins">Plugins</a> · Follow the <a href="docs/migration.md">Migration</a> · Join the <a href="https://github.com/WALKERKILLER/Coursive/discussions">Discussions</a></em></sub>
+</p>
+<br />
 
-[Local courses](docs/local-courses.md) work without school login. The library filters materials by course, purpose and file type; AI transcript review adds dismissible suggestions beside the original text. [Folder sync](docs/tutorials/course-folder-sync.md) exchanges selected courses through a user-managed folder, including media when enabled. It reports local publication separately from delivery to another device. Concurrent canvas saves use whole-document last-save-wins with recoverable losing copies; other content retains conflict handling.
+</div>
 
-The [NAS adapter](docs/nas-services.md) is optional and requires explicit deployment configuration. See [build dependencies and validation boundaries](docs/study-workspace-build.md) before building PDF and Android features. The workspace is an integration preview; upstream release builds and Windows/Linux device acceptance need validation.
+> **Things to note**: Coursive is moving into this repository module by module, and each part arrives with its full commit history once it has been refactored. Until then this repository holds the governance, documentation, brand assets and design contracts; there is no release to install yet.
 
-![Study canvas with synthetic learning material](docs/images/study-workspace.png)
+### The Little Secret Behind the Name
 
-## Download
+**Coursive** is **Course** + **Cursive**:
 
-Each `studio-v*` release on the [releases page](https://github.com/WALKERKILLER/Coursive/releases) carries:
+- **Course**: everything a lecture leaves behind — the video, what was said, the slides on screen and the notes you took.
+- **Cursive**: joined-up handwriting, where every letter flows into the next without lifting the pen.
+- **Together**: subtitles, frames, notes and the assistant's understanding are not separate files but strokes of one continuous line, drawn on a canvas you write on as freely as you would by hand.
 
-| Platform | Files |
-| --- | --- |
-| Linux x64 and arm64 | `.deb` (Debian, Ubuntu), `.rpm` (Fedora, openSUSE), `.pkg.tar.zst` (Arch: `sudo pacman -U`), `.AppImage`, `.tar.gz` |
-| Windows x64 | `-setup.exe` (per-user install, no admin rights) and a portable `.zip` |
-| macOS (Apple silicon and Intel) | `.dmg` and `.zip` |
+## What is Coursive
 
-Install `ffmpeg` for transcription and Node.js 22+ for the assistant (or let the app install the assistant's runtime). The deb, rpm and Arch packages and the plain archive need GTK 3, libmpv 2 and glibc 2.39 or newer (Ubuntu 24.04, Debian 13, Fedora 40, Arch and later); the AppImage carries its own libmpv and runs from Ubuntu 22.04 on.
+Coursive keeps your courses on your own device, turns them into searchable, linked material, and gives you a canvas and an assistant to think with:
 
-The builds are not code-signed yet. Windows SmartScreen may warn: choose "More info" → "Run anyway". On macOS, open the app once with right-click → Open, or run `xattr -dr com.apple.quarantine "/Applications/Look Studio.app"`.
+- **Local-first library**: import lecture videos and courseware into folders you own; a rebuildable index makes everything searchable, and nothing requires an account.
+- **Transcripts you can trust**: cloud or fully local speech recognition aligned to the video, with review suggestions you accept or reject.
+- **Slides and frames**: courseware becomes searchable text, and sampled key frames put the screen at any moment one click away.
+- **Study canvas**: an infinite canvas for handwriting, stylus ink, cards and excerpts, where every card links back to its timestamp, slide or note.
+- **An assistant that cites its sources**: course-aware conversations, outlines, notes and quizzes; every action is recorded and undoable, under an approval mode you choose.
+- **Plugins**: views, tools, skills and content sources install from a marketplace that picks the fastest GitHub mirror and verifies every download.
+- **Your data, your sync**: export to Markdown tools, back up, or sync course folders across devices through storage you choose.
 
-## Build from source
+## Installation
 
-Common requirements: Go 1.27, Node.js 22 or newer, Flutter 3.47.7 (stable), and `ffmpeg` on `PATH` for transcription.
+### From Releases
 
-```sh
-git clone -b app https://github.com/WALKERKILLER/Coursive.git look-studio
-cd look-studio
-```
+Pre-release packages will appear on [Releases](https://github.com/WALKERKILLER/Coursive/releases) from the first pre-release on:
 
-### Linux — supported, built in CI
+- **Linux**: AppImage, deb, rpm, Arch package and tarball, for x64 and arm64.
+- **Windows**: installer and portable zip.
+- **macOS**: dmg and zip.
+- **Android**: one APK per ABI (arm64-v8a, x86_64).
 
-```sh
-# Debian/Ubuntu packages; use your distribution's equivalents elsewhere
-sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev ffmpeg
-(cd lookd && go build -trimpath -o bin/lookd ./cmd/lookd)
+### From Source
+
+```bash
+git clone https://github.com/WALKERKILLER/Coursive.git
+cd Coursive
+# Linux: needs Go 1.27, Node.js 22+, Flutter 3.47.7, ffmpeg and the GTK 3 and libmpv headers
+(cd daemon && go build -trimpath -o bin/coursive-daemon ./cmd/coursive-daemon)
 (cd agent && npm ci)
 (cd app && flutter build linux --release)
-./app/build/linux/x64/release/bundle/look_studio
+./app/build/linux/x64/release/bundle/coursive
 ```
 
-Prebuilt bundles: the `look-studio-linux-bundle` artifact of each CI run, and the release packages above. `app/linux/packaging/package.sh` builds the same packages locally (it needs `nfpm` and `linuxdeploy` for the deb, rpm, Arch and AppImage formats).
+Toolchains, the other platforms and the test commands are in [docs/development.md](docs/development.md) and [AGENTS.md](AGENTS.md#commands).
 
-### Windows — built for releases, lightly tested
+## Directory Structure
 
-Needs Visual Studio 2022 with "Desktop development with C++" (PowerShell):
-
-```powershell
-cd lookd; go build -trimpath -o bin\lookd.exe .\cmd\lookd; cd ..
-cd agent; npm ci; cd ..
-cd app; flutter build windows --release; cd ..
-.\app\build\windows\x64\runner\Release\look_studio.exe
+```text
+Coursive/
+├── .agents/skills/     # review, decision and governance workflows for contributors and agents
+├── .github/            # CI, issue and pull request templates
+├── .repo-seed/         # governance manifest
+├── agent/              # assistant host (Node.js)
+├── app/                # Flutter app for desktop and Android
+├── assets/brand/       # logo master and every exported icon
+├── daemon/             # local daemon (Go): library, jobs, vault, plugins and sources
+├── docs/
+│   ├── decisions/      # architecture and process decisions (MADR)
+│   ├── postmortems/    # incident write-ups linked to guardrails
+│   └── specs/          # change contracts: Draft → Approved → Implemented
+└── scripts/            # governance gates and the brand export script
 ```
 
-From a source checkout the app finds `lookd\bin\lookd.exe` and `agent\src\host.mjs` by itself, and Node.js on `PATH` or in `Program Files\nodejs`.
+[docs/architecture.md](docs/architecture.md) shows how the app, the daemon and the assistant host fit together.
 
-### macOS — built for releases, lightly tested
+## Plugins & Sign-in
 
-Needs Xcode and CocoaPods. The runner is not sandboxed, because the app starts `lookd`, which reads and writes `~/LookStudio`.
+Coursive has no built-in account and no built-in sign-in; it opens straight into your local library.
 
-```sh
-(cd lookd && go build -trimpath -o bin/lookd ./cmd/lookd)
-(cd agent && npm ci)
-(cd app && flutter build macos --release)
-open "app/build/macos/Build/Products/Release/Look Studio.app"
-```
+Anything that talks to an external course platform is a **source plugin**: install one and its sign-in, course list and downloads appear; remove it and they disappear while your library stays. The daemon seals the credentials a source needs and they never leave your device ([contract](docs/specs/0024-source-provider-plugins.md)).
 
-Node.js is found on `PATH`, in `/usr/local/bin` or in `/opt/homebrew/bin`.
-
-### Android — arm64 and x86_64, Android 7+
-
-Needs the Android SDK and NDK (`flutter doctor --android-licenses`), Go and Python 3. `prepare.py` downloads the pinned Termux proot build and builds `lookd` for the APK; on first run the app downloads an Ubuntu base system and runs `lookd` and the assistant inside it (see [decision 0013](docs/decisions/0013-android-runs-lookd-in-a-proot-ubuntu-workspace.md)).
-
-```sh
-python3 app/android/workspace/prepare.py --abi arm64-v8a,x86_64
-(cd app && flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64)
-# app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk, app-x86_64-release.apk
-```
-
-Without `app/android/key.properties` (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) the APK is signed with the debug key, and installing a build signed with another key needs an uninstall first, which deletes the app's library. Release APKs are attached to `studio-v*` releases.
+The index, the mirror list and the official plugins live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins). Coursive speed-tests the available GitHub mirrors and downloads through the fastest one, checking every file against the signed index, so a mirror can make a download faster but never change it ([contract](docs/specs/0025-plugin-marketplace.md)).
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request; AI agents follow [AGENTS.md](AGENTS.md). Pull requests into `app` need green CI and approval from @WALKERKILLER. Design notes: [docs/overview.md](docs/overview.md) (features) and [docs/architecture.md](docs/architecture.md) (structure).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) first; human and AI contributors follow the same rules, and every commit runs `node scripts/run-gates.mjs`. Plugin authors start in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins).
 
-License: MIT.
+## Community
+
+**Feedback:**
+
+- Report bugs and suggest features in [Issues](https://github.com/WALKERKILLER/Coursive/issues/new/choose).
+- Ask questions and share setups in [Discussions](https://github.com/WALKERKILLER/Coursive/discussions).
+- Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+**Thanks:**
+
+- Everyone whose commits travel with the migrated history.
+
+**Built With:**
+
+- [Flutter](https://flutter.dev), [Go](https://go.dev) and [Node.js](https://nodejs.org).
+- [Pi](https://github.com/earendil-works/pi) for the assistant runtime and [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) for local speech recognition.
+
+Coursive is released under the [MIT License](LICENSE).
+
+---
+
+<div align="right">
+<a href="#readme-top">↑ Back to top</a>
+</div>

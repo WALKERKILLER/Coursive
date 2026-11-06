@@ -22,7 +22,7 @@ The lecture study page combines a native media_kit video player with the course 
 
 ## Decision Outcome
 
-The implementation uses Flutter for ink, camera transforms and material cards, retains the existing native lecture video and assistant, and puts persistence behind lookd. A standalone macOS PDFKit helper handles bounded PDF conversion without changing the runner or plugin dependency set. The independent browser prototype informs the document structure and incremental ink approach; application code is implemented within the Flutter and Go boundaries. This requires a separate renderer. macOS uses PDFKit; Linux and Android use bounded Poppler subprocesses, as described in the build reference.
+The implementation uses Flutter for ink, camera transforms and material cards, retains the existing native lecture video and assistant, and puts persistence behind coursive-daemon. A standalone macOS PDFKit helper handles bounded PDF conversion without changing the runner or plugin dependency set. The independent browser prototype informs the document structure and incremental ink approach; application code is implemented within the Flutter and Go boundaries. This requires a separate renderer. macOS uses PDFKit; Linux and Android use bounded Poppler subprocesses, as described in the build reference.
 
 ## Pros and Cons of the Options
 

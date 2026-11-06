@@ -22,7 +22,7 @@ Not in this spec (backlog): Zotero citations (local API), board photos to LaTeX,
 Shared rules for every view below:
 - Every view is native Material 3 (tonal surfaces, dynamic colour, dark mode, reduced motion honoured), keyboard and screen-reader accessible.
 - Layouts are deterministic, so the same data always looks the same.
-- Every node or item can carry a `ref` (`look://` timestamp, slide, courseware or note) that opens the source.
+- Every node or item can carry a `ref` (`coursive://` timestamp, slide, courseware or note) that opens the source.
 - Limits, as validated by the tool before the model sees success:
   - ≤ 300 nodes per view;
   - labels ≤ 40 chars;

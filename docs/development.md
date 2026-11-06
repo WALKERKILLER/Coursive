@@ -5,7 +5,9 @@ English is the working language of this repository. This document covers contrib
 ## Prerequisites
 
 - Git
-- Go 1.27 (pinned by `lookd/go.mod`), Node.js 22 or newer (CI uses 24), Flutter 3.47.7 stable and ffmpeg; Linux desktop builds also need clang, cmake, ninja, pkg-config and the GTK 3 and libmpv headers (the package list is in [ci.yml](../.github/workflows/ci.yml)).
+- Node.js 22 or newer (CI uses 24) for the governance gates.
+- ImageMagick 7 and the Inter font, only to regenerate brand assets.
+- As modules migrate: Go 1.27, Flutter 3.47.7 stable and ffmpeg; Linux desktop builds also need clang, cmake, ninja, pkg-config and the GTK 3 and libmpv headers. Each module pins its toolchain in its own manifest and lists its CI packages in [ci.yml](../.github/workflows/ci.yml).
 
 ## Daily workflow
 
@@ -16,9 +18,12 @@ English is the working language of this repository. This document covers contrib
    node scripts/run-gates.mjs
    ```
    An authorized pre-commit capability enforces the same runner; run it early even when no hook is installed.
-4. Run the test command: `(cd lookd && go test -count=1 -race ./...) && (cd agent && npm test) && (cd app && flutter test)`
-5. Run the lint command: `(cd lookd && test -z "$(gofmt -l .)" && go vet ./...) && (cd agent && npm run check) && (cd app && flutter analyze --no-fatal-infos)`
-6. Commit with a message that states the why; include a decision record reference when one changed.
+4. Run the test and lint commands from [AGENTS.md](../AGENTS.md#commands) for the parts you touched.
+5. Commit with a message that states the why; include a decision record reference when one changed.
+
+## Brand assets
+
+Every icon is generated from `assets/brand/source/coursive-logo-4096.png`. After changing the master or the export script, run `scripts/export-brand-icons.sh` and commit the master, the exports and `assets/brand/exports.json` together; CI fails when they disagree. The asset map is in [assets/brand/README.md](../assets/brand/README.md).
 
 ## Source attribution
 

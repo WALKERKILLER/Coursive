@@ -5,7 +5,7 @@ Proposed
 Class: feature
 
 ## Context and Problem Statement
-The library and the assistant's history should follow the student across devices ([spec 0014](../specs/0014-data-sync-and-backup.md)) without a Look Studio server. Students in China commonly have 坚果云 or a self-hosted Nextcloud or AList, all of which speak WebDAV. WebDAV offers files and folders but no change feed, no reliable modification times across servers, and listing large trees is slow and rate-limited. How do devices find out what changed and settle edits made on two devices?
+The library and the assistant's history should follow the student across devices ([spec 0014](../specs/0014-data-sync-and-backup.md)) without a Coursive server. Students in China commonly have 坚果云 or a self-hosted Nextcloud or AList, all of which speak WebDAV. WebDAV offers files and folders but no change feed, no reliable modification times across servers, and listing large trees is slow and rate-limited. How do devices find out what changed and settle edits made on two devices?
 
 ## Decision Drivers
 - Works with any WebDAV server, including ones with request limits (坚果云).

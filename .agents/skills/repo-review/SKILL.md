@@ -28,22 +28,26 @@ Read the diff, the owning docs, the decision log, and enough surrounding code to
 
 ### Project-specific (instantiated at seed time from this project's own rules)
 
-1. **Governance routing and ownership:** the change follows the [AGENTS.md](../../../AGENTS.md) routing, and its pull request into `app` carries the code-owner approval required by [CODEOWNERS](../../../CODEOWNERS).
-2. **Credentials stay in lookd:** no diff logs, commits, or returns the SchoolA session or password, the MinerU token (beyond its last 4 characters), or provider keys, and nothing from `~/LookStudio/` or `~/.local/share/look-studio/` is added.
-3. **Assistant write boundary:** agent tools still write only notes, schedule marks and outlines, downloads still start from a user click, and the note overwrite and transcript-coverage guards in `agent/src/tools.mjs` are not weakened without an Approved spec.
-4. **License hygiene:** no code is copied from GPL/AGPL projects; protocol-derived code cites its source, and third-party assets keep their `NOTICE`.
-5. **API and link contracts stay in sync:** a lookd route or JSON field change updates `app/lib/core/api.dart` and `agent/src/lookd.mjs`; a `look://` scheme change updates `LookRef`, the producing agent tools and `lookd/internal/library/readme.go` in the same diff.
+1. **Governance routing and ownership:** the change follows the [AGENTS.md](../../../AGENTS.md) routing, and its pull request into `main` carries the code-owner approval required by [CODEOWNERS](../../../CODEOWNERS).
+2. **Credentials stay in the daemon:** no diff logs, commits, or returns a source-plugin secret, a sync or service token (beyond its last 4 characters), or a provider key, and nothing from the course library or the app's data directory is added.
+3. **No built-in institution:** core code, docs, tests and assets do not name a specific institution or course platform, and the app still starts on the local library with no sign-in gate; platform knowledge lives in a source plugin.
+4. **Assistant write boundary:** assistant actions stay recorded with their undo and subject to the approval mode, deleting downloaded files still waits for confirmation, and the assistant's write guards are not weakened without an Approved spec.
+5. **Plugin trust boundary:** installs verify the index signature and each artifact's SHA-256 whatever mirror served them, consent shows exactly the permissions granted, and no credential or cookie is ever sent to a mirror.
+6. **License hygiene:** no code is copied from GPL/AGPL projects; protocol-derived code cites its source, and third-party assets keep their `NOTICE`.
+7. **API contracts stay in sync:** a daemon route or JSON field change updates the app and the assistant host clients in the same diff; a source-provider protocol or plugin manifest change bumps its version and updates [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins) templates and schemas.
 
 ## Manual checks
 
 ### Project-specific (instantiated at seed time from this project's stack and known failure modes)
 
-- **Daemon lifecycle (`lookd/internal/jobs`, `dl`, `asr`):** trace cancellation through every goroutine and HTTP call, cleanup of `.part` files and temp chunks on error, and pause/resume after a restart. Shared state needs `go test -race` evidence at the owning package.
-- **External service etiquette:** SchoolA, bcut/JianYing and MinerU calls keep their pacing, backoff, cooldowns and quotas; a new call path reuses the existing client rather than opening a parallel one, and user-facing errors say what failed.
-- **Store and library data:** a `schema.sql` change upgrades an existing `library.db` with user data in place, and the index can still be rebuilt from library files.
-- **Model perspective (`agent/src`):** read the exact tool names, schemas, descriptions, `GUIDE`/playbook text and system prompt a model receives; check tool-result size caps, the per-turn tool-call cap, and that error text tells the model how to recover.
-- **Flutter state and rendering:** after every `await`, check `mounted`; dispose controllers, timers and subscriptions; snackbars and overlays do not outlive their page. Markdown/LaTeX changes extend `app/test/look_markdown_test.dart` with the failing input.
-- **Release packaging:** a change to binary discovery in `app/lib/core/lookd_service.dart` or to the agent entry keeps `.github/workflows/release.yml` producing a working layout.
+- **Daemon lifecycle (jobs, downloads, transcription):** trace cancellation through every goroutine and HTTP call, cleanup of partial files and temp chunks on error, and pause/resume after a restart. Shared state needs `go test -race` evidence at the owning package.
+- **Source-provider processes:** a provider that hangs, crashes, floods output or speaks the wrong protocol version is timed out, restarted with backoff or disabled without blocking the library; nothing it sends reaches logs unredacted.
+- **External service etiquette:** calls to course platforms, speech-recognition and parsing services keep their pacing, backoff, cooldowns and quotas; a new call path reuses the existing client rather than opening a parallel one, and user-facing errors say what failed.
+- **Mirrors and downloads:** speed tests stay bounded in time and bytes, fallback order is deterministic, and a hash mismatch from one mirror retries the next one instead of installing.
+- **Store and library data:** a schema change upgrades an existing index with user data in place, and the index can still be rebuilt from library files.
+- **Model perspective (assistant host):** read the exact tool names, schemas, descriptions, playbook text and system prompt a model receives; check tool-result size caps, the per-turn tool-call cap, and that error text tells the model how to recover.
+- **Flutter state and rendering:** after every `await`, check `mounted`; dispose controllers, timers and subscriptions; snackbars and overlays do not outlive their page. Use the design tokens (spacing, corners, motion) rather than literals, and keep user-facing strings in the localization files.
+- **Brand assets:** an icon change edits the master or [scripts/export-brand-icons.sh](../../../scripts/export-brand-icons.sh) and commits the regenerated exports in the same diff.
 
 ### Universal fallbacks (apply where the project has no specific rule)
 

@@ -1,8 +1,6 @@
 # AGENTS.md
 
-**This branch is frozen.** Development continues in [Coursive](https://github.com/WALKERKILLER/Coursive); do not start new work, pull requests or releases here unless the maintainer asks for a fix to this branch.
-
-Look Studio is a work-in-progress desktop client for SchoolA's lecture-recording platform (look.schoola.edu.cn): a Flutter UI in `app/`, a Go daemon in `lookd/`, and a Node.js assistant host in `agent/`. It lives on the `app` branch of Coursive; `main` holds the skill and shares no history with this branch.
+Coursive is a local-first study workspace for recorded lectures: a Flutter app, a Go daemon that owns the library, credentials and downloads, and a Node.js assistant host. The app lives in `app/`, the daemon in `daemon/` and the assistant host in `agent/`, imported with their commit history ([docs/migration.md](docs/migration.md)); [docs/architecture.md](docs/architecture.md) maps them and [docs/specs/](docs/specs/) holds their contracts. Plugins, the plugin index and the mirror list live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins).
 
 ## Repository governance
 
@@ -28,9 +26,11 @@ Write code for human readers. Keep the primary logic path visible; introduce an 
 
 ## Commands
 
-- Test: `(cd lookd && go test -count=1 -race ./...) && (cd agent && npm test) && (cd app && flutter test)`
-- Lint: `(cd lookd && test -z "$(gofmt -l .)" && go vet ./...) && (cd agent && npm run check) && (cd app && flutter analyze --no-fatal-infos)`
 - Gates: `node scripts/run-gates.mjs`
+- Brand assets: `scripts/export-brand-icons.sh` regenerates every icon from `assets/brand/source/coursive-logo-4096.png`; commit the master and the exports together.
+- Test: `(cd daemon && go test -count=1 -race ./...) && (cd agent && npm test) && (cd app && flutter test)`
+- Lint: `(cd daemon && test -z "$(gofmt -l .)" && go vet ./...) && (cd agent && npm run check) && (cd app && flutter analyze --no-fatal-infos)`
+- Interface text: edit `app/lib/l10n/app_zh.arb`, then run `flutter gen-l10n` in `app/`.
 
 Run relevant tests while working and the shared gate runner before every commit. CI or an installed pre-commit hook may repeat the exhaustive matrix.
 
@@ -45,15 +45,17 @@ Run relevant tests while working and the shared gate runner before every commit.
 
 ## Project rules
 
-- Credentials stay inside lookd: the SchoolA session and password, the MinerU token and provider API keys are never logged, committed, or returned by an API (the MinerU token only as its last 4 characters). User data under `~/LookStudio/` and `~/.local/share/look-studio/` never enters the repository.
-- Course agents and chats write notes, schedule marks, outlines and quizzes, and operate the app; the resident bot also keeps memory files ([spec 0007](docs/specs/0007-resident-bot-and-course-agents.md), amended by [spec 0016](docs/specs/0016-agent-acts.md)). Every operation is recorded with its undo and follows the user's approval mode (自动 runs it, 询问 makes a card); deleting downloaded files always waits for a card, and the assistant cannot change the approval mode. Note overwrite and transcript-coverage guards in `agent/src/tools.mjs`, the memory guard in `agent/src/memory.mjs` and the operations and approval checks in `agent/src/operate.mjs` change only through an Approved spec.
+- Credentials stay inside the daemon: source-plugin secrets, sync and service tokens and model-provider API keys are sealed there and never logged, committed, or returned by an API (a token at most as its last 4 characters). Source plugins receive their own secrets only through the daemon vault. User data (the course library and the app's data directory) never enters the repository.
+- The core app has no sign-in and no startup gate beyond the daemon: it opens on the local library. Every connection to an external course platform is a source plugin ([spec 0024](docs/specs/0024-source-provider-plugins.md)); core code, docs and assets never name a specific institution or platform.
+- Plugin downloads are verified against the signed index whatever mirror served them; mirrors receive GET requests only and never credentials ([spec 0025](docs/specs/0025-plugin-marketplace.md)).
+- Assistant actions are recorded with their undo and follow the user's approval mode; deleting downloaded files always waits for confirmation, and the assistant cannot change the approval mode. The assistant's write guards (note overwrite and transcript coverage in `agent/src/tools.mjs`, the memory guard in `agent/src/memory.mjs`, operations and approval checks in `agent/src/operate.mjs`) change only through an Approved spec.
 - Do not copy code from GPL/AGPL projects; reimplement from protocols and documentation with provenance, and keep third-party asset `NOTICE` files.
-- A lookd route or JSON field change updates both clients (`app/lib/core/api.dart`, `agent/src/lookd.mjs`) in the same change.
+- A daemon route or JSON field change updates both clients (the app and the assistant host) in the same change.
 
 ## Security rules
 
 - Never `git commit` or `git push` unless the user explicitly asks.
-- Never modify files outside the seeded paths (AGENTS.md, CLAUDE.md, docs/, scripts/, .agents/skills/, .github/, CONTRIBUTING.md, LICENSE, .editorconfig, .gitattributes, .repo-seed/) without asking.
+- Never modify files outside the seeded paths (AGENTS.md, CLAUDE.md, docs/, scripts/, .agents/skills/, .github/, CONTRIBUTING.md, LICENSE, .editorconfig, .gitattributes, .repo-seed/) and the brand assets (`assets/brand/`) without asking.
 - Never read `.env` files or other secrets.
 
 ## Documentation
@@ -80,5 +82,6 @@ Follow [docs/testing.md](docs/testing.md). Name the regression risk, then choose
 
 ## Enabled optional capabilities
 
-- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `app`, and the Go, Node and Flutter checks only for the parts a change touches (Markdown-only changes skip them); the app's Linux build runs only for changes to `app/linux/`, the pubspec or the workflow, and on pushes to `app`. Publishing a `studio-v*` release or pre-release builds Linux, Windows and macOS packages and Android APKs and attaches them through [.github/workflows/release.yml](.github/workflows/release.yml).
-- Path-level owners live in [CODEOWNERS](CODEOWNERS). The `app` branch ruleset requires an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request.
+- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes.
+- Path-level owners live in [CODEOWNERS](CODEOWNERS). The `main` branch ruleset requires an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request.
+- Security vulnerabilities are reported per [SECURITY.md](SECURITY.md).

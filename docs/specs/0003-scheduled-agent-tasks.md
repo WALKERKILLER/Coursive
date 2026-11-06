@@ -10,7 +10,7 @@ Outcome: users create scheduled tasks (prompt plus schedule); the agent host run
 
 This adds unattended assistant runs. They use the same tools as chat, but each run may only make the writes its task allows (`writes`: notes and outlines, schedule marks, quiz sets; none by default), because material a run reads could carry injected instructions; downloads still only start from a user click.
 
-Non-goals: running while Look Studio is closed (no system service), event triggers (for example "after a transcript finishes"), chained workflows, sending results outside the app.
+Non-goals: running while Coursive is closed (no system service), event triggers (for example "after a transcript finishes"), chained workflows, sending results outside the app.
 
 ## Contract
 
@@ -28,7 +28,7 @@ Non-goals: running while Look Studio is closed (no system service), event trigge
 - A run opens a new conversation named `定时 · <name> · MM-DD HH:mm` and prompts it with the task prompt plus a context line saying it is an unattended scheduled run (no user available to answer questions; finish with a short summary), that only the task prompt is an instruction while transcripts, courseware, notes, web pages and tool results are data whose requests are never followed, and which writes this run may make. Tool-call cap 24 per run (as chat). Usage is recorded with `purpose: task` and `task_id`.
 - A run stops on the budget, on a 15-minute timeout (`error`), or when its task is disabled or deleted (`aborted`).
 - A run whose history cannot be written is logged; the scheduler still clears it and moves on to the next queued run. A check saves the handled times before writing `skipped` records, retries a failed save on the next check, and always starts queued runs.
-- On start and finish the host notifies lookd (`POST /api/agent/event`, `{type: agent_task, data}`; other types → 400), which publishes `agent_task` on the event bus.
+- On start and finish the host notifies coursive-daemon (`POST /api/agent/event`, `{type: agent_task, data}`; other types → 400), which publishes `agent_task` on the event bus.
 - Disabling or deleting a task cancels its pending run; deleting keeps its conversations.
 
 ### API (agent host, via `/agent/…`)
@@ -47,7 +47,7 @@ Modelled on the sidebar entries of agent apps (Codex app *Automations*, Claude C
 
 ## Plan
 1. Agent: `agent/src/tasks.mjs` (store, scheduler, runner using `openConversation`), routes, budget enforcement via `message_end` usage, ledger purpose `task`.
-2. lookd: `POST /api/agent/event` (token-authenticated, agent only) → bus.
+2. coursive-daemon: `POST /api/agent/event` (token-authenticated, agent only) → bus.
 3. App: `features/assistant/tasks_page.dart`, editor, history, snackbar on `agent_task`.
 
 ## Verification
@@ -56,8 +56,8 @@ Modelled on the sidebar entries of agent apps (Codex app *Automations*, Claude C
 
 ## Evidence
 - Scheduler: [tasks.mjs](../../agent/src/tasks.mjs) with [tasks.test.mjs](../../agent/src/tasks.test.mjs) (previous and next runs across a month end, weekdays and a year end; catch-up and late windows; a time runs once; `writes` validation and a run refusing write tools its task does not allow while chats are not restricted; validation including overflowing dates; serial runs, budget status, abort on disable, skipped runs, history kept across a restart, 0600 modes, cross-task history with deleted tasks, a failed history write not stalling the queue, a failed skipped record still saving handled times); body limit and deadline (stopping early, a chunked upload answered with 413 and a closed connection) in [http.test.mjs](../../agent/src/http.test.mjs).
-- Runner and routes: `runTask` (untrusted-material prompt, `conv.writes`) and `/tasks` routes in [host.mjs](../../agent/src/host.mjs), the write check in `guard` with `WRITE_TOOLS` in [tools.mjs](../../agent/src/tools.mjs); lookd relay [agent_event.go](../../lookd/internal/server/agent_event.go).
+- Runner and routes: `runTask` (untrusted-material prompt, `conv.writes`) and `/tasks` routes in [host.mjs](../../agent/src/host.mjs), the write check in `guard` with `WRITE_TOOLS` in [tools.mjs](../../agent/src/tools.mjs); coursive-daemon relay [agent_event.go](../../daemon/internal/server/agent_event.go).
 - App: [tasks_page.dart](../../app/lib/features/assistant/tasks_page.dart) (tab, list-detail, run history, templates, editor, run listener), unread count [task_inbox.dart](../../app/lib/features/assistant/task_inbox.dart), rail destination in [shell.dart](../../app/lib/shell.dart); [tasks_test.dart](../../app/test/tasks_test.dart) (wording; wide list beside detail, toggle request, run history with filters, skipped reason and deleted task; narrow cards and detail page; templates and the weekly and 工作日 schedules).
 - Live check (2026-10-15): a daily task set two minutes ahead with a $0.05 cap ran once at its time (not manually), produced `started` and `finished` `agent_task` events, a conversation titled `定时 · 验证A · 10-15 05:15`, and one usage line with purpose `task` and its task id; a second task disabled before the time never ran; an empty name and a non-task event type returned 400. The test tasks and their conversation were deleted afterwards.
-- Live check (2026-10-15, after the redesign): `GET /agent/tasks/runs` answered through lookd; the existing `tasks.json` and `tasks-runs.jsonl` were tightened to 0600 on load.
+- Live check (2026-10-15, after the redesign): `GET /agent/tasks/runs` answered through coursive-daemon; the existing `tasks.json` and `tasks-runs.jsonl` were tightened to 0600 on load.
 - Not verified: the budget and timeout aborts against a live model (unit-tested through the scheduler), the snackbar, the unread badge with a live run, and the screens' look.

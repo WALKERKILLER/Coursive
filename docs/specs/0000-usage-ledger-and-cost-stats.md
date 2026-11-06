@@ -18,13 +18,13 @@ Non-goals: provider billing reconciliation (costs are estimates from model price
   - `input` excludes cached tokens; `cost` is the Pi-computed USD estimate (0 when the model has no price); `ok=false` for errored calls, which keep whatever usage the provider reported.
   - `purpose` ∈ `chat`, `timeline`, `vision`, `title`, `test`, `task`, `quiz`.
 - Every assistant message of a turn is recorded, including tool-loop round trips (counting only the last message of a turn under-reports several-fold).
-- On SIGINT/SIGTERM the host waits up to 3 s for appends in flight before exiting (lookd allows 5 s), so finished calls are not lost.
+- On SIGINT/SIGTERM the host waits up to 3 s for appends in flight before exiting (coursive-daemon allows 5 s), so finished calls are not lost.
 - Backfill: on first start with no ledger, existing session files are scanned once and their assistant messages written as `purpose: chat` with their original timestamps; a marker line prevents a second backfill.
 - Deleting a conversation does not delete its ledger lines.
 - Retention: calls older than 739 days (two longest summary ranges, one and its previous period, plus a week) are pruned at host start and daily by an atomic rewrite; the backfill marker stays. Ledger writes and cache reloads run one at a time in one queue, so a prune never drops a concurrent append and a query never counts a call twice or reads a cache a prune reset. After the first load, queries read only bytes appended since.
 - The ledger holds no prompt or response text.
 
-### API (agent host, reached by the app as `/agent/usage…` through lookd)
+### API (agent host, reached by the app as `/agent/usage…` through coursive-daemon)
 - `GET /usage/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` →
   `{totals:{calls, input, output, cache_read, cache_write, cost, errors}, days:[{date, input, output, cache_read, cost, calls}], by_model:[…], by_purpose:[…], by_session:[{session_id, title, …}]}`; days use local time and include zero days in range. The range spans at most 366 days (本年 in a leap year); longer → 400.
 - `GET /usage/calls?before=<cursor>&limit=50` → newest-first page of ledger lines with the session title resolved. Calls are ordered by (time, position in the ledger), and each carries `cursor` `<ts>:<position>`. The next page passes the last call's cursor, so calls sharing a millisecond are not skipped (a bare `<ts>` still means "older than"). `limit` is an integer 1–200 (default 50; anything else → 400). `from`/`to` and `summary` dates must be real calendar days (`2026-02-31` → 400).

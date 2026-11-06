@@ -1,13 +1,15 @@
-<!-- Title: type(scope): summary — e.g. fix(lookd): resume ASR chunks after restart. See CONTRIBUTING.md. -->
+<!-- Title: type(scope): summary — e.g. fix(daemon): resume transcription chunks after restart. See CONTRIBUTING.md. -->
 
 ## What changed
 
 ## Why
 
 ## Affected parts
-- [ ] `app/` (Flutter)
-- [ ] `lookd/` (Go)
-- [ ] `agent/` (Node)
+- [ ] App (Flutter)
+- [ ] Daemon (Go)
+- [ ] Assistant host (Node)
+- [ ] Plugin contract (manifest, permissions, source protocol, marketplace)
+- [ ] Brand assets
 - [ ] CI / docs / governance
 
 ## Platforms tested
@@ -25,3 +27,4 @@
 - [ ] External sources are cited at the owning code or decision record, when applicable
 - [ ] UI changes include a screenshot or recording
 - [ ] No credentials, local user data, or GPL/AGPL-derived code added
+- [ ] No specific institution or course platform named outside a source plugin

@@ -5,7 +5,7 @@ Proposed
 Class: feature
 
 ## Context and Problem Statement
-Users want the library in Notion as well as Obsidian ([decision 0010](0010-obsidian-one-way-export.md)). Notion has no local files to write: content goes through its API, which needs authorization, has rate limits, and lets the user edit pages we created. How does Look Studio authorize, what does it write, and how does it avoid overwriting the user's edits?
+Users want the library in Notion as well as Obsidian ([decision 0010](0010-obsidian-one-way-export.md)). Notion has no local files to write: content goes through its API, which needs authorization, has rate limits, and lets the user edit pages we created. How does Coursive authorize, what does it write, and how does it avoid overwriting the user's edits?
 
 ## Decision Drivers
 - No server of our own: a desktop app cannot keep an OAuth client secret.
