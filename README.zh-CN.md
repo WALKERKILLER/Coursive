@@ -70,12 +70,12 @@ Coursive 把课程保存在你自己的设备上，变成可搜索、相互链�
 
 ### 从 Releases 安装
 
-从首个预发布版本起，安装包会发布在 [Releases](https://github.com/WALKERKILLER/Coursive/releases) 页面：
+每个正式版和预发布版的安装包都附在 [Releases](https://github.com/WALKERKILLER/Coursive/releases) 页面：
 
 - **Linux**：AppImage、deb、rpm、Arch 软件包和 tar 包，支持 x64 和 arm64。
 - **Windows**：安装程序和免安装 zip 包。
-- **macOS**：dmg 和 zip 包。
-- **Android**：每种 ABI 一个 APK（arm64-v8a、x86_64）。
+- **macOS**：dmg 和 zip 包。应用未经公证，首次打开时请右键点按应用并选择「打开」。
+- **Android**：每种 ABI 一个 APK（arm64-v8a、x86_64）。预发布版 APK 使用临时签名，安装之后的版本需要先卸载，卸载会删除应用数据。
 
 ### 从源码构建
 

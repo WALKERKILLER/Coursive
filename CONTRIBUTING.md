@@ -7,7 +7,7 @@ Thank you for considering contributing to Coursive. This repository is agent-nat
 - `main` is the integration branch.
 - Work on a short-lived branch from `main`, named by type: `feat/…`, `fix/…`, `docs/…`, `ci/…`, `refactor/…`, `chore/…`. Contributors without write access work on a fork.
 - Every change reaches `main` through a pull request. The `main` ruleset blocks deletion and force-pushes, and requires the CI check `governance (gates)` plus an approving review from the code owner @WALKERKILLER ([CODEOWNERS](CODEOWNERS)). Each migrated module adds its CI job to the required checks; CI runs a part's job only when the change touches that part, Markdown-only changes run just the gates, and skipped jobs count as passed.
-- Releases: once the app has migrated, publishing a GitHub release or pre-release tagged `vX.Y.Z` (or `vX.Y.Z-beta.N`) on `main` builds and attaches the Linux, Windows, macOS and Android packages. Icons for every platform come from [scripts/export-brand-icons.sh](scripts/export-brand-icons.sh).
+- Releases: publishing a GitHub release or pre-release tagged `vX.Y.Z` (or `vX.Y.Z-beta.N`) on `main` runs [release.yml](.github/workflows/release.yml), which builds and attaches the Linux, Windows, macOS and Android packages. Icons for every platform come from [scripts/export-brand-icons.sh](scripts/export-brand-icons.sh).
 
 ## Governance loop
 
