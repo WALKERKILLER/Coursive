@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // check-brand-assets.mjs — the brand exports match assets/brand/exports.json.
 // Fails when the master changed without a re-export, an export was edited by hand,
-// or a file was added or removed outside scripts/export-brand-icons.sh.
+// or a file was added or removed outside scripts/export-brand-icons.sh, and that
+// the READMEs reference the banner with the cache-busting ?v=<first 8 hex of its SHA-256>.
 // Zero dependencies; Node >= 18.
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
@@ -36,6 +37,14 @@ for (const [rel, hash] of listed) {
 }
 for (const dir of ['logo', 'platforms', 'social']) {
   for (const rel of await walk(dir)) if (!listed.has(rel)) errors.push(`${rel} is not produced by the export script`);
+}
+const banner = 'social/coursive-social-1280x640.png';
+const version = (await sha256(banner)).slice(0, 8);
+for (const readme of ['README.md', 'README.zh-CN.md']) {
+  const text = await readFile(path.join(brand, '..', '..', readme), 'utf8');
+  for (const match of text.matchAll(/assets\/brand\/social\/coursive-social-1280x640\.png(\?v=[0-9a-f]+)?/g)) {
+    if (match[1] !== `?v=${version}`) errors.push(`${readme} references the banner without ?v=${version}; browsers would keep the old image`);
+  }
 }
 if (errors.length) {
   for (const error of errors) console.error(`check-brand-assets: ${error}`);

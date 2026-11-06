@@ -33,8 +33,8 @@
 <img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Android/android3.svg" alt="Android" />
 </p>
 
-<a href="assets/brand/social/coursive-social-1280x640.png">
-<img src="assets/brand/social/coursive-social-1280x640.png" alt="Coursive 预览" width="92%" />
+<a href="assets/brand/social/coursive-social-1280x640.png?v=3604f8dd">
+<img src="assets/brand/social/coursive-social-1280x640.png?v=3604f8dd" alt="Coursive 预览" width="92%" />
 </a>
 
 <p>
