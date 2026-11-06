@@ -14,13 +14,13 @@ Coursive's code comes from a predecessor project and moves here as it is refacto
 1. **Foundation** (done): governance, documentation, CI, brand assets, the plugin repository, and the two Draft specs for [source-provider plugins](specs/0024-source-provider-plugins.md) and the [plugin marketplace](specs/0025-plugin-marketplace.md).
 2. **Approve the contracts** (done 2026-11-06): the maintainer approved both specs and resolved their questions; they took the next spec numbers after the imported specs, [0024](specs/0024-source-provider-plugins.md) and [0025](specs/0025-plugin-marketplace.md).
 3. **Import history** (done 2026-11-06) into `import/app` with the procedure in [History](#history), which rewrites names in every commit; the decoupling pull requests complete the [de-identification checklist](#de-identification-checklist).
-4. **Decouple on `import/app`** (current). The first pull request carries the refactor developed before the import: the local-library start, the source-provider protocol with the platform code moved to coursive-plugins, source-plugin installs from the index, and the renames. Still open: agent-plugin install state in the daemon, the index signature, mirrors and the speed test.
+4. **Decouple on `import/app`** (done 2026-11-06 in #4): the local-library start, the source-provider protocol with the platform code moved to coursive-plugins, source-plugin installs from the index, and the renames. Agent-plugin install state in the daemon, the index signature, mirrors and the speed test continue as ordinary pull requests on `main`.
    - start on the local library: remove the splash and sign-in gates from the app root;
    - move platform sign-in, course listing and media resolution behind the source-provider protocol, and move the platform code into a source plugin outside this repository;
    - move plugin install state and consent into the daemon and add the marketplace, mirrors and speed test;
    - apply the [renames](#renames).
-5. **Merge into `main`** after maintainer approval: `git merge --allow-unrelated-histories import/app` as one merge commit; add each module's CI job and required check.
-6. **First release**: the release workflow (restored from the imported history with `vX.Y.Z` tags), signing keys and the first `v0.x` pre-release.
+5. **Merge into `main`** (done 2026-11-06 in #5): `git merge --allow-unrelated-histories import/app` as one merge commit; the daemon, assistant-host, app and Linux-build jobs are required checks.
+6. **First release** (current): the release workflow (restored from the imported history with `vX.Y.Z` tags), signing keys and the first `v0.x` pre-release.
 
 ## History
 
