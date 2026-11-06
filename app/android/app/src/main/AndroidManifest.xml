@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- lookd and the assistant run in this app's Linux workspace and reach
+    <!-- daemon and the assistant run in this app's Linux workspace and reach
          the school, model providers and WebDAV. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Downloads, transcriptions and sync keep running in the background. -->
@@ -7,9 +7,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="Look Studio"
+        android:label="Coursive"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
@@ -32,15 +33,15 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- lookstudio:// links go to the look/links channel only, not to
+            <!-- coursive-app:// links go to the coursive/links channel only, not to
                  Flutter's route-based deep linking (the app has no routes). -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-            <!-- lookstudio:// links, e.g. timestamps in notes exported to Obsidian -->
+            <!-- coursive-app:// links, e.g. timestamps in notes exported to Obsidian -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="lookstudio"/>
+                <data android:scheme="coursive-app"/>
             </intent-filter>
         </activity>
         <service

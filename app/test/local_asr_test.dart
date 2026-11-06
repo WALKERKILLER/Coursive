@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/settings/asr_bench.dart';
-import 'package:look_studio/features/settings/local_asr_page.dart';
+import 'package:coursive/features/settings/asr_bench.dart';
+import 'package:coursive/features/settings/local_asr_page.dart';
 
 Map<String, dynamic> model(
   String id,

@@ -6,7 +6,7 @@ Status: Approved
 ## Intent
 Transcription relies on two free cloud channels (必剪, 剪映) whose rate limits and 12-hour quotas stall long lectures. Users with a reasonable laptop should be able to download an offline model once and transcribe on their own machine, choosing the model with an honest comparison of accuracy, speed and memory.
 
-Outcome: Settings → 转写 opens a page with a benchmark board and a model list; one click downloads the recogniser and a model into Look Studio's data directory from a chosen source, and the model becomes the `local` channel of the existing ASR pool.
+Outcome: Settings → 转写 opens a page with a benchmark board and a model list; one click downloads the recogniser and a model into Coursive's data directory from a chosen source, and the model becomes the `local` channel of the existing ASR pool.
 
 This downloads and runs executables and large files from third parties, so every file has a pinned size and SHA-256, sources are a fixed list plus one user template, and nothing is installed system-wide. Recogniser: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0) command-line programs; the reference project VideoCaptioner (GPL-3.0) inspired the feature only, no code is taken from it.
 
@@ -15,7 +15,7 @@ Non-goals: GPU providers, streaming/live captions, model fine-tuning, automatic 
 ## Contract
 
 ### Catalog
-`lookd/internal/localasr/catalog.go` lists the engine archive per platform (`linux/amd64`, `darwin/arm64`, `darwin/amd64`, `windows/amd64`; others are unsupported) and six models: SenseVoice Small, Paraformer 中文, Qwen3-ASR 0.6B (recommended), Fun-ASR-Nano, FireRedASR2 AED, Whisper Large v3 Turbo. Each model carries files (path, size, SHA-256), languages, whether it writes punctuation, license and upstream links, a published CER on WenetSpeech test_meeting with its paper, and RTF/peak memory measured on the reference machine with four threads. Silero VAD is always installed; the CT-Transformer punctuation model is installed for models that do not punctuate.
+`daemon/internal/localasr/catalog.go` lists the engine archive per platform (`linux/amd64`, `darwin/arm64`, `darwin/amd64`, `windows/amd64`; others are unsupported) and six models: SenseVoice Small, Paraformer 中文, Qwen3-ASR 0.6B (recommended), Fun-ASR-Nano, FireRedASR2 AED, Whisper Large v3 Turbo. Each model carries files (path, size, SHA-256), languages, whether it writes punctuation, license and upstream links, a published CER on WenetSpeech test_meeting with its paper, and RTF/peak memory measured on the reference machine with four threads. Silero VAD is always installed; the CT-Transformer punctuation model is installed for models that do not punctuate.
 
 ### Sources
 `asr.local.source` (setting): `hf-mirror` (default, `https://hf-mirror.com/<repo>/resolve/main/<file>`), `huggingface`, `modelscope` (only packs with a byte-identical ModelScope copy: Qwen3-ASR 0.6B from `zengshuishui/Qwen3-ASR-onnx`, Silero VAD from `pengzhendong/silero-vad`; other packs fall back to hf-mirror with a progress note), `custom` (`asr.local.custom_url`, an `http(s)` template containing `{file}` and optionally `{repo}`). The engine comes from GitHub Releases, optionally prefixed by `asr.local.github_proxy`.
@@ -46,5 +46,5 @@ Settings → 转写 shows an entry card (status of the local channel) that opens
 - Manual: install SenseVoice from hf-mirror into a scratch directory and transcribe a test clip through the pool.
 
 ## Evidence
-- [localasr tests](../../lookd/internal/localasr/localasr_test.go), [location tests](../../lookd/internal/localasr/location_test.go), [pool test](../../lookd/internal/asr/pool_test.go), [app tests](../../app/test/local_asr_test.dart).
+- [localasr tests](../../daemon/internal/localasr/localasr_test.go), [location tests](../../daemon/internal/localasr/location_test.go), [pool test](../../daemon/internal/asr/pool_test.go), [app tests](../../app/test/local_asr_test.dart).
 - Reference measurements (i7-13650HX, 4 threads, 5.4 min clip): SenseVoice RTF 0.023 / 0.5 GB, Paraformer 0.021 / 0.5 GB, Fun-ASR-Nano 0.119 / 2.1 GB, Qwen3-ASR 0.158 / 2.3 GB, Whisper Turbo 0.188 / 1.8 GB, FireRedASR2 0.257 / 1.9 GB.

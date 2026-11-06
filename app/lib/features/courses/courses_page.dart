@@ -6,7 +6,9 @@ import '../../core/models.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/horizontal_scroller.dart';
+import '../../shell.dart';
 import '../../widgets/states.dart';
+import '../sources/sources_page.dart';
 import 'course_card.dart';
 import 'course_page.dart';
 import 'local_course_dialog.dart';
@@ -28,6 +30,13 @@ class _CoursesPageState extends State<CoursesPage> {
     _q.dispose();
     super.dispose();
   }
+
+  Future<void> _create() =>
+      startLocalCourse(context, onCreated: (_) => setState(() => _term = 'local'));
+
+  void _openSources() => Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const SourcesPage()));
 
   @override
   Widget build(BuildContext context) {
@@ -61,8 +70,10 @@ class _CoursesPageState extends State<CoursesPage> {
         .where((c) => c.hidden && (term.isEmpty || c.term == term))
         .length;
 
-    return RefreshIndicator(
-      onRefresh: () => app.loadCourses(sync: true),
+    final none = app.courses.isEmpty;
+
+    final body = RefreshIndicator(
+      onRefresh: () => app.loadCourses(sync: app.anySignedIn),
       child: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -88,112 +99,99 @@ class _CoursesPageState extends State<CoursesPage> {
                           ),
                         ),
                         IconButton(
-                          tooltip: l10n.localCourseCreate,
-                          icon: const Icon(Icons.add_rounded),
-                          onPressed: !app.connected
-                              ? null
-                              : () async {
-                                  final id = await openLocalCourseDialog(
-                                    context,
-                                    app.api,
-                                  );
-                                  if (!mounted || id == null) return;
-                                  setState(() => _term = 'local');
-                                  await app.loadCourses();
-                                  if (!context.mounted) return;
-                                  await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => CoursePage(courseId: id),
-                                    ),
-                                  );
-                                },
+                          tooltip: l10n.sourcesTitle,
+                          icon: const Icon(Icons.extension_outlined),
+                          onPressed: _openSources,
                         ),
-                        IconButton(
-                          tooltip: l10n.coursesSync,
-                          onPressed: app.coursesLoading
-                              ? null
-                              : () => app.loadCourses(sync: true),
-                          icon: app.coursesLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : const Icon(Icons.sync_rounded),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: Space.lg),
-                    SearchBar(
-                      controller: _q,
-                      hintText: l10n.coursesSearchHint,
-                      leading: const Icon(Icons.search_rounded),
-                      trailing: [
-                        if (_q.text.isNotEmpty)
+                        if (app.anySignedIn)
                           IconButton(
-                            onPressed: () => setState(_q.clear),
-                            icon: const Icon(Icons.close_rounded),
+                            tooltip: l10n.coursesSync,
+                            onPressed: app.coursesLoading
+                                ? null
+                                : () => app.loadCourses(sync: true),
+                            icon: app.coursesLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                    ),
+                                  )
+                                : const Icon(Icons.sync_rounded),
                           ),
                       ],
-                      onChanged: (_) => setState(() {}),
-                      elevation: const WidgetStatePropertyAll(0),
-                      backgroundColor: WidgetStatePropertyAll(
-                        cs.surfaceContainerHigh,
-                      ),
                     ),
-                    const SizedBox(height: Space.md),
-                    HorizontalScroller(
-                      fade: true,
-                      builder: (c) => SingleChildScrollView(
-                        controller: c,
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            for (final t in terms) ...[
-                              ChoiceChip(
-                                label: Text(
-                                  t == 'local'
-                                      ? l10n.localCourse
-                                      : Course({'term': t}).termLabel,
-                                ),
-                                selected: term == t,
-                                onSelected: (_) => setState(() => _term = t),
-                              ),
-                              const SizedBox(width: Space.sm),
-                            ],
-                            ChoiceChip(
-                              label: Text(l10n.coursesAllTerms),
-                              selected: term.isEmpty,
-                              onSelected: (_) => setState(() => _term = ''),
+                    if (!none) ...[
+                      const SizedBox(height: Space.lg),
+                      SearchBar(
+                        controller: _q,
+                        hintText: l10n.coursesSearchHint,
+                        leading: const Icon(Icons.search_rounded),
+                        trailing: [
+                          if (_q.text.isNotEmpty)
+                            IconButton(
+                              onPressed: () => setState(_q.clear),
+                              icon: const Icon(Icons.close_rounded),
                             ),
-                            if (hiddenCount > 0) ...[
-                              const SizedBox(width: Space.sm),
-                              FilterChip(
-                                label: Text(
-                                  l10n.coursesHiddenCount(hiddenCount),
-                                ),
-                                selected: _showHidden,
-                                onSelected: (v) =>
-                                    setState(() => _showHidden = v),
-                              ),
-                            ],
-                          ],
+                        ],
+                        onChanged: (_) => setState(() {}),
+                        elevation: const WidgetStatePropertyAll(0),
+                        backgroundColor: WidgetStatePropertyAll(
+                          cs.surfaceContainerHigh,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: Space.md),
+                      HorizontalScroller(
+                        fade: true,
+                        builder: (c) => SingleChildScrollView(
+                          controller: c,
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final t in terms) ...[
+                                ChoiceChip(
+                                  label: Text(
+                                    t == 'local'
+                                        ? l10n.localCourse
+                                        : Course({'term': t}).termLabel,
+                                  ),
+                                  selected: term == t,
+                                  onSelected: (_) => setState(() => _term = t),
+                                ),
+                                const SizedBox(width: Space.sm),
+                              ],
+                              ChoiceChip(
+                                label: Text(l10n.coursesAllTerms),
+                                selected: term.isEmpty,
+                                onSelected: (_) => setState(() => _term = ''),
+                              ),
+                              if (hiddenCount > 0) ...[
+                                const SizedBox(width: Space.sm),
+                                FilterChip(
+                                  label: Text(
+                                    l10n.coursesHiddenCount(hiddenCount),
+                                  ),
+                                  selected: _showHidden,
+                                  onSelected: (v) =>
+                                      setState(() => _showHidden = v),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
-          if (app.coursesLoading && app.courses.isEmpty)
+          if (app.coursesLoading && none)
             SliverFillRemaining(
               hasScrollBody: false,
               child: CenteredLoader(label: l10n.coursesSyncing),
             )
-          else if (app.coursesError != null && app.courses.isEmpty)
+          else if (app.coursesError != null && none)
             SliverFillRemaining(
               hasScrollBody: false,
               child: ErrorState(
@@ -201,21 +199,64 @@ class _CoursesPageState extends State<CoursesPage> {
                 onRetry: () => app.loadCourses(sync: true),
               ),
             )
-          else if (list.isEmpty)
+          else if (none)
             SliverFillRemaining(
               hasScrollBody: false,
               child: EmptyState(
-                icon: Icons.search_off_rounded,
-                title: q.isEmpty
-                    ? l10n.coursesEmptyTerm
-                    : l10n.coursesNoMatch(_q.text),
+                icon: Icons.video_library_outlined,
+                title: l10n.coursesEmptyTitle,
+                body: l10n.coursesEmptyBody,
+                action: Column(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: app.connected ? _create : null,
+                      icon: const Icon(Icons.add_rounded),
+                      label: Text(l10n.localCourseCreate),
+                    ),
+                    const SizedBox(height: Space.sm),
+                    TextButton(
+                      onPressed: _openSources,
+                      child: Text(l10n.coursesEmptySources),
+                    ),
+                  ],
+                ),
               ),
+            )
+          else if (list.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: q.isNotEmpty
+                  ? EmptyState(
+                      icon: Icons.search_off_rounded,
+                      title: l10n.coursesNoMatch(_q.text),
+                      action: TextButton(
+                        onPressed: () => setState(_q.clear),
+                        child: Text(l10n.coursesClearSearch),
+                      ),
+                    )
+                  : term.isNotEmpty
+                  ? EmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: l10n.coursesEmptyTerm,
+                      action: TextButton(
+                        onPressed: () => setState(() => _term = ''),
+                        child: Text(l10n.coursesViewAllTerms),
+                      ),
+                    )
+                  : EmptyState(
+                      icon: Icons.visibility_off_outlined,
+                      title: l10n.coursesAllHidden,
+                      action: TextButton(
+                        onPressed: () => setState(() => _showHidden = true),
+                        child: Text(l10n.coursesShowHidden),
+                      ),
+                    ),
             )
           else
             SliverToBoxAdapter(
               child: ContentWidth(
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(pad, Space.sm, pad, Space.huge + MediaQuery.paddingOf(context).bottom),
+                  padding: EdgeInsets.fromLTRB(pad, Space.sm, pad, 96 + MediaQuery.paddingOf(context).bottom),
                   child: LayoutBuilder(
                     builder: (context, c) {
                       final cols = (c.maxWidth / 280).floor().clamp(1, 4);
@@ -253,6 +294,22 @@ class _CoursesPageState extends State<CoursesPage> {
             ),
         ],
       ),
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      // The empty state carries the create action until a course exists.
+      floatingActionButton: none
+          ? null
+          : PageFab(
+              child: FloatingActionButton.extended(
+                heroTag: 'courses-add',
+                onPressed: app.connected ? _create : null,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(l10n.localCourseCreate),
+              ),
+            ),
+      body: body,
     );
   }
 }

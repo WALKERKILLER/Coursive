@@ -5,7 +5,7 @@ Proposed
 Class: feature
 
 ## Context and Problem Statement
-Users want their lecture notes in Obsidian. The library is already plain Markdown with YAML front matter, but notes link through the app-only `look://` scheme, use `\( \)` math, and live next to videos and `library.db`. How should notes reach a vault, and in which link style?
+Users want their lecture notes in Obsidian. The library is already plain Markdown with YAML front matter, but notes link through the app-only `coursive://` scheme, use `\( \)` math, and live next to videos and `library.db`. How should notes reach a vault, and in which link style?
 
 ## Decision Drivers
 - The library stays the source of truth; edits made in Obsidian must never be lost.
@@ -14,18 +14,18 @@ Users want their lecture notes in Obsidian. The library is already plain Markdow
 - Small first step that a later two-way sync can build on.
 
 ## Considered Options
-- One-way export into a vault folder, standard relative Markdown links, `lookstudio://` deep links for timestamps.
+- One-way export into a vault folder, standard relative Markdown links, `coursive-app://` deep links for timestamps.
 - Point Obsidian at the library folder itself.
 - Two-way sync from the start.
 - Wikilinks (`[[...]]`, `![[...]]`) instead of Markdown links.
 
 ## Decision Outcome
-Chosen option: one-way export with standard Markdown links and a `lookstudio://` deep link. The conversion lives in `lookd/internal/portable` so other exporters reuse it. Files edited in the vault are detected by hash and kept; the new version is written beside them.
+Chosen option: one-way export with standard Markdown links and a `coursive-app://` deep link. The conversion lives in `daemon/internal/portable` so other exporters reuse it. Files edited in the vault are detected by hash and kept; the new version is written beside them.
 
 ### Consequences
 - Good: no risk to the library; vault content is portable Markdown; timestamps open the app.
 - Good: the converter is shared by future exporters.
-- Trade-off: edits made in Obsidian do not flow back; the user merges the `(Look Studio)` copy by hand until two-way sync exists.
+- Trade-off: edits made in Obsidian do not flow back; the user merges the `(Coursive)` copy by hand until two-way sync exists.
 - Trade-off: deep links need the handler registered per platform.
 
 ## Pros and Cons of the Options
@@ -35,7 +35,7 @@ Chosen option: one-way export with standard Markdown links and a `lookstudio://`
 
 ### Library as the vault
 - Good: zero copies, edits are immediate.
-- Bad: `look://` links and `\( \)` math do not render; videos, `.parsed/` and the WAL database burden indexing and vault sync; renaming a note title renames its file and breaks backlinks; the app's front matter rewrite drops properties added in Obsidian.
+- Bad: `coursive://` links and `\( \)` math do not render; videos, `.parsed/` and the WAL database burden indexing and vault sync; renaming a note title renames its file and breaks backlinks; the app's front matter rewrite drops properties added in Obsidian.
 
 ### Two-way sync first
 - Good: edits flow both ways.

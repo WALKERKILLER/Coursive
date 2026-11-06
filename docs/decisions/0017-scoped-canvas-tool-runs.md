@@ -22,7 +22,7 @@ The native study canvas owns mutable ink, materials and undo history. The reside
 
 ## Decision Outcome
 
-The canvas-run service uses the existing ModelPipeline with a finite tool budget. lookd resolves selected identifiers and ranges against the saved document; Flutter supplies only explicitly selected visual regions. Tools stage typed card and connection operations. Flutter validates the result against the source snapshot and applies one undoable transaction, with review before changing existing content. A versioned document retains structured blocks and normalized source anchors. General chat tools and their write guards retain their own scope.
+The canvas-run service uses the existing ModelPipeline with a finite tool budget. coursive-daemon resolves selected identifiers and ranges against the saved document; Flutter supplies only explicitly selected visual regions. Tools stage typed card and connection operations. Flutter validates the result against the source snapshot and applies one undoable transaction, with review before changing existing content. A versioned document retains structured blocks and normalized source anchors. General chat tools and their write guards retain their own scope.
 
 ## Pros and Cons of the Options
 

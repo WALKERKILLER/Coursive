@@ -19,7 +19,7 @@ import '../../widgets/states.dart';
 import '../../widgets/user_avatar.dart';
 import '../courses/course_page.dart';
 import '../courses/download_sheet.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../library/note_reader.dart';
 import '../player/player_page.dart';
 import '../plugins/plugin_views.dart';
@@ -1135,7 +1135,7 @@ class _AssistantTurn extends StatelessWidget {
           }
         default:
           if (b.text.isNotEmpty) {
-            children.add(LookMarkdown(
+            children.add(CoursiveMarkdown(
               b.text,
               style: tt.bodyMedium?.copyWith(height: 1.65),
               lectureId: ctxLecture,
@@ -1146,7 +1146,7 @@ class _AssistantTurn extends StatelessWidget {
                       onSeek: (t) => onAction({'kind': 'seek', 'lecture_id': t.lectureId.isNotEmpty ? t.lectureId : ctxLecture, 'seconds': t.seconds})),
               isStreaming: live,
               animation: prefs.reduceMotion ? GptMarkdownAnimation.none : prefs.streamAnimation,
-              codeBuilder: (context, name, code, closed) => (closed ? lookViewBlock(context, name, code) : null) ?? _CodeBlock(lang: name, code: code),
+              codeBuilder: (context, name, code, closed) => (closed ? coursiveViewBlock(context, name, code) : null) ?? _CodeBlock(lang: name, code: code),
             ));
           }
       }

@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 
 import 'core/app_state.dart';
+import 'core/models.dart';
 import 'core/plugins.dart';
 import 'features/assistant/assistant_controller.dart';
 import 'features/assistant/assistant_panel.dart';
@@ -16,14 +17,13 @@ import 'features/courses/courses_page.dart';
 import 'features/downloads/downloads_page.dart';
 import 'features/home/home_page.dart';
 import 'features/library/library_page.dart';
-import 'features/nas/nas_page.dart';
-import 'features/login/login_page.dart';
 import 'features/notifications/notification_center.dart';
 import 'features/plugins/plugins_page.dart';
 import 'features/profile/profile_dialog.dart';
 import 'features/schedule/schedule_page.dart';
 import 'features/schedule/schedule_store.dart';
 import 'features/settings/settings_page.dart';
+import 'features/sources/sources_page.dart';
 import 'theme/glass.dart';
 import 'theme/prefs.dart';
 import 'theme/tokens.dart';
@@ -51,12 +51,10 @@ abstract final class Tabs {
       library = 4,
       tasks = 5,
       plugins = 6,
-      settings = 7,
-      nas = 8;
+      settings = 7;
 }
 
 final _dests = [
-  // Keep tab indices stable; NAS is appended below.
   _Dest(
     l10n.screenHome,
     Icons.home_outlined,
@@ -105,7 +103,6 @@ final _dests = [
     Icons.tune_rounded,
     l10n.commonSettings,
   ),
-  _Dest(l10n.nasTitle, Icons.hub_outlined, Icons.hub, l10n.nasTitle),
 ];
 
 /// The bottom bar leaves out 定时 and 插件, reached from 设置 and the
@@ -193,7 +190,7 @@ class _AppShellState extends State<AppShell> {
     ShellNav._goTo = _select;
     ShellNav._current = () => _index;
     ShellNav._keys = _navKeys;
-    // Plugin notices (look.notify) show wherever the user is.
+    // Plugin notices (coursive.notify) show wherever the user is.
     _notices = context.read<PluginStore>().notices.listen((m) {
       if (mounted) showSnack(context, m);
     });
@@ -243,7 +240,6 @@ class _AppShellState extends State<AppShell> {
     Tabs.library => const LibraryPage(),
     Tabs.tasks => const TasksPage(),
     Tabs.plugins => const PluginsPage(),
-    Tabs.nas => const NasPage(),
     _ => const SettingsPage(),
   };
 
@@ -314,8 +310,8 @@ class _AppShellState extends State<AppShell> {
 
     final body = Column(
       children: [
-        if (app.auth.status == 'needs_password')
-          _ReauthBanner(error: app.auth.error),
+        for (final s in app.sources.where((s) => s.expired))
+          _ExpiredBanner(source: s),
         Expanded(child: stack),
       ],
     );
@@ -631,7 +627,7 @@ class _BrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Tooltip(
-      message: 'Look Studio',
+      message: 'Coursive',
       child: CustomPaint(
         size: const Size.square(36),
         painter: _BrandPainter(cs.primaryContainer, cs.primary),
@@ -771,21 +767,17 @@ class _AssistantFab extends StatelessWidget {
   }
 }
 
-class _ReauthBanner extends StatelessWidget {
-  const _ReauthBanner({required this.error});
-  final String error;
+/// Shown while a source's sign-in has expired; opens its sign-in sheet.
+class _ExpiredBanner extends StatelessWidget {
+  const _ExpiredBanner({required this.source});
+  final Source source;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
       color: cs.errorContainer,
       child: InkWell(
-        onTap: () => showDialog(
-          context: context,
-          builder: (_) => const Dialog(
-            child: SizedBox(width: 420, child: LoginForm(dialog: true)),
-          ),
-        ),
+        onTap: () => signInSource(context, source),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: Space.lg,
@@ -797,8 +789,14 @@ class _ReauthBanner extends StatelessWidget {
               const SizedBox(width: Space.md),
               Expanded(
                 child: Text(
-                  l10n.shellSessionExpired,
+                  l10n.sourceExpiredBanner(source.title),
                   style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+              Text(
+                l10n.loginSignInAgain,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: cs.onErrorContainer,
                 ),
               ),
               Icon(Icons.chevron_right_rounded, color: cs.onErrorContainer),

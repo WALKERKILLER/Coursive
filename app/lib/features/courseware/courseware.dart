@@ -16,7 +16,7 @@ import '../../l10n/l10n.dart';
 
 const kCoursewareExts = ['pdf', 'ppt', 'pptx', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg', 'webp'];
 
-/// Lets the user pick documents and uploads them to a lecture. lookd queues
+/// Lets the user pick documents and uploads them to a lecture. daemon queues
 /// MinerU parsing when automatic parsing is on.
 Future<int> pickAndUploadCourseware(BuildContext context, String lectureId) async {
   final files = await openFiles(acceptedTypeGroups: [XTypeGroup(label: l10n.assetCourseware, extensions: kCoursewareExts)]);

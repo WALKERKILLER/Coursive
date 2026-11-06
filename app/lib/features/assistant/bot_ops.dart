@@ -9,10 +9,12 @@ import '../../theme/prefs.dart';
 import '../activity/activity_page.dart';
 import '../courses/course_page.dart';
 import '../library/note_reader.dart';
+import '../lms/lms_page.dart';
 import '../player/lecture_player.dart';
 import '../player/player_page.dart';
 import '../schedule/schedule_widgets.dart';
 import '../settings/settings_page.dart';
+import '../sources/sources_page.dart';
 import '../usage/usage_page.dart';
 import 'bot_page.dart';
 import '../../l10n/l10n.dart';
@@ -30,6 +32,8 @@ final kOpenTargets = <String, String>{
   'schedule': l10n.commonSchedule,
   'downloads': l10n.commonDownload,
   'library': l10n.screenLibrary,
+  'sources': l10n.sourcesTitle,
+  'lms': l10n.lmsTitle,
   'tasks': l10n.commonScheduledTasks,
   'plugins': l10n.commonPlugins,
   'settings': l10n.commonSettings,
@@ -106,7 +110,7 @@ abstract final class BotOps {
     final tab = _tabTargets[target];
     // Tabs sit under full-screen routes (the compact assistant, a sheet, the
     // player): close them so the page shows, as the chat's buttons do.
-    if (tab != null || target == 'course' || target == 'note') rootNavigator.currentState?.popUntil((r) => r.isFirst);
+    if (tab != null || const {'course', 'note', 'sources', 'lms'}.contains(target)) rootNavigator.currentState?.popUntil((r) => r.isFirst);
     if (tab != null) {
       ShellNav.goTo(tab);
       final day = DateTime.tryParse('${op['day'] ?? ''}');
@@ -130,6 +134,10 @@ abstract final class BotOps {
         pushTab(Tabs.courses, CoursePage(courseId: '${op['course_id']}'));
       case 'note':
         pushTab(Tabs.library, NotePage(noteId: '${op['note_id']}'));
+      case 'sources':
+        pushTab(Tabs.courses, const SourcesPage());
+      case 'lms':
+        pushTab(Tabs.courses, const LmsPage());
       case 'lecture':
         final t = (op['t'] as num?)?.round();
         pushRoot(PlayerPage(lectureId: '${op['lecture_id']}', startMs: t == null ? null : t * 1000));

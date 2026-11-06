@@ -100,10 +100,10 @@ class _ObsidianPageState extends State<ObsidianPage> {
     }
   }
 
-  /// Makes `lookstudio://` links open this app: a user desktop entry that
+  /// Makes `coursive-app://` links open this app: a user desktop entry that
   /// handles the scheme, set as the default with xdg-mime.
   Future<void> _registerLinks() async {
-    const name = 'cn.lookstudio.look_studio-handler.desktop';
+    const name = 'io.github.walkerkiller.coursive-handler.desktop';
     try {
       final home = Platform.environment['HOME'] ?? '';
       final dir = Directory(p.join(home, '.local', 'share', 'applications'));
@@ -111,11 +111,11 @@ class _ObsidianPageState extends State<ObsidianPage> {
       final exe = Platform.resolvedExecutable.replaceAllMapped(RegExp(r'["`$\\]'), (m) => '\\${m[0]}');
       await File(p.join(dir.path, name)).writeAsString('[Desktop Entry]\n'
           'Type=Application\n'
-          'Name=Look Studio\n'
+          'Name=Coursive\n'
           'Exec="$exe" %u\n'
           'NoDisplay=true\n'
-          'MimeType=x-scheme-handler/lookstudio;\n');
-      final r = await Process.run('xdg-mime', ['default', name, 'x-scheme-handler/lookstudio']);
+          'MimeType=x-scheme-handler/coursive-app;\n');
+      final r = await Process.run('xdg-mime', ['default', name, 'x-scheme-handler/coursive-app']);
       try {
         await Process.run('update-desktop-database', [dir.path]);
       } on ProcessException {
@@ -161,7 +161,7 @@ class _ObsidianPageState extends State<ObsidianPage> {
             const SizedBox(height: Space.md),
             TextField(
               controller: _folder,
-              decoration: InputDecoration(labelText: l10n.obsidianFolder, hintText: 'LookStudio', border: OutlineInputBorder(), helperText: l10n.obsidianFolderHelper),
+              decoration: InputDecoration(labelText: l10n.obsidianFolder, hintText: 'Coursive', border: OutlineInputBorder(), helperText: l10n.obsidianFolderHelper),
               onSubmitted: (_) => _saveAndTell(quiet: true),
             ),
             const SizedBox(height: Space.sm),

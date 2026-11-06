@@ -5,8 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../core/api.dart';
 import '../../core/app_state.dart';
-import '../../core/format.dart';
-import '../../core/profile.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/report_screen.dart';
@@ -20,8 +18,8 @@ import '../assistant/bot_avatar.dart';
 import '../assistant/bot_page.dart';
 import '../assistant/runtime_setup.dart';
 import '../usage/usage_page.dart';
-import '../canvas/canvas_page.dart';
-import '../nas/nas_page.dart';
+import '../lms/lms_page.dart';
+import '../sources/sources_page.dart';
 import 'about_page.dart';
 import 'asr_settings.dart';
 import 'data_settings.dart';
@@ -56,13 +54,11 @@ final _categories = [
     Icons.account_circle_outlined,
     l10n.settingsAccountHint,
     [
-      l10n.authSchoolA,
-      l10n.authRenewNow,
-      l10n.authSignOut,
       l10n.settingsProfileKeyword,
-      'Canvas',
-      l10n.commonSchool,
-      l10n.settingsCanvasKeyword,
+      l10n.sourcesTitle,
+      l10n.loginSignIn,
+      l10n.sourceSignOut,
+      l10n.lmsTitle,
     ],
   ),
   _Category(
@@ -201,7 +197,7 @@ final _categories = [
 
 /// The bot's section names (agent/src/operate.mjs) → categories.
 const _sectionAliases = {
-  'account': 'account', 'canvas': 'account', //
+  'account': 'account', //
   'appearance': 'appearance', 'player': 'appearance',
   'assistant': 'assistant', 'models': 'assistant', 'plugins': 'assistant',
   'downloads': 'transfer', 'transcript': 'transfer', 'courseware': 'transfer',
@@ -487,18 +483,10 @@ class _SettingsPageState extends State<SettingsPage> {
       'account' => [
         const SizedBox(height: Space.xl),
         const _AccountSection(),
-        ListTile(
-          title: Text(l10n.nasEntry),
-          leading: const Icon(Icons.hub_outlined),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const NasPage()),
-          ),
-        ),
         SettingsGroup(
-          title: l10n.settingsSchoolCanvas,
-          icon: Icons.school_outlined,
-          children: [CanvasSettingsEntry()],
+          title: l10n.sourcesTitle,
+          icon: Icons.extension_outlined,
+          children: const [_SourcesEntry()],
         ),
       ],
       'appearance' => [
@@ -669,7 +657,6 @@ class _CategoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final account = category.id == 'account';
-    final auth = account ? context.watch<AppState>().auth : null;
     final leading = account
         ? const UserAvatar(size: 40)
         : AnimatedContainer(
@@ -707,13 +694,7 @@ class _CategoryTile extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          account
-              ? l10n.settingsAccountSummary(
-                  auth!.status == 'active'
-                      ? l10n.authSignedIn
-                      : l10n.authSignedOut,
-                )
-              : category.summary,
+          category.summary,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -779,182 +760,93 @@ class _SliderTile extends StatelessWidget {
 
 // ---------------------------------------------------------------- account
 
+/// The local profile, and the sources that bring courses in.
 class _AccountSection extends StatelessWidget {
   const _AccountSection();
   @override
   Widget build(BuildContext context) {
-    final app = context.watch<AppState>();
-    final a = app.auth;
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final name = a.realname.isNotEmpty ? a.realname : a.username;
-    final exp = a.expiresAt;
-    final (statusText, statusColor) = switch (a.status) {
-      'active' => (l10n.authSignedIn, cs.primary),
-      'renewing' => (l10n.authRenewing, cs.tertiary),
-      'needs_password' => (l10n.authNeedsSignIn, cs.error),
-      _ => (l10n.authSignedOut, cs.onSurfaceVariant),
-    };
-    final method = switch (a.method) {
-      'password' => l10n.authMethodPassword,
-      'sso' => l10n.authMethodSso,
-      'stored' => l10n.authMethodSavedPassword,
-      'cache' => l10n.authMethodRestored,
-      final m => m,
-    };
     return Container(
       padding: const EdgeInsets.all(Space.xl),
       decoration: BoxDecoration(
         color: cs.secondaryContainer,
         borderRadius: BorderRadius.circular(Corners.xlIncreased),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Tooltip(
-                message: l10n.profileEdit,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: () => showProfileDialog(context),
-                  child: const UserAvatar(size: 56),
-                ),
-              ),
-              const SizedBox(width: Space.lg),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            userDisplayName(context),
-                            style: tt.titleLarge?.copyWith(
-                              color: cs.onSecondaryContainer,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: l10n.profileEditTooltip,
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => showProfileDialog(context),
-                          icon: Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: cs.onSecondaryContainer,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      [
-                        if (context.watch<UserProfile>().nickname.isNotEmpty)
-                          name,
-                        a.username,
-                        a.school == 'schoolb'
-                            ? l10n.schoolSchoolB
-                            : l10n.schoolSchoolA,
-                      ].join(' · '),
-                      style: tt.bodyMedium?.copyWith(
-                        color: cs.onSecondaryContainer.withValues(alpha: 0.8),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: cs.surface.withValues(alpha: 0.7),
-                  borderRadius: BorderRadius.circular(Corners.full),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: statusColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(statusText, style: tt.labelMedium),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.lg),
-          Text(
-            [
-              if (exp != null) l10n.authExpires(fmtUntil(exp)),
-              if (a.renewedAt != null)
-                l10n.authLastRenewed(fmtRelative(a.renewedAt!), method),
-              a.remember ? l10n.authPasswordSaved : l10n.authPasswordNotSaved,
-            ].join('\n'),
-            style: tt.bodySmall?.copyWith(
-              color: cs.onSecondaryContainer,
-              height: 1.7,
+          Tooltip(
+            message: l10n.profileEdit,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => showProfileDialog(context),
+              child: const UserAvatar(size: 56),
             ),
           ),
-          if (a.error.isNotEmpty)
-            Text(a.error, style: tt.bodySmall?.copyWith(color: cs.error)),
-          const SizedBox(height: Space.md),
-          Wrap(
-            spacing: Space.sm,
-            children: [
-              FilledButton.tonalIcon(
-                onPressed: a.status == 'renewing'
-                    ? null
-                    : () async {
-                        try {
-                          await app.api.post('/api/auth/renew');
-                          if (context.mounted)
-                            showSnack(context, l10n.authRenewed);
-                        } catch (e) {
-                          if (context.mounted)
-                            showSnack(context, l10n.authRenewFailed(e));
-                        }
-                      },
-                icon: const Icon(Icons.autorenew_rounded),
-                label: Text(l10n.authRenewNow),
-              ),
-              TextButton.icon(
-                onPressed: () async {
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(l10n.authSignOutTitle),
-                      content: Text(l10n.authSignOutBody),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(l10n.commonCancel),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: Text(l10n.authSignOutAction),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (ok == true) await app.logout();
-                },
-                icon: const Icon(Icons.logout_rounded),
-                label: Text(l10n.authSignOut),
-              ),
-            ],
+          const SizedBox(width: Space.lg),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userDisplayName(context),
+                  style: tt.titleLarge?.copyWith(color: cs.onSecondaryContainer),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  l10n.settingsProfileLocal,
+                  style: tt.bodyMedium?.copyWith(
+                    color: cs.onSecondaryContainer.withValues(alpha: 0.8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.tonalIcon(
+            onPressed: () => showProfileDialog(context),
+            icon: const Icon(Icons.edit_outlined),
+            label: Text(l10n.profileEdit),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The settings rows for sources and their learning platforms.
+class _SourcesEntry extends StatelessWidget {
+  const _SourcesEntry();
+  @override
+  Widget build(BuildContext context) {
+    final app = context.watch<AppState>();
+    final ss = app.sources;
+    final signed = ss.where((s) => s.signedIn).length;
+    return Column(
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.extension_outlined),
+          title: Text(l10n.sourcesTitle),
+          subtitle: Text(
+            ss.isEmpty ? l10n.sourcesNone : l10n.sourcesSummary(ss.length, signed),
+          ),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SourcesPage()),
+          ),
+        ),
+        if (ss.any((s) => s.signedIn && s.hasLms))
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.assignment_outlined),
+            title: Text(l10n.lmsTitle),
+            subtitle: Text(l10n.lmsEntryHint),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const LmsPage()),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/assistant/runtime_setup.dart';
+import 'package:coursive/features/assistant/runtime_setup.dart';
 
 void main() {
   Map<String, dynamic> status({bool node = false, bool deps = false, Map<String, dynamic>? install}) => {

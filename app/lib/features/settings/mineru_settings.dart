@@ -14,7 +14,7 @@ const _tokenPage = 'https://mineru.net/apiManage/token';
 String _date(DateTime d) => l10n.dateYearMonthDay(d.year, d.month, d.day);
 
 /// MinerU courseware parsing: API token, options and today's page quota.
-/// The token stays sealed in lookd; only its last four characters come back.
+/// The token stays sealed in daemon; only its last four characters come back.
 class MinerUSettings extends StatefulWidget {
   const MinerUSettings({super.key});
   @override

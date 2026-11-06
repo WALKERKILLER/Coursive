@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/app_state.dart';
-import 'package:look_studio/core/lookd_service.dart';
-import 'package:look_studio/core/models.dart';
-import 'package:look_studio/features/downloads/downloads_page.dart';
+import 'package:coursive/core/app_state.dart';
+import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/models.dart';
+import 'package:coursive/features/downloads/downloads_page.dart';
 import 'package:provider/provider.dart';
 
 class _App extends AppState {
-  _App() : super(LookdService());
+  _App() : super(DaemonService());
   final bulk = <(String, List<String>?)>[];
 
   @override

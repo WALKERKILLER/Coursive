@@ -36,7 +36,7 @@ async function writePrivate(path, value) {
 }
 
 export const DEFAULT_BOT = Object.freeze({
-	name: "小 Look",
+	name: "小 C",
 	shape: "mochi",
 	color: "theme",
 	persona: "",

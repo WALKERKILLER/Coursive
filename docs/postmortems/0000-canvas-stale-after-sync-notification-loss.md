@@ -25,4 +25,4 @@ The page subscribed directly to an event stream and ignored stream errors. A dis
 
 - [Canvas widget tests](../../app/test/study_canvas_ui_test.dart) include a received document with no push event; the open page must catch up within five seconds. The same fixture checks automatic replacement and bounded revision-race retries.
 - [Canvas implementation](../../app/lib/features/study_canvas/study_canvas.dart) checks state periodically while visible and immediately after returning to the foreground, and disposes its observer and timer with the page.
-- [Folder integration tests](../../lookd/internal/datasync/folder_test.go) verify whole-canvas convergence and recovery bytes, following the [selected save policy](../decisions/0022-whole-canvas-last-save-wins.md).
+- [Folder integration tests](../../daemon/internal/datasync/folder_test.go) verify whole-canvas convergence and recovery bytes, following the [selected save policy](../decisions/0022-whole-canvas-last-save-wins.md).

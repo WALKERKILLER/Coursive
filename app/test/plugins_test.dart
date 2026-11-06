@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/app_state.dart';
-import 'package:look_studio/core/lookd_service.dart';
-import 'package:look_studio/core/plugins.dart';
-import 'package:look_studio/features/plugins/plugin_views.dart';
-import 'package:look_studio/features/plugins/plugins_page.dart';
+import 'package:coursive/core/app_state.dart';
+import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/plugins.dart';
+import 'package:coursive/features/plugins/plugin_views.dart';
+import 'package:coursive/features/plugins/plugins_page.dart';
 import 'package:provider/provider.dart';
 
 Map<String, dynamic> _plugin(String id, {String state = 'enabled', Map<String, dynamic> contributes = const {}}) => {
@@ -53,7 +53,7 @@ class _FakeStore extends PluginStore {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  PluginStore storeWith(List<Map<String, dynamic>> plugins) => PluginStore(AppState(LookdService()))..installed = plugins;
+  PluginStore storeWith(List<Map<String, dynamic>> plugins) => PluginStore(AppState(DaemonService()))..installed = plugins;
 
   test('contributions come from active plugins only', () {
     final store = storeWith([
@@ -115,7 +115,7 @@ void main() {
     expect(find.text('「graph」视图'), findsOneWidget);
   });
 
-  testWidgets('look-view blocks render only for declared kinds', (tester) async {
+  testWidgets('coursive-view blocks render only for declared kinds', (tester) async {
     final store = storeWith([
       _plugin('demo', contributes: {'blocks': ['checklist']}),
     ]);
@@ -123,9 +123,9 @@ void main() {
     await tester.pumpWidget(ChangeNotifierProvider.value(
       value: store,
       child: MaterialApp(home: Builder(builder: (context) {
-        declared = lookViewBlock(context, 'look-view', '{"kind":"checklist","data":{"items":[]}}');
-        undeclared = lookViewBlock(context, 'look-view', '{"kind":"graph","data":{}}');
-        broken = lookViewBlock(context, 'look-view', '{not json');
+        declared = coursiveViewBlock(context, 'coursive-view', '{"kind":"checklist","data":{"items":[]}}');
+        undeclared = coursiveViewBlock(context, 'coursive-view', '{"kind":"graph","data":{}}');
+        broken = coursiveViewBlock(context, 'coursive-view', '{not json');
         return const SizedBox();
       })),
     ));
@@ -209,10 +209,13 @@ void main() {
     Future<_FakeStore> pumpTab(WidgetTester tester, Size size, {int view = 0}) async {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final store = _FakeStore(AppState(LookdService()), [listing('mindmap', '思维导图'), listing('anki', '闪卡导出', official: false)])
+      final store = _FakeStore(AppState(DaemonService()), [listing('mindmap', '思维导图'), listing('anki', '闪卡导出', official: false)])
         ..installed = [_plugin('mindmap'), _plugin('cards', state: 'needs_consent')];
       pluginsView.value = view;
-      await tester.pumpWidget(ChangeNotifierProvider<PluginStore>.value(value: store, child: const MaterialApp(home: PluginsPage())));
+      await tester.pumpWidget(MultiProvider(providers: [
+        ChangeNotifierProvider<AppState>.value(value: store.app),
+        ChangeNotifierProvider<PluginStore>.value(value: store),
+      ], child: const MaterialApp(home: PluginsPage())));
       await tester.pumpAndSettle();
       return store;
     }
@@ -220,7 +223,7 @@ void main() {
     testWidgets('wide: catalogs by source, a side pane, installed list beside detail', (tester) async {
       final store = await pumpTab(tester, const Size(1400, 900));
       expect(find.text('2 个已安装 · 1 个启用 · 1 个需要处理'), findsOneWidget);
-      expect(find.text('Look Studio 官方'), findsWidgets);
+      expect(find.text('Coursive 官方'), findsWidgets);
       expect(find.text('社区目录'), findsOneWidget);
       expect(find.byType(PluginDetailView), findsNothing);
 

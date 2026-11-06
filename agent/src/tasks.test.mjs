@@ -70,7 +70,7 @@ test("a run refuses write tools its task does not allow", async () => {
 	await assert.rejects(tool(run, "save_note").execute("1", { title: "x", body: "y" }), /没有被允许「保存笔记与大纲」/);
 	await assert.rejects(tool(run, "mark_schedule").execute("1", {}), /没有被允许「标记与修改日程」/);
 	assert.equal(run.calls, 0); // refused before anything ran
-	// Chats set no writes and are not restricted (this call fails later, reaching lookd).
+	// Chats set no writes and are not restricted (this call fails later, reaching daemon).
 	await assert.rejects(tool({ calls: 0 }, "save_note").execute("1", { title: "x", body: "y" }), (e) => !/没有被允许/.test(e.message));
 });
 

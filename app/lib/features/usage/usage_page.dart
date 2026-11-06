@@ -86,7 +86,7 @@ num _allTokens(Map? t) =>
     _n(t, 'cache_write') +
     _n(t, 'output');
 
-/// GET helper; defaults to the lookd API (agent routes under /agent/).
+/// GET helper; defaults to the daemon API (agent routes under /agent/).
 typedef UsageFetch = Future<dynamic> Function(
   String path,
   Map<String, String> query,

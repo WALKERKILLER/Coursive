@@ -11,14 +11,14 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_logo.dart';
+import '../../widgets/coursive_logo.dart';
 import 'settings_common.dart';
 
-/// The repository Look Studio is built from; its releases carry the app.
+/// The repository Coursive is built from; its releases carry the app.
 const repoSlug = 'WALKERKILLER/Coursive';
-const repoUrl = 'https://github.com/$repoSlug/tree/app';
+const repoUrl = 'https://github.com/$repoSlug';
 
-/// A Look Studio release on GitHub (tag `studio-v<version>`).
+/// A Coursive release on GitHub (tag `v<version>`).
 class Release {
   Release(this.version, this.page, this.publishedAt, this.assets);
   final String version;
@@ -85,8 +85,8 @@ Release? newerRelease(List releases, String current) {
   Release? best;
   for (final r in releases.cast<Map>()) {
     final tag = '${r['tag_name'] ?? ''}';
-    if (r['draft'] == true || !tag.startsWith('studio-v') || (r['prerelease'] == true && !pre)) continue;
-    final v = tag.substring('studio-v'.length);
+    if (r['draft'] == true || !RegExp(r'^v\d').hasMatch(tag) || (r['prerelease'] == true && !pre)) continue;
+    final v = tag.substring(1);
     if (compareVersions(v, current) <= 0 || (best != null && compareVersions(v, best.version) <= 0)) continue;
     best = Release(v, '${r['html_url']}', DateTime.tryParse('${r['published_at']}')?.toLocal(), {
       for (final a in (r['assets'] as List? ?? const []).cast<Map>()) '${a['name']}': '${a['browser_download_url']}',
@@ -222,9 +222,9 @@ class _AboutSectionState extends State<AboutSection> {
           trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => showLicensePage(
             context: context,
-            applicationName: 'Look Studio',
+            applicationName: 'Coursive',
             applicationVersion: version,
-            applicationIcon: const Padding(padding: EdgeInsets.all(Space.lg), child: LookLogo(size: 64, label: null)),
+            applicationIcon: const Padding(padding: EdgeInsets.all(Space.lg), child: CoursiveLogo(size: 64, label: null)),
           ),
         ),
       ]),
@@ -254,9 +254,9 @@ class _Hero extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     return Column(children: [
-      const LookLogo(size: 88),
+      const CoursiveLogo(size: 88),
       const SizedBox(height: Space.lg),
-      Text('Look Studio', style: tt.headlineSmall, textAlign: TextAlign.center),
+      Text('Coursive', style: tt.headlineSmall, textAlign: TextAlign.center),
       const SizedBox(height: Space.xs),
       Text(l10n.aboutTagline, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant), textAlign: TextAlign.center),
       const SizedBox(height: Space.md),

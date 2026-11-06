@@ -9,7 +9,7 @@ import '../../core/app_state.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/heatmap.dart' show fmtMinutes;
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../widgets/states.dart';
 import '../library/note_reader.dart' show openRef;
 import 'quiz.dart';
@@ -272,7 +272,7 @@ class _QuestionView extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final x = quiz.questions[index];
     final answered = chosen != null;
-    final ref = LookRef.parse(x.ref);
+    final ref = CoursiveRef.parse(x.ref);
     return ListView(padding: const EdgeInsets.fromLTRB(0, Space.xl, 0, Space.xxxl), children: [
       ContentWidth(
         max: 720,
@@ -291,7 +291,7 @@ class _QuestionView extends StatelessWidget {
               ],
             ]),
             const SizedBox(height: Space.md),
-            LookMarkdown(x.stem, style: tt.titleMedium?.copyWith(height: 1.6), lectureId: quiz.lectureId, onRef: (r) => openRef(context, r, lectureId: quiz.lectureId)),
+            CoursiveMarkdown(x.stem, style: tt.titleMedium?.copyWith(height: 1.6), lectureId: quiz.lectureId, onRef: (r) => openRef(context, r, lectureId: quiz.lectureId)),
             const SizedBox(height: Space.xl),
             for (var i = 0; i < x.options.length; i++)
               Padding(
@@ -321,7 +321,7 @@ class _QuestionView extends StatelessWidget {
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Icon(Icons.lightbulb_outline_rounded, size: 18, color: cs.onSurfaceVariant),
                           const SizedBox(width: Space.sm),
-                          Expanded(child: LookMarkdown(x.hint, style: tt.bodyMedium, lectureId: quiz.lectureId, onRef: (r) => openRef(context, r, lectureId: quiz.lectureId))),
+                          Expanded(child: CoursiveMarkdown(x.hint, style: tt.bodyMedium, lectureId: quiz.lectureId, onRef: (r) => openRef(context, r, lectureId: quiz.lectureId))),
                         ]),
                       )
                     : TextButton.icon(onPressed: onHint, icon: const Icon(Icons.lightbulb_outline_rounded, size: 18), label: Text(l10n.practiceHint)),
@@ -408,12 +408,12 @@ class OptionRow extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Padding(
                     padding: const EdgeInsets.only(top: 3),
-                    child: LookMarkdown(option.text, style: tt.bodyLarge?.copyWith(color: fg), lectureId: lectureId, onRef: (r) => openRef(context, r, lectureId: lectureId)),
+                    child: CoursiveMarkdown(option.text, style: tt.bodyLarge?.copyWith(color: fg), lectureId: lectureId, onRef: (r) => openRef(context, r, lectureId: lectureId)),
                   ),
                   if (note != null) Text(note, style: tt.labelMedium?.copyWith(color: fg)),
                   if (revealed && option.rationale.isNotEmpty) ...[
                     const SizedBox(height: Space.xs),
-                    LookMarkdown(option.rationale, style: tt.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85), height: 1.5), lectureId: lectureId, onRef: (r) => openRef(context, r, lectureId: lectureId)),
+                    CoursiveMarkdown(option.rationale, style: tt.bodySmall?.copyWith(color: fg.withValues(alpha: 0.85), height: 1.5), lectureId: lectureId, onRef: (r) => openRef(context, r, lectureId: lectureId)),
                   ],
                 ]),
               ),

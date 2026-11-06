@@ -64,7 +64,7 @@ class ChatSession {
   int get messages => (j['messages'] as num?)?.toInt() ?? 0;
 }
 
-/// Talks to the embedded Pi agent host (proxied by lookd under /agent).
+/// Talks to the embedded Pi agent host (proxied by daemon under /agent).
 class AssistantController extends ChangeNotifier {
   AssistantController(this.app, this.screen, this.players) {
     app.addListener(_onApp);

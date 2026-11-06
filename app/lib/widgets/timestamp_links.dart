@@ -17,7 +17,7 @@ int? parseClock(String s) {
 }
 
 /// Rewrites bare `[mm:ss]`, `[h:mm:ss]` and `[a]–[b]` references into
-/// `look://` links so Markdown renders them as tappable timestamps. With
+/// `coursive://` links so Markdown renders them as tappable timestamps. With
 /// [lectureId] the link names its lecture; otherwise it means "this lecture".
 /// Code spans and fenced blocks are left untouched.
 String linkifyTimestamps(String md, {String lectureId = ''}) {
@@ -57,11 +57,11 @@ String _linkPlain(String s, String lectureId) => s.replaceAllMapped(_tsRef, (m) 
       if (start == null) return m[0]!;
       final end = m[2] == null ? null : parseClock(m[2]!);
       final label = m[2] == null ? m[1]! : '${m[1]}–${m[2]}';
-      final base = lectureId.isEmpty ? 'look://seek' : 'look://lecture/$lectureId';
+      final base = lectureId.isEmpty ? 'coursive://seek' : 'coursive://lecture/$lectureId';
       return '[$label]($base?t=$start${end != null ? '&end=$end' : ''})';
     });
 
-/// A parsed `look://` timestamp link.
+/// A parsed `coursive://` timestamp link.
 class TimeLink {
   const TimeLink(this.lectureId, this.seconds);
   final String lectureId; // empty: the lecture in context
@@ -69,7 +69,7 @@ class TimeLink {
 
   static TimeLink? parse(String url) {
     final u = Uri.tryParse(url);
-    if (u == null || (u.scheme != 'look' && u.scheme != 'lookstudio')) return null;
+    if (u == null || (u.scheme != 'coursive' && u.scheme != 'coursive-app')) return null;
     final t = int.tryParse(u.queryParameters['t'] ?? '');
     if (t == null) return null;
     if (u.host == 'seek') return TimeLink('', t);

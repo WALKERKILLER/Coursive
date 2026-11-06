@@ -1,11 +1,11 @@
-# Look Studio lives on an orphan `app` branch
+# Coursive lives on an orphan `app` branch
 
 ## Status
-Accepted
+Deprecated
 Class: process
 
 ## Context and Problem Statement
-Look Studio (Flutter app, Go daemon, Node agent host) grew out of the Coursive skill but shares none of its code: it only reads and exports the skill's file formats. It needed a home in the upstream repository while still in development, without disturbing the skill's `main` branch, its CI, or its releases.
+Coursive (Flutter app, Go daemon, Node agent host) grew out of a lecture-notes skill in a predecessor repository but shares none of its code: it only reads and exports the skill's file formats. It needed a home in the upstream repository while still in development, without disturbing the skill's `main` branch, its CI, or its releases.
 
 ## Decision Drivers
 - The skill on `main` keeps working and releasing unchanged.
@@ -38,5 +38,7 @@ Chosen option: an orphan `app` branch with Studio at the root. The branch has it
 - Good: complete isolation.
 - Bad: the owner asked for a branch in the upstream repository.
 
+The owner later chose the separate repository: Coursive moved into its own repository with its history ([migration](../migration.md)), so this record no longer applies.
+
 ## Links
-- [Coursive](https://github.com/WALKERKILLER/Coursive) — upstream repository; the skill lives on `main`.
+- [Migration](../migration.md) — how the history moved into this repository.

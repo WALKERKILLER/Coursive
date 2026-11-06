@@ -14,8 +14,7 @@ import '../../widgets/report_screen.dart';
 import '../../widgets/states.dart';
 import '../assistant/assistant_panel.dart';
 import '../player/player_page.dart';
-import '../nas/nas_page.dart';
-import '../canvas/canvas_course.dart';
+import '../lms/lms_course.dart';
 import '../plugins/plugin_views.dart';
 import 'courses_page.dart';
 import 'download_sheet.dart';
@@ -216,17 +215,6 @@ class _CoursePageState extends State<CoursePage> {
                               await app.loadCourses(quiet: true);
                             },
                           ),
-                        IconButton(
-                          tooltip: l10n.nasTitle,
-                          icon: const Icon(Icons.hub_outlined),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  NasPage(courseId: widget.courseId),
-                            ),
-                          ),
-                        ),
                         if (course != null)
                           Padding(
                             padding: const EdgeInsets.only(right: Space.xs),
@@ -300,7 +288,7 @@ class _CoursePageState extends State<CoursePage> {
                 child: ContentWidth(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(pad, 0, pad, 0),
-                    child: CanvasCourseSection(courseId: widget.courseId),
+                    child: LmsCourseSection(courseId: widget.courseId),
                   ),
                 ),
               ),

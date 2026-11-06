@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { api } from "./lookd.mjs";
+import { api } from "./daemon.mjs";
 import { entryFrom } from "./usage.mjs";
 
 const endpoint = (id) => `/api/lectures/${encodeURIComponent(id)}/transcript-review`;

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/format.dart';
-import '../../core/lookd_service.dart';
+import '../../core/daemon_service.dart';
 import '../../core/workspace.dart';
 import '../../theme/tokens.dart';
 import '../../l10n/l10n.dart';
 
-// First run on Android: install the Linux workspace lookd and the
+// First run on Android: install the Linux workspace daemon and the
 // assistant run in. Contract: docs/specs/draft-android-app.md
 
 class WorkspaceSetupPage extends StatefulWidget {
@@ -25,7 +25,7 @@ class _WorkspaceSetupPageState extends State<WorkspaceSetupPage> {
     l10n.workspaceStepConfigure,
   ];
 
-  Future<void> _start(LookdService daemon, Workspace ws) async {
+  Future<void> _start(DaemonService daemon, Workspace ws) async {
     try {
       await ws.install(workspaceMirrors.firstWhere((m) => m.id == _mirror));
     } catch (_) {
@@ -36,7 +36,7 @@ class _WorkspaceSetupPageState extends State<WorkspaceSetupPage> {
 
   @override
   Widget build(BuildContext context) {
-    final daemon = context.watch<LookdService>();
+    final daemon = context.watch<DaemonService>();
     final ws = daemon.workspace!;
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;

@@ -35,7 +35,7 @@ Non-goals:
 ### Operate
 - `read_settings` (core group `settings`): non-secret settings as `{key, label, value, where}`:
   - app appearance and player prefs, pushed by the app to the host on change via `PUT /agent/app-state`;
-  - lookd download, transcription and parsing settings (MinerU token only as set/unset);
+  - coursive-daemon download, transcription and parsing settings (MinerU token only as set/unset);
   - assistant model, thinking and vision prefs;
   - plugins and scheduled tasks summary.
 - `propose_settings {changes:[{key, value}], reason}`: validated against a registry `{key, type, range|enum, label, where, risk}`. It returns a `settings` proposal card listing `label: old → new`.
@@ -56,13 +56,13 @@ An assignment (作业) is a folder in the library: `courses/<course>/assignments
 ```
 
 - The assistant creates it from a schedule item (kind 作业), courseware or the chat:
-  - `requirements` quote the source with `look://` refs;
+  - `requirements` quote the source with `coursive://` refs;
   - every checklist item has a concrete `verify` (what file or behaviour proves it).
 - Tools (group `assignment`):
   - `create_assignment`, `read_assignment`, `update_checklist`, `list_assignment_files`, `read_assignment_file`;
   - `write_assignment_file {path, content}`: text only, ≤ 512 KB, relative path inside the folder, no `..`, no executable bit, at most 200 files;
   - `verify_assignment`: walks the checklist, reads the evidence files and sets `state` + `evidence` per item. It returns a summary; it never marks an item done without naming its evidence.
-- lookd owns the folder (`/api/assignments…` routes, index table `assignments`, reindex from `assignment.json`) like notes and quizzes, and publishes `assignment_changed`.
+- coursive-daemon owns the folder (`/api/assignments…` routes, index table `assignments`, reindex from `assignment.json`) like notes and quizzes, and publishes `assignment_changed`.
 - Plugins with `workspace` permission (for example the Codex delegate) work in the same folder through `look.assignment(id)`.
 - Policy: an optional `policy_note` (the course's rule on AI help, entered by the user) shows on the assignment page and is passed to the assistant and plugins. Export adds an "AI 协助说明" section listing which actors wrote which files from the log.
 
@@ -84,7 +84,7 @@ An assignment (作业) is a folder in the library: `courses/<course>/assignments
    - `settings` group with the registry and `PUT /agent/app-state`;
    - proposal tools;
    - `assignment` group.
-2. lookd: assignments store, files API with the path guards, reindex, events; both clients updated.
+2. coursive-daemon: assignments store, files API with the path guards, reindex, events; both clients updated.
 3. App:
    - starter chips;
    - navigation executor and anchor registry with the spotlight overlay;

@@ -9,12 +9,12 @@ import '../features/player/player_page.dart';
 /// The app's root navigator, so links from other programs can open screens.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Receives `lookstudio://` links that the operating system hands to the app
-/// (the Linux runner and the Android activity, over the `look/links`
+/// Receives `coursive-app://` links that the operating system hands to the app
+/// (the Linux runner and the Android activity, over the `coursive/links`
 /// channel), for example a timestamp clicked in an exported Obsidian note.
 /// Links wait until the main screen is up, then open.
 class DeepLinks {
-  static const _channel = MethodChannel('look/links');
+  static const _channel = MethodChannel('coursive/links');
   static final _pending = <Uri>[];
   static bool _ready = false;
 
@@ -39,7 +39,7 @@ class DeepLinks {
 
   static void _receive(String raw) {
     final uri = Uri.tryParse(raw);
-    if (uri == null || uri.scheme != 'lookstudio') return;
+    if (uri == null || uri.scheme != 'coursive-app') return;
     _pending.add(uri);
     _flush();
   }

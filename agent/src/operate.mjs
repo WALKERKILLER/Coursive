@@ -32,7 +32,7 @@ export const MAX_DOWNLOAD = 50;
 
 /**
  * Settings the bot may read and change. where: app (UiPrefs JSON keys, applied
- * by the app), lookd (GET/PUT /api/settings) or agent (assistant prefs). No
+ * by the app), daemon (GET/PUT /api/settings) or agent (assistant prefs). No
  * secret is listed, so none is readable or writable. Every change has an undo.
  */
 export const SETTINGS = {
@@ -49,13 +49,13 @@ export const SETTINGS = {
 	showSubtitles: { where: "app", label: "显示字幕", type: "boolean" },
 	subtitleScale: { where: "app", label: "字幕大小", min: 0.6, max: 2 },
 	lecturesNewestFirst: { where: "app", label: "课程页最新一节在前", type: "boolean" },
-	"download.video_parallel": { where: "lookd", label: "同时下载的视频数", min: 1, max: 4, int: true, fallback: 2 },
-	"download.max_conns": { where: "lookd", label: "单个视频的并发连接", min: 1, max: 16, int: true, fallback: 8 },
-	"download.rate_limit": { where: "lookd", label: "总速度上限（字节/秒，0 不限）", enum: [0, 2 * MB, 5 * MB, 10 * MB, 20 * MB], fallback: 0 },
-	"download.stream": { where: "lookd", label: "下载哪个画面（空为自动）", enum: ["", "屏幕", "教师", "学生"], fallback: "" },
-	"transcript.delete_video": { where: "lookd", label: "转写完成后删除视频", type: "boolean", fallback: false },
-	"asr.strategy": { where: "lookd", label: "转写渠道分配（balance 或渠道 id）", type: "string", fallback: "balance" },
-	"asr.concurrency": { where: "lookd", label: "同时识别的段数", min: 1, max: 4, int: true, fallback: 2 },
+	"download.video_parallel": { where: "daemon", label: "同时下载的视频数", min: 1, max: 4, int: true, fallback: 2 },
+	"download.max_conns": { where: "daemon", label: "单个视频的并发连接", min: 1, max: 16, int: true, fallback: 8 },
+	"download.rate_limit": { where: "daemon", label: "总速度上限（字节/秒，0 不限）", enum: [0, 2 * MB, 5 * MB, 10 * MB, 20 * MB], fallback: 0 },
+	"download.stream": { where: "daemon", label: "下载哪个画面（空为自动）", enum: ["", "屏幕", "教师", "学生"], fallback: "" },
+	"transcript.delete_video": { where: "daemon", label: "转写完成后删除视频", type: "boolean", fallback: false },
+	"asr.strategy": { where: "daemon", label: "转写渠道分配（balance 或渠道 id）", type: "string", fallback: "balance" },
+	"asr.concurrency": { where: "daemon", label: "同时识别的段数", min: 1, max: 4, int: true, fallback: 2 },
 	model: { where: "agent", label: "助手默认模型（provider/model）", type: "string" },
 	thinking: { where: "agent", label: "思考强度", enum: ["off", "minimal", "low", "medium", "high", "xhigh"] },
 };
@@ -95,7 +95,7 @@ export async function runOp(op, deps) {
 		case "app":
 			return { app: op.set };
 		case "settings": {
-			if (op.lookd && Object.keys(op.lookd).length) await deps.api("PUT", "/api/settings", op.lookd);
+			if (op.daemon && Object.keys(op.daemon).length) await deps.api("PUT", "/api/settings", op.daemon);
 			if (op.agent && Object.keys(op.agent).length) {
 				const patch = { ...op.agent };
 				if (patch.model) {
@@ -193,13 +193,13 @@ export function operateTools(deps) {
 		try {
 			server = (await api("GET", "/api/settings")) ?? {};
 		} catch {
-			// lookd unreachable: report app and agent settings only.
+			// daemon unreachable: report app and agent settings only.
 		}
 		const agentPrefs = deps.pipeline.prefs;
 		const out = {};
 		for (const [key, s] of Object.entries(SETTINGS)) {
 			if (s.where === "app") out[key] = app[key];
-			else if (s.where === "lookd") out[key] = server[key] ?? s.fallback;
+			else if (s.where === "daemon") out[key] = server[key] ?? s.fallback;
 			else if (key === "model") out[key] = agentPrefs.provider && agentPrefs.model ? `${agentPrefs.provider}/${agentPrefs.model}` : "";
 			else out[key] = agentPrefs[key];
 		}
@@ -238,16 +238,16 @@ export function operateTools(deps) {
 			name: "open_page",
 			label: "打开页面",
 			description:
-				"Navigate the app for the user. targets: home, courses, course (course_id), lecture (lecture_id, optional t seconds), note (note_id), schedule (optional day YYYY-MM-DD), downloads, library, tasks, plugins, settings (optional section), activity, usage, bot.",
+				"Navigate the app for the user. targets: home, courses, course (course_id), lecture (lecture_id, optional t seconds), note (note_id), schedule (optional day YYYY-MM-DD), downloads, library, sources, lms, tasks, plugins, settings (optional section), activity, usage, bot.",
 			promptSnippet: "open_page(target, …): navigate the app (course, lecture, note, schedule, downloads, settings, …)",
 			parameters: Type.Object({
-				target: lit(["home", "courses", "course", "lecture", "note", "schedule", "downloads", "library", "tasks", "plugins", "settings", "activity", "usage", "bot"]),
+				target: lit(["home", "courses", "course", "lecture", "note", "schedule", "downloads", "library", "sources", "lms", "tasks", "plugins", "settings", "activity", "usage", "bot"]),
 				course_id: Type.Optional(Type.String()),
 				lecture_id: Type.Optional(Type.String()),
 				note_id: Type.Optional(Type.String()),
 				t: Type.Optional(Type.Number({ description: "Seconds into the lecture" })),
 				day: Type.Optional(Type.String({ description: "YYYY-MM-DD" })),
-				section: Type.Optional(lit(["account", "canvas", "appearance", "player", "assistant", "models", "plugins", "downloads", "transcript", "courseware", "knowledge", "storage", "obsidian", "notion", "sync", "backup", "notifications", "diagnostics"])),
+				section: Type.Optional(lit(["appearance", "player", "assistant", "models", "plugins", "downloads", "transcript", "courseware", "knowledge", "storage", "obsidian", "notion", "sync", "backup", "notifications", "diagnostics"])),
 			}),
 			execute: async (_id, p) => {
 				const need = { course: "course_id", lecture: "lecture_id", note: "note_id" }[p.target];
@@ -302,8 +302,8 @@ export function operateTools(deps) {
 					const ok = new Set(desc.providers.flatMap((p) => p.models.filter((m) => m.available).map((m) => `${p.id}/${m.id}`)));
 					for (const c of clean) if (c.key === "model" && !ok.has(c.value)) throw bad(`模型 ${c.value} 不可用。可用：${[...ok].slice(0, 20).join("、")}`);
 				}
-				const op = { type: "settings", app: {}, lookd: {}, agent: {} };
-				const undo = { type: "settings", app: {}, lookd: {}, agent: {} };
+				const op = { type: "settings", app: {}, daemon: {}, agent: {} };
+				const undo = { type: "settings", app: {}, daemon: {}, agent: {} };
 				for (const c of clean) {
 					const where = SETTINGS[c.key].where;
 					op[where][c.key] = c.value;
@@ -483,7 +483,7 @@ export function operateTools(deps) {
 		{
 			name: "sync_courses",
 			label: "同步课程",
-			description: "Refresh the course list from the Look platform.",
+			description: "Refresh the course list from signed-in sources.",
 			parameters: Type.Object({}),
 			execute: async () => {
 				const list = (await api("GET", "/api/courses?sync=1")) ?? [];

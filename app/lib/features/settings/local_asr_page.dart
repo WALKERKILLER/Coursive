@@ -8,7 +8,7 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart' show openPlainLink;
+import '../../widgets/coursive_markdown.dart' show openPlainLink;
 import '../../widgets/pickers.dart';
 import '../../widgets/states.dart';
 import 'asr_bench.dart';

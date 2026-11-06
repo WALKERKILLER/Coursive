@@ -1,6 +1,6 @@
 import '../l10n/l10n.dart';
 
-// Plain data classes mirroring lookd JSON.
+// Plain data classes mirroring daemon JSON.
 
 int _i(dynamic v) =>
     v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
@@ -8,28 +8,90 @@ double _d(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
 String _s(dynamic v) => v?.toString() ?? '';
 bool _b(dynamic v) => v == true || v == 1 || v == '1';
 
-class AuthState {
-  AuthState(this.j);
+/// An installed source plugin, as `GET /api/sources` lists it.
+class SourcePlugin {
+  SourcePlugin(this.j);
   final Map<String, dynamic> j;
-  String get status => _s(j['status']);
+  String get id => _s(j['id']);
+  String get title => _s(j['title']);
+  String get summary => _s(j['summary']);
 
-  /// The school signed in to (or last tried): `schoola` or `schoolb`.
-  String get school => j['school'] == 'schoolb' ? 'schoolb' : 'schoola';
-  String get username => _s(j['username']);
-  String get realname => _s(j['realname']);
-  String get method => _s(j['method']);
-  bool get remember => _b(j['remember']);
+  /// A Material Symbols name or an image data: URL; see [pluginIconImage].
+  String get icon => _s(j['icon']);
+  String get version => _s(j['version']);
+  bool get enabled => _b(j['enabled']);
+
+  /// False when the plugin has no executable for this device.
+  bool get available => _b(j['available']);
+  List<String> get hosts => [for (final h in (j['hosts'] as List?) ?? const []) _s(h)];
+  List<Source> get sources => [
+    for (final s in (j['sources'] as List?) ?? const [])
+      Source((s as Map).cast<String, dynamic>()),
+  ];
+}
+
+/// One source of a plugin and its sign-in state.
+class Source {
+  Source(this.j);
+  final Map<String, dynamic> j;
+  Map<String, dynamic> get _auth =>
+      (j['auth'] as Map?)?.cast<String, dynamic>() ?? const {};
+
+  /// `<plugin>/<source>`.
+  String get id => _s(j['id']);
+  String get plugin => _s(j['plugin']);
+  String get title => _s(j['title']);
+
+  /// The provider process: stopped, starting, ready or error.
+  String get process => _s(j['process']);
   String get error => _s(j['error']);
-  DateTime? get expiresAt => _time(j['expires_at']);
-  DateTime? get renewedAt => _time(j['renewed_at']);
 
-  /// lookd sends Go's zero time when there is none (SchoolB's session has no expiry).
-  static DateTime? _time(dynamic v) => switch (DateTime.tryParse(_s(v))) {
-    final t? when t.year > 2000 => t.toLocal(),
+  /// signed_out, signed_in, needs_input or expired.
+  String get state => _s(_auth['state']);
+  bool get signedIn => state == 'signed_in';
+  bool get expired => state == 'expired';
+  String get account =>
+      _s(((_auth['account'] as Map?) ?? const {})['display']);
+  SignInChallenge? get challenge => switch (_auth['challenge']) {
+    final Map c => SignInChallenge(c.cast<String, dynamic>()),
     _ => null,
   };
-  bool get signedIn => status == 'active' || status == 'renewing';
-  static final empty = AuthState({'status': 'signed_out'});
+  List<String> get capabilities => [
+    for (final c in (j['capabilities'] as List?) ?? const []) _s(c),
+  ];
+  bool get hasLms => capabilities.contains('lms');
+  List<SignInField> get fields => [
+    for (final f in (j['fields'] as List?) ?? const [])
+      SignInField((f as Map).cast<String, dynamic>()),
+  ];
+}
+
+/// One input of a source's sign-in form.
+class SignInField {
+  SignInField(this.j);
+  final Map<String, dynamic> j;
+  String get key => _s(j['key']);
+  String get title => _s(j['title']);
+
+  /// text, password or otp.
+  String get kind => _s(j['kind']);
+
+  /// False: the value is passed to the source once and never stored.
+  bool get remember => j['remember'] != false;
+}
+
+/// An extra sign-in step, such as a captcha image.
+class SignInChallenge {
+  SignInChallenge(this.j);
+  final Map<String, dynamic> j;
+  String get id => _s(j['id']);
+
+  /// image, text or qr.
+  String get kind => _s(j['kind']);
+  String get prompt => _s(j['prompt']);
+
+  /// A data: URL for image and qr challenges.
+  String get image => _s(j['image']);
 }
 
 class Course {
@@ -37,6 +99,16 @@ class Course {
   final Map<String, dynamic> j;
   bool get isLocal => id.startsWith('local-');
   String get id => _s(j['id']);
+
+  /// The source id (`<plugin>/<source>`); empty for local courses and for
+  /// courses indexed before sources were recorded.
+  String get source => _s(j['source']);
+
+  /// False when the course's source plugin is gone: it stays readable.
+  bool get refreshable => _b(j['refreshable']);
+
+  /// The course on its platform.
+  String get url => _s(j['url']);
   String get rawTitle => _s(j['title']);
   String get alias => _s(j['alias']);
   String get title => alias.isNotEmpty ? alias : rawTitle;
@@ -197,7 +269,7 @@ class LectureMedia {
   );
   String get localPath => _s(j['local_path']);
 
-  /// Streams are lookd paths (relayed for SchoolB, whose media only lookd reaches).
+  /// Streams are daemon paths: they need headers that stay in daemon.
   bool get relayed => _b(j['relayed']);
   List<Map<String, dynamic>> get courseware =>
       ((j['courseware'] as List?) ?? []).cast<Map<String, dynamic>>();
@@ -222,8 +294,8 @@ class ScheduleItem {
   String get source => _s(j['source']);
   bool get done => _b(j['done']);
 
-  /// A Canvas assignment: read-only except done, opened on Canvas.
-  bool get isCanvas => source == 'canvas';
+  /// A learning-platform assignment: read-only except done, opened on the platform.
+  bool get isLms => source == 'lms';
   String get url => _s(j['url']);
   DateTime get day => DateTime.tryParse(dueDate) ?? DateTime(1970);
   bool get overdue {

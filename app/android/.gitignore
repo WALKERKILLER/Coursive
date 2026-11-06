@@ -15,5 +15,5 @@ key.properties
 
 # Linux workspace built by workspace/prepare.py
 /app/src/main/jniLibs/
-/app/src/main/assets/look/
+/app/src/main/assets/coursive/
 /workspace/.cache/

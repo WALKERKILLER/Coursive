@@ -85,7 +85,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
 
   final player = Player(
     configuration: const PlayerConfiguration(
-      title: 'Look Studio',
+      title: 'Coursive',
       bufferSize: 64 * 1024 * 1024,
     ),
   );
@@ -339,7 +339,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     if (i != null) {
       final p = Player(
         configuration: const PlayerConfiguration(
-          title: 'Look Studio PiP',
+          title: 'Coursive PiP',
           muted: true,
         ),
       );
@@ -438,11 +438,11 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
 
   String slideUrl(Slide s) => switch (s) {
     _ when s.path.isNotEmpty => api.fileUrl(s.path),
-    _ when media?.relayed ?? false => api.uri(
+    // daemon fetches remote slides with any headers the source needs.
+    _ => api.uri(
       '/api/lectures/$lectureId/slides/${s.idx}/image',
       {'token': api.token},
     ).toString(),
-    _ => s.remoteUrl,
   };
 
   // ---- persistence ----

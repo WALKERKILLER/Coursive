@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
-import 'look_markdown.dart';
+import 'coursive_markdown.dart';
 import '../l10n/l10n.dart';
 
 /// A heading of a reader document; [section] is the section it opens.
@@ -98,7 +98,7 @@ class MarkdownReader extends StatefulWidget {
   final MdReaderController controller;
   final Widget? header;
   final String lectureId, baseDir;
-  final ValueChanged<LookRef>? onRef;
+  final ValueChanged<CoursiveRef>? onRef;
   final double maxWidth;
   final EdgeInsets padding;
 
@@ -204,7 +204,7 @@ class _MarkdownReaderState extends State<MarkdownReader> {
                   color: _flash == i ? cs.tertiaryContainer.withValues(alpha: 0.45) : Colors.transparent,
                   borderRadius: BorderRadius.circular(Corners.md),
                 ),
-                child: LookMarkdown(
+                child: CoursiveMarkdown(
                   doc.sections[i],
                   style: tt.bodyLarge?.copyWith(height: 1.75),
                   lectureId: widget.lectureId,

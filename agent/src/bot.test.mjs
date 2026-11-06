@@ -6,14 +6,14 @@ import { test } from "node:test";
 import { Bot, Consolidator, PROPOSAL_TTL_MS, transcriptOf, turnsOf, validateBotPatch } from "./bot.mjs";
 
 async function fresh() {
-	const dir = await mkdtemp(join(tmpdir(), "look-bot-"));
+	const dir = await mkdtemp(join(tmpdir(), "coursive-bot-"));
 	const bot = new Bot(dir);
 	await bot.load();
 	return { bot, dir, done: () => rm(dir, { recursive: true, force: true }) };
 }
 
 test("identity patches are validated", () => {
-	assert.deepEqual(validateBotPatch({ name: " 小 Look ", shape: "ghost", color: "teal", memory: { auto: false } }), { name: "小 Look", shape: "ghost", color: "teal", memory: { auto: false } });
+	assert.deepEqual(validateBotPatch({ name: " 小 C ", shape: "ghost", color: "teal", memory: { auto: false } }), { name: "小 C", shape: "ghost", color: "teal", memory: { auto: false } });
 	assert.throws(() => validateBotPatch({ name: "" }), /1–12/);
 	assert.throws(() => validateBotPatch({ name: "一二三四五六七八九十一二三" }), /1–12/);
 	assert.throws(() => validateBotPatch({ shape: "square" }), /形象/);

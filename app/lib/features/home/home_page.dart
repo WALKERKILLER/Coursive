@@ -18,11 +18,11 @@ import '../../widgets/organic_shapes.dart';
 import '../../widgets/states.dart';
 import '../../widgets/user_avatar.dart';
 import '../activity/activity_page.dart';
-import '../nas/nas_page.dart';
 import '../courses/course_card.dart';
 import '../courses/course_page.dart';
 import '../notifications/notification_center.dart';
 import '../player/player_page.dart';
+import 'first_course.dart';
 import '../profile/profile_dialog.dart';
 import '../schedule/schedule_page.dart';
 import '../schedule/schedule_store.dart';
@@ -37,7 +37,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List<Lecture> _recent = [];
-  Map<String, dynamic>? _lib, _sync;
   StreamSubscription? _sub;
 
   @override
@@ -60,15 +59,11 @@ class _HomePageState extends State<HomePage> {
     final api = context.read<AppState>().api;
     try {
       final r = jsonList(await api.get('/api/recent'));
-      final lib = await api.get('/api/library') as Map;
-      final sync = await api.get('/api/sync') as Map;
       if (!mounted) return;
       setState(() {
         _recent = r
             .map((e) => Lecture((e as Map).cast<String, dynamic>()))
             .toList();
-        _lib = lib.cast<String, dynamic>();
-        _sync = sync.cast<String, dynamic>();
       });
     } catch (_) {}
   }
@@ -98,6 +93,9 @@ class _HomePageState extends State<HomePage> {
           ..sort((a, b) => b.lastLearnAt.compareTo(a.lastLearnAt));
     final active = app.sortedJobs.where((j) => j.active).take(3).toList();
     final now = DateTime.now();
+    // Without any course, starting one is the whole point of the page.
+    final first =
+        app.courses.isEmpty && !app.coursesLoading && app.coursesError == null;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -122,14 +120,15 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: ContentWidth(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(pad, 0, pad, Space.lg),
-                child: _WorkspaceEntry(sync: _sync),
+          if (first)
+            SliverToBoxAdapter(
+              child: ContentWidth(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(pad, Space.sm, pad, Space.lg),
+                  child: const FirstCoursePanel(),
+                ),
               ),
             ),
-          ),
           if (context.watch<ScheduleStore>().upcoming().isNotEmpty) ...[
             _header(
               context,
@@ -251,16 +250,19 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ],
-          _header(
-            context,
-            latestTerm.isEmpty ? l10n.commonCourses : l10n.homeThisTermCourses,
-            pad,
-            action: TextButton(
-              onPressed: () => ShellScope.of(context).goTo(Tabs.courses),
-              child: Text(l10n.homeAllCourses),
+          if (!first)
+            _header(
+              context,
+              latestTerm.isEmpty ? l10n.commonCourses : l10n.homeThisTermCourses,
+              pad,
+              action: TextButton(
+                onPressed: () => ShellScope.of(context).goTo(Tabs.courses),
+                child: Text(l10n.homeAllCourses),
+              ),
             ),
-          ),
-          if (app.coursesLoading && app.courses.isEmpty)
+          if (first)
+            ...const <Widget>[]
+          else if (app.coursesLoading && app.courses.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(Space.xxl),
@@ -303,17 +305,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-          if (_lib != null) ...[
-            _header(context, l10n.commonLibrary, pad),
-            SliverToBoxAdapter(
-              child: ContentWidth(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: pad),
-                  child: _LibraryStats(lib: _lib!),
-                ),
-              ),
-            ),
-          ],
           SliverToBoxAdapter(child: SizedBox(height: Space.huge + MediaQuery.paddingOf(context).bottom)),
         ],
       ),
@@ -802,140 +793,6 @@ class _ContinueCard extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _LibraryStats extends StatelessWidget {
-  const _LibraryStats({required this.lib});
-  final Map<String, dynamic> lib;
-  @override
-  Widget build(BuildContext context) {
-    final st = (lib['stats'] as Map?) ?? {};
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final items = [
-      ('${st['local_lectures'] ?? 0}', l10n.homeStatLecturesSaved),
-      (fmtBytes((st['bytes'] ?? 0) as num), l10n.homeStatStorage),
-      ('${st['segments'] ?? 0}', l10n.homeStatSegments),
-      ('${st['notes'] ?? 0}', l10n.homeStatNotes),
-    ];
-    return Card(
-      color: cs.surfaceContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(Space.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: Space.xxl,
-              runSpacing: Space.lg,
-              children: [
-                for (final (v, l) in items)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        v,
-                        style: tt.headlineSmall?.copyWith(color: cs.primary),
-                      ),
-                      Text(
-                        l,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-            const SizedBox(height: Space.lg),
-            Row(
-              children: [
-                Icon(
-                  Icons.folder_outlined,
-                  size: 16,
-                  color: cs.onSurfaceVariant,
-                ),
-                const SizedBox(width: Space.sm),
-                Expanded(
-                  child: Text(
-                    '${lib['root']}',
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Entry to the course workspace. Deliberately compact: the library, jobs and
-/// deadlines are the point of the home screen, and this is a doorway, not a
-/// banner.
-class _WorkspaceEntry extends StatelessWidget {
-  const _WorkspaceEntry({this.sync});
-  final Map<String, dynamic>? sync;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme, tt = Theme.of(context).textTheme;
-    final on = sync?['configured'] == true && sync?['kind'] == 'folder';
-    final courses = (sync?['course_ids'] as List?)?.length ?? 0;
-    final host = Uri.tryParse('${sync?['url'] ?? ''}')?.host ?? '';
-    return Material(
-      color: cs.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(Corners.lg),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const NasPage()),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(Space.md),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: cs.primaryContainer,
-                  borderRadius: BorderRadius.circular(Corners.md),
-                ),
-                child: Icon(
-                  Icons.workspaces_outline,
-                  size: 22,
-                  color: cs.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: Space.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(l10n.nasEntry, style: tt.titleSmall),
-                    Text(
-                      on
-                          ? l10n.nasEntryConnected(
-                              host.isEmpty ? l10n.nasTitle : host,
-                              courses,
-                            )
-                          : l10n.nasEntryHint,
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

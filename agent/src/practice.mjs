@@ -1,5 +1,5 @@
 // Quiz grounding checks for create_quiz (docs/specs/0002-tutor-quiz-cards.md).
-// Pure functions so they can be tested without lookd.
+// Pure functions so they can be tested without daemon.
 
 // Loaded with the practice group, so it costs no context until the assistant
 // writes a quiz.
@@ -13,12 +13,12 @@ export const QUIZ_PLAYBOOK = `出题流程（按顺序执行）：
 - 4 个选项为宜，只有一个正确答案；干扰项来自常见误解、相近概念或计算中易犯的错误，长度和语气与正确答案相近；不用“以上都对/都不对”。
 - 正确答案的位置要分散。
 - 每个选项都写 rationale：正确项说明为什么对，错误项指出错在哪里（一两句）。
-- 每题给 ref 出处：录像时间 look://lecture/<id>?t=<秒>（必须是读过的字幕位置）、PPT look://slide/<id>/<序号> 或课件链接（search_courseware 给出的写法）。
+- 每题给 ref 出处：录像时间 coursive://lecture/<id>?t=<秒>（必须是读过的字幕位置）、PPT coursive://slide/<id>/<序号> 或课件链接（search_courseware 给出的写法）。
 - hint 提示思路但不泄露答案；topic 用 2–6 个字概括知识点，用于统计错题。
 - 公式用 LaTeX（$...$），题干和选项都可以用 Markdown。
 - 难度：easy 考定义和直接结论；medium 考理解、比较和一步推理；hard 考多步推导、综合应用和易混淆点。`;
 
-// parseRef understands the look:// links the app opens.
+// parseRef understands the coursive:// links the app opens.
 export function parseRef(ref) {
 	let u;
 	try {
@@ -26,7 +26,7 @@ export function parseRef(ref) {
 	} catch {
 		return null;
 	}
-	if (u.protocol !== "look:") return null;
+	if (u.protocol !== "coursive:") return null;
 	let seg;
 	try {
 		seg = u.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -66,7 +66,7 @@ export function checkQuiz({ questions, lecture_id, partial }, reads, coverage) {
 	for (const [i, q] of questions.entries()) {
 		const n = i + 1;
 		const r = parseRef(q.ref ?? "");
-		if (!r) return `第 ${n} 题的 ref 无效。出处写成 look://lecture/<id>?t=<秒>、look://slide/<id>/<序号> 或 search_courseware 给出的课件链接。`;
+		if (!r) return `第 ${n} 题的 ref 无效。出处写成 coursive://lecture/<id>?t=<秒>、coursive://slide/<id>/<序号> 或 search_courseware 给出的课件链接。`;
 		if (lecture_id && r.lecture !== lecture_id) return `第 ${n} 题的出处指向另一节课（${r.lecture}），应引用本节 ${lecture_id} 的材料。`;
 		if (r.kind === "time") {
 			const spans = reads?.[r.lecture]?.spans ?? [];

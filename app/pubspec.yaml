@@ -1,5 +1,5 @@
-name: look_studio
-description: "Look Studio — 学校 A Look 录课平台客户端"
+name: coursive
+description: "Coursive — 录播课学习客户端"
 publish_to: 'none'
 version: 0.1.0+1
 
@@ -42,6 +42,5 @@ flutter:
   assets:
     - assets/providers/
     - assets/brands/
-    - assets/schools/
     - assets/reward.png
-    - branding/icon.svg
+    - branding/logo.png

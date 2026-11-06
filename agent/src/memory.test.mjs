@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { checkPath, hashOf, MAX_FILE, MemoryStore, memoryTools, sensitiveKind } from "./memory.mjs";
 
 async function store() {
-	const dir = await mkdtemp(join(tmpdir(), "look-memory-"));
+	const dir = await mkdtemp(join(tmpdir(), "coursive-memory-"));
 	const s = new MemoryStore(join(dir, "memory"));
 	await s.init();
 	return { s, done: () => rm(dir, { recursive: true, force: true }) };
@@ -24,9 +24,9 @@ test("the guard rejects sensitive values and keeps ordinary text", () => {
 	assert.equal(sensitiveKind("卡号 4111 1111 1111 1111"), "银行卡号");
 	assert.equal(sensitiveKind("电话 13812345678"), "手机号");
 	assert.equal(sensitiveKind("key sk-abcdefghijklmnop1234"), "密钥");
-	assert.equal(sensitiveKind("统一身份认证密码是 hunter2"), "密码");
+	assert.equal(sensitiveKind("学校账号密码是 hunter2"), "密码");
 	assert.equal(sensitiveKind("每周三复习高数，第 3 节 12:30 开始；时间戳 1760000000000"), null);
-	assert.equal(sensitiveKind("见 look://lecture/4111111111111111"), null);
+	assert.equal(sensitiveKind("见 coursive://lecture/4111111111111111"), null);
 	assert.equal(sensitiveKind("忘记密码怎么办"), null);
 });
 

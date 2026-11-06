@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/app_state.dart';
-import '../../core/lookd_service.dart';
+import '../../core/daemon_service.dart';
 import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
@@ -45,7 +45,7 @@ class _DiagnosticsState extends State<Diagnostics> {
 
   Future<void> _load() async {
     final app = context.read<AppState>();
-    final workspace = context.read<LookdService>().workspace;
+    final workspace = context.read<DaemonService>().workspace;
     if (!app.connected) return;
     try {
       final rt = (await app.api.get('/api/agent/runtime') as Map)
@@ -75,7 +75,7 @@ class _DiagnosticsState extends State<Diagnostics> {
           final os => os,
         };
 
-  List<_Check> _checks(AppState app, LookdService daemon) {
+  List<_Check> _checks(AppState app, DaemonService daemon) {
     final h = app.health;
     final agent = app.agent;
     final node = (_runtime?['node'] as Map?)?.cast<String, dynamic>();
@@ -163,8 +163,8 @@ class _DiagnosticsState extends State<Diagnostics> {
     ];
   }
 
-  String _report(AppState app, LookdService daemon, List<_Check> checks) => [
-    'Look Studio ${app.health['version'] ?? ''} · $_platform',
+  String _report(AppState app, DaemonService daemon, List<_Check> checks) => [
+    'Coursive ${app.health['version'] ?? ''} · $_platform',
     for (final c in checks) l10n.diagReportLine(c.title, c.detail),
     if ('${app.health['library'] ?? ''}'.isNotEmpty)
       l10n.diagReportLibrary(app.health['library']),
@@ -173,7 +173,7 @@ class _DiagnosticsState extends State<Diagnostics> {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final daemon = context.watch<LookdService>();
+    final daemon = context.watch<DaemonService>();
     final checks = _checks(app, daemon);
     final library = '${app.health['library'] ?? ''}';
     return Column(
@@ -183,7 +183,7 @@ class _DiagnosticsState extends State<Diagnostics> {
         _Summary(
           checks: checks,
           subtitle:
-              'Look Studio ${app.health['version'] ?? ''} · $_platform${daemon.workspace != null ? l10n.diagWorkspaceSuffix : ''}',
+              'Coursive ${app.health['version'] ?? ''} · $_platform${daemon.workspace != null ? l10n.diagWorkspaceSuffix : ''}',
           onCopy: () {
             Clipboard.setData(
               ClipboardData(text: _report(app, daemon, checks)),

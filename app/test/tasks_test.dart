@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/assistant/tasks_page.dart';
+import 'package:coursive/features/assistant/tasks_page.dart';
 
 void main() {
   test('schedule and time wording', () {

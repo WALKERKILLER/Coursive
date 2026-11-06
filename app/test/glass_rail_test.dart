@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/widgets/glass_dock.dart';
-import 'package:look_studio/widgets/glass_rail.dart';
+import 'package:coursive/widgets/glass_dock.dart';
+import 'package:coursive/widgets/glass_rail.dart';
 
 void main() {
   const labels = ['首页', '课程', '日程', '下载', '资料库', '定时', '插件', '设置', 'NAS'];

@@ -1,12 +1,12 @@
 // Lets the assistant look at slides and courseware figures. A chat model that
 // accepts images gets them directly; a text-only model gets a transcription
 // from the vision model chosen in settings (cached by image hash), the same
-// split as the Look SchoolA Notes vision-support skill: the vision model only
+// split as the course-notes vision-support skill: the vision model only
 // reads images and never takes part in the reasoning.
 import { createHash } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fetchBytes } from "./lookd.mjs";
+import { fetchBytes } from "./daemon.mjs";
 import { DATA_DIR } from "./models.mjs";
 import { entryFrom } from "./usage.mjs";
 
@@ -88,7 +88,7 @@ export async function seeCanvasImages(pipeline, images, signal) {
 }
 
 /**
- * Tool content for images: [{label, path}] where path is a lookd URL path.
+ * Tool content for images: [{label, path}] where path is a daemon URL path.
  * Returns {content, mode} with mode "image" | "described" | "unavailable".
  */
 export async function seeImages(pipeline, images, signal) {

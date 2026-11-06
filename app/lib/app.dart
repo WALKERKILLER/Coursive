@@ -4,9 +4,8 @@ import 'package:provider/provider.dart';
 
 import 'core/app_state.dart';
 import 'core/deep_links.dart';
-import 'core/lookd_service.dart';
+import 'core/daemon_service.dart';
 import 'features/assistant/tasks_page.dart';
-import 'features/login/login_page.dart';
 import 'features/setup/workspace_setup_page.dart';
 import 'shell.dart';
 import 'theme/prefs.dart';
@@ -19,8 +18,8 @@ import 'l10n/l10n.dart';
 final rootMessenger = GlobalKey<ScaffoldMessengerState>();
 final rootNavigator = rootNavigatorKey;
 
-class LookApp extends StatelessWidget {
-  const LookApp({super.key});
+class CoursiveApp extends StatelessWidget {
+  const CoursiveApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -75,13 +74,14 @@ class LookApp extends StatelessWidget {
   }
 }
 
-/// Splash → daemon error → login → shell, with a fade-through between them.
+/// Workspace setup → daemon error → shell, with a fade-through between them.
+/// Nothing asks to sign in: sources sign in from 课程 → 来源 once installed.
 class RootGate extends StatelessWidget {
   const RootGate({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final daemon = context.watch<LookdService>();
+    final daemon = context.watch<DaemonService>();
     final app = context.watch<AppState>();
     Widget child;
     if (daemon.state == DaemonState.setup) {
@@ -99,15 +99,12 @@ class RootGate extends StatelessWidget {
           ),
         ),
       );
-    } else if (!app.connected || !app.authKnown) {
+    } else if (!app.connected) {
+      // daemon starts in about a second; pages need its connection.
       child = Scaffold(
-        key: ValueKey('splash'),
+        key: const ValueKey('starting'),
         body: CenteredLoader(label: l10n.commonStarting),
       );
-    } else if (!app.localMode &&
-        !app.auth.signedIn &&
-        app.auth.status != 'needs_password') {
-      child = const LoginPage(key: ValueKey('login'));
     } else {
       child = const AppShell(key: ValueKey('shell'));
       WidgetsBinding.instance.addPostFrameCallback((_) => DeepLinks.ready());

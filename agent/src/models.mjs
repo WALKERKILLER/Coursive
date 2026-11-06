@@ -11,7 +11,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { Catalog } from "./catalog.mjs";
 import { entryFrom } from "./usage.mjs";
 
-export const DATA_DIR = process.env.AGENT_DATA_DIR ?? join(homedir(), ".local/share/look-studio/agent");
+export const DATA_DIR = process.env.AGENT_DATA_DIR ?? join(homedir(), ".local/share/coursive/agent");
 const MODELS = join(DATA_DIR, "models.json");
 const KEYS = join(DATA_DIR, "keys.json");
 const PREFS = join(DATA_DIR, "assistant.json");

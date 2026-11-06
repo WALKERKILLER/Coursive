@@ -698,7 +698,7 @@ class _JobTile extends StatelessWidget {
 
 /// The bar and status line of an unfinished job. Only a running job is drawn
 /// in the accent colour; waiting and paused jobs keep their progress on a
-/// muted bar, and the bar only sweeps while lookd works without knowing the
+/// muted bar, and the bar only sweeps while daemon works without knowing the
 /// size yet.
 class _JobProgress extends StatelessWidget {
   const _JobProgress({required this.job});

@@ -1,8 +1,8 @@
 import 'package:flutter/services.dart';
 
-/// The Android side of the app: MainActivity's "look/android" channel.
+/// The Android side of the app: MainActivity's "coursive/android" channel.
 abstract final class AndroidBridge {
-  static const _ch = MethodChannel('look/android');
+  static const _ch = MethodChannel('coursive/android');
   static Map<String, dynamic>? _info;
 
   /// nativeLibraryDir, filesDir, cacheDir, abi, sdk.

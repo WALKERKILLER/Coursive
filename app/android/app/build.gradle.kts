@@ -14,7 +14,7 @@ val keyProps = Properties().apply {
 }
 
 android {
-    namespace = "cn.lookstudio.look_studio"
+    namespace = "io.github.walkerkiller.coursive"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "cn.lookstudio.look_studio"
+        applicationId = "io.github.walkerkiller.coursive"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

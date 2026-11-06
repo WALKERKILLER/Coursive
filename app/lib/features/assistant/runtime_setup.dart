@@ -36,7 +36,7 @@ class RuntimeStatus {
 class RuntimeSetupCard extends StatefulWidget {
   const RuntimeSetupCard({super.key, this.api, this.events});
 
-  /// Defaults to the app's lookd client and event stream.
+  /// Defaults to the app's daemon client and event stream.
   final ApiCall? api;
   final Stream<Map<String, dynamic>>? events;
 

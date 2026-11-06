@@ -9,7 +9,7 @@ import '../../core/models.dart';
 import '../../core/format.dart';
 import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
-import '../../widgets/look_markdown.dart';
+import '../../widgets/coursive_markdown.dart';
 import '../../widgets/report_screen.dart';
 import '../../widgets/states.dart';
 import '../../l10n/l10n.dart';

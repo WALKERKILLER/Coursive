@@ -6,7 +6,7 @@ Status: Approved
 ## Intent
 The assistant needs Node.js 22 or later and the agent's npm dependencies, which include the Pi SDK. Release packages bundle the dependencies but not Node.js, and a development checkout has neither until someone runs `npm ci`. Without them the assistant panel only says that the assistant did not start, and the user has to install things by hand.
 
-Outcome: when either is missing, the app offers one button that sets the runtime up inside Look Studio's private data directory and starts the assistant, with progress and a clear error when a step fails.
+Outcome: when either is missing, the app offers one button that sets the runtime up inside Coursive's private data directory and starts the assistant, with progress and a clear error when a step fails.
 
 This downloads and runs executables, so the sources are fixed (two mirrors of the official Node.js builds and npm registry), every archive is checked against the release's published SHA-256 sums, package install scripts are disabled, and nothing is installed system-wide.
 
@@ -38,23 +38,23 @@ Non-goals: installing or updating a system Node.js, upgrading the agent's depend
 - Each step updates `install` and publishes `runtime` on the event bus. A failure keeps what earlier steps installed and can be retried.
 
 ### Startup
-lookd uses `-node` when given (`source: flag`); otherwise the Node.js recorded in `runtime.json` when it exists (`managed`). The agent supervisor can be restarted with another binary; a supervisor that had no Node.js waits for one instead of exiting.
+coursive-daemon uses `-node` when given (`source: flag`); otherwise the Node.js recorded in `runtime.json` when it exists (`managed`). The agent supervisor can be restarted with another binary; a supervisor that had no Node.js waits for one instead of exiting.
 
 ### App
 - When the assistant is not running because Node.js or the dependencies are missing, the assistant panel shows a card 安装助手运行环境: what will be installed and where, the source (国内镜像 default, 官方源), 开始安装, then a step list (Node.js, 依赖, 启动) with a progress bar, the log in an expandable section, and 重试 on failure.
 - 设置 → 助手 shows 运行环境: Node.js version and source, dependencies, and 修复 (the same install).
 
 ## Plan
-1. lookd: `internal/runtime` (resolve, download, verify, extract, npm, state), routes, supervisor restart and wait, startup fallback.
-2. Clients: `api.dart` and `lookd.mjs` route list; app card and settings tile.
+1. coursive-daemon: `internal/runtime` (resolve, download, verify, extract, npm, state), routes, supervisor restart and wait, startup fallback.
+2. Clients: `api.dart` and `daemon.mjs` route list; app card and settings tile.
 
 ## Verification
 - `go test`: version resolution from an `index.json`; checksum mismatch refused and the file removed; extraction refusing `..`, absolute paths and escaping links; deps step command line and timeout with a fake npm; state transitions and 409; supervisor restart after waiting without Node.js.
 - Widget test: the install card's steps, progress and failure.
-- Live: with `LOOK_NODE` pointing nowhere and no system Node.js on `PATH`, the app installs Node.js into the data directory and the assistant starts.
+- Live: with `COURSIVE_NODE` pointing nowhere and no system Node.js on `PATH`, the app installs Node.js into the data directory and the assistant starts.
 
 ## Evidence
-- lookd: [agentenv.go](../../lookd/internal/agentenv/agentenv.go) with [agentenv_test.go](../../lookd/internal/agentenv/agentenv_test.go) (full install with a fake Node, checksum mismatch, version resolution, archive entries escaping the target refused, the npm time limit, a second start refused while one runs); supervisor restart in [supervisor.go](../../lookd/internal/agent/supervisor.go) with [supervisor_test.go](../../lookd/internal/agent/supervisor_test.go); routes in [server.go](../../lookd/internal/server/server.go).
+- coursive-daemon: [agentenv.go](../../daemon/internal/agentenv/agentenv.go) with [agentenv_test.go](../../daemon/internal/agentenv/agentenv_test.go) (full install with a fake Node, checksum mismatch, version resolution, archive entries escaping the target refused, the npm time limit, a second start refused while one runs); supervisor restart in [supervisor.go](../../daemon/internal/agent/supervisor.go) with [supervisor_test.go](../../daemon/internal/agent/supervisor_test.go); routes in [server.go](../../daemon/internal/server/server.go).
 - App: [runtime_setup.dart](../../app/lib/features/assistant/runtime_setup.dart) with [runtime_setup_test.dart](../../app/test/runtime_setup_test.dart) (mirror choice, progress events, failure and retry); entry points in the assistant panel and 设置 → 助手 → 运行环境.
 - Live check (2026-10-21, release build): `GET /api/agent/runtime` reported the system Node.js (`source: flag`) and the agent's dependencies as ready.
 - Not verified: a real download and install of Node.js and the npm dependencies on a machine without them.

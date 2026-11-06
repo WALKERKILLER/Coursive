@@ -28,7 +28,7 @@ The earlier review reports generalized beyond the evidence. A large integration 
 ## Guardrails
 
 - [The owning specification’s verification matrix](../specs/0023-course-folder-sync.md#verification) connects each invariant to its actual evidence boundary and states remaining release blockers.
-- [Shared index and restore validation](../../lookd/internal/datasync/folder_validation.go) rejects invalid collections and applies automatic-import ownership checks to manual recovery.
-- [Lifecycle regressions](../../lookd/internal/datasync/folder_lifecycle_test.go) require corrupt indexes to leave the published generation unchanged and verify deletion rounds after private-baseline migration.
-- [Server integration tests](../../lookd/internal/server/folder_integration_test.go) exercise the real file-to-index composition and authenticated restoration, including stale previews, backups and acknowledgement failure after a successful replacement.
+- [Shared index and restore validation](../../daemon/internal/datasync/folder_validation.go) rejects invalid collections and applies automatic-import ownership checks to manual recovery.
+- [Lifecycle regressions](../../daemon/internal/datasync/folder_lifecycle_test.go) require corrupt indexes to leave the published generation unchanged and verify deletion rounds after private-baseline migration.
+- [Server integration tests](../../daemon/internal/server/folder_integration_test.go) exercise the real file-to-index composition and authenticated restoration, including stale previews, backups and acknowledgement failure after a successful replacement.
 - The cross-process metadata writer protocol remains unresolved. The Draft integration must not be promoted on the strength of the passing Go-only suite; the eventual repair needs a production Go/Node interleaving regression and failure-retry evidence.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/shell.dart';
+import 'package:coursive/shell.dart';
 
 /// The phone layout: the shell's assistant button over a tab whose page has
 /// its own button, both in the bottom-right corner.

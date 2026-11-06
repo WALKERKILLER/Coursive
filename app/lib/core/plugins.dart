@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -40,7 +42,7 @@ class PluginStore extends ChangeNotifier {
   StreamSubscription? _sub;
   final _notices = StreamController<String>.broadcast();
 
-  /// Short messages from plugins (`look.notify`), shown as snackbars.
+  /// Short messages from plugins (`coursive.notify`), shown as snackbars.
   Stream<String> get notices => _notices.stream;
 
   bool get ready => app.agentReady;
@@ -122,7 +124,7 @@ class PluginStore extends ChangeNotifier {
     return null;
   }
 
-  /// Whether an active plugin renders `look-view` blocks of [kind] in Markdown.
+  /// Whether an active plugin renders `coursive-view` blocks of [kind] in Markdown.
   bool rendersBlock(String kind) => active.any((p) => jsonList((p['contributes'] as Map?)?['blocks']).contains(kind));
 
   Future<Map<String, dynamic>> catalog() async => (await app.api.get('/agent/plugins/catalog') as Map).cast<String, dynamic>();
@@ -222,6 +224,29 @@ const pluginIcons = <String, IconData>{
 };
 
 IconData pluginIcon(Object? name) => pluginIcons['$name'] ?? Icons.extension_outlined;
+
+/// A plugin icon given as an image: the bytes of a `data:image/…;base64,`
+/// URL, which the daemon makes from the image in a plugin's package.
+typedef PluginIconImage = ({Uint8List bytes, bool svg});
+
+final _iconImages = <String, PluginIconImage>{};
+
+/// Decodes [icon] when it is an image data: URL; null for a symbol name.
+/// Decoded images are kept, so rebuilding a card does not decode again.
+PluginIconImage? pluginIconImage(Object? icon) {
+  if (icon is! String || !icon.startsWith('data:image/')) return null;
+  final hit = _iconImages[icon];
+  if (hit != null) return hit;
+  final comma = icon.indexOf(',');
+  if (comma < 0 || !icon.substring(0, comma).endsWith(';base64')) return null;
+  try {
+    final img = (bytes: base64Decode(icon.substring(comma + 1)), svg: icon.startsWith('data:image/svg+xml'));
+    if (_iconImages.length >= 64) _iconImages.remove(_iconImages.keys.first);
+    return _iconImages[icon] = img;
+  } on FormatException {
+    return null;
+  }
+}
 
 final pluginCategories = {
   'notes': l10n.commonNotes,

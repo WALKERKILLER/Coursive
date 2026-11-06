@@ -25,7 +25,7 @@ Status: Implemented
 验证课程与类型/类别组合筛选、中文与 Lab 文件名分类、无目录越界或重复元数据；验证完整分段覆盖、模型输出校验、原文指纹冲突、取消与重试、旁注重启恢复。确认原 SRT/Markdown 和原片段逐字未变，明暗主题旁注可辨识，未配置模型时显示设置提示。
 
 ## Evidence
-- [Go 编目与路径边界测试](../../lookd/internal/library/catalog_test.go)、[旁注持久化与原文保护测试](../../lookd/internal/library/transcript_review_test.go)、[受认证 API 与离线本地录像回归测试](../../lookd/internal/server/library_features_test.go)。
+- [Go 编目与路径边界测试](../../daemon/internal/library/catalog_test.go)、[旁注持久化与原文保护测试](../../daemon/internal/library/transcript_review_test.go)、[受认证 API 与离线本地录像回归测试](../../daemon/internal/server/library_features_test.go)。
 - [模型分段、逐字依据、过滤、取消和断点重试测试](../../agent/src/transcript-review.test.mjs)。
 - [Flutter 组合筛选、明暗主题旁注、详情忽略与启动提示测试](../../app/test/library_review_test.dart)。
 - Web release 构建通过；本机首课真实模型审校完成 11/11 批，原始 SRT/Markdown 哈希未变。macOS 原生 AOT 构建、12 项界面测试和安装包真实 API 验证通过；桌面实测课程＋Lab＋PDF 筛选得到 7 项并打开 Lab 4，首课本地录像可播放，已保存的 159 条旁注恢复。安装与回退流程见[本机构建说明](../study-workspace-build.md)。

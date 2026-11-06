@@ -1,13 +1,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/activity_tracker.dart';
-import 'package:look_studio/core/app_state.dart';
-import 'package:look_studio/core/lookd_service.dart';
-import 'package:look_studio/core/models.dart';
-import 'package:look_studio/features/activity/activity_page.dart';
-import 'package:look_studio/features/library/note_reader.dart';
-import 'package:look_studio/widgets/heatmap.dart';
+import 'package:coursive/core/activity_tracker.dart';
+import 'package:coursive/core/app_state.dart';
+import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/models.dart';
+import 'package:coursive/features/activity/activity_page.dart';
+import 'package:coursive/features/library/note_reader.dart';
+import 'package:coursive/widgets/heatmap.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -52,7 +52,7 @@ void main() {
     late ActivityTracker t;
     setUp(() {
       now = DateTime(2026, 10, 14, 9);
-      t = ActivityTracker(AppState(LookdService()), now: () => now);
+      t = ActivityTracker(AppState(DaemonService()), now: () => now);
     });
     tearDown(() => t.dispose());
 
@@ -108,11 +108,11 @@ void main() {
     });
   });
 
-  test('a report keeps its id until lookd confirms it', () async {
+  test('a report keeps its id until daemon confirms it', () async {
     var now = DateTime(2026, 10, 14, 9);
     final sent = <Map<String, Object>>[];
-    var lose = true; // the first response is lost after lookd applied it
-    final t = ActivityTracker(AppState(LookdService()), now: () => now, post: (r) async {
+    var lose = true; // the first response is lost after daemon applied it
+    final t = ActivityTracker(AppState(DaemonService()), now: () => now, post: (r) async {
       sent.add(r);
       if (lose) {
         lose = false;
@@ -128,7 +128,7 @@ void main() {
     c.stop();
     await t.flush();
     await t.flush();
-    // The lost report was resent unchanged, so lookd can drop the repeat,
+    // The lost report was resent unchanged, so daemon can drop the repeat,
     // and unique reports add up to the time watched.
     final byId = <Object, List<Map<String, Object>>>{};
     for (final r in sent) {

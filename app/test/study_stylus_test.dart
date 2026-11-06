@@ -13,7 +13,7 @@ import 'study_handwriting_test.dart' show close;
 
 Future<void> native(WidgetTester t, Map value) async {
   await t.binding.defaultBinaryMessenger.handlePlatformMessage(
-    'look/stylus/events',
+    'coursive/stylus/events',
     const StandardMethodCodec().encodeSuccessEnvelope(value),
     (_) {},
   );
@@ -38,11 +38,11 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
-      const MethodChannel('look/stylus'),
+      const MethodChannel('coursive/stylus'),
       (_) async => {'backend': 'androidx'},
     );
     messenger.setMockMethodCallHandler(
-      const MethodChannel('look/stylus/events'),
+      const MethodChannel('coursive/stylus/events'),
       (_) async => null,
     );
   });

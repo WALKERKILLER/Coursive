@@ -12,7 +12,7 @@ import 'local_asr_page.dart';
 import '../../l10n/l10n.dart';
 
 /// Free cloud transcription channels: enable/disable, strategy, concurrency
-/// and live status from lookd's ASR pool.
+/// and live status from daemon's ASR pool.
 class AsrSettings extends StatefulWidget {
   const AsrSettings({super.key, required this.server, required this.put});
   final Map<String, dynamic> server;
@@ -173,7 +173,7 @@ class _ChannelCard extends StatelessWidget {
         decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(Corners.lg)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            _Mark(text: '${c['name']}'.characters.first, busy: state == 'busy'),
+            _Mark(text: '${c['name']}'.characters.first, asset: _channelMarks[c['id']], busy: state == 'busy'),
             const SizedBox(width: Space.md),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -279,14 +279,29 @@ class _EventLog extends StatelessWidget {
   }
 }
 
-/// Channel badge: a soft cookie shape that turns while the channel works.
+/// The service icon of each cloud channel (assets/brands, see NOTICE).
+const _channelMarks = {'bcut': 'assets/brands/bcut.png', 'jianying': 'assets/brands/jianying.png'};
+
+/// Channel badge: a soft cookie shape that turns while the channel works,
+/// filled with the service's icon when there is one.
 class _Mark extends StatelessWidget {
-  const _Mark({required this.text, required this.busy});
+  const _Mark({required this.text, required this.busy, this.asset});
   final String text;
   final bool busy;
+  final String? asset;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final icon = asset;
+    if (icon != null) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(end: busy ? 1 : 0),
+        duration: Motion.long2,
+        curve: Motion.emphasized,
+        builder: (_, t, child) => ClipPath(clipper: _MarkClipper(t), child: child),
+        child: Image.asset(icon, width: 40, height: 40, fit: BoxFit.cover, filterQuality: FilterQuality.medium, semanticLabel: text),
+      );
+    }
     return TweenAnimationBuilder<double>(
       tween: Tween(end: busy ? 1 : 0),
       duration: Motion.long2,
@@ -303,13 +318,24 @@ class _Mark extends StatelessWidget {
   }
 }
 
+Path _markPath(double t, Size size) =>
+    shapePath(morphRadii(OrganicShape.cookie9, OrganicShape.softBurst, t), Offset.zero & size, rotation: t * 0.6);
+
+class _MarkClipper extends CustomClipper<Path> {
+  _MarkClipper(this.t);
+  final double t;
+  @override
+  Path getClip(Size size) => _markPath(t, size);
+  @override
+  bool shouldReclip(_MarkClipper o) => o.t != t;
+}
+
 class _MarkPainter extends CustomPainter {
   _MarkPainter(this.t, this.color);
   final double t;
   final Color color;
   @override
-  void paint(Canvas canvas, Size size) =>
-      canvas.drawPath(shapePath(morphRadii(OrganicShape.cookie9, OrganicShape.softBurst, t), Offset.zero & size, rotation: t * 0.6), Paint()..color = color);
+  void paint(Canvas canvas, Size size) => canvas.drawPath(_markPath(t, size), Paint()..color = color);
   @override
   bool shouldRepaint(_MarkPainter o) => o.t != t || o.color != color;
 }

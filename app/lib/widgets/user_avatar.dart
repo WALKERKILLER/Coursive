@@ -36,8 +36,7 @@ ColorScheme _schemeOf(Color seed, Brightness b) =>
 }
 
 String userDisplayName(BuildContext context) {
-  final a = context.select<AppState, (String, String)>((s) => (s.auth.realname, s.auth.username));
-  final fallback = a.$1.isNotEmpty ? a.$1 : a.$2;
+  final fallback = context.select<AppState, String>((s) => s.accountName);
   return context.select<UserProfile, String>((p) => p.displayName(fallback));
 }
 

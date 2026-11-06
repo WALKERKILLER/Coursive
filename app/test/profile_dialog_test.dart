@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/app_state.dart';
-import 'package:look_studio/core/lookd_service.dart';
-import 'package:look_studio/core/profile.dart';
-import 'package:look_studio/features/profile/profile_dialog.dart';
+import 'package:coursive/core/app_state.dart';
+import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/profile.dart';
+import 'package:coursive/features/profile/profile_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,7 +17,7 @@ void main() {
     await tester.pumpWidget(MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: profile),
-        ChangeNotifierProvider(create: (_) => AppState(LookdService())),
+        ChangeNotifierProvider(create: (_) => AppState(DaemonService())),
       ],
       child: MaterialApp(
         home: Builder(builder: (context) => TextButton(onPressed: () => showProfileDialog(context), child: const Text('open'))),

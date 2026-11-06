@@ -9,6 +9,6 @@ export 'app_localizations.dart';
 // build) after editing the ARB file.
 
 /// Strings of the app's locale, also for code without a BuildContext
-/// (controllers, services, top-level tables). [LookApp] keeps it in step
+/// (controllers, services, top-level tables). [CoursiveApp] keeps it in step
 /// with the locale MaterialApp resolves.
 AppLocalizations l10n = lookupAppLocalizations(const Locale('zh'));

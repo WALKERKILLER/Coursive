@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => 'Look Studio';
+  String get appTitle => 'Coursive';
 
   @override
   String get levelStandard => '标准';
@@ -269,7 +269,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get daemonNotFound =>
-      '找不到后台服务 lookd。开发环境请先构建：cd lookd && go build -o bin/lookd ./cmd/lookd';
+      '找不到后台服务 coursive-daemon。开发环境请先构建：cd daemon && go build -o bin/coursive-daemon ./cmd/coursive-daemon';
 
   @override
   String daemonCannotReadAppDir(Object e) {
@@ -456,42 +456,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonCancel => '取消';
 
   @override
-  String get loginHeadline => '课堂录像，\n变成你的知识库。';
-
-  @override
-  String get loginFeatureDownload => '高速下载录像、PPT 与课件，断点续传';
-
-  @override
-  String get loginFeatureTranscribe => '自动转写，按时间轴全文检索';
-
-  @override
-  String get loginFeatureAssistant => '常驻助手帮你梳理每一节课';
-
-  @override
-  String get loginMissingCredentials => '请输入学号和密码';
-
-  @override
   String get loginSignInAgain => '重新登录';
 
   @override
   String get loginSignIn => '登录';
-
-  @override
-  String get loginChooseSchool => '选择学校，用统一身份认证账号登录';
-
-  @override
-  String get loginHintSchoolA => '连接学校 A Look 录课平台（look.schoola.edu.cn）';
-
-  @override
-  String get loginHintSchoolB => '经学校 B CampusVPN 连接 PlatformB，登录约需半分钟';
-
-  @override
-  String loginSchoolsFailed(Object e) {
-    return '无法读取学校列表：$e';
-  }
-
-  @override
-  String get loginStudentId => '学号 / 工号';
 
   @override
   String get commonPassword => '密码';
@@ -501,18 +469,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonHidePassword => '隐藏密码';
-
-  @override
-  String get loginCaptcha => '验证码';
-
-  @override
-  String get loginStaySignedIn => '保持登录';
-
-  @override
-  String get loginStaySignedInHint => '登录过期时自动续期，密码加密保存在本机';
-
-  @override
-  String get loginPrivacy => '学号和密码只发送给学校的统一身份认证，保持登录时加密保存在本机。';
 
   @override
   String get homeGreetingNight => '夜深了';
@@ -560,6 +516,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeAllCourses => '全部课程';
 
   @override
+  String get homeFirstCourseTitle => '添加第一门课';
+
+  @override
+  String get homeFirstCourseBody => '从本机导入课堂录像，或连接学校的课程平台，就能开始看课、记笔记和复习。';
+
+  @override
+  String get homeFirstCourseConnect => '连接课程平台';
+
+  @override
+  String get homeFirstCourseLocal => '录像、转写和笔记都保存在本机';
+
+  @override
   String get commonLibrary => '课程库';
 
   @override
@@ -574,16 +542,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeNextQuote => '换一句';
 
   @override
-  String get homeStatLecturesSaved => '节已存本地';
-
-  @override
   String get homeStatStorage => '占用空间';
-
-  @override
-  String get homeStatSegments => '句转写';
-
-  @override
-  String get homeStatNotes => '篇笔记';
 
   @override
   String get listSeparator => '、';
@@ -594,7 +553,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get coursesSync => '从平台同步';
+  String get coursesSync => '从来源同步课程';
 
   @override
   String get coursesSearchHint => '搜索课程或老师';
@@ -608,7 +567,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get coursesSyncing => '正在同步课程';
+  String get coursesSyncing => '正在加载课程';
 
   @override
   String get coursesEmptyTerm => '这个学期没有课程';
@@ -1496,7 +1455,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get botDefaultName => '小 Look';
+  String get botDefaultName => '小 C';
 
   @override
   String chatOpenFailed(Object e) {
@@ -1688,7 +1647,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tasksIntroBody =>
-      '每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Look Studio 打开时执行；错过的时间可以在 12 小时内启动时补跑。';
+      '每次运行都会开一个新对话，结果可在「运行记录」里查看。任务只在 Coursive 打开时执行；错过的时间可以在 12 小时内启动时补跑。';
 
   @override
   String get tasksFromBlank => '从空白开始';
@@ -1787,7 +1746,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get runtimeIntro =>
-      '助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Look Studio 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。';
+      '助手运行在 Node.js 上，并使用 Pi SDK。缺少的部分会安装到 Coursive 的数据目录，不改动系统；安装包会按官方发布的 SHA-256 校验。';
 
   @override
   String runtimeReadFailed(Object error) {
@@ -3426,7 +3385,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get asrSourceHuggingface =>
-      '官方源，文件最全，但国内通常需要代理。Look Studio 的后台服务会使用系统的 HTTPS_PROXY 环境变量。';
+      '官方源，文件最全，但国内通常需要代理。Coursive 的后台服务会使用系统的 HTTPS_PROXY 环境变量。';
 
   @override
   String get asrSourceCustom =>
@@ -3466,7 +3425,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get watchBody =>
-      '刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；已连接的 Canvas 每 15 分钟同步作业和公告。有变化时立即提醒，课程页也会自动刷新。';
+      '登录来源后自动检查：刚下课的课每 10 分钟查一次回放，之后逐渐放缓；其他课程每 6 小时同步一次；学习平台每 30 分钟同步作业和通知。有变化时立即提醒，课程页也会自动刷新。';
 
   @override
   String watchAwaiting(Object awaiting) {
@@ -3505,7 +3464,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String obsidianConflicts(Object conflicts) {
-    return '$conflicts 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Look Studio)」副本）';
+    return '$conflicts 个文件在 Obsidian 中改过，已保留你的版本（笔记的新版本另存为「(Coursive)」副本）';
   }
 
   @override
@@ -3520,7 +3479,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get linkRegistered => '已注册：点击 lookstudio:// 链接会打开 Look Studio';
+  String get linkRegistered => '已注册：点击 coursive-app:// 链接会打开 Coursive';
 
   @override
   String linkRegisterPartial(Object name, Object stderr) {
@@ -3545,7 +3504,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get obsidianBody =>
-      '把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Look Studio；在 Obsidian 里改过的文件不会被覆盖。';
+      '把课程库单向导出到 Obsidian 仓库的一个文件夹：总的「课程库」页，每门课一个文件夹，里面分「笔记」（按节次，含引用的 PPT 和课件）和「转写稿」。点击时间戳会回到 Coursive；在 Obsidian 里改过的文件不会被覆盖。';
 
   @override
   String get commonLocation => '位置';
@@ -3575,14 +3534,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonExportNow => '立即导出';
 
   @override
-  String get obsidianBackLinks => '回到 Look Studio';
+  String get obsidianBackLinks => '回到 Coursive';
 
   @override
   String get obsidianBackLinksBody =>
-      '导出的时间戳和课次链接是 lookstudio:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。';
+      '导出的时间戳和课次链接是 coursive-app:// 链接。注册后，在 Obsidian 里点击会打开对应的课和时刻。';
 
   @override
-  String get linkRegister => '注册 lookstudio:// 链接';
+  String get linkRegister => '注册 coursive-app:// 链接';
 
   @override
   String get notionSubtitle => '同步到你的 Notion 工作区';
@@ -3627,14 +3586,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notionBody =>
-      '把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Look Studio 创建的页面；在 Notion 里改过的页面不会被覆盖。';
+      '把课程库同步到 Notion 的一个页面下：每门课、每节课一个页面，下面是笔记和转写稿。只写入 Coursive 创建的页面；在 Notion 里改过的页面不会被覆盖。';
 
   @override
   String get notionCreateIntegration => '创建集成';
 
   @override
   String get notionStep1 =>
-      '在 Notion 的「集成」页新建一个 Internal 集成，名称填 Look Studio，选择要同步到的工作区';
+      '在 Notion 的「集成」页新建一个 Internal 集成，名称填 Coursive，选择要同步到的工作区';
 
   @override
   String get notionStep2 => '在「功能」里保留读取、更新和插入内容，其余可以关闭';
@@ -3673,7 +3632,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notionChoosePage => '选择页面';
 
   @override
-  String get notionParentHint => '课程库在这个页面下的「Look Studio 课程库」里';
+  String get notionParentHint => '课程库在这个页面下的「Coursive 课程库」里';
 
   @override
   String get notionOpenInNotion => '在 Notion 中打开';
@@ -3792,7 +3751,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get knowledgeConnectApps => '连接到笔记应用';
 
   @override
-  String get knowledgeObsidianSubtitle => '导出到本地仓库，时间戳可点回 Look Studio';
+  String get knowledgeObsidianSubtitle => '导出到本地仓库，时间戳可点回 Coursive';
 
   @override
   String get knowledgeAutoExportSuffix => ' · 自动导出';
@@ -3817,7 +3776,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get knowledgeTemplatesSaved => '模板已保存';
 
   @override
-  String get knowledgeSkillExport => '导出为 Coursive 技能格式';
+  String get knowledgeSkillExport => '导出为课程笔记技能格式';
 
   @override
   String get knowledgeSkillExportHint => '以硬链接生成 raw/<课程>/<节次>/原始数据/ 目录，不额外占空间';
@@ -3829,7 +3788,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get knowledgeTargetFolder => '目标文件夹';
 
   @override
-  String get knowledgeTargetFolderHelper => 'Coursive 技能所在的文件夹';
+  String get knowledgeTargetFolderHelper => '课程笔记技能所在的文件夹';
 
   @override
   String knowledgeExported(Object value) {
@@ -3980,11 +3939,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get syncInSync => '两边已经一致';
 
   @override
-  String get backupTypeLabel => 'Look Studio 备份';
+  String get backupTypeLabel => 'Coursive 备份';
 
   @override
   String backupFileName(Object year, Object value, Object value2) {
-    return 'LookStudio-备份-$year$value$value2.zip';
+    return 'Coursive-备份-$year$value$value2.zip';
   }
 
   @override
@@ -4304,28 +4263,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get diagLogNothing => '后台还没有写下任何记录';
 
   @override
-  String get settingsAccount => '账户与学校';
+  String get settingsAccount => '账户与来源';
 
   @override
-  String get settingsAccountHint => '统一身份认证、Canvas';
-
-  @override
-  String get authSchoolA => '统一身份认证';
-
-  @override
-  String get authRenewNow => '立即续期';
-
-  @override
-  String get authSignOut => '退出登录';
+  String get settingsAccountHint => '个人资料、来源插件';
 
   @override
   String get settingsProfileKeyword => '昵称和头像';
-
-  @override
-  String get commonSchool => '学校';
-
-  @override
-  String get settingsCanvasKeyword => '作业与课件';
 
   @override
   String get settingsAppearance => '外观与播放';
@@ -4507,9 +4451,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get settingsSchoolCanvas => '学校与 Canvas';
-
-  @override
   String get settingsAppearanceGroup => '外观';
 
   @override
@@ -4550,42 +4491,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsStreamHint => '自动：优先屏幕（含 PPT），没有时用第一个画面。';
 
   @override
-  String settingsAccountSummary(Object value) {
-    return '$value · 学校 A · Canvas';
-  }
-
-  @override
-  String get authSignedIn => '已登录';
-
-  @override
-  String get authSignedOut => '未登录';
-
-  @override
-  String get authRenewing => '正在续期…';
-
-  @override
-  String get authNeedsSignIn => '需要重新登录';
-
-  @override
-  String get authMethodPassword => '密码登录';
-
-  @override
-  String get authMethodSso => '统一认证静默续期';
-
-  @override
-  String get authMethodSavedPassword => '已保存的密码续期';
-
-  @override
-  String get authMethodRestored => '从本地会话恢复';
-
-  @override
   String get profileEditTooltip => '编辑昵称和头像';
-
-  @override
-  String get schoolSchoolA => '学校 A';
-
-  @override
-  String get schoolSchoolB => '学校 B';
 
   @override
   String get settingsAbout => '关于';
@@ -4647,39 +4553,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String aboutFeedbackBody(Object version, Object os) {
     return '请描述遇到的问题和复现步骤：\n\n\n---\n版本：$version\n系统：$os';
   }
-
-  @override
-  String authExpires(Object value) {
-    return '凭证 $value后到期，会在到期前自动续期';
-  }
-
-  @override
-  String authLastRenewed(Object value, Object method) {
-    return '上次续期 $value（$method）';
-  }
-
-  @override
-  String get authPasswordSaved => '已在本机加密保存密码，统一认证失效时用于自动登录';
-
-  @override
-  String get authPasswordNotSaved => '未保存密码：统一认证会话失效后需要手动登录';
-
-  @override
-  String get authRenewed => '已续期';
-
-  @override
-  String authRenewFailed(Object e) {
-    return '续期失败：$e';
-  }
-
-  @override
-  String get authSignOutTitle => '退出登录？';
-
-  @override
-  String get authSignOutBody => '会清除本机保存的会话和密码。已下载的文件不受影响。';
-
-  @override
-  String get authSignOutAction => '退出';
 
   @override
   String get themeSystem => '跟随系统';
@@ -5004,9 +4877,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonDeleted => '已删除';
 
   @override
-  String get scheduleOpenInCanvas => '在 Canvas 打开';
-
-  @override
   String get scheduleHide => '从日程隐藏';
 
   @override
@@ -5072,7 +4942,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get coursewareUploadBody =>
-      'Look 不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。';
+      '课程来源通常不提供课件。把老师发的 PDF、PPT、Word 传上来，MinerU 会把它解析成文字，可以全文阅读，助手也能引用。';
 
   @override
   String get commonChooseFiles => '选择文件';
@@ -5660,7 +5530,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pluginsAllowThirdPartyBody =>
-      '第三方插件不是 Look Studio 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。';
+      '第三方插件不是 Coursive 发布的，与助手运行在同一进程中。只安装你信任的作者的插件；每次安装前都会列出它需要的权限。';
 
   @override
   String get commonAllow => '允许';
@@ -5739,7 +5609,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginsNoMatchBody => '换个关键词，或在「来源」里添加更多插件目录';
 
   @override
-  String get pluginsOfficial => 'Look Studio 官方';
+  String get pluginsOfficial => 'Coursive 官方';
 
   @override
   String get pluginsMoreHint =>
@@ -5805,7 +5675,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get pluginsCatalogHint => 'owner/repo 或 https://…/look-catalog.json';
+  String get pluginsCatalogHint =>
+      'owner/repo 或 https://…/coursive-catalog.json';
 
   @override
   String get pluginsFetching => '正在获取插件…';
@@ -5952,8 +5823,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationsMarkAllRead => '全部已读';
 
   @override
-  String get notificationsIntro =>
-      '新回放、新课次、Canvas 作业和公告会出现在这里。Look Studio 打开时在后台自动检查。';
+  String get notificationsIntro => '新回放、新课次，以及学习平台的作业和通知会出现在这里。应用打开时在后台自动检查。';
 
   @override
   String get notificationsEmpty => '暂时没有通知';
@@ -5963,189 +5833,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationsUnread => '未读';
-
-  @override
-  String schoolEmblem(Object name) {
-    return '$name校徽';
-  }
-
-  @override
-  String get schoolOther => '其他学校';
-
-  @override
-  String get canvasConnected => '已连接 Canvas，正在同步课程和作业';
-
-  @override
-  String get canvasDisconnectTitle => '断开 Canvas？';
-
-  @override
-  String canvasDisconnectBody(Object value) {
-    return '日程里的 Canvas 作业和课程关联会一起移除，已下载的课件保留。$value';
-  }
-
-  @override
-  String get canvasRevokesToken => 'Look Studio 创建的访问令牌也会被撤销。';
-
-  @override
-  String get canvasConnectTitle => '连接你学校的 Canvas';
-
-  @override
-  String get canvasConnectBody =>
-      '作业会进入日程，截止前一天提醒你；课件可以直接下载到对应课程的文件夹。Look Studio 只读取，不会提交或修改任何内容。';
-
-  @override
-  String get canvasUrl => 'Canvas 地址';
-
-  @override
-  String get canvasSignInMethod => '登录方式';
-
-  @override
-  String get canvasAccessToken => '访问令牌';
-
-  @override
-  String get canvasSchoolBId => '学校 B SSO 学号';
-
-  @override
-  String get canvasSchoolBPassword => 'SSO 密码';
-
-  @override
-  String get canvasSchoolBPasswordHelper => '用本机密钥加密保存，只用来登录学校 B SSO';
-
-  @override
-  String get canvasNeedsSchoolA => '需要先在 Look Studio 登录学校 A统一身份认证。';
-
-  @override
-  String get canvasSchoolATitle => '沿用 Look Studio 的学校 A登录';
-
-  @override
-  String get canvasSchoolBTitle => '用学校 B SSO 登录 Canvas';
-
-  @override
-  String get canvasSchoolABody =>
-      '不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用和 Look 相同的方式自动续上：先静默单点登录，必要时用你记住的密码。';
-
-  @override
-  String get canvasSchoolBBody =>
-      '不在 Canvas 账户里创建任何东西。Canvas 的登录过期时，会用保存的 SSO 账号自动重新登录。';
-
-  @override
-  String get canvasAutoTokenTitle => '由 Look Studio 创建并自动续期';
-
-  @override
-  String get canvasAutoTokenBody =>
-      '通过统一身份认证在你的 Canvas 账户里新建一个 90 天的访问令牌，到期前 14 天自动换新，断开时撤销';
-
-  @override
-  String get canvasManualToken => '手动获取令牌';
-
-  @override
-  String get canvasTokenStep1 => '打开 Canvas，进入「账户 → 设置」';
-
-  @override
-  String get canvasTokenStep2 =>
-      '在「已批准的集成」下点「新建访问许可证」，用途填 Look Studio；过期日期可以留空';
-
-  @override
-  String get canvasTokenStep3 => '复制生成的令牌（只显示一次），粘贴到下面';
-
-  @override
-  String get canvasOpenSettings => '打开 Canvas 设置页';
-
-  @override
-  String get canvasTokenHelper => '加密保存在本机，界面上只显示末 4 位。令牌到期或被撤销时会提醒你重新粘贴';
-
-  @override
-  String get canvasSessionAuth => '统一身份认证会话 · 过期自动续上';
-
-  @override
-  String canvasTokenTail(Object value) {
-    return '访问令牌 ····$value';
-  }
-
-  @override
-  String get canvasAutoRenew => '自动续期';
-
-  @override
-  String canvasTokenExpires(Object value, Object value2) {
-    return '$value到期 $value2';
-  }
-
-  @override
-  String get canvasCurrentToken => '当前令牌';
-
-  @override
-  String canvasConnectedAs(Object value) {
-    return '已连接为 $value';
-  }
-
-  @override
-  String get canvasNotSynced => '还没有同步';
-
-  @override
-  String get canvasSyncInterval => '每 15 分钟自动同步';
-
-  @override
-  String canvasSummary(Object length, Object open) {
-    return '$length 门课程 · $open 项作业待交';
-  }
-
-  @override
-  String get canvasChangeMethod => '更改登录方式';
-
-  @override
-  String get canvasCourseLinks => '课程关联';
-
-  @override
-  String get canvasCourseLinksBody =>
-      '作业按关联的 Look 课程归类，课件会下载到那门课的文件夹。同名课程会自动关联。';
-
-  @override
-  String get canvasLoadingCourses => '正在读取课程…';
-
-  @override
-  String get canvasNoCourses => '这个学期在 Canvas 上没有课程';
-
-  @override
-  String get canvasLookReplay => 'Look 录播';
-
-  @override
-  String get canvasAnySite => '任意 Canvas 站点，用访问令牌';
-
-  @override
-  String get canvasNoLink => '不关联';
-
-  @override
-  String get canvasAutoNoMatch => '自动：未找到同名课程';
-
-  @override
-  String canvasAutoMatch(Object title) {
-    return '自动：$title';
-  }
-
-  @override
-  String canvasOpenAssignments(Object open) {
-    return '$open 项作业待交';
-  }
-
-  @override
-  String get canvasNoOpenAssignments => '没有待交作业';
-
-  @override
-  String get canvasLinkCourse => '关联到 Look 课程';
-
-  @override
-  String get canvasAutoLink => '自动匹配同名课程';
-
-  @override
-  String canvasSchoolConnected(Object value) {
-    return '$value Canvas 已连接';
-  }
-
-  @override
-  String get canvasConnect => '连接 Canvas';
-
-  @override
-  String get canvasEntryHint => '学校 A、学校 B或其他学校的 Canvas：作业进日程，课件下载到课程文件夹';
 
   @override
   String dateMonthDayTime(
@@ -6187,31 +5874,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String canvasAssignmentsTab(Object length) {
-    return '作业 $length';
-  }
-
-  @override
-  String canvasAnnouncementsTab(Object length) {
-    return '公告 $length';
-  }
-
-  @override
-  String get canvasSavedToCourse => '已保存到课程文件夹';
-
-  @override
   String commonDownloadFailed(Object e) {
     return '下载失败：$e';
   }
-
-  @override
-  String get canvasAnnouncement => '公告';
-
-  @override
-  String get canvasNoAssignments => '没有作业';
-
-  @override
-  String get canvasNoAssignmentsBody => '老师在 Canvas 上布置作业后，会出现在这里和日程里。';
 
   @override
   String assignmentDueShort(Object value) {
@@ -6224,34 +5889,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get canvasLoadingFiles => '正在读取 Canvas 课件';
-
-  @override
-  String get canvasNoFiles => '没有可见的课件';
-
-  @override
-  String get canvasNoFilesBody => '这门课的文件页和单元里都没有你能下载的文件。';
-
-  @override
-  String canvasFileUpdated(Object month, Object day) {
-    return '$month月$day日更新';
-  }
-
-  @override
-  String get canvasFileLocked => '老师已锁定';
-
-  @override
-  String get canvasDownloadToCourse => '下载到课程文件夹';
-
-  @override
-  String get canvasNoAnnouncements => '最近 30 天没有公告';
-
-  @override
   String get workspaceTitle => '准备 Linux 工作区';
 
   @override
   String get workspaceBody =>
-      'Look Studio 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。';
+      'Coursive 在手机上运行一个精简的 Ubuntu 环境，下载、转写、同步和助手都在里面工作，和电脑版一样。首次需要下载约 30 MB，安装后占用约 140 MB，只保存在本应用内。';
 
   @override
   String get workspacePreparing => '正在准备';
@@ -6279,9 +5921,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String shellProfileTooltip(Object value) {
     return '$value · 个人资料';
   }
-
-  @override
-  String get shellSessionExpired => '登录已过期，自动续期没有成功。点这里重新登录。';
 
   @override
   String get appDaemonFailed => '后台服务无法启动';
@@ -6411,7 +6050,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutLicenses => '开源许可';
 
   @override
-  String get aboutLicensesHint => 'Look Studio 用到的开源组件';
+  String get aboutLicensesHint => 'Coursive 用到的开源组件';
 
   @override
   String get aboutReward => '赞赏';
@@ -6420,16 +6059,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get aboutRewardTitle => '请作者喝杯咖啡';
 
   @override
-  String get aboutRewardBody => '觉得 Look Studio 有用，可以用微信扫码赞赏。';
+  String get aboutRewardBody => '觉得 Coursive 有用，可以用微信扫码赞赏。';
 
   @override
   String get aboutRewardPhoneHint => '在本机上可以先截屏，再在微信「扫一扫」里从相册识别。';
 
   @override
   String get aboutRewardImage => '微信赞赏码';
-
-  @override
-  String get colorAzureBlue => '湛蓝';
 
   @override
   String get toolPrepareDownload => '准备下载';
@@ -6439,183 +6075,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get toolPreparePlugin => '准备开关插件';
-
-  @override
-  String get loginWithSchoolA => '使用学校 A统一身份认证';
-
-  @override
-  String get nasTitle => '课程工作台';
-
-  @override
-  String get nasRunHomework => '运行一轮作业任务';
-
-  @override
-  String get nasRunCalendar => '刷新 NAS 日历';
-
-  @override
-  String get nasHomeworkConfirm =>
-      '将使用 NAS 已配置的 Codex 服务，处理最多两项符合条件的作业。已有稿件保护和任务锁继续生效。生成完成后仍需检查，不会自动提交。';
-
-  @override
-  String get nasCalendarConfirm =>
-      '请求 NAS 刷新日历。当天已成功同步时，现有程序可能跳过重复更新；不会运行作业生成。';
-
-  @override
-  String get nasRun => '开始运行';
-
-  @override
-  String get nasTextTruncated => '仅展示前 12000 字；全文保留在同步目录中。';
-
-  @override
-  String get nasReady => '已生成，待检查';
-
-  @override
-  String get nasSubmitted => '平台已提交';
-
-  @override
-  String get nasFailed => '生成失败';
-
-  @override
-  String get nasExisting => '已有文件';
-
-  @override
-  String get nasRunning => '生成中';
-
-  @override
-  String get nasQueued => '排队中';
-
-  @override
-  String get nasNeedsInput => '需要补充材料或查看 NAS 运行记录';
-
-  @override
-  String get nasRefresh => '刷新状态';
-
-  @override
-  String get nasOnline => 'NAS 已连接 · 资料来自本机同步目录';
-
-  @override
-  String get nasOffline => 'NAS 未连接 · 展示已有资料和上次状态';
-
-  @override
-  String get nasObserved => 'NAS 状态采集时间';
-
-  @override
-  String get nasAllCourses => '全部课程';
-
-  @override
-  String get nasSearch => '搜索资料与作业';
-
-  @override
-  String get nasLinkCourse => '关联录播课程';
-
-  @override
-  String get nasUnlinked => '未关联录播课程';
-
-  @override
-  String get nasOpenRecording => '打开课程录像';
-
-  @override
-  String get nasHomework => '作业';
-
-  @override
-  String get nasDeadlines => '截止日程';
-
-  @override
-  String get nasMaterials => '资料与成果';
-
-  @override
-  String get nasServices => '后台服务';
-
-  @override
-  String get nasSeparateStates => '生成状态与平台提交状态分别显示；生成稿请检查后使用。';
-
-  @override
-  String get nasUnconfirmed => '提交待确认';
-
-  @override
-  String get nasDue => '截止';
-
-  @override
-  String get nasTimeout => '上次生成超过 45 分钟限制，需要处理后重试。';
-
-  @override
-  String get nasViewSource => '查看学校原页面';
-
-  @override
-  String get nasNoReport => '暂无已同步的报告入口，可在资料与成果中查找。';
-
-  @override
-  String get nasServicesHint => '后台任务由 NAS 独立运行，关闭本页面不影响原有定时任务。状态刷新不会启动生成。';
-
-  @override
-  String get nasServiceState => '服务状态';
-
-  @override
-  String get nasLastRun => '最近完成';
-
-  @override
-  String get nasNextRun => '下次计划';
-
-  @override
-  String get nasEntry => '课程工作台';
-
-  @override
-  String get nasDeadlineCompleted => '日历标记已完成';
-
-  @override
-  String get nasHomeworkService => '作业生成';
-
-  @override
-  String get nasCalendarService => '日历同步定时任务';
-
-  @override
-  String get nasLectureService => '录课订阅';
-
-  @override
-  String get nasCalendarContainer => '日历同步运行环境';
-
-  @override
-  String get nasRelatedFiles => '查看本课程资料与代码';
-
-  @override
-  String get nasFullFile => '打开完整文件';
-
-  @override
-  String get nasCalendarSource => 'NAS 同步';
-
-  @override
-  String get nasScanResult => '最近扫描：任务数 / 失败数';
-
-  @override
-  String get nasCampusOffline =>
-      'PlatformB 尚未登录：已同步资料、笔记和 NAS 任务仍可使用。点击登录以获取受保护的录课。';
-
-  @override
-  String get nasGenerationUnknown => '生成状态未单独记录';
-
-  @override
-  String get schoolLabel => '学校';
-
-  @override
-  String get schoolSchoolBLogin => '登录学校 B PlatformB';
-
-  @override
-  String get schoolSchoolBHint => '在浏览器中完成学校 B统一身份认证，密码仅在学校 B认证页面输入。';
-
-  @override
-  String get schoolBrowserWaiting => '等待浏览器登录完成';
-
-  @override
-  String get schoolBrowserLogin => '打开浏览器登录';
-
-  @override
-  String get schoolSwitching => '正在切换学校…';
-
-  @override
-  String get schoolReconnectFailed => '学校已保存，但连接尚未恢复，请重新打开应用。';
-
-  @override
-  String get schoolChange => '切换学校';
 
   @override
   String get catalogCourseware => '课件';
@@ -6933,7 +6392,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localCourse => '本地课程';
 
   @override
-  String get localCourseCreate => '新建本地课程';
+  String get localCourseCreate => '新建课程';
 
   @override
   String get localCourseName => '课程名称';
@@ -6942,10 +6401,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localCourseNameRequired => '请填写课程名称';
 
   @override
-  String get localCourseTeacher => '讲师或来源（可选）';
-
-  @override
-  String get localCourseImportHint => '视频按文件名顺序生成独立课次。也可以先创建课程，稍后添加视频。';
+  String get localCourseTeacher => '讲师或出处（选填）';
 
   @override
   String get localVideosChoose => '选择视频';
@@ -6954,20 +6410,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get localVideosAdd => '添加视频';
 
   @override
-  String get localVideosImporting => '正在导入';
+  String get localVideosPartialSaved => '课程和已导入的课次都已保留。继续导入会从这个视频开始。';
 
   @override
-  String get localVideosPartialSaved => '已创建的课程和成功导入的课次已保留。重试会从失败的文件继续。';
-
-  @override
-  String get localVideoLimit => '单个视频不能超过 4 GiB';
+  String get localVideoLimit => '超过 4 GiB，请移除后再导入';
 
   @override
   String get folderSyncTitle => '课程同步';
 
   @override
   String get folderSyncBody =>
-      '把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；学校登录、模型密钥和本机设置留在本机。';
+      '把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。';
 
   @override
   String get folderSyncAccount => 'NAS 账号';
@@ -7053,46 +6506,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get folderSyncUsingCourseSync => '当前按课程同步；整库 WebDAV 同步尚未启用';
-
-  @override
-  String get nasWorkspaceIntro => '资料、作业和日程都在本机；NAS 只负责在多台设备之间搬运课程文件夹。';
-
-  @override
-  String get nasEmptyHomework => '还没有作业记录';
-
-  @override
-  String get nasEmptyHomeworkBody =>
-      '在 NAS 上运行一次作业扫描，或等自动同步完成后，这里会列出每份作业的生成与提交状态。';
-
-  @override
-  String get nasEmptyDeadlines => '还没有截止日程';
-
-  @override
-  String get nasEmptyDeadlinesBody => '运行日程同步后，课程截止日期会汇总到这里。';
-
-  @override
-  String get nasEmptyMaterials => '还没有资料';
-
-  @override
-  String get nasEmptyMaterialsBody => '课程文件夹里的讲义、PDF 和笔记同步到本机后会出现在这里。';
-
-  @override
-  String get nasFilesUnavailable => '本机课程目录还不可用';
-
-  @override
-  String get nasOpenSync => '打开课程同步';
-
-  @override
-  String get nasServicesOptional =>
-      'NAS 服务是可选的：不连接也能浏览本机资料。连接后可以在这里手动触发作业扫描和日程同步。';
-
-  @override
-  String get nasEntryHint => '连接 NAS 后，资料、作业和日程会同步到本机';
-
-  @override
-  String nasEntryConnected(Object host, Object n) {
-    return '$host · 同步 $n 门课程';
-  }
 
   @override
   String get folderSyncSettingsGroup => '课程同步';
@@ -7385,4 +6798,373 @@ class AppLocalizationsZh extends AppLocalizations {
   String studyAnswerLabel(Object letter) {
     return '答案：$letter';
   }
+
+  @override
+  String get coursesEmptyTitle => '还没有课程';
+
+  @override
+  String get coursesEmptyBody => '新建一门课程，从本机导入课堂录像，就能开始看课、记笔记和复习。';
+
+  @override
+  String get coursesEmptySources => '安装来源插件';
+
+  @override
+  String get coursesClearSearch => '清除搜索';
+
+  @override
+  String get coursesViewAllTerms => '查看全部学期';
+
+  @override
+  String get coursesAllHidden => '课程都已隐藏';
+
+  @override
+  String get coursesShowHidden => '显示已隐藏的课程';
+
+  @override
+  String get localCourseCreateBody => '课程保存在本机。课堂录像可以现在导入，也可以稍后添加。';
+
+  @override
+  String get localCourseNameHint => '例如：线性代数';
+
+  @override
+  String get localCourseSubmit => '创建课程';
+
+  @override
+  String localCourseSubmitWithVideos(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '创建并导入 $count 个视频',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String localCourseCreateFailed(Object error) {
+    return '无法创建课程：$error';
+  }
+
+  @override
+  String get localVideosSection => '课堂录像';
+
+  @override
+  String get localVideosSectionHint => '视频按文件名顺序导入，每个视频成为一个课次。单个视频不超过 4 GiB。';
+
+  @override
+  String get localVideosRechoose => '重新选择';
+
+  @override
+  String localVideosSummary(Object count, Object size) {
+    return '$count 个视频 · 共 $size';
+  }
+
+  @override
+  String localVideosSubmit(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '导入 $count 个视频',
+      zero: '导入视频',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String localVideosProgress(Object done, Object total) {
+    return '已导入 $done/$total';
+  }
+
+  @override
+  String localVideoImportFailed(Object name, Object error) {
+    return '无法导入“$name”：$error';
+  }
+
+  @override
+  String localVideosPickFailed(Object error) {
+    return '无法选择视频：$error';
+  }
+
+  @override
+  String get localVideosResume => '继续导入';
+
+  @override
+  String get localVideosLater => '稍后添加';
+
+  @override
+  String get sourcesTitle => '来源';
+
+  @override
+  String get sourcesEmptyTitle => '还没有来源插件';
+
+  @override
+  String get sourcesEmptyBody => '来源插件可以接入课程平台，同步课程、回放和作业。选择插件所在的文件夹即可安装。';
+
+  @override
+  String get sourcesInstall => '从文件夹安装';
+
+  @override
+  String get sourcesIntro => '每个插件提供一个或多个来源。登录信息只保存在本机。';
+
+  @override
+  String get sourcesChooseFolder => '选择插件文件夹';
+
+  @override
+  String sourcesCannotRead(Object error) {
+    return '无法读取插件：$error';
+  }
+
+  @override
+  String sourcesCannotInstall(Object error) {
+    return '无法安装插件：$error';
+  }
+
+  @override
+  String sourcesInstalled(Object name) {
+    return '已安装「$name」';
+  }
+
+  @override
+  String sourcesConsentTitle(Object name) {
+    return '安装「$name」？';
+  }
+
+  @override
+  String sourcesVersion(Object version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get sourcesConsentHosts => '插件会访问的网站';
+
+  @override
+  String get sourcesConsentBody => '插件会用你的账号访问上面列出的网站。只安装你信任的插件。';
+
+  @override
+  String get sourcesUnavailable => '这个插件不支持本机的系统，无法安装。';
+
+  @override
+  String get sourcesInstallPlugin => '安装插件';
+
+  @override
+  String sourcesRemoveTitle(Object name) {
+    return '卸载「$name」？';
+  }
+
+  @override
+  String get sourcesRemoveBody => '插件和它保存的登录信息会被删除。已同步的课程和课次留在本机，但不能再刷新。';
+
+  @override
+  String get sourcesRemovePlugin => '卸载插件';
+
+  @override
+  String get sourcesMarketTitle => '来源插件';
+
+  @override
+  String get sourcesMarketEmpty => '插件目录里还没有来源插件，也可以从文件夹安装。';
+
+  @override
+  String sourcesMarketFailed(Object error) {
+    return '无法读取插件目录：$error';
+  }
+
+  @override
+  String get sourcesMarketUnsupported => '不支持本机';
+
+  @override
+  String sourcesMarketUpdate(Object version) {
+    return '更新到 $version';
+  }
+
+  @override
+  String get sourcesMarketVerifying => '正在下载并校验…';
+
+  @override
+  String get sourcesDisabled => '已停用';
+
+  @override
+  String get sourcesNone => '未安装来源插件';
+
+  @override
+  String sourcesSummary(Object count, Object signed) {
+    return '$count 个来源 · $signed 个已登录';
+  }
+
+  @override
+  String sourceFailed(Object error) {
+    return '无法启动：$error';
+  }
+
+  @override
+  String get sourceExpired => '登录已过期';
+
+  @override
+  String get sourceSignedInPlain => '已登录';
+
+  @override
+  String sourceSignedInAs(Object account) {
+    return '已登录为 $account';
+  }
+
+  @override
+  String get sourceSignedOut => '未登录';
+
+  @override
+  String get sourceRestart => '重新启动';
+
+  @override
+  String get sourceSignOut => '退出登录';
+
+  @override
+  String sourceSignedIn(Object name) {
+    return '已登录「$name」';
+  }
+
+  @override
+  String sourceExpiredBanner(Object name) {
+    return '「$name」的登录已过期，重新登录后继续同步';
+  }
+
+  @override
+  String sourceSignInTitle(Object name) {
+    return '登录「$name」';
+  }
+
+  @override
+  String get sourceSignInBody => '由插件完成登录，账号信息只保存在本机。';
+
+  @override
+  String get sourceSignInContinue => '继续登录';
+
+  @override
+  String get sourceSignInIncomplete => '无法完成登录：插件没有给出下一步。请重试。';
+
+  @override
+  String get sourceFieldNotStored => '不会保存，下次登录需要重新填写';
+
+  @override
+  String sourceFieldRequired(Object field) {
+    return '请填写$field';
+  }
+
+  @override
+  String get sourceChallengeAnswer => '验证码';
+
+  @override
+  String get lmsTitle => '作业与通知';
+
+  @override
+  String get lmsBadge => '学习平台';
+
+  @override
+  String get lmsEmptyTitle => '没有可用的学习平台';
+
+  @override
+  String get lmsEmptyBody => '登录提供学习平台的来源后，作业、文件和通知会显示在这里。';
+
+  @override
+  String get lmsEntryHint => '学习平台的作业、文件和通知';
+
+  @override
+  String get lmsSignedOut => '未登录';
+
+  @override
+  String get lmsNotSynced => '尚未同步';
+
+  @override
+  String lmsSummary(Object courses, Object open) {
+    return '$courses 门课程 · $open 项待交作业';
+  }
+
+  @override
+  String lmsSyncFailed(Object error) {
+    return '无法同步：$error';
+  }
+
+  @override
+  String get lmsCourseLinks => '课程对应';
+
+  @override
+  String get lmsCourseLinksBody => '把平台课程对应到资料库里的课程，作业和文件就会出现在课程页。';
+
+  @override
+  String get lmsLoadingCourses => '正在加载平台课程';
+
+  @override
+  String get lmsNoCourses => '这个平台没有课程';
+
+  @override
+  String get lmsNoLink => '不对应';
+
+  @override
+  String get lmsAutoNoMatch => '自动：没有匹配的课程';
+
+  @override
+  String lmsAutoMatch(Object title) {
+    return '自动：$title';
+  }
+
+  @override
+  String get lmsLinkCourse => '选择对应的课程';
+
+  @override
+  String get lmsAutoLink => '自动匹配';
+
+  @override
+  String get lmsNoOpenAssignments => '没有待交作业';
+
+  @override
+  String lmsCourseHeading(Object name) {
+    return '$name · 学习平台';
+  }
+
+  @override
+  String lmsAssignmentsTab(Object count) {
+    return '作业 $count';
+  }
+
+  @override
+  String get lmsFiles => '文件';
+
+  @override
+  String lmsAnnouncementsTab(Object count) {
+    return '通知 $count';
+  }
+
+  @override
+  String get lmsAnnouncements => '通知';
+
+  @override
+  String get lmsSavedToCourse => '已保存到课程文件夹';
+
+  @override
+  String get lmsNoAssignments => '没有作业';
+
+  @override
+  String get lmsNoAssignmentsBody => '平台发布作业后会显示在这里。';
+
+  @override
+  String get lmsLoadingFiles => '正在加载文件';
+
+  @override
+  String get lmsNoFiles => '没有文件';
+
+  @override
+  String get lmsNoFilesBody => '平台上传课程文件后会显示在这里。';
+
+  @override
+  String lmsFileUpdated(Object month, Object day) {
+    return '$month 月 $day 日更新';
+  }
+
+  @override
+  String get lmsDownloadToCourse => '下载到课程文件夹';
+
+  @override
+  String get lmsNoAnnouncements => '没有通知';
+
+  @override
+  String get scheduleOpenOnPlatform => '在学习平台打开';
+
+  @override
+  String get settingsProfileLocal => '资料只保存在本机';
 }

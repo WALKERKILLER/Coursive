@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/widgets/horizontal_scroller.dart';
+import 'package:coursive/widgets/horizontal_scroller.dart';
 
 Widget row(int n, {ScrollController? controller}) => MaterialApp(
       home: Scaffold(

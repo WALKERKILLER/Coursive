@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import 'app_state.dart';
 
-/// Measures study time in the app and reports it to lookd for the activity
+/// Measures study time in the app and reports it to daemon for the activity
 /// heatmap (docs/specs/0001-learning-activity-heatmap.md).
 ///
 /// Surfaces start a [ActivityClock] while they are in use. Every [tick] the
@@ -32,7 +32,7 @@ class ActivityTracker with WidgetsBindingObserver {
   final DateTime Function() now;
   final Future<dynamic> Function(Map<String, Object> report) _post;
 
-  /// A test seam for [_post]: sends even without a lookd connection.
+  /// A test seam for [_post]: sends even without a daemon connection.
   final bool _testing;
   late final Timer _ticker;
   final _clocks = <ActivityClock>{};
@@ -81,8 +81,8 @@ class ActivityTracker with WidgetsBindingObserver {
   }
 
   /// Sends accumulated time and counts. Failed reports stay queued for a day,
-  /// the window lookd accepts back-dated reports in. A report keeps its id
-  /// until lookd confirms it, so a retry after a lost response counts once.
+  /// the window daemon accepts back-dated reports in. A report keeps its id
+  /// until daemon confirms it, so a retry after a lost response counts once.
   Future<void> flush() async {
     if (_flushing || (!app.connected && !_testing)) return;
     _flushing = true;

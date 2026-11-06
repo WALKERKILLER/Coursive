@@ -33,9 +33,9 @@ PDF 模块标题栏的「在画布展开为一列」将各页按页码竖向铺�
 | 文件导入 | `POST /api/lectures/{id}/study-canvas/assets?name=...` | 原始文件字节；返回 `objects` 卡片数组 |
 | 课件导入 | `POST /api/lectures/{id}/study-canvas/assets?path=...` | 当前课次内的原课件相对路径；返回同一对象结构 |
 
-客户端读取 version 1/2/3，保存 version 3，包含 camera 的 x/y/z、layers、objects、strokes 和 connections。新字段定义见[多模态对象](multimodal-canvas.md)。不支持新版格式的旧应用拒绝 version 3，回退前须保留新版画布或恢复备份，不能用旧版覆盖新版文档。卡片记录 id/type/layer、x/y/w/h、title/text 及库内 path/source；笔迹记录 id/layer/anchor、tool/color/width 和 `[x,y,pressure]` 点列。导入素材引用只允许本课次 study-assets 内的常规文件；课程视频引用通过课程归属校验解析其他课次的本地视频；目录与文件符号链接均拒绝。所有接口使用现有 lookd 认证，Node 客户端同步声明接口；模型只返回回答与来源，完整画布文档由 Flutter 验证并保存。
+客户端读取 version 1/2/3，保存 version 3，包含 camera 的 x/y/z、layers、objects、strokes 和 connections。新字段定义见[多模态对象](multimodal-canvas.md)。不支持新版格式的旧应用拒绝 version 3，回退前须保留新版画布或恢复备份，不能用旧版覆盖新版文档。卡片记录 id/type/layer、x/y/w/h、title/text 及库内 path/source；笔迹记录 id/layer/anchor、tool/color/width 和 `[x,y,pressure]` 点列。导入素材引用只允许本课次 study-assets 内的常规文件；课程视频引用通过课程归属校验解析其他课次的本地视频；目录与文件符号链接均拒绝。所有接口使用现有 coursive-daemon 认证，Node 客户端同步声明接口；模型只返回回答与来源，完整画布文档由 Flutter 验证并保存。
 
-文档上限为 32 MiB、32 图层、2000 卡片、30000 笔迹段、500000 点；坐标为有限值且绝对值不大于 1e9，缩放为 0.05–8。单文件导入上限为 300 MiB，文字为 800000 UTF-8 字节，分页 PDF 最多 5000 页，每页按需渲染；兼容旧整批导入的内部接口限 100 页且每页约 200 万像素，整批发布素材上限为 400 MiB。macOS PDF 转换由与 lookd 同目录的 `look-study-pdf` 执行；Linux/安卓使用[本地 Poppler 组件](study-workspace-build.md)，分页处理限时 45 秒，兼容旧整批导入限时两分钟。非法输入返回 400，超限返回 413，版本冲突返回 409，缺少课次返回 404；服务、文件系统或转换组件启动错误保留为失败，不覆盖旧文档。
+文档上限为 32 MiB、32 图层、2000 卡片、30000 笔迹段、500000 点；坐标为有限值且绝对值不大于 1e9，缩放为 0.05–8。单文件导入上限为 300 MiB，文字为 800000 UTF-8 字节，分页 PDF 最多 5000 页，每页按需渲染；兼容旧整批导入的内部接口限 100 页且每页约 200 万像素，整批发布素材上限为 400 MiB。macOS PDF 转换由与 coursive-daemon 同目录的 `coursive-study-pdf` 执行；Linux/安卓使用[本地 Poppler 组件](study-workspace-build.md)，分页处理限时 45 秒，兼容旧整批导入限时两分钟。非法输入返回 400，超限返回 413，版本冲突返回 409，缺少课次返回 404；服务、文件系统或转换组件启动错误保留为失败，不覆盖旧文档。
 
 源码直接沿用仓库的 Flutter、Go 和 Android 构建入口。PDF 与手写笔依赖、平台验收边界见[构建说明](study-workspace-build.md)。
 

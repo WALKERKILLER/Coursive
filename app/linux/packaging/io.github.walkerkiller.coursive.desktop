@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Coursive
+GenericName=Lecture Studio
+GenericName[zh_CN]=课程回放与笔记
+Comment=Watch recorded lectures, transcribe them and take notes with an assistant
+Comment[zh_CN]=看课程回放、转写文字稿，和助手一起记笔记
+Exec=coursive %U
+Icon=io.github.walkerkiller.coursive
+Terminal=false
+Categories=Education;
+Keywords=lecture;replay;transcript;notes;Canvas;课程;回放;笔记;
+MimeType=x-scheme-handler/coursive-app;
+StartupWMClass=io.github.walkerkiller.coursive
+StartupNotify=true

@@ -1,8 +1,8 @@
 {
-  "name": "look-studio-agent",
+  "name": "coursive-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Look Studio resident assistant: embeds Pi via @earendil-works/pi-coding-agent SDK",
+  "description": "Coursive resident assistant: embeds Pi via @earendil-works/pi-coding-agent SDK",
   "type": "module",
   "main": "src/host.mjs",
   "scripts": {

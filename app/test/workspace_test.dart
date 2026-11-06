@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/lookd_service.dart';
-import 'package:look_studio/core/workspace.dart';
-import 'package:look_studio/features/setup/workspace_setup_page.dart';
+import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/workspace.dart';
+import 'package:coursive/features/setup/workspace_setup_page.dart';
 import 'package:provider/provider.dart';
 
 class PackageWorkspace extends Workspace {
@@ -47,7 +47,7 @@ void main() {
       info: () async => {
         // Android's real library path contains '=' (see Workspace.guestNative).
         'nativeLibraryDir':
-            '/data/app/~~aB==/cn.lookstudio.look_studio-xY==/lib/arm64',
+            '/data/app/~~aB==/io.github.walkerkiller.coursive-xY==/lib/arm64',
         'filesDir': '${tmp.path}/files',
         'cacheDir': '${tmp.path}/cache',
         'abi': 'arm64-v8a',
@@ -61,12 +61,12 @@ void main() {
 
   test('runs guest commands through proot with the native folder at a fixed path', () {
     final (exe, args, env) = ws.guest(
-      ['${Workspace.guestNative}/liblookd.so', '-data', ws.dataDir],
-      env: {'LOOKD_TOKEN': 't'},
+      ['${Workspace.guestNative}/libcoursive_daemon.so', '-data', ws.dataDir],
+      env: {'COURSIVE_TOKEN': 't'},
     );
     expect(
       exe,
-      '/data/app/~~aB==/cn.lookstudio.look_studio-xY==/lib/arm64/libproot.so',
+      '/data/app/~~aB==/io.github.walkerkiller.coursive-xY==/lib/arm64/libproot.so',
     );
     expect(
       args,
@@ -80,20 +80,20 @@ void main() {
     expect(
       args,
       contains(
-        '/data/app/~~aB==/cn.lookstudio.look_studio-xY==/lib/arm64:/opt/look',
+        '/data/app/~~aB==/io.github.walkerkiller.coursive-xY==/lib/arm64:/opt/coursive',
       ),
     );
     // env reads NAME=VALUE words up to the command, so nothing after it may be
     // mistaken for one and the command itself must not contain '='.
-    final cmd = args.indexOf('/opt/look/liblookd.so');
+    final cmd = args.indexOf('/opt/coursive/libcoursive_daemon.so');
     expect(
       args.sublist(args.indexOf('/usr/bin/env'), cmd),
-      containsAll(['-i', 'TZ=Asia/Shanghai', 'LOOKD_TOKEN=t', 'HOME=/root']),
+      containsAll(['-i', 'TZ=Asia/Shanghai', 'COURSIVE_TOKEN=t', 'HOME=/root']),
     );
     expect(args.sublist(cmd), [
-      '/opt/look/liblookd.so',
+      '/opt/coursive/libcoursive_daemon.so',
       '-data',
-      '${tmp.path}/files/look-data',
+      '${tmp.path}/files/coursive-data',
     ]);
     expect(env['PROOT_LOADER'], endsWith('/lib/arm64/libproot_loader.so'));
     expect(Directory(env['PROOT_TMP_DIR']!).existsSync(), isTrue);
@@ -108,7 +108,7 @@ void main() {
     tester.view.devicePixelRatio = 2; // 360 × 640 dp
     addTearDown(tester.view.reset);
     ws.error = '下载失败：网络不可用';
-    final daemon = LookdService(workspace: ws);
+    final daemon = DaemonService(workspace: ws);
     addTearDown(daemon.dispose);
     await tester.pumpWidget(
       ChangeNotifierProvider.value(

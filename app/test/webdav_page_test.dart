@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/core/api.dart';
-import 'package:look_studio/features/settings/data_settings.dart';
-import 'package:look_studio/features/settings/webdav_page.dart';
+import 'package:coursive/core/api.dart';
+import 'package:coursive/features/settings/data_settings.dart';
+import 'package:coursive/features/settings/webdav_page.dart';
 
 class Fake {
-  Map<String, dynamic> status = {'configured': false, 'has_password': false, 'folder': 'LookStudio', 'auto': false, 'media': false, 'running': false};
+  Map<String, dynamic> status = {'configured': false, 'has_password': false, 'folder': 'Coursive', 'auto': false, 'media': false, 'running': false};
   final calls = <(String, String, Object?)>[];
   Object? failPut;
 
@@ -60,7 +60,7 @@ void main() {
 
     final put = api.calls.firstWhere((c) => c.$1 == 'PUT');
     final b = put.$3 as Map;
-    expect((b['url'], b['user'], b['password'], b['folder'], b['media']), ('https://dav.jianguoyun.com/dav/', 'me@example.com', 'app-pass-1', 'LookStudio', false));
+    expect((b['url'], b['user'], b['password'], b['folder'], b['media']), ('https://dav.jianguoyun.com/dav/', 'me@example.com', 'app-pass-1', 'Coursive', false));
     expect(api.calls.any((c) => c.$2 == '/api/sync/run'), isTrue);
     expect(find.text('已连接 dav.jianguoyun.com'), findsOneWidget);
     expect(find.textContaining('app-pass-1'), findsNothing);
@@ -87,7 +87,7 @@ void main() {
 
   testWidgets('reports conflicts and keeps the saved password when editing', (tester) async {
     api.status = {
-      'configured': true, 'has_password': true, 'url': 'https://dav.jianguoyun.com/dav/', 'user': 'me@example.com', 'folder': 'LookStudio',
+      'configured': true, 'has_password': true, 'url': 'https://dav.jianguoyun.com/dav/', 'user': 'me@example.com', 'folder': 'Coursive',
       'auto': true, 'media': false, 'running': false,
       'last': {'at': DateTime.now().millisecondsSinceEpoch, 'uploaded': 2, 'downloaded': 5, 'conflicts': 1, 'conflict_dir': '/lib/.sync-conflicts/x'},
     };
@@ -117,7 +117,7 @@ void main() {
 }
 
 Map<String, dynamic> _storage() => {
-      'library': '/home/me/LookStudio',
+      'library': '/home/me/Coursive',
       'total': 3 << 30,
       'categories': [
         {'key': 'video', 'label': '视频与录音', 'bytes': 2 << 30, 'files': 12},
@@ -168,7 +168,7 @@ void phoneLayouts() {
       await tester.pumpAndSettle();
       api.status = {
         'configured': true, 'has_password': true, 'url': 'https://cloud.example.com/remote.php/dav/files/someone-with-a-long-name/', 'user': 'someone@example.com',
-        'folder': 'LookStudio', 'auto': true, 'media': true, 'running': false,
+        'folder': 'Coursive', 'auto': true, 'media': true, 'running': false,
         'last': {'at': 1, 'error': 'WebDAV 服务器暂时限制了请求次数，稍后会自动继续', 'partial': true, 'errors': ['library/courses/很长的课程名称/很长的节次名称/notes/笔记.md：HTTP 500']},
       };
       await tester.pumpWidget(MaterialApp(home: WebDavPage(key: UniqueKey(), api: api.call, events: const Stream.empty())));

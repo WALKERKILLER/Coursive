@@ -9,19 +9,19 @@ const rules = ({ style = "温和", reveal_after = 2 } = {}) => `## 引导式提�
 - 引用课堂内容时照常标注时间戳，便于用户回看原话。
 - 最后请用户用自己的话复述结论。用户明确说“直接告诉我答案”时，提醒可以在输入框「+」里关闭引导式提问。`;
 
-export async function activate(look) {
-	look.status({ active: (await look.storage.get("active")) === true });
-	look.action("toggle", async () => {
-		const active = !((await look.storage.get("active")) === true);
-		await look.storage.set("active", active);
-		look.status({ active });
+export async function activate(coursive) {
+	coursive.status({ active: (await coursive.storage.get("active")) === true });
+	coursive.action("toggle", async () => {
+		const active = !((await coursive.storage.get("active")) === true);
+		await coursive.storage.set("active", active);
+		coursive.status({ active });
 		return { toast: active ? "已开启引导式提问：助手会用提问引导你思考" : "已关闭引导式提问", state: { active } };
 	});
 }
 
-export default function (pi, look) {
+export default function (pi, coursive) {
 	pi.on("before_agent_start", async (event) => {
-		if ((await look.storage.get("active")) !== true) return undefined;
-		return { systemPrompt: `${event.systemPrompt}\n\n${rules(look.settings())}` };
+		if ((await coursive.storage.get("active")) !== true) return undefined;
+		return { systemPrompt: `${event.systemPrompt}\n\n${rules(coursive.settings())}` };
 	});
 }

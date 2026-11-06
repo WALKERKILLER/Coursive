@@ -38,14 +38,14 @@ extension _StudyStylus on StudyCanvasState {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     // Probe first: EventChannel reports a missing native plugin globally.
     try {
-      await const MethodChannel('look/stylus').invokeMethod('status');
+      await const MethodChannel('coursive/stylus').invokeMethod('status');
     } on MissingPluginException catch (_) {
       return;
     } on PlatformException catch (_) {
       return;
     }
     if (!mounted) return;
-    _stylusEvents = const EventChannel('look/stylus/events')
+    _stylusEvents = const EventChannel('coursive/stylus/events')
         .receiveBroadcastStream()
         .listen(_stylusEvent, onError: (_) {});
     unawaited(_configureStylus());
@@ -54,7 +54,7 @@ extension _StudyStylus on StudyCanvasState {
   Future<void> _configureStylus() async {
     if (defaultTargetPlatform != TargetPlatform.android) return;
     try {
-      await const MethodChannel('look/stylus').invokeMethod('configure', {
+      await const MethodChannel('coursive/stylus').invokeMethod('configure', {
         'prediction': _predictionEnabled,
         'buttons': _penButtons,
       });
@@ -145,7 +145,7 @@ extension _StudyStylus on StudyCanvasState {
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
         status =
-            await const MethodChannel('look/stylus')
+            await const MethodChannel('coursive/stylus')
                 .invokeMapMethod('status') ??
             {};
       } on MissingPluginException catch (_) {

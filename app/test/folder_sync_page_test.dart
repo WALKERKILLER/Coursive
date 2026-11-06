@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:look_studio/features/settings/folder_sync_page.dart';
+import 'package:coursive/features/settings/folder_sync_page.dart';
 
 void main() {
   // The form polls and its text fields blink a cursor, so the tests step frames

@@ -1,5 +1,5 @@
-// Look Studio agent host: a minimal Pi agent embedded through the SDK.
-// lookd starts this process, reads "AGENT_READY <port>" and proxies /agent/*.
+// Coursive agent host: a minimal Pi agent embedded through the SDK.
+// daemon starts this process, reads "AGENT_READY <port>" and proxies /agent/*.
 import { createServer } from "node:http";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -16,7 +16,7 @@ import { bundledPluginsDir, PluginHost } from "./plugins.mjs";
 import { generateTimeline } from "./timeline.mjs";
 import { TranscriptReviewer } from "./transcript-review.mjs";
 import { CanvasRunner } from "./canvas-agent.mjs";
-import { api } from "./lookd.mjs";
+import { api } from "./daemon.mjs";
 import { fmtStamp, TASK_WRITES, TaskScheduler } from "./tasks.mjs";
 import { httpError, readJson, replyError } from "./http.mjs";
 import { entryFrom, UsageLedger } from "./usage.mjs";
@@ -25,7 +25,7 @@ import { MemoryStore, memoryTools } from "./memory.mjs";
 import { MEMORY_GROUP, OPERATE_GROUP, operateTools, runOp, SETTINGS } from "./operate.mjs";
 import { Sessions } from "./sessions.mjs";
 
-const TOKEN = process.env.LOOKD_TOKEN ?? "";
+const TOKEN = process.env.COURSIVE_TOKEN ?? "";
 const CWD = process.env.LIBRARY_ROOT ?? process.cwd();
 const SESSIONS = join(DATA_DIR, "sessions");
 await mkdir(SESSIONS, { recursive: true });
@@ -54,14 +54,14 @@ await memory.init();
 let appState = null;
 const botEvent = (data) => api("POST", "/api/agent/event", { type: "bot_event", data }).catch(() => {});
 
-const SYSTEM = `你是 Look Studio 的常驻助手，帮助学校 A学生使用 Look 录课平台的课程录像。
+const SYSTEM = `你是 Coursive 的常驻助手，帮助学生学习录播课程。
 你能做的：介绍应用功能、查看课程与节次、阅读转写稿、看 PPT 与课件、全文搜索、整理与保存笔记、生成时间轴大纲、标记日程、出复习题。
 工具：
 - 起初只有核心工具（current_context、read_transcript、search_library、suggest_actions、find_tools）。需要别的能力时先调用 find_tools 加载工具组：course（课程与节次）、notes（笔记，会一并加载 PPT 与课件工具并给出写笔记流程）、schedule（日程）、outline（时间轴大纲）、materials（查看 PPT、搜索与阅读课件）、practice（练习题，会一并加载 PPT 与课件工具并给出出题流程）、help（应用功能说明）。加载后在本对话中一直可用，不要重复加载。
 - 每轮最多调用 ${TURN_TOOL_BUDGET} 次工具。长文字稿按需分页读取，先用 search_library 或大纲定位，不要一次读完整节课。
 原则：
 - 先用工具获取事实，不要编造课程内容；引用课堂内容时标注 [mm:ss] 或 [h:mm:ss] 时间戳，界面会把它们变成可点击的跳转。
-- 时间戳默认指当前节次（播放器里的课或笔记所属的课）。引用其他节次时写成 [mm:ss](look://lecture/<lecture_id>?t=<秒>)。
+- 时间戳默认指当前节次（播放器里的课或笔记所属的课）。引用其他节次时写成 [mm:ss](coursive://lecture/<lecture_id>?t=<秒>)。
 - suggest_actions 只用来给出用户接下来可能想做的事（例如“跳转到 12:03”），不能代替你执行用户已经要求的操作。
 - 用户正在看的页面可通过 current_context 获取；消息开头的 <context> 块也描述了当前页面。
 - 日程：只有原话里出现明确日期或星期（如“10月20日前交”“下周三小测”“明天上机”）时，才用 mark_schedule 标记作业、考试、活动、截止。quote 逐字摘录原话；相对日期以这节课的日期换算（来自聊天时以今天换算）。没有日期的事项只在回复里提醒，不要标记，也不要猜日期。同一件事只标记一次；标记后在回复里一句话说明，用户可以在卡片上撤销。
@@ -78,7 +78,7 @@ const OPERATE_RULES = `操作应用：
 - 用户能在应用里做的事，你也能用工具做。open_page 直接打开页面（课程、节次、笔记、日程、下载、设置等）；其他操作先 find_tools(groups:["operate"])，会一并加载课程与节次工具：控制播放器、读取与修改设置、下载、查看下载进度、暂停/继续/重试/取消下载、删除本地文件、置顶/隐藏/改名/配色课程、同步课程、创建定时任务、开关插件。
 - 用户要你做的事，用工具直接做完，不要改成按钮或操作步骤让用户自己去点。多步任务自己串起来：例如“下载高数第 3 到 5 周的视频”，先 list_courses 找到课程，再用 download 的 course_id 加 from、to（或 latest）一次下载，不必逐节查 id；之后可用 list_downloads 查看进度。范围不清楚时（哪门课、哪几节）先问一句再做。
 - 用户在输入框旁选择操作模式：自动模式下改动立即生效，用户可以撤销，做完一句话说明结果；询问模式下改动会生成卡片，用户点「应用」后才执行，不要声称已经完成。删除本地文件无法撤销，两种模式都会生成确认卡片。
-- 不能登录登出、修改账户、密码或密钥、安装插件、更改课程库位置；这些请用户自己操作，可以用 open_page 打开对应页面。`;
+- 不能登录登出来源、修改账户、密码或密钥、安装插件、更改课程库位置；这些请用户自己操作，可以用 open_page 打开对应页面。`;
 
 const BOT_RULES = `作为常驻 bot，你和用户长期相处：记得用户告诉过你的事，也能代用户在应用里完成操作。
 记忆：
@@ -91,14 +91,14 @@ async function systemPrompt(conv) {
 	const parts = [];
 	if (conv.kind === "bot") {
 		const id = bot.identity();
-		parts.push(`你是「${id.name}」，Look Studio 的常驻 bot，帮助学校 A学生使用 Look 录课平台的课程录像。`, BODY, BOT_RULES, OPERATE_RULES);
+		parts.push(`你是「${id.name}」，Coursive 的常驻 bot，帮助学生学习录播课程。`, BODY, BOT_RULES, OPERATE_RULES);
 		if (id.persona) parts.push(`用户希望你这样相处：${id.persona}`);
 		const mem = await memory.prompt();
 		if (mem) parts.push(`<memory>\n${mem}\n</memory>`);
 	} else {
 		if (conv.kind === "course" && conv.course_id) {
 			parts.push(
-				`你是课程「${conv.course ?? conv.course_id}」（course_id ${conv.course_id}）的课程助手，帮助学校 A学生学习这门课的录像。本对话只围绕这门课：找节次、读文字稿、笔记、大纲、练习都默认限定在这门课，用户明确提到别的课程时再换。`,
+				`你是课程「${conv.course ?? conv.course_id}」（course_id ${conv.course_id}）的课程助手，帮助学生学习这门课的录像。本对话只围绕这门课：找节次、读文字稿、笔记、大纲、练习都默认限定在这门课，用户明确提到别的课程时再换。`,
 			);
 		} else {
 			parts.push(SYSTEM.slice(0, SYSTEM.indexOf("\n")));
@@ -132,7 +132,7 @@ const plugins = new PluginHost({
 	dataDir: DATA_DIR,
 	libraryRoot: CWD,
 	bundledDir: bundledPluginsDir,
-	lookd: api,
+	daemon: api,
 	notify: (data) => api("POST", "/api/agent/event", { type: "plugin_event", data }).catch(() => {}),
 	convOf: (id) => live.get(id),
 	guard,
@@ -220,7 +220,7 @@ function extraTools(conv) {
 }
 
 let courseTitles = { at: 0, map: new Map() };
-/** Course titles by id (aliases first), cached for a minute; empty when lookd is unreachable. */
+/** Course titles by id (aliases first), cached for a minute; empty when daemon is unreachable. */
 async function courseNames() {
 	if (Date.now() - courseTitles.at > 60_000) {
 		try {
@@ -934,13 +934,13 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
 		consolidator.stop();
 		server.close();
 		// Finished model calls reach the ledger and plugin cleanups (spawned
-		// processes) run first; lookd allows 5 s before killing us.
+		// processes) run first; daemon allows 5 s before killing us.
 		await Promise.race([Promise.allSettled([canvasRunner.close(),transcriptReviewer.close().then(() => usage.flush()), plugins.close()]), new Promise((r) => setTimeout(r, 3000))]);
 		process.exit(0);
 	});
 }
 
-// lookd may exit before it can signal us; leave with it instead of lingering.
+// daemon may exit before it can signal us; leave with it instead of lingering.
 const parentPid = process.ppid;
 setInterval(() => {
 	if (process.ppid !== parentPid) process.kill(process.pid, "SIGTERM");
