@@ -17,6 +17,8 @@ const pngIcon =
 class MarketApi extends Api {
   MarketApi() : super('http://localhost', 'test');
   bool installed = false;
+  String notice = '';
+  bool listed = true;
   final calls = <String>[];
 
   Map<String, dynamic> get _plugin => {
@@ -47,18 +49,20 @@ class MarketApi extends Api {
     return switch (path) {
       '/api/sources/market' => {
         'configured': true,
+        'notice': notice,
         'plugins': [
-          {
-            'id': 'uni',
-            'title': '示例大学',
-            'summary': '录播课和作业',
-            'icon': svgIcon,
-            'author': 'WALKERKILLER',
-            'official': true,
-            'version': '0.1.0',
-            'available': true,
-            'installed': installed ? '0.1.0' : '',
-          },
+          if (listed)
+            {
+              'id': 'uni',
+              'title': '示例大学',
+              'summary': '录播课和作业',
+              'icon': svgIcon,
+              'author': 'WALKERKILLER',
+              'official': true,
+              'version': '0.1.0',
+              'available': true,
+              'installed': installed ? '0.1.0' : '',
+            },
         ],
       },
       '/api/sources' => {
@@ -184,5 +188,30 @@ void main() {
 
     expect(api.calls, contains('DELETE /api/sources/uni'));
     expect(find.widgetWithText(FilledButton, '安装'), findsOneWidget);
+  });
+
+  for (final (notice, listed, text) in [
+    ('unverified', true, '无法验证插件目录，以下是上次验证过的目录。'),
+    ('stale', true, '无法更新插件目录，以下是上次验证过的目录。'),
+    ('unverified', false, '无法验证插件目录，已忽略这次下载的目录。'),
+  ]) {
+    testWidgets('the market notes a $notice index (listed: $listed)', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        MarketApi()
+          ..notice = notice
+          ..listed = listed,
+      );
+      expect(find.text(text), findsOneWidget);
+      expect(find.text('示例大学'), listed ? findsOneWidget : findsNothing);
+      expect(find.textContaining('还没有来源插件'), findsNothing);
+    });
+  }
+
+  testWidgets('a verified index shows no note', (tester) async {
+    await pump(tester, MarketApi());
+    expect(find.byIcon(Icons.gpp_maybe_outlined), findsNothing);
   });
 }

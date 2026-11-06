@@ -11,7 +11,7 @@ import 'sources_page.dart';
 /// 插件 → 发现 → 来源插件: the source plugins in the plugin index, each with
 /// install, sign-in and uninstall. The daemon owns these installs, so the
 /// section works without the assistant.
-/// Contract: docs/specs/draft-plugin-marketplace.md
+/// Contract: docs/specs/0025-plugin-marketplace.md
 class SourceMarketSection extends StatefulWidget {
   const SourceMarketSection({super.key, this.query = '', this.category = ''});
 
@@ -24,6 +24,9 @@ class SourceMarketSection extends StatefulWidget {
 
 class _SourceMarketSectionState extends State<SourceMarketSection> {
   List<Map<String, dynamic>>? _listings;
+  // Why the daemon shows the last verified index, or none: '', 'unverified'
+  // or 'stale'.
+  String _notice = '';
   Object? _error;
   bool _loading = false;
 
@@ -40,6 +43,7 @@ class _SourceMarketSectionState extends State<SourceMarketSection> {
           for (final p in jsonList(r['plugins']))
             (p as Map).cast<String, dynamic>(),
         ];
+        _notice = '${r['notice'] ?? ''}';
         _error = null;
       });
     } catch (e) {
@@ -82,6 +86,13 @@ class _SourceMarketSectionState extends State<SourceMarketSection> {
     if (all != null && all.isNotEmpty && shown.isEmpty) {
       return const SizedBox.shrink();
     }
+    final notice = switch (_notice) {
+      _ when _error != null || all == null => null,
+      'unverified' when all.isEmpty => l10n.sourcesMarketUnverifiedEmpty,
+      'unverified' => l10n.sourcesMarketUnverified,
+      'stale' => l10n.sourcesMarketStale,
+      _ => null,
+    };
     final Widget body;
     if (_error != null) {
       body = _Note(
@@ -97,6 +108,8 @@ class _SourceMarketSectionState extends State<SourceMarketSection> {
         padding: EdgeInsets.all(Space.lg),
         child: Center(child: CircularProgressIndicator()),
       );
+    } else if (all.isEmpty && notice != null) {
+      body = const SizedBox.shrink();
     } else if (all.isEmpty) {
       body = _Note(
         icon: Icons.inventory_2_outlined,
@@ -145,6 +158,14 @@ class _SourceMarketSectionState extends State<SourceMarketSection> {
             ],
           ),
         ),
+        if (notice != null) ...[
+          _Note(
+            icon: Icons.gpp_maybe_outlined,
+            text: notice,
+            action: TextButton(onPressed: _load, child: Text(l10n.commonRetry)),
+          ),
+          const SizedBox(height: Space.md),
+        ],
         body,
       ],
     );

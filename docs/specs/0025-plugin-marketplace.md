@@ -91,7 +91,9 @@ The links are listed under Sources.
 - `icon` is optional: the manifest's Material Symbols name, or its image as a base64 `data:image/png`, `image/webp` or `image/svg+xml` URL of at most 256 KiB, so the signed index covers it and the market shows it before anything is downloaded. Any other value is ignored.
 - `platform` is `any` or one of the source executable keys. An install picks the newest version whose `engine` matches and whose artifacts cover this device.
 - Artifact URLs point at `github.com` releases or `raw.githubusercontent.com`. Any other host is refused unless it comes from a user-added catalog.
-- The app pins the index public keys. An index whose signature fails is ignored, and the last verified copy (kept up to 30 days) is shown with 「无法验证插件目录」.
+- The official index and its signature are read from the `index` branch of coursive-plugins, which its publish workflow writes after every merge: `https://raw.githubusercontent.com/WALKERKILLER/coursive-plugins/index/index.json` and `index.json.sig`. The minisign `Ed` algorithm (Ed25519 over the file) is used, and the trusted comment is checked with the global signature.
+- The app pins the index public keys. An index whose signature fails is ignored, and the last verified copy (kept up to 30 days) is shown with 「无法验证插件目录」. When the index cannot be fetched, that copy is shown with 「无法更新插件目录」. A verified index older than the copy (by `generatedAt`) does not replace it.
+- `COURSIVE_PLUGIN_INDEX`, a development override, names a local unsigned `index.json` whose artifact URLs may be relative to it. A remote index's relative URLs are refused.
 - User-added catalogs (HTTPS URL or `owner/repo`) use the same format without a signature. Their plugins are marked third-party and installable only with 允许第三方插件 on.
 
 ### Mirrors
@@ -151,12 +153,12 @@ Updates show the new version and any added permissions, and wait for the user. U
 
 ## Evidence
 
-- Implemented so far: an index read from `COURSIVE_PLUGIN_INDEX`, version, engine and platform selection, size and SHA-256 checks, refused unpack escapes and links, and install and uninstall of source plugins; tested in [market_test.go](../../daemon/internal/sources/market_test.go) and [icon_test.go](../../daemon/internal/sources/icon_test.go), with the app side in [source_market_test.dart](../../app/test/source_market_test.dart).
-- Pending: the index signature, mirrors and the speed test, the daemon-owned store for agent plugins, and the 下载线路 page.
+- Implemented so far: the official index fetched and verified against the pinned key, with the last verified copy cached for 30 days and the 「无法验证插件目录」 and 「无法更新插件目录」 notes (tested in [index_test.go](../../daemon/internal/sources/index_test.go), including a signature written by coursive-plugins' `scripts/minisign.mjs`); a local index from `COURSIVE_PLUGIN_INDEX`; version, engine and platform selection, size and SHA-256 checks, refused unpack escapes and links, and install and uninstall of source plugins; tested in [market_test.go](../../daemon/internal/sources/market_test.go) and [icon_test.go](../../daemon/internal/sources/icon_test.go), with the app side in [source_market_test.dart](../../app/test/source_market_test.dart).
+- Pending: mirrors and the speed test, the daemon-owned store for agent plugins, and the 下载线路 page.
 
 ## Resolved questions
 
-1. The index and mirror-list signing key is a GitHub Actions secret in coursive-plugins, created by the maintainer; only the release workflow reads it.
+1. The index and mirror-list signing key is a GitHub Actions secret in coursive-plugins, created by the maintainer; only the publish workflow reads it.
 2. The app refreshes the built-in mirror list from the signed list at run time and falls back to the list it shipped with.
 
 ## Sources

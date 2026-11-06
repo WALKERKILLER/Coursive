@@ -12105,6 +12105,24 @@ abstract class AppLocalizations {
   /// **'不支持本机'**
   String get sourcesMarketUnsupported;
 
+  /// No description provided for @sourcesMarketUnverified.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法验证插件目录，以下是上次验证过的目录。'**
+  String get sourcesMarketUnverified;
+
+  /// No description provided for @sourcesMarketUnverifiedEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法验证插件目录，已忽略这次下载的目录。'**
+  String get sourcesMarketUnverifiedEmpty;
+
+  /// No description provided for @sourcesMarketStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法更新插件目录，以下是上次验证过的目录。'**
+  String get sourcesMarketStale;
+
   /// No description provided for @sourcesMarketUpdate.
   ///
   /// In zh, this message translates to:

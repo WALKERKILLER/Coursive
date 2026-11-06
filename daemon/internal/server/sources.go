@@ -39,12 +39,12 @@ func (s *Server) sourceRoutes(h func(string, func(http.ResponseWriter, *http.Req
 		in, err := s.Sources.Install(from)
 		return s.started(r.Context(), in, err)
 	})
-	h("GET /api/sources/market", func(http.ResponseWriter, *http.Request) (any, error) {
-		ls, err := s.Market.List()
+	h("GET /api/sources/market", func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		ls, notice, err := s.Market.List(r.Context())
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"plugins": ls, "configured": s.Market.Index != "", "platform": sources.Platform()}, nil
+		return map[string]any{"plugins": ls, "notice": notice, "configured": s.Market.Configured(), "platform": sources.Platform()}, nil
 	})
 	h("POST /api/sources/market/{plugin}/stage", func(_ http.ResponseWriter, r *http.Request) (any, error) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)

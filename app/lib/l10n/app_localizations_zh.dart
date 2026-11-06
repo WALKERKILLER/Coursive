@@ -6971,6 +6971,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sourcesMarketUnsupported => '不支持本机';
 
   @override
+  String get sourcesMarketUnverified => '无法验证插件目录，以下是上次验证过的目录。';
+
+  @override
+  String get sourcesMarketUnverifiedEmpty => '无法验证插件目录，已忽略这次下载的目录。';
+
+  @override
+  String get sourcesMarketStale => '无法更新插件目录，以下是上次验证过的目录。';
+
+  @override
   String sourcesMarketUpdate(Object version) {
     return '更新到 $version';
   }

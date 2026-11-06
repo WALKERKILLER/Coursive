@@ -70,7 +70,7 @@ func TestMarketInstallsVerifiedArtifactAndUninstalls(t *testing.T) {
 	art := tgz(t, fakePackage(t, "1.0.0"))
 	m := market(t, r, root, art, art, "^2.0.0")
 
-	ls, err := m.List()
+	ls, _, err := m.List(t.Context())
 	if err != nil || len(ls) != 1 || ls[0].Version != "1.0.0" || !ls[0].Available || ls[0].Installed != "" {
 		t.Fatalf("list = %+v, %v", ls, err)
 	}
@@ -90,7 +90,7 @@ func TestMarketInstallsVerifiedArtifactAndUninstalls(t *testing.T) {
 	if entries, _ := os.ReadDir(m.Staging); len(entries) != 0 {
 		t.Fatalf("staging left behind: %d entries", len(entries))
 	}
-	if ls, _ := m.List(); ls[0].Installed != "1.0.0" || ls[0].Update {
+	if ls, _, _ := m.List(t.Context()); ls[0].Installed != "1.0.0" || ls[0].Update {
 		t.Fatalf("after install = %+v", ls[0])
 	}
 	if _, err := m.Install(st.Token); err == nil {
@@ -99,7 +99,7 @@ func TestMarketInstallsVerifiedArtifactAndUninstalls(t *testing.T) {
 	if err := r.Uninstall("fake"); err != nil {
 		t.Fatal(err)
 	}
-	if ls, _ := m.List(); ls[0].Installed != "" {
+	if ls, _, _ := m.List(t.Context()); ls[0].Installed != "" {
 		t.Fatalf("after uninstall = %+v", ls[0])
 	}
 }
