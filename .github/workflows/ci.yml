@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "import/**"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "import/**"]
   workflow_dispatch:
 
 permissions:
@@ -14,9 +14,54 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Each migrated module (app, daemon, agent) adds its job here, gated on the
-# paths it owns, together with its entry in the main ruleset's required checks.
+env:
+  FLUTTER_VERSION: "3.47.7"
+
 jobs:
+  # Decides which parts a change touches. Jobs for untouched parts are skipped
+  # through `if:`; GitHub reports a skipped job as successful, so the required
+  # checks still pass. Markdown-only changes skip every build job.
+  # The Linux build of the app runs for its native side (app/linux, the
+  # pubspec) and on every push.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      daemon: ${{ steps.filter.outputs.daemon }}
+      agent: ${{ steps.filter.outputs.agent }}
+      app: ${{ steps.filter.outputs.app }}
+      app_linux: ${{ steps.filter.outputs.app_linux }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # Run everything when there is no usable base: manual runs, new
+          # branches, force-pushes.
+          all=false
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ] \
+            || ! files="$(git diff --name-only "$BASE"...HEAD)"; then
+            all=true
+          fi
+          code="$(printf '%s\n' "${files:-}" | grep -Ev '\.md$' || true)"
+          for part in daemon agent app; do
+            if [ "$all" = true ] || printf '%s\n' "$code" | grep -Eq "^(${part}/|\.github/workflows/ci\.yml$)"; then
+              echo "$part=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "$part=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+          if [ "$all" = true ] || [ "$GITHUB_EVENT_NAME" = push ] \
+            || printf '%s\n' "$code" | grep -Eq '^(app/linux/|app/pubspec\.(yaml|lock)$|\.github/workflows/ci\.yml$)'; then
+            echo "app_linux=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app_linux=false" >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
   governance:
     name: governance (gates)
     runs-on: ubuntu-latest
@@ -28,3 +73,110 @@ jobs:
       - run: node scripts/run-gates.mjs
       - name: Brand exports match the master
         run: node scripts/check-brand-assets.mjs
+
+  daemon:
+    name: daemon (Go)
+    needs: changes
+    # Fail safe: if change detection itself fails, run the job anyway.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.daemon == 'true') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - run: go vet ./...
+      - run: go test -count=1 -race ./...
+      - run: go build -trimpath -ldflags='-s -w' -o bin/coursive-daemon ./cmd/coursive-daemon
+      # Release packages also ship the daemon for Windows and macOS.
+      - name: Cross-compile for Windows and macOS
+        run: |
+          for t in windows/amd64 darwin/arm64 darwin/amd64; do
+            CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -o /dev/null ./cmd/coursive-daemon
+          done
+
+  agent:
+    name: agent (Node)
+    needs: changes
+    # Fail safe: if change detection itself fails, run the job anyway.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.agent == 'true') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+
+  app:
+    name: app (Flutter)
+    needs: changes
+    # Fail safe: if change detection itself fails, run the job anyway.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.app == 'true') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  app-linux:
+    name: app (Linux build)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.app_linux == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux build dependencies
+        timeout-minutes: 15
+        run: |
+          # The runner's Azure mirror sometimes trickles at a few dozen kB/s
+          # for many minutes (actions/runner-images#14823): give each try a
+          # deadline and fall back to the main archive.
+          pkgs="clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev"
+          deps() { sudo timeout 180 apt-get update -q && sudo timeout 300 apt-get install -y -q --no-install-recommends $pkgs; }
+          deps || {
+            for f in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*; do
+              [ -f "$f" ] && sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' "$f"
+            done
+            deps
+          }
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build linux --release
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coursive-linux-bundle
+          path: app/build/linux/x64/release/bundle
+          retention-days: 7

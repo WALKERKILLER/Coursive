@@ -1,0 +1,61 @@
+# deb, rpm and Arch packages from the staged bundle; see package.sh.
+# Contents with expand: true take their paths from package.sh's environment.
+name: coursive
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${VERSION}
+section: education
+priority: optional
+maintainer: Coursive contributors <noreply@github.com>
+description: |
+  Coursive: watch recorded lectures, transcribe them and take notes
+  with a resident assistant. Bundles the coursive-daemon daemon and the assistant host.
+vendor: Coursive
+homepage: https://github.com/WALKERKILLER/Coursive
+license: MIT
+
+contents:
+  - src: ${STAGE}/
+    dst: /opt/coursive/
+    type: tree
+    expand: true
+  - src: /opt/coursive/coursive
+    dst: /usr/bin/coursive
+    type: symlink
+  - src: ${PACKAGING}/io.github.walkerkiller.coursive.desktop
+    dst: /usr/share/applications/io.github.walkerkiller.coursive.desktop
+    expand: true
+  - src: ${ICONS}/
+    dst: /usr/share/icons/hicolor/
+    type: tree
+    expand: true
+
+overrides:
+  deb:
+    depends:
+      - libgtk-3-0t64 | libgtk-3-0
+      - libmpv2
+    recommends:
+      - ffmpeg
+      - nodejs
+  rpm:
+    depends:
+      - gtk3
+      - mpv-libs
+    recommends:
+      - ffmpeg
+      - nodejs
+  archlinux:
+    depends:
+      - gtk3
+      - mpv
+    recommends: # written as optdepend
+      - "ffmpeg: transcription"
+      - "nodejs: the assistant"
+
+deb:
+  fields:
+    Bugs: https://github.com/WALKERKILLER/Coursive/issues
+rpm:
+  group: Applications/Education
+  compression: zstd

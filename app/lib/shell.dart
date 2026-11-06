@@ -1,0 +1,809 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:provider/provider.dart';
+
+import 'core/app_state.dart';
+import 'core/models.dart';
+import 'core/plugins.dart';
+import 'features/assistant/assistant_controller.dart';
+import 'features/assistant/assistant_panel.dart';
+import 'features/assistant/bot_avatar.dart';
+import 'features/assistant/bot_ops.dart';
+import 'features/assistant/task_inbox.dart';
+import 'features/assistant/tasks_page.dart';
+import 'features/courses/courses_page.dart';
+import 'features/downloads/downloads_page.dart';
+import 'features/home/home_page.dart';
+import 'features/library/library_page.dart';
+import 'features/notifications/notification_center.dart';
+import 'features/plugins/plugins_page.dart';
+import 'features/profile/profile_dialog.dart';
+import 'features/schedule/schedule_page.dart';
+import 'features/schedule/schedule_store.dart';
+import 'features/settings/settings_page.dart';
+import 'features/sources/sources_page.dart';
+import 'theme/glass.dart';
+import 'theme/prefs.dart';
+import 'theme/tokens.dart';
+import 'widgets/glass_dock.dart';
+import 'widgets/glass_rail.dart';
+import 'widgets/organic_shapes.dart';
+import 'widgets/states.dart';
+import 'widgets/user_avatar.dart';
+import 'l10n/l10n.dart';
+
+class _Dest {
+  const _Dest(this.label, this.icon, this.selected, this.screen);
+  final String label;
+  final IconData icon;
+  final IconData selected;
+  final String screen;
+}
+
+/// Tab indices, shared with pages that switch tabs.
+abstract final class Tabs {
+  static const home = 0,
+      courses = 1,
+      schedule = 2,
+      downloads = 3,
+      library = 4,
+      tasks = 5,
+      plugins = 6,
+      settings = 7;
+}
+
+final _dests = [
+  _Dest(
+    l10n.screenHome,
+    Icons.home_outlined,
+    Icons.home_rounded,
+    l10n.screenHome,
+  ),
+  _Dest(
+    l10n.commonCourses,
+    Icons.school_outlined,
+    Icons.school_rounded,
+    l10n.navCourses,
+  ),
+  _Dest(
+    l10n.commonSchedule,
+    Icons.event_note_outlined,
+    Icons.event_note_rounded,
+    l10n.commonSchedule,
+  ),
+  _Dest(
+    l10n.commonDownload,
+    Icons.download_outlined,
+    Icons.download_rounded,
+    l10n.screenDownloads,
+  ),
+  _Dest(
+    l10n.screenLibrary,
+    Icons.auto_stories_outlined,
+    Icons.auto_stories_rounded,
+    l10n.screenLibrary,
+  ),
+  _Dest(
+    l10n.navTasks,
+    Icons.schedule_outlined,
+    Icons.schedule_rounded,
+    l10n.commonScheduledTasks,
+  ),
+  _Dest(
+    l10n.commonPlugins,
+    Icons.extension_outlined,
+    Icons.extension_rounded,
+    l10n.commonPlugins,
+  ),
+  _Dest(
+    l10n.commonSettings,
+    Icons.tune_outlined,
+    Icons.tune_rounded,
+    l10n.commonSettings,
+  ),
+];
+
+/// The bottom bar leaves out 定时 and 插件, reached from 设置 and the
+/// assistant there.
+const _barTabs = [
+  Tabs.home,
+  Tabs.courses,
+  Tabs.schedule,
+  Tabs.downloads,
+  Tabs.library,
+  Tabs.settings,
+];
+
+/// Lets any page switch tabs (e.g. "see all downloads").
+class ShellScope extends InheritedWidget {
+  const ShellScope({super.key, required this.goTo, required super.child});
+  final void Function(int index) goTo;
+  static ShellScope of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ShellScope>()!;
+  @override
+  bool updateShouldNotify(ShellScope old) => false;
+}
+
+/// Navigation for widgets outside the tab navigators (the assistant panel).
+abstract final class ShellNav {
+  static void Function(int)? _goTo;
+  static int Function()? _current;
+  static List<GlobalKey<NavigatorState>> _keys = const [];
+
+  static void goTo(int tab) => _goTo?.call(tab);
+
+  /// The selected tab.
+  static int get current => _current?.call() ?? Tabs.home;
+
+  /// Pops the page on top of [tab]'s navigator.
+  static void pop(int tab) {
+    if (tab < _keys.length) _keys[tab].currentState?.maybePop();
+  }
+
+  /// Switches to [tab] and opens [page] on top of it.
+  static void push(int tab, Widget page) {
+    _goTo?.call(tab);
+    if (tab >= _keys.length) return;
+    void go() =>
+        _keys[tab].currentState?.push(MaterialPageRoute(builder: (_) => page));
+    if (_keys[tab].currentState != null) {
+      go();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => go());
+    }
+  }
+}
+
+class AppShell extends StatefulWidget {
+  const AppShell({super.key});
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  int _index = 0;
+  final _navKeys = List.generate(
+    _dests.length,
+    (_) => GlobalKey<NavigatorState>(),
+  );
+  final _built = <int>{0};
+
+  /// Pages pushed above each tab's root; the phone dock shows on roots only
+  /// (M3: navigation bar on primary pages, toolbars on the ones below).
+  late final _depths = List.generate(_dests.length, (_) => ValueNotifier(0));
+  late final _observers = [for (final d in _depths) _DepthObserver(d)];
+
+  /// The phone dock shrinks to the current tab while a page scrolls down.
+  bool _dockSmall = false;
+  StreamSubscription<String>? _notices;
+  StreamSubscription? _botOps;
+  StreamSubscription? _daemonNotes;
+  late final UiPrefs _prefs = context.read<UiPrefs>();
+  late final AssistantController _assistant = context
+      .read<AssistantController>();
+
+  @override
+  void initState() {
+    super.initState();
+    ShellNav._goTo = _select;
+    ShellNav._current = () => _index;
+    ShellNav._keys = _navKeys;
+    // Plugin notices (coursive.notify) show wherever the user is.
+    _notices = context.read<PluginStore>().notices.listen((m) {
+      if (mounted) showSnack(context, m);
+    });
+    // The bot's app operations (docs/specs/0007-resident-bot-and-course-agents.md)
+    // and the preferences it may read.
+    _botOps = _assistant.appOps.listen((op) {
+      if (mounted) BotOps.run(context, op);
+    });
+    // New replays, lectures and Canvas items (docs/specs/0010-live-refresh.md).
+    _daemonNotes = context
+        .read<AppState>()
+        .events
+        .where((e) => e['type'] == 'notification')
+        .listen((e) {
+          if (!mounted) return;
+          final n = (e['data'] as Map).cast<String, dynamic>();
+          showSnack(
+            context,
+            '${n['title']}',
+            action: l10n.commonView,
+            onAction: () => openNotification(context, n),
+          );
+        });
+    _prefs.addListener(_pushPrefs);
+    _pushPrefs();
+  }
+
+  void _pushPrefs() => _assistant.pushAppState(_prefs.toJson());
+
+  @override
+  void dispose() {
+    _notices?.cancel();
+    _botOps?.cancel();
+    _daemonNotes?.cancel();
+    _prefs.removeListener(_pushPrefs);
+    for (final d in _depths) {
+      d.dispose();
+    }
+    super.dispose();
+  }
+
+  Widget _root(int i) => switch (i) {
+    Tabs.home => const HomePage(),
+    Tabs.courses => const CoursesPage(),
+    Tabs.schedule => const SchedulePage(),
+    Tabs.downloads => const DownloadsPage(),
+    Tabs.library => const LibraryPage(),
+    Tabs.tasks => const TasksPage(),
+    Tabs.plugins => const PluginsPage(),
+    _ => const SettingsPage(),
+  };
+
+  void _select(int i) {
+    if (i == _index) {
+      _navKeys[i].currentState?.popUntil((r) => r.isFirst);
+      return;
+    }
+    setState(() {
+      _index = i;
+      _built.add(i);
+      _dockSmall = false;
+    });
+    context.read<TaskInbox>().viewing = i == Tabs.tasks;
+    context.read<ScreenContext>().set({'screen': _dests[i].screen});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sc = context.sizeClass;
+    final app = context.watch<AppState>();
+    final prefs = context.watch<UiPrefs>();
+    final cs = Theme.of(context).colorScheme;
+    final downloads = app.activeJobCount;
+    final dueSoon = context.watch<ScheduleStore>().dueSoon;
+    final unread = context.watch<TaskInbox>().unread;
+    final attention = context.watch<PluginStore>().attention;
+
+    // Tabs keep their navigators alive; switching uses an MD3 fade-through.
+    final stack = Stack(
+      fit: StackFit.expand,
+      children: [
+        for (var i = 0; i < _dests.length; i++)
+          if (_built.contains(i))
+            _TabSlot(
+              key: ValueKey(i),
+              active: i == _index,
+              child: HeroControllerScope(
+                controller: MaterialApp.createMaterialHeroController(),
+                child: Navigator(
+                  key: _navKeys[i],
+                  observers: [_observers[i]],
+                  onGenerateRoute: (_) =>
+                      MaterialPageRoute(builder: (_) => _root(i)),
+                ),
+              ),
+            ),
+      ],
+    );
+
+    Widget icon(int i, bool sel) {
+      final d = _dests[i];
+      final ic = Icon(sel ? d.selected : d.icon);
+      if (i == Tabs.downloads && downloads > 0)
+        return Badge.count(count: downloads, child: ic);
+      if (i == Tabs.schedule && dueSoon > 0)
+        return Badge.count(count: dueSoon, child: ic);
+      if (i == Tabs.tasks && unread > 0)
+        return Badge.count(count: unread, child: ic);
+      if (i == Tabs.plugins && attention > 0)
+        return Badge.count(count: attention, child: ic);
+      if (i == Tabs.settings &&
+          sc == SizeClass.compact &&
+          unread + attention > 0)
+        return Badge(child: ic);
+      return ic;
+    }
+
+    final body = Column(
+      children: [
+        for (final s in app.sources.where((s) => s.expired))
+          _ExpiredBanner(source: s),
+        Expanded(child: stack),
+      ],
+    );
+
+    final content = NavigatorPopHandler(
+      onPopWithResult: (_) => _navKeys[_index].currentState?.maybePop(),
+      child: ShellScope(goTo: _select, child: body),
+    );
+
+    if (sc == SizeClass.compact) {
+      final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+      final selected = _barTabs.contains(_index)
+          ? _barTabs.indexOf(_index)
+          : _barTabs.indexOf(Tabs.settings);
+      return Scaffold(
+        body: ValueListenableBuilder<int>(
+          valueListenable: _depths[_index],
+          builder: (context, depth, _) {
+            final mq = MediaQuery.of(context);
+            final show = depth == 0 && !keyboard;
+            final inset = mq.padding.bottom;
+            // Pages scroll beneath the glass; their padding clears its top.
+            final clear = show ? inset + Space.sm + GlassNavDock.clearance : inset;
+            return Stack(
+              children: [
+                MediaQuery(
+                  data: mq.copyWith(
+                    padding: mq.padding.copyWith(bottom: clear),
+                  ),
+                  child: SafeArea(
+                    bottom: false,
+                    child: NotificationListener<UserScrollNotification>(
+                      onNotification: _scrolled,
+                      child: content,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: Space.lg,
+                  right: Space.lg,
+                  bottom: inset + Space.sm,
+                  child: AnimatedSlide(
+                    offset: show ? Offset.zero : const Offset(0, 1.6),
+                    duration: MediaQuery.disableAnimationsOf(context)
+                        ? Duration.zero
+                        : Motion.medium2,
+                    curve: show
+                        ? Motion.emphasizedDecelerate
+                        : Motion.emphasizedAccelerate,
+                    child: IgnorePointer(
+                      ignoring: !show,
+                      child: GlassNavDock(
+                        key: const ValueKey('shell-dock'),
+                        selected: selected,
+                        minimized: _dockSmall,
+                        onExpand: () => setState(() => _dockSmall = false),
+                        onSelected: (b) => _select(_barTabs[b]),
+                        items: [
+                          for (final i in _barTabs)
+                            GlassNavItem(
+                              icon: icon(i, false),
+                              selectedIcon: icon(i, true),
+                              label: _dests[i].label,
+                            ),
+                        ],
+                        accessory: const _AssistantDockButton(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
+    final docked =
+        sc.index >= SizeClass.expanded.index && prefs.assistantDocked;
+    return Scaffold(
+      body: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Space.md,
+              Space.sm,
+              Space.xs,
+              Space.lg,
+            ),
+            child: GlassNavRail(
+              key: const ValueKey('shell-rail'),
+              selected: _index,
+              onSelected: _select,
+              brand: const _BrandMark(),
+              leading: docked ? null : const _AssistantFab(compact: false),
+              trailing: Column(
+                children: [
+                  const NotificationBell(),
+                  const SizedBox(height: Space.sm),
+                  Tooltip(
+                    message: l10n.shellProfileTooltip(userDisplayName(context)),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => showProfileDialog(context),
+                      child: const UserAvatar(size: 40),
+                    ),
+                  ),
+                ],
+              ),
+              items: [
+                for (var i = 0; i < _dests.length; i++)
+                  GlassNavItem(
+                    icon: icon(i, false),
+                    selectedIcon: icon(i, true),
+                    label: _dests[i].label,
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: docked ? 0 : Space.lg,
+                top: Space.sm,
+                bottom: Space.lg,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(Corners.xl),
+                child: ColoredBox(
+                  color: cs.surfaceContainerLowest,
+                  child: content,
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: Motion.medium4,
+            curve: Motion.emphasized,
+            child: docked
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Space.sm,
+                      Space.sm,
+                      Space.lg,
+                      Space.lg,
+                    ),
+                    child: SizedBox(
+                      width: sc.index >= SizeClass.large.index ? 440 : 380,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(Corners.xl),
+                        child: ColoredBox(
+                          color: cs.surfaceContainerLow,
+                          child: const AssistantPanel(docked: true),
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox(height: double.infinity),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shrinks the dock while the page scrolls toward its end and brings it
+  /// back on the way up (iOS 26 tab bars, M3 bottom bars on scroll).
+  bool _scrolled(UserScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    final small = switch (n.direction) {
+      ScrollDirection.reverse => n.metrics.pixels > Space.xxl,
+      ScrollDirection.forward => false,
+      ScrollDirection.idle => n.metrics.pixels > Space.xxl && _dockSmall,
+    };
+    if (small != _dockSmall) setState(() => _dockSmall = small);
+    return false;
+  }
+}
+
+/// Counts the pages pushed above a tab's root.
+class _DepthObserver extends NavigatorObserver {
+  _DepthObserver(this.depth);
+  final ValueNotifier<int> depth;
+  final _pages = <Route<dynamic>>{};
+
+  // Deferred: routes change while the navigator builds.
+  void _sync() => Future.microtask(() => depth.value = _pages.length);
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previous) {
+    if (route is PageRoute && previous != null) _pages.add(route);
+    _sync();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previous) {
+    _pages.remove(route);
+    _sync();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previous) {
+    _pages.remove(route);
+    _sync();
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (_pages.remove(oldRoute) && newRoute is PageRoute) _pages.add(newRoute);
+    _sync();
+  }
+}
+
+/// The assistant beside the phone dock, in the same glass.
+class _AssistantDockButton extends StatelessWidget {
+  const _AssistantDockButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final a = context.watch<AssistantController>();
+    return Semantics(
+      button: true,
+      label: l10n.botMoodLabel(a.botName, kBotMoodLabels[a.mood]!),
+      child: Tooltip(
+        message: a.botName,
+        child: GlassSurface(
+          radius: Corners.full,
+          child: InkWell(
+            key: const ValueKey('shell-assistant'),
+            customBorder: const CircleBorder(),
+            onTap: () {
+              openAssistantPanel(context);
+              if (a.view != 'bot') a.showBot();
+            },
+            child: Center(
+              child: BotAvatar(
+                size: 40,
+                shape: a.botShape,
+                color: a.botColor,
+                mood: a.mood,
+                followPointer: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fade-through host for one tab: the incoming tab fades and settles in
+/// while the outgoing one leaves immediately (MD3 fade-through, simplified).
+class _TabSlot extends StatefulWidget {
+  const _TabSlot({super.key, required this.active, required this.child});
+  final bool active;
+  final Widget child;
+  @override
+  State<_TabSlot> createState() => _TabSlotState();
+}
+
+class _TabSlotState extends State<_TabSlot>
+    with SingleTickerProviderStateMixin {
+  late final _c = AnimationController(
+    vsync: this,
+    duration: Motion.medium2,
+    value: widget.active ? 1 : 0,
+  );
+  late final _fade = CurvedAnimation(
+    parent: _c,
+    curve: const Interval(0.3, 1, curve: Motion.emphasizedDecelerate),
+  );
+  late final _scale = Tween(
+    begin: 0.97,
+    end: 1.0,
+  ).animate(CurvedAnimation(parent: _c, curve: Motion.emphasizedDecelerate));
+
+  @override
+  void didUpdateWidget(_TabSlot old) {
+    super.didUpdateWidget(old);
+    if (widget.active == old.active) return;
+    if (widget.active) {
+      MediaQuery.disableAnimationsOf(context)
+          ? _c.value = 1
+          : _c.forward(from: 0);
+    } else {
+      _c.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Offstage(
+    offstage: !widget.active,
+    child: TickerMode(
+      enabled: widget.active,
+      child: FadeTransition(
+        opacity: _fade,
+        child: ScaleTransition(scale: _scale, child: widget.child),
+      ),
+    ),
+  );
+}
+
+/// App mark on the rail: a soft twelve-lobed cookie holding a play glyph.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark();
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Coursive',
+      child: CustomPaint(
+        size: const Size.square(36),
+        painter: _BrandPainter(cs.primaryContainer, cs.primary),
+        child: SizedBox.square(
+          dimension: 36,
+          child: Icon(
+            Icons.play_arrow_rounded,
+            size: 20,
+            color: cs.onPrimaryContainer,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrandPainter extends CustomPainter {
+  _BrandPainter(this.fill, this.ring);
+  final Color fill, ring;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = Offset.zero & size;
+    canvas.drawPath(
+      shapePath(shapeRadii(OrganicShape.cookie12), r),
+      Paint()..color = fill,
+    );
+    canvas.drawCircle(r.topRight.translate(-4, 4), 3.5, Paint()..color = ring);
+  }
+
+  @override
+  bool shouldRepaint(_BrandPainter o) => o.fill != fill || o.ring != ring;
+}
+
+/// Wraps a page's own floating action button. On phones the assistant's
+/// button sits in the same corner; while a wrapped button shows on the
+/// current tab and route, the assistant's moves up above it.
+class PageFab extends StatefulWidget {
+  const PageFab({super.key, this.visible = true, required this.child});
+
+  /// False while the page keeps the button but hides it (e.g. scaled to zero).
+  final bool visible;
+  final Widget child;
+
+  /// Height of the wrapped buttons (standard and extended FABs).
+  static const double height = 56;
+
+  /// Whether some page's button shows now.
+  static final shown = ValueNotifier(false);
+  static final _showing = <_PageFabState>{};
+
+  @override
+  State<PageFab> createState() => _PageFabState();
+}
+
+class _PageFabState extends State<PageFab> {
+  bool _on = false;
+
+  void _report(bool on) {
+    if (on == _on) return;
+    _on = on;
+    on ? PageFab._showing.add(this) : PageFab._showing.remove(this);
+    // Reported after the frame: the shell's button may not rebuild during this build.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => PageFab.shown.value = PageFab._showing.isNotEmpty,
+    );
+  }
+
+  @override
+  void dispose() {
+    _report(false);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Hidden tabs run with tickers off; covered routes are not current.
+    _report(
+      widget.visible &&
+          TickerMode.valuesOf(context).enabled &&
+          (ModalRoute.isCurrentOf(context) ?? true),
+    );
+    return widget.child;
+  }
+}
+
+/// Holds the shell's own floating button clear of a page's: the page's keeps
+/// the corner and this one rises above it on the same right edge.
+class PageFabClearance extends StatelessWidget {
+  const PageFabClearance({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+    valueListenable: PageFab.shown,
+    builder: (context, up, child) => AnimatedPadding(
+      padding: EdgeInsets.only(bottom: up ? PageFab.height + Space.md : 0),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : Motion.medium2,
+      curve: Motion.emphasized,
+      child: child,
+    ),
+    child: child,
+  );
+}
+
+/// The bot on the rail and the compact layout's floating button: tap to
+/// open it.
+class _AssistantFab extends StatelessWidget {
+  const _AssistantFab({required this.compact});
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final a = context.watch<AssistantController>();
+    final cs = Theme.of(context).colorScheme;
+    return Semantics(
+      label: l10n.botMoodLabel(a.botName, kBotMoodLabels[a.mood]!),
+      child: FloatingActionButton(
+        heroTag: 'assistant',
+        tooltip: a.botName,
+        backgroundColor: cs.surfaceContainerHigh,
+        elevation: compact ? null : 0,
+        onPressed: () {
+          openAssistantPanel(context);
+          if (a.view != 'bot') a.showBot();
+        },
+        child: BotAvatar(
+          size: 44,
+          shape: a.botShape,
+          color: a.botColor,
+          mood: a.mood,
+          followPointer: false,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown while a source's sign-in has expired; opens its sign-in sheet.
+class _ExpiredBanner extends StatelessWidget {
+  const _ExpiredBanner({required this.source});
+  final Source source;
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.errorContainer,
+      child: InkWell(
+        onTap: () => signInSource(context, source),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Space.lg,
+            vertical: Space.md,
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.lock_clock_outlined, color: cs.onErrorContainer),
+              const SizedBox(width: Space.md),
+              Expanded(
+                child: Text(
+                  l10n.sourceExpiredBanner(source.title),
+                  style: TextStyle(color: cs.onErrorContainer),
+                ),
+              ),
+              Text(
+                l10n.loginSignInAgain,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: cs.onErrorContainer,
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: cs.onErrorContainer),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
