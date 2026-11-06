@@ -94,6 +94,7 @@ The links are listed under Sources.
 
 - A mirror is `{id, name, template, kinds}`:
   - `template` must be HTTPS and contain `{url}`, the full GitHub URL, or `{path}`, the URL without its scheme and host;
+  - a mirror for raw files only may instead use `{owner}`, `{repo}`, `{ref}` and `{file}` from a `raw.githubusercontent.com` URL (jsDelivr's shape);
   - `kinds` is a subset of `raw`, `release` and `archive`.
 - The built-in list is the mirror list published in coursive-plugins, signed like the index, plus `direct` (no rewrite). Users can add, disable and reorder mirrors in 插件 → 下载线路.
 - Speed test (「测速」, on first use, and when the cached result is older than 24 h):
