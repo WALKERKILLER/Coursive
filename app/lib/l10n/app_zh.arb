@@ -4333,6 +4333,9 @@
     }
   },
   "sourcesMarketUnsupported": "不支持本机",
+  "sourcesMarketUnverified": "无法验证插件目录，以下是上次验证过的目录。",
+  "sourcesMarketUnverifiedEmpty": "无法验证插件目录，已忽略这次下载的目录。",
+  "sourcesMarketStale": "无法更新插件目录，以下是上次验证过的目录。",
   "sourcesMarketUpdate": "更新到 {version}",
   "@sourcesMarketUpdate": {
     "placeholders": {

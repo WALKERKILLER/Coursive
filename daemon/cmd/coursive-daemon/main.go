@@ -190,9 +190,10 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 		slog.Warn("source plugins", "err", err)
 	}
 	defer reg.Stop()
-	// COURSIVE_PLUGIN_INDEX names a local index.json until the signed
-	// official index is fetched (docs/specs/draft-plugin-marketplace.md).
-	market := &sources.Market{Index: os.Getenv("COURSIVE_PLUGIN_INDEX"), Staging: filepath.Join(dataDir, "plugins", ".staging"),
+	// The market reads the signed official index; COURSIVE_PLUGIN_INDEX names
+	// a local, unsigned index.json instead (docs/specs/0025-plugin-marketplace.md).
+	market := &sources.Market{Index: os.Getenv("COURSIVE_PLUGIN_INDEX"), IndexURL: sources.OfficialIndex, Keys: sources.OfficialKeys,
+		Cache: filepath.Join(dataDir, "plugins", ".index"), Staging: filepath.Join(dataDir, "plugins", ".staging"),
 		Registry: reg, HTTP: &http.Client{Transport: transport, Timeout: 5 * time.Minute}}
 	os.RemoveAll(market.Staging)
 	mgr := jobs.New(st, lib, nil, eng, asr.NewPool(filepath.Join(dataDir, "asr-usage.json")), bus)

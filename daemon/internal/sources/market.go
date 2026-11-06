@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,19 +28,41 @@ import (
 // Source plugins listed in a plugin index, installed by downloading the
 // artifact for this device, checking its size and SHA-256, and unpacking it
 // into staging before the user consents.
-// Contract: docs/specs/draft-plugin-marketplace.md
+// Contract: docs/specs/0025-plugin-marketplace.md
 
 // PluginAPI is the plugin API version manifests' engine ranges match.
 const PluginAPI = "2.0.0"
 
+// OfficialIndex is the index the coursive-plugins publish workflow signs;
+// OfficialKeys are the minisign public keys its signature must match.
+const OfficialIndex = "https://raw.githubusercontent.com/WALKERKILLER/coursive-plugins/index/index.json"
+
+var OfficialKeys = []string{"RWRrcl0UlUhfrlzG7oQkg+2nc0F8QlnGH3Eh0he2B315bAFEVZG4Jz5C"}
+
 const (
 	maxArtifact = 256 << 20
 	stagedTTL   = 15 * time.Minute
+
+	maxIndex     = 8 << 20
+	indexFresh   = 10 * time.Minute    // a fetched index is reused this long
+	indexRetry   = time.Minute         // a failed fetch is retried after this
+	indexKeep    = 30 * 24 * time.Hour // a verified copy is shown this long
+	indexTimeout = 20 * time.Second
+)
+
+// Notices explain why the market shows the last verified copy of the index,
+// or nothing.
+const (
+	// NoticeUnverified: the fetched index's signature did not verify.
+	NoticeUnverified = "unverified"
+	// NoticeStale: the index could not be fetched.
+	NoticeStale = "stale"
 )
 
 // Index is the plugin index (index.json, schema version 1).
 type Index struct {
 	SchemaVersion int          `json:"schemaVersion"`
+	GeneratedAt   string       `json:"generatedAt"`
 	Plugins       []IndexEntry `json:"plugins"`
 }
 
@@ -100,32 +123,191 @@ type staged struct {
 	at            time.Time
 }
 
-// Market reads one plugin index. Index is the path of a local index.json,
-// whose artifact URLs are paths relative to it or GitHub addresses; an
-// empty Index lists nothing.
+// Market reads one plugin index. Index, a development override, is the
+// path of a local, unsigned index.json whose artifact URLs may be paths
+// relative to it. Otherwise IndexURL names a remote index whose detached
+// signature (IndexURL + ".sig") must verify against Keys, and Cache keeps
+// the last verified copy. With neither, the market lists nothing.
 type Market struct {
 	Index    string
+	IndexURL string
+	Keys     []string
+	Cache    string
 	Staging  string
 	Registry *Registry
 	HTTP     *http.Client
 
 	mu     sync.Mutex
 	staged map[string]staged
+
+	ixMu   sync.Mutex
+	ix     *Index
+	notice string
+	ixErr  error
+	ixAt   time.Time
 }
 
-func (m *Market) read() (*Index, error) {
-	if m.Index == "" {
-		return &Index{SchemaVersion: 1}, nil
+// Configured reports whether the market has an index to read.
+func (m *Market) Configured() bool { return m.Index != "" || m.IndexURL != "" }
+
+// read returns the index and, for a remote index, a notice when it is the
+// last verified copy or empty.
+func (m *Market) read(ctx context.Context) (*Index, string, error) {
+	switch {
+	case m.Index != "":
+		b, err := os.ReadFile(m.Index)
+		if err != nil {
+			return nil, "", errorf(KindUnavailable, "无法读取插件目录：%v", err)
+		}
+		ix, err := parseIndex(b)
+		return ix, "", err
+	case m.IndexURL == "":
+		return &Index{SchemaVersion: 1}, "", nil
 	}
-	b, err := os.ReadFile(m.Index)
-	if err != nil {
-		return nil, errorf(KindUnavailable, "无法读取插件目录：%v", err)
+	m.ixMu.Lock()
+	defer m.ixMu.Unlock()
+	ttl := indexFresh
+	if m.notice != "" || m.ixErr != nil {
+		ttl = indexRetry
 	}
+	if m.ixAt.IsZero() || time.Since(m.ixAt) >= ttl {
+		// A caller that goes away does not cut the shared fetch short.
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), indexTimeout)
+		m.ix, m.notice, m.ixErr = m.refresh(ctx)
+		cancel()
+		m.ixAt = time.Now()
+	}
+	return m.ix, m.notice, m.ixErr
+}
+
+func parseIndex(b []byte) (*Index, error) {
 	var ix Index
 	if err := json.Unmarshal(b, &ix); err != nil || ix.SchemaVersion != 1 {
 		return nil, errorf(KindInvalid, "无法读取插件目录：格式不受支持")
 	}
 	return &ix, nil
+}
+
+// refresh fetches and verifies the remote index. A verified index replaces
+// the cached copy unless it is older; when the fetch or its signature
+// fails, the cached copy is shown with a notice.
+func (m *Market) refresh(ctx context.Context) (*Index, string, error) {
+	cached := m.cached()
+	body, err := m.get(ctx, m.IndexURL)
+	var sig []byte
+	if err == nil {
+		sig, err = m.get(ctx, m.IndexURL+".sig")
+	}
+	if err != nil {
+		slog.Warn("plugin index", "err", err)
+		if cached != nil {
+			return cached, NoticeStale, nil
+		}
+		return nil, "", errorf(KindUnavailable, "无法读取插件目录：%v", err)
+	}
+	ix, err := m.verify(body, sig)
+	if err != nil {
+		slog.Warn("plugin index", "err", err)
+		if cached == nil {
+			cached = &Index{SchemaVersion: 1}
+		}
+		return cached, NoticeUnverified, nil
+	}
+	if cached != nil && older(ix.GeneratedAt, cached.GeneratedAt) {
+		// A CDN may still serve the copy before the last publish.
+		return cached, "", nil
+	}
+	if err := m.store(body, sig); err != nil {
+		slog.Warn("plugin index cache", "err", err)
+	}
+	return ix, "", nil
+}
+
+func (m *Market) verify(body, sig []byte) (*Index, error) {
+	if err := verifyMinisign(body, sig, m.Keys); err != nil {
+		return nil, err
+	}
+	return parseIndex(body)
+}
+
+func older(a, b string) bool {
+	ta, errA := time.Parse(time.RFC3339, a)
+	tb, errB := time.Parse(time.RFC3339, b)
+	return errA == nil && errB == nil && ta.Before(tb)
+}
+
+// cached returns the cached index if it still verifies and was verified
+// within indexKeep.
+func (m *Market) cached() *Index {
+	if m.Cache == "" {
+		return nil
+	}
+	p := filepath.Join(m.Cache, "index.json")
+	fi, err := os.Stat(p)
+	if err != nil || time.Since(fi.ModTime()) > indexKeep {
+		return nil
+	}
+	body, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	sig, err := os.ReadFile(p + ".sig")
+	if err != nil {
+		return nil
+	}
+	ix, err := m.verify(body, sig)
+	if err != nil {
+		return nil
+	}
+	return ix
+}
+
+// store keeps a verified index; its modification time is when it was
+// last verified.
+func (m *Market) store(body, sig []byte) error {
+	if m.Cache == "" {
+		return nil
+	}
+	if err := os.MkdirAll(m.Cache, 0o700); err != nil {
+		return err
+	}
+	for name, b := range map[string][]byte{"index.json.sig": sig, "index.json": body} {
+		tmp := filepath.Join(m.Cache, name+".tmp")
+		if err := os.WriteFile(tmp, b, 0o600); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, filepath.Join(m.Cache, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Market) get(ctx context.Context, u string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := m.client().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxIndex+1))
+	if err == nil && len(b) > maxIndex {
+		err = errors.New("插件目录超过 8 MiB")
+	}
+	return b, err
+}
+
+func (m *Market) client() *http.Client {
+	if m.HTTP != nil {
+		return m.HTTP
+	}
+	return http.DefaultClient
 }
 
 // pick returns the newest version whose engine matches and that has an
@@ -155,11 +337,12 @@ func hasKind(e IndexEntry, k string) bool {
 	return false
 }
 
-// List returns the index's source plugins with their install state.
-func (m *Market) List() ([]Listing, error) {
-	ix, err := m.read()
+// List returns the index's source plugins with their install state, and
+// the notice read returned.
+func (m *Market) List(ctx context.Context) ([]Listing, string, error) {
+	ix, notice, err := m.read(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	installed := map[string]string{}
 	for _, p := range m.Registry.Plugins() {
@@ -180,12 +363,12 @@ func (m *Market) List() ([]Listing, error) {
 		l.Update = l.Installed != "" && l.Available && compareVersions(l.Version, l.Installed) > 0
 		out = append(out, l)
 	}
-	return out, nil
+	return out, notice, nil
 }
 
 // Stage downloads and verifies id's artifact and unpacks it for consent.
 func (m *Market) Stage(ctx context.Context, id string) (Staged, error) {
-	ix, err := m.read()
+	ix, _, err := m.read(ctx)
 	if err != nil {
 		return Staged{}, err
 	}
@@ -281,7 +464,7 @@ func (m *Market) fetch(ctx context.Context, a Artifact) ([]byte, error) {
 	switch {
 	case err != nil:
 		return nil, errorf(KindInvalid, "插件包地址无效")
-	case u.Scheme == "":
+	case u.Scheme == "" && m.Index != "":
 		p := filepath.FromSlash(path.Clean("/" + u.Path))[1:] // stays below the index
 		f, err := os.Open(filepath.Join(filepath.Dir(m.Index), p))
 		if err != nil {
@@ -293,11 +476,7 @@ func (m *Market) fetch(ctx context.Context, a Artifact) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		hc := m.HTTP
-		if hc == nil {
-			hc = http.DefaultClient
-		}
-		resp, err := hc.Do(req)
+		resp, err := m.client().Do(req)
 		if err != nil {
 			return nil, errorf(KindUnavailable, "无法下载插件包：%v", err)
 		}
