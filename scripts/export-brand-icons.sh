@@ -41,12 +41,12 @@ png "$tmp/ink.png" "$tmp/mask.png" -alpha off -compose CopyOpacity -composite "$
 # Shapes: a continuous-corner square (22.5% radius) and a circle.
 rounded() { # rounded <in> <size> <out>
   local r=$(( $2 * 225 / 1000 ))
-  png "$1" -filter Lanczos -resize "$2x$2" \
+  png "$1" -filter Lanczos -resize "$2x$2" -alpha set \
     \( -size "$2x$2" xc:none -fill white -draw "roundrectangle 0,0 $(( $2 - 1 )),$(( $2 - 1 )) $r,$r" \) \
     -compose DstIn -composite "$3"
 }
 circle() { # circle <in> <size> <out>
-  png "$1" -filter Lanczos -resize "$2x$2" \
+  png "$1" -filter Lanczos -resize "$2x$2" -alpha set \
     \( -size "$2x$2" xc:none -fill white -draw "circle $(( $2 / 2 )),$(( $2 / 2 )) $(( $2 / 2 )),0" \) \
     -compose DstIn -composite "$3"
 }
@@ -163,16 +163,24 @@ for s in 192 512; do
 done
 
 # Social preview (GitHub repository card, also the README banner), 1280×640.
+# The logo and its soft blue shadow share one padded layer so they stay aligned.
 rounded "$tmp/full.png" 336 "$tmp/card-logo.png"
+png "$tmp/card-logo.png" -background none -gravity center -extent 432x432 \
+  \( +clone -fill "#1A3F73" -colorize 100 -channel A -evaluate multiply 0.28 +channel -blur 0x14 -roll +0+12 \) \
+  +swap -compose Over -composite "$tmp/card-layer.png"
 png "$tmp/clean.png" -filter Lanczos -resize 1280x1280^ -gravity center -extent 1280x640 \
-  \( "$tmp/card-logo.png" -background "#0B1E3F" -shadow 24x14+0+10 \) -gravity west -geometry +112+8 -composite \
-  "$tmp/card-logo.png" -gravity west -geometry +128+0 -composite \
+  "$tmp/card-layer.png" -gravity northwest -geometry +80+104 -compose Over -composite \
   -gravity northwest -fill "#0E2A4D" -font Inter-Display-Bold -pointsize 112 -annotate +540+168 'Coursive' \
   -fill "#2E5A8A" -font Inter-Display-Medium -pointsize 30 -annotate +546+336 'Course + Cursive' \
   -fill "#33506F" -font Inter-Display-Regular -pointsize 30 \
   -annotate +546+390 'Weave lectures, transcripts, slides, handwriting' \
   -annotate +546+436 'and AI into one knowledge canvas.' \
   "$brand/social/coursive-social-1280x640.png"
+
+# Shapes with transparent corners must really be transparent there.
+for f in logo/coursive-rounded-1024.png platforms/web/icon-512.png platforms/linux/hicolor/256x256/apps/coursive.png platforms/android/res/mipmap-xxxhdpi/ic_launcher_round.png; do
+  [ "$(magick "$brand/$f" -format '%[fx:p{1,1}.a]' info:)" = 0 ] || { echo "export-brand-icons: $f has an opaque corner" >&2; exit 1; }
+done
 
 # exports.json records the master's hash and every export, so CI can tell a stale or hand-edited set.
 {
@@ -185,4 +193,4 @@ png "$tmp/clean.png" -filter Lanczos -resize 1280x1280^ -gravity center -extent 
   printf '  ]\n}\n'
 } > "$brand/exports.json"
 
-echo "export-brand-icons: wrote $(find "$brand" -type f ! -path '*/source/*' ! -name exports.json | wc -l) files under assets/brand/"
+echo "export-brand-icons: wrote $(cd "$brand" && find logo platforms social -type f | wc -l) files under assets/brand/"
