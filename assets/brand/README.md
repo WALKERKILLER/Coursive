@@ -26,4 +26,4 @@ Paths under `platforms/` mirror where each file goes in the Flutter project:
 | `linux/hicolor/` | `share/icons/hicolor/` in packages | 16 to 512 px, named `coursive.png` |
 | `web/` | `app/web/` | `favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`, manifest icons and maskable icons (art fills the 80% safe zone) |
 
-The social preview is uploaded by hand in the repository settings under **Social preview**.
+The READMEs reference the banner as `coursive-social-1280x640.png?v=<first 8 hex of its SHA-256>` so browsers and GitHub's image cache fetch a changed banner; update the suffix whenever the banner changes (CI checks it). The social preview is uploaded by hand in the repository settings under **Social preview**.
