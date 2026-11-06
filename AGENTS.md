@@ -1,5 +1,7 @@
 # AGENTS.md
 
+**This branch is frozen.** Development continues in [Coursive](https://github.com/WALKERKILLER/Coursive); do not start new work, pull requests or releases here unless the maintainer asks for a fix to this branch.
+
 Look Studio is a work-in-progress desktop client for SchoolA's lecture-recording platform (look.schoola.edu.cn): a Flutter UI in `app/`, a Go daemon in `lookd/`, and a Node.js assistant host in `agent/`. It lives on the `app` branch of Coursive; `main` holds the skill and shares no history with this branch.
 
 ## Repository governance
