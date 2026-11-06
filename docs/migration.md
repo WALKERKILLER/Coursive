@@ -12,8 +12,8 @@ Coursive's code comes from a predecessor project and moves here as it is refacto
 ## Steps
 
 1. **Foundation** (done): governance, documentation, CI, brand assets, the plugin repository, and the two Draft specs for [source-provider plugins](specs/draft-source-provider-plugins.md) and the [plugin marketplace](specs/draft-plugin-marketplace.md).
-2. **Approve the contracts** (current): the maintainer reviews both Draft specs, answers their open questions and marks them Approved.
-3. **Import history** into `import/app` with the procedure in [History](#history); the import passes the [de-identification checklist](#de-identification-checklist).
+2. **Approve the contracts** (done 2026-11-06): the maintainer approved both specs and resolved their questions; they take the next spec numbers when the history lands, after the imported specs.
+3. **Import history** (current) into `import/app` with the procedure in [History](#history); the import passes the [de-identification checklist](#de-identification-checklist).
 4. **Decouple on `import/app`**, one pull request each:
    - start on the local library: remove the splash and sign-in gates from the app root;
    - move platform sign-in, course listing and media resolution behind the source-provider protocol, and move the platform code into a source plugin outside this repository;

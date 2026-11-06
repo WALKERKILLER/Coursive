@@ -90,9 +90,16 @@ From the daemon to the provider:
 | `auth.signOut` | `{}` → `{}` |
 | `courses.list` | `{cursor?}` → `{courses: [{id, title, term?, teachers?}], cursor?}` |
 | `lectures.list` | `{course, cursor?}` → `{lectures: [{id, title, startsAt, durationSec?, streams: ["camera"\|"screen"\|"audio"], courseware?: bool}], cursor?}` |
-| `media.resolve` | `{lecture, stream}` → `{url, headers?, expiresAt?}` |
-| `courseware.list` | `{lecture}` → `{files: [{id, name, size?}]}` (capability `courseware`) |
-| `courseware.resolve` | `{lecture, file}` → `{url, headers?, expiresAt?}` (capability `courseware`) |
+| `media.resolve` | `{course, lecture}` → `{streams: [{id, kind: "camera"\|"screen"\|"audio", label, url, headers?, expiresAt?}], durationSec?, seekable?}` |
+| `media.refresh` | `{course, lecture, stream}` → `{url, headers?, expiresAt?}`: a fresh address for one stream whose address expired |
+| `slides.list` | `{course, lecture}` → `{slides: [{atSec, url, headers?}]}` (capability `slides`) |
+| `courseware.list` | `{course, lecture}` → `{files: [{id, name, size?}]}` (capability `courseware`) |
+| `courseware.resolve` | `{course, lecture, file}` → `{url, headers?, expiresAt?}` (capability `courseware`) |
+| `lms.courses` | `{}` → `{courses: [{id, title, code?, term?}]}` (capability `lms`) |
+| `lms.assignments` | `{course?}` → `{assignments: [{id, course, title, dueAt?, url?, points?, submitted?}]}` (capability `lms`) |
+| `lms.announcements` | `{course?, since?}` → `{announcements: [{id, course, title, html, postedAt, url?}]}` (capability `lms`) |
+| `lms.files` | `{course}` → `{files: [{id, name, folder?, size?, updatedAt?}]}` (capability `lms`) |
+| `lms.file` | `{file}` → `{url, headers?, expiresAt?}` (capability `lms`) |
 
 From the provider to the daemon:
 
@@ -103,7 +110,8 @@ From the provider to the daemon:
 | `vault.delete` | `{key}` → `{}` |
 | `notify` | `{state}`: sign-in state changed (for example a session expired) |
 
-- `capabilities` lists optional method groups. The daemon never calls a group that was not announced.
+- `capabilities` lists optional method groups (`slides`, `courseware`, `lms`). The daemon never calls a group that was not announced.
+- A returned `url` may point at `127.0.0.1` on a port the provider listens on, for platforms whose content is reachable only through the provider's own session or network gateway. The daemon fetches it like any other address; the provider binds loopback only and rejects requests without the per-run path token it generated.
 - Errors use JSON-RPC error objects with a user-facing `message` that starts with 无法, plus `data.kind`: `auth_required`, `rate_limited` (with `retryAfterSec`), `unavailable` or `invalid`.
 
 ### Vault and downloads
@@ -112,10 +120,17 @@ From the provider to the daemon:
 - Sign-in field values marked `remember: false` are passed to the provider and never stored.
 - The daemon performs every media and courseware download itself. Resolved URLs and headers live only in memory for the job, are never logged or returned by an API, and are resolved again when they expire.
 - Library entries from a source carry `source: "<plugin>/<source>"` and the provider's ids. They stay readable after the plugin is removed and are marked as no longer refreshable.
+- The daemon re-resolves a stream through `media.refresh` when a download or playback request finds its address expired, and relays streams that need headers through its own loopback route, so the app never sees a header.
+
+### Learning-platform data
+
+- The daemon keeps one generic learning-platform layer for every source that announces `lms`: a sync every 30 minutes and on demand, a cache, assignment due dates in the schedule, notifications for new announcements and assignments, per-item done and hidden state, links between platform courses and library courses (suggested by title, confirmed by the user), and file downloads into the linked course.
+- Platform-specific sign-in and API calls, including any token the platform issues, live in the provider.
 
 ### UI
 
 - With a source installed, 课程 → 来源 lists each source with its state and 「登录」 or 「退出登录」.
+- With a source that announces `lms`, the 作业与通知 page lists its courses, assignments, announcements and files.
 - The sign-in sheet is rendered from `signIn.fields` and challenges. A challenge image is shown at its natural size.
 - A source's courses appear in the library beside local courses, grouped by source. Lecture rows offer the download actions the source's capabilities allow.
 - A source in state `expired` shows a banner on its courses with 「重新登录」. Downloads that need it wait with that reason instead of failing.
@@ -131,7 +146,7 @@ From the provider to the daemon:
    - a root without splash or sign-in gates;
    - the shell's loading states;
    - the 来源 page and sign-in sheet driven by `signIn.fields`.
-3. Remove the built-in sign-in code and its routes from the core. Port it to a provider in a plugin repository chosen by the maintainer.
+3. Remove the built-in sign-in, platform and learning-platform clients and their routes from the core; port them to one provider plugin per institution in coursive-plugins.
 4. coursive-plugins: protocol schema, a provider template, and a fake provider used by daemon tests.
 
 ## Verification
@@ -154,7 +169,7 @@ From the provider to the daemon:
 
 Pending until implementation.
 
-## Open questions
+## Resolved questions
 
-1. Where the ported providers live: a private repository, or a public one listed only through a user-added catalog. The official index lists no institution-specific source either way.
-2. Whether the predecessor's library folder is imported once on first start, or the user imports it through the existing local-course import.
+1. Institution-specific providers live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins), one plugin per institution, each covering its lecture platform and its learning platform; this repository never names them.
+2. An existing library folder needs no importer: its layout is unchanged, so the user selects it as the library folder in settings.

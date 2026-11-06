@@ -149,10 +149,10 @@ Updates show the new version and any added permissions, and wait for the user. U
 
 Pending until implementation.
 
-## Open questions
+## Resolved questions
 
-1. Signing key custody: a GitHub Actions secret in coursive-plugins (the maintainer creates it) or offline signing by the maintainer before each index publish.
-2. Whether the built-in mirror list may be refreshed from the signed list at run time, or changes only with app releases.
+1. The index and mirror-list signing key is a GitHub Actions secret in coursive-plugins, created by the maintainer; only the release workflow reads it.
+2. The app refreshes the built-in mirror list from the signed list at run time and falls back to the list it shipped with.
 
 ## Sources
 
