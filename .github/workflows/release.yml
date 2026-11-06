@@ -71,9 +71,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build dependencies
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev file
+          # The runner's Azure mirror sometimes trickles for many minutes
+          # (actions/runner-images#14823): give each try a deadline and fall
+          # back to the main archive, as ci.yml does.
+          pkgs="clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev file"
+          deps() { sudo timeout 180 apt-get update -q && sudo timeout 300 apt-get install -y -q $pkgs; }
+          deps || {
+            for f in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*; do
+              [ -f "$f" ] && sudo sed -i 's#azure\.archive\.ubuntu\.com#archive.ubuntu.com#g' "$f"
+            done
+            deps
+          }
       - uses: actions/setup-go@v7
         with:
           go-version-file: daemon/go.mod
