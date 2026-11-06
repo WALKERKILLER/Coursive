@@ -70,7 +70,7 @@ Coursive 把课程保存在你自己的设备上，变成可搜索、相互链�
 
 ### 从 Releases 安装
 
-应用代码迁入后，预发布安装包会发布在 [Releases](https://github.com/WALKERKILLER/Coursive/releases) 页面：
+从首个预发布版本起，安装包会发布在 [Releases](https://github.com/WALKERKILLER/Coursive/releases) 页面：
 
 - **Linux**：AppImage、deb、rpm、Arch 软件包和 tar 包，支持 x64 和 arm64。
 - **Windows**：安装程序和免安装 zip 包。
@@ -82,10 +82,14 @@ Coursive 把课程保存在你自己的设备上，变成可搜索、相互链�
 ```bash
 git clone https://github.com/WALKERKILLER/Coursive.git
 cd Coursive
-node scripts/run-gates.mjs   # 治理检查；各模块迁入后会加入各自的构建命令
+# Linux：需要 Go 1.27、Node.js 22+、Flutter 3.47.7、ffmpeg 以及 GTK 3 和 libmpv 开发包
+(cd daemon && go build -trimpath -o bin/coursive-daemon ./cmd/coursive-daemon)
+(cd agent && npm ci)
+(cd app && flutter build linux --release)
+./app/build/linux/x64/release/bundle/coursive
 ```
 
-工具链和各模块的命令见 [docs/development.md](docs/development.md)。
+工具链、其他平台和测试命令见 [docs/development.md](docs/development.md) 与 [AGENTS.md](AGENTS.md#commands)。
 
 ## 目录结构
 
@@ -94,7 +98,10 @@ Coursive/
 ├── .agents/skills/     # 供贡献者和智能体使用的审查、决策与治理流程
 ├── .github/            # CI、Issue 模板和 Pull Request 模板
 ├── .repo-seed/         # 治理清单
+├── agent/              # 助手宿主（Node.js）
+├── app/                # 桌面端与 Android 的 Flutter 应用
 ├── assets/brand/       # Logo 原图和全部导出图标
+├── daemon/             # 本机守护进程（Go）：课程库、任务、凭据库、插件与来源
 ├── docs/
 │   ├── decisions/      # 架构与流程决策（MADR）
 │   ├── postmortems/    # 事故复盘，每篇都连到防护措施
@@ -102,15 +109,15 @@ Coursive/
 └── scripts/            # 治理检查和品牌素材导出脚本
 ```
 
-应用（Flutter）、本机守护进程（Go）和助手宿主（Node.js）会在迁移过程中陆续加入。三者的关系见 [docs/architecture.md](docs/architecture.md)。
+应用、守护进程和助手宿主三者的关系见 [docs/architecture.md](docs/architecture.md)。
 
 ## 插件与登录
 
 Coursive 没有内置账号，也没有内置登录，启动后直接进入本地课程库。
 
-所有连接外部课程平台的功能都由**来源插件**提供。安装后，它的登录页、课程列表和下载功能才会出现；卸载后这些功能随之消失，课程库中的内容保持不变。来源插件需要的凭据由守护进程加密保存，不会离开你的设备（[契约](docs/specs/draft-source-provider-plugins.md)）。
+所有连接外部课程平台的功能都由**来源插件**提供。安装后，它的登录页、课程列表和下载功能才会出现；卸载后这些功能随之消失，课程库中的内容保持不变。来源插件需要的凭据由守护进程加密保存，不会离开你的设备（[契约](docs/specs/0024-source-provider-plugins.md)）。
 
-插件索引、镜像列表和官方插件维护在 [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins) 仓库。Coursive 会测量可用 GitHub 镜像的速度，通过最快的镜像下载，并对照签名索引校验每个文件。镜像只能让下载变快，无法改变下载的内容（[契约](docs/specs/draft-plugin-marketplace.md)）。
+插件索引、镜像列表和官方插件维护在 [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins) 仓库。Coursive 会测量可用 GitHub 镜像的速度，通过最快的镜像下载，并对照签名索引校验每个文件。镜像只能让下载变快，无法改变下载的内容（[契约](docs/specs/0025-plugin-marketplace.md)）。
 
 ## 参与贡献
 

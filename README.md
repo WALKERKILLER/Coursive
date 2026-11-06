@@ -70,7 +70,7 @@ Coursive keeps your courses on your own device, turns them into searchable, link
 
 ### From Releases
 
-Pre-release packages will appear on [Releases](https://github.com/WALKERKILLER/Coursive/releases) once the app code has moved here:
+Pre-release packages will appear on [Releases](https://github.com/WALKERKILLER/Coursive/releases) from the first pre-release on:
 
 - **Linux**: AppImage, deb, rpm, Arch package and tarball, for x64 and arm64.
 - **Windows**: installer and portable zip.
@@ -82,10 +82,14 @@ Pre-release packages will appear on [Releases](https://github.com/WALKERKILLER/C
 ```bash
 git clone https://github.com/WALKERKILLER/Coursive.git
 cd Coursive
-node scripts/run-gates.mjs   # governance gates; module builds join as they migrate
+# Linux: needs Go 1.27, Node.js 22+, Flutter 3.47.7, ffmpeg and the GTK 3 and libmpv headers
+(cd daemon && go build -trimpath -o bin/coursive-daemon ./cmd/coursive-daemon)
+(cd agent && npm ci)
+(cd app && flutter build linux --release)
+./app/build/linux/x64/release/bundle/coursive
 ```
 
-Toolchains and per-module commands are in [docs/development.md](docs/development.md).
+Toolchains, the other platforms and the test commands are in [docs/development.md](docs/development.md) and [AGENTS.md](AGENTS.md#commands).
 
 ## Directory Structure
 
@@ -94,7 +98,10 @@ Coursive/
 ├── .agents/skills/     # review, decision and governance workflows for contributors and agents
 ├── .github/            # CI, issue and pull request templates
 ├── .repo-seed/         # governance manifest
+├── agent/              # assistant host (Node.js)
+├── app/                # Flutter app for desktop and Android
 ├── assets/brand/       # logo master and every exported icon
+├── daemon/             # local daemon (Go): library, jobs, vault, plugins and sources
 ├── docs/
 │   ├── decisions/      # architecture and process decisions (MADR)
 │   ├── postmortems/    # incident write-ups linked to guardrails
@@ -102,15 +109,15 @@ Coursive/
 └── scripts/            # governance gates and the brand export script
 ```
 
-The app (Flutter), the local daemon (Go) and the assistant host (Node.js) join this tree as they migrate; [docs/architecture.md](docs/architecture.md) shows how they fit together.
+[docs/architecture.md](docs/architecture.md) shows how the app, the daemon and the assistant host fit together.
 
 ## Plugins & Sign-in
 
 Coursive has no built-in account and no built-in sign-in; it opens straight into your local library.
 
-Anything that talks to an external course platform is a **source plugin**: install one and its sign-in, course list and downloads appear; remove it and they disappear while your library stays. The daemon seals the credentials a source needs and they never leave your device ([contract](docs/specs/draft-source-provider-plugins.md)).
+Anything that talks to an external course platform is a **source plugin**: install one and its sign-in, course list and downloads appear; remove it and they disappear while your library stays. The daemon seals the credentials a source needs and they never leave your device ([contract](docs/specs/0024-source-provider-plugins.md)).
 
-The index, the mirror list and the official plugins live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins). Coursive speed-tests the available GitHub mirrors and downloads through the fastest one, checking every file against the signed index, so a mirror can make a download faster but never change it ([contract](docs/specs/draft-plugin-marketplace.md)).
+The index, the mirror list and the official plugins live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins). Coursive speed-tests the available GitHub mirrors and downloads through the fastest one, checking every file against the signed index, so a mirror can make a download faster but never change it ([contract](docs/specs/0025-plugin-marketplace.md)).
 
 ## Contributing
 

@@ -1,0 +1,2376 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:window_manager/window_manager.dart';
+
+import '../../core/api.dart';
+import '../../core/format.dart';
+import '../../core/models.dart';
+import '../../theme/glass.dart';
+import '../../theme/tokens.dart';
+import '../../widgets/coursive_markdown.dart';
+import '../../l10n/l10n.dart';
+import '../player/lecture_player.dart';
+import '../player/video_card_hold.dart';
+import '../practice/quiz.dart';
+import 'study_document.dart';
+import 'study_pdf_column.dart';
+import 'study_shape.dart';
+
+import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
+
+part 'study_agent_ui.dart';
+part 'study_agent_stage.dart';
+part 'study_shelf_ui.dart';
+part 'study_brush_ui.dart';
+part 'study_interaction.dart';
+part 'study_conversation_ui.dart';
+part 'study_pdf_ui.dart';
+part 'study_toolbar_ui.dart';
+part 'study_edge_dock.dart';
+part 'study_theme.dart';
+part 'study_pen_palette.dart';
+part 'study_shape_interaction.dart';
+part 'study_stylus.dart';
+
+enum StudyTool { select, hand, pen, highlighter, eraser, region }
+
+class StudyCanvas extends StatefulWidget {
+  const StudyCanvas({
+    super.key,
+    required this.api,
+    required this.ctl,
+    required this.video,
+    required this.panel,
+    required this.onClassic,
+    required this.onAsk,
+    required this.onBack,
+    this.fullscreen = false,
+  });
+  final Api api;
+  final LecturePlayer ctl;
+  final Widget video, panel;
+  final VoidCallback onClassic, onBack;
+  final ValueChanged<String> onAsk;
+  final bool fullscreen;
+  @override
+  State<StudyCanvas> createState() => StudyCanvasState();
+}
+
+class StudyCanvasState extends State<StudyCanvas>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
+  /// Theme-derived chrome colours for the whole workspace.
+  StudyChrome get chrome => StudyChrome.of(context);
+
+  /// Dark paper: ink and paper are toned for the dark scheme.
+  bool get _dark => Theme.of(context).brightness == Brightness.dark;
+  StudyDocument? document;
+  Object? _loadError, _saveError;
+  StudyTool _tool = StudyTool.select;
+  int _color = 0xff25344a;
+  double _penWidth = 3;
+  StudyBrush _brush = const StudyBrush(), _gestureBrush = const StudyBrush();
+  double _gestureWidth = 3, _eraserSize = 18;
+  int _gestureColor = 0xff25344a, _presetIndex = 0;
+  List<StudyPenPreset> _presets = StudyPenPreset.defaults();
+  String _eraserMode = 'partial', _paperStyle = 'ruled';
+  int _paperColor = 0xffffffff;
+  StudyDockPlacement _penPlacement = const StudyDockPlacement(
+    StudyDockEdge.bottom,
+  );
+  StudyDockPlacement _aiPlacement = const StudyDockPlacement(
+    StudyDockEdge.right,
+    .34,
+  );
+  final _aiDockKey = GlobalKey();
+  bool _dockSmall = false;
+  final _penItemKeys = <int, GlobalKey>{};
+  final _eraserKey = GlobalKey();
+  final _eraserLasso = <Offset>[], _lasso = <Offset>[];
+  final _camera = ValueNotifier(0), _cursor = ValueNotifier(0);
+
+  /// Carries the view to a new place instead of cutting to it; see [_flyTo].
+  late final _fly = AnimationController(vsync: this, duration: Motion.long2)
+    ..addListener(() => _flyStep?.call());
+  void Function()? _flyStep;
+
+  /// Where a finger rests on a card while the hold to move it runs.
+  final _holdCue = ValueNotifier<Offset?>(null);
+  final _selectionMenuKey = GlobalKey();
+  Rect? _stageRect, _selectionBounds;
+  Offset? _eraserCursor, _pressureOrigin, _pressureStart;
+  double _cursorRadius = 18, _pressureThreshold = .8;
+  bool _pressureEraser = true, _temporaryEraser = false;
+  bool _selectionReady = false,
+      _selectionDragging = false,
+      _selectionResize = false;
+  bool _lassoRectangle = false;
+  Timer? _pressureTimer;
+  Timer? _shapeTimer;
+  Timer? _cardHoldTimer;
+  Offset? _cardHoldOrigin;
+  bool _heldCardNeedsCheckpoint = false;
+  final _videoSurfacePointers = <int>{};
+  final _inputSurface = GlobalKey();
+  StreamSubscription? _stylusEvents;
+  Timer? _predictionExpiry;
+  bool _predictionEnabled = true, _penButtons = true;
+  List<InkPoint> _predicted = [];
+  int _acceptedPredictions = 0;
+  int? _lastRealStylusTime;
+  Offset _lastRealStylusPosition = Offset.zero;
+  Offset? _shapeHoldOrigin, _shapeHandle;
+  StudyShape? _shape;
+  List<InkPoint>? _shapePreview;
+  int _pressureKeep = 0;
+  List<StudyStroke> _copiedInk = [];
+  List<StudyCard> _copiedCards = [];
+  Rect? _copiedBounds;
+
+  final _topBarKey = GlobalKey();
+  final _moduleKey = GlobalKey(), _toolbarKey = GlobalKey();
+  final _conversationKeys = <String, GlobalKey<_ConversationBodyState>>{};
+  final _initialConversations = <String, Map>{};
+  String? _activeConversation;
+
+  /// Conversations mounted this session; a hidden one keeps its run going.
+  final _liveThreads = <String>{};
+
+  /// Last known turn count and question per conversation, for thread nodes.
+  final _threadSummary = <String, Map>{};
+  final _threadTick = ValueNotifier(0);
+  final _stageKeys = <GlobalKey>{};
+  final _cardHeaderActions = <String, GlobalKey>{};
+  final _composerFocus = FocusNode(debugLabel: 'study-composer');
+  final _idleInput = TextEditingController();
+
+  /// True while a stroke, pan or drag is under way; the stage steps back.
+  final _gesturing = ValueNotifier(false);
+  bool _stageOpen = false;
+  bool _quickAsk = false, _quickSending = false, _quickImages = false;
+  final _quickInput = TextEditingController();
+
+  /// The open 课次素材 tab, or null when the shelf is away.
+  _ShelfTab? _shelfTab, _shelfShown;
+  final _shelfKey = GlobalKey();
+
+  /// Where a dragged shelf item would land, in canvas pixels.
+  final _dropHint = ValueNotifier<Rect?>(null);
+  String _status = l10n.studyOpening;
+  bool _importing = false, _disposed = false;
+  Timer? _saveTimer;
+  Timer? _syncCheck;
+  StreamSubscription? _syncSubscription;
+  bool _remotePending = false, _refreshing = false;
+  Map? _remoteDocument;
+  Future<bool>? _saving;
+  int _savedEdit = 0;
+  final _scene = ValueNotifier(0), _live = ValueNotifier(0);
+  final _selection = <String>{};
+  final _detail = StudySelection();
+  final _capture = GlobalKey();
+  final _dockKey = GlobalKey(), _zoomKey = GlobalKey();
+  final _localVideoKeys = <String, GlobalKey<_LocalVideoState>>{};
+  final _localVideoTimes = <String, int>{};
+  Rect? _regionSelection, _sourceHighlight;
+  void _update(VoidCallback action) => setState(action);
+  final _pointers = <int, Offset>{};
+  final _touchPointers = <int>{}, _stylusPointers = <int>{};
+  Timer? _palmCooldown;
+  List<InkPoint> _points = [];
+  final List<StudyStroke> _prefix = [];
+  int _prefixEnd = 0;
+  String _anchor = '';
+  Offset? _start, _last;
+  Offset? _panCamera;
+  Rect? _marquee;
+  String? _dragCard;
+  bool _resize = false, _erasing = false;
+  double? _pinchDistance, _pinchZoom;
+  Offset? _pinchWorld;
+  int? _drawingPointer;
+  int _pointBudget = 20000;
+  Size _viewport = const Size(1000, 700);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+    _syncCheck = Timer.periodic(const Duration(seconds: 5), (_) {
+      final lifecycle = WidgetsBinding.instance.lifecycleState;
+      if (lifecycle == AppLifecycleState.paused ||
+          lifecycle == AppLifecycleState.hidden ||
+          lifecycle == AppLifecycleState.detached ||
+          !mounted ||
+          ModalRoute.of(context)?.isCurrent == false)
+        return;
+      unawaited(_refreshFromSync());
+    });
+    _syncSubscription = widget.api.sse('/api/events').listen((e) {
+      if (e['type'] == 'sync_done' &&
+          ((e['data'] as Map?)?['downloaded'] as num? ?? 0) > 0) {
+        unawaited(_refreshFromSync());
+      }
+    }, onError: (_) {});
+    unawaited(_titlebar(true));
+    unawaited(_startStylus());
+    _loadBrushSettings();
+    _loadLayout();
+  }
+
+  Future<void> _titlebar(bool canvas) async {
+    if (!Platform.isMacOS) return;
+    try {
+      await windowManager.setTitleBarStyle(
+        canvas ? TitleBarStyle.hidden : TitleBarStyle.normal,
+      );
+      if (canvas && !mounted)
+        await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    } on PlatformException catch (_) {
+      // Window chrome is optional; canvas navigation remains in the toolbar.
+    } on MissingPluginException catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshFromSync());
+    if (state != AppLifecycleState.resumed) {
+      _cancelShapeHold();
+      _clearPrediction();
+    } else {
+      unawaited(_configureStylus());
+    }
+  }
+
+  bool get _editingCanvas =>
+      _importing ||
+      (document != null && document!.edit != _savedEdit) ||
+      _saving != null ||
+      _drawingPointer != null ||
+      _erasing ||
+      _dragCard != null;
+
+  Future<void> _load({Map? synced}) async {
+    try {
+      final data = synced ?? await widget.api.studyCanvas(widget.ctl.lectureId);
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      final draft = prefs.getString('study-draft-${widget.ctl.lectureId}');
+      if (!mounted) return;
+      if (synced != null && _editingCanvas) return;
+      final d = StudyDocument.fromJson(data as Map);
+      if (draft != null) {
+        document?.dispose();
+        d.dispose();
+        _remoteDocument = data;
+        _remotePending = true;
+        document = StudyDocument.fromJson(jsonDecode(draft) as Map);
+        _adoptThreads(document!);
+        document!.edit = 1;
+        _savedEdit = 0;
+        document!.addListener(_changed);
+        if (mounted) setState(() => _status = '已恢复本机草稿，请选择保留版本');
+        return;
+      }
+      document?.dispose();
+      document = d;
+      _adoptThreads(d);
+      d.addListener(_changed);
+      _savedEdit = d.edit;
+      setState(() {
+        _loadError = null;
+        _status = l10n.studySaved;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _loadError = e);
+    }
+  }
+
+  Future<void> _refreshFromSync() async {
+    if (_refreshing || !mounted) return;
+    _refreshing = true;
+    try {
+      final remote = await widget.api.studyCanvas(widget.ctl.lectureId) as Map;
+      final d = document;
+      if (d == null || !mounted) return;
+      if (remote['base_hash'] == d.baseHash) return;
+      // Finish an edit already in progress. Its save rebases against the latest
+      // revision, so the last saved whole canvas wins (ADR 0022).
+      if (_editingCanvas) return;
+      await _load(synced: remote);
+    } catch (_) {
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  Future<void> _resolveRemote(bool keepLocal) async {
+    final remote = _remoteDocument;
+    if (remote == null) return;
+    if (keepLocal) {
+      document!.revision = (remote['revision'] as num).toInt();
+      document!.baseHash = remote['base_hash'] as String? ?? '';
+      _remotePending = false;
+      if (!await flush()) {
+        _remotePending = true;
+        return;
+      }
+    } else {
+      _remotePending = false;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('study-draft-${widget.ctl.lectureId}');
+      await _load();
+    }
+    if (!_remotePending) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('study-draft-${widget.ctl.lectureId}');
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _changed() {
+    if (_disposed) return;
+    if (_selectionReady) {
+      final strokes = document!.strokes.map((s) => s.id).toSet();
+      final cards = document!.cards.map((c) => c.id).toSet();
+      _detail.strokeIds.removeWhere((id) => !strokes.contains(id));
+      _selection.removeWhere((id) => !cards.contains(id));
+      _selectionBounds = _boundsOfSelection();
+      if (_selectionBounds == null && _detail.objectId == null)
+        _selectionReady = false;
+    }
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 1000), _saveWhenIdle);
+    _scene.value++;
+    setState(() => _status = l10n.studyPendingSave);
+  }
+
+  void _saveWhenIdle() {
+    if (_drawingPointer != null || _erasing || _dragCard != null) {
+      _saveTimer = Timer(const Duration(seconds: 1), _saveWhenIdle);
+    } else {
+      unawaited(flush());
+    }
+  }
+
+  Future<bool> flush() async {
+    _saveTimer?.cancel();
+    final current = _saving;
+    if (current != null) {
+      if (!await current) return false;
+    }
+    final d = document;
+    if (_remotePending) return false;
+    if (d == null || d.edit == _savedEdit) return true;
+    final future = _saveLoop(d);
+    _saving = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_saving, future)) _saving = null;
+    }
+  }
+
+  Future<bool> _saveLoop(StudyDocument d) async {
+    try {
+      var retries = 0;
+      while (d.edit != _savedEdit) {
+        final edit = d.edit;
+        if (mounted) setState(() => _status = l10n.studySaving);
+        Map out;
+        try {
+          out = await widget.api.saveStudyCanvas(
+            widget.ctl.lectureId,
+            d.json(),
+          ) as Map;
+        } on ApiError catch (e) {
+          if (e.status != 409 || retries++ >= 2) rethrow;
+          final remote =
+              await widget.api.studyCanvas(widget.ctl.lectureId) as Map;
+          // Retain the superseded saved document before replacing it.
+          await widget.api.post(
+            '/api/lectures/${widget.ctl.lectureId}/study-canvas/draft',
+            remote,
+          );
+          d.revision = (remote['revision'] as num).toInt();
+          d.baseHash = remote['base_hash'] as String? ?? '';
+          continue;
+        }
+        d.revision = (out['revision'] as num).toInt();
+        d.baseHash = out['base_hash'] as String? ?? '';
+        _savedEdit = edit;
+      }
+      if (mounted)
+        setState(() {
+          _saveError = null;
+          _status = l10n.studySaved;
+        });
+      return true;
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _saveError = e;
+          _status = l10n.studySaveFailed;
+        });
+      return false;
+    }
+  }
+
+  bool handleKey(KeyEvent e) {
+    if (e is! KeyDownEvent || document == null) return false;
+    // Typing in the composer or a card must not switch tools.
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus != null &&
+        (focus.widget is EditableText ||
+            focus.findAncestorWidgetOfExactType<EditableText>() != null))
+      return false;
+    final k = e.logicalKey;
+    if ((HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed) &&
+        k == LogicalKeyboardKey.keyZ) {
+      HardwareKeyboard.instance.isShiftPressed
+          ? document!.redo()
+          : document!.undo();
+      return true;
+    }
+    final tool = {
+      LogicalKeyboardKey.keyV: StudyTool.select,
+      LogicalKeyboardKey.keyH: StudyTool.hand,
+      LogicalKeyboardKey.keyD: StudyTool.pen,
+      LogicalKeyboardKey.keyE: StudyTool.eraser,
+    }[k];
+    if (tool != null) {
+      _chooseTool(tool);
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _cancelCardHold();
+    _palmCooldown?.cancel();
+    unawaited(_titlebar(false));
+    WidgetsBinding.instance.removeObserver(this);
+    _syncCheck?.cancel();
+    _disposed = true;
+    _saveTimer?.cancel();
+    _syncSubscription?.cancel();
+    _pressureTimer?.cancel();
+    _shapeTimer?.cancel();
+    _predictionExpiry?.cancel();
+    unawaited(_stylusEvents?.cancel());
+    _fly.dispose();
+    _holdCue.dispose();
+    _camera.dispose();
+    _cursor.dispose();
+    _threadTick.dispose();
+    _composerFocus.dispose();
+    _idleInput.dispose();
+    _quickInput.dispose();
+    _gesturing.dispose();
+    _dropHint.dispose();
+    document?.removeListener(_changed);
+    document?.dispose();
+    _scene.dispose();
+    _live.dispose();
+    super.dispose();
+  }
+
+  Offset _world(Offset p) => (p - document!.camera) / document!.zoom;
+  bool get _ink => _tool == StudyTool.pen || _tool == StudyTool.highlighter;
+  bool get _writing =>
+      _ink || _tool == StudyTool.eraser || _tool == StudyTool.region;
+  void _cameraChanged() {
+    _camera.value++;
+    final stage = _stageRect, view = _visibleWorld;
+    if (stage == null ||
+        !stage.contains(view.topLeft) ||
+        !stage.contains(view.bottomRight)) {
+      setState(() {});
+    }
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 700), () {
+      if (!mounted) return;
+      document!.edit++;
+      setState(() {}); // Re-cull only after the gesture settles.
+      unawaited(flush());
+    });
+  }
+
+  bool _overControls(Offset global) {
+    for (final key in [
+      _dockKey,
+      _aiDockKey,
+      _zoomKey,
+      _selectionMenuKey,
+      _moduleKey,
+      _toolbarKey,
+      _topBarKey,
+      _shelfKey,
+      ..._stageKeys,
+    ]) {
+      final box = key.currentContext?.findRenderObject() as RenderBox?;
+      if (box != null &&
+          box.hasSize &&
+          box.size.contains(box.globalToLocal(global)))
+        return true;
+    }
+    return false;
+  }
+
+  void _cancelCardHold() {
+    _cardHoldTimer?.cancel();
+    _cardHoldTimer = null;
+    _cardHoldOrigin = null;
+    _holdCue.value = null;
+  }
+
+  /// Moves the view to [camera] at [zoom] along one eased path. The point
+  /// at the centre of the window travels in a straight line while the zoom
+  /// changes geometrically, so the way there stays readable. Any touch,
+  /// wheel or zoom stops it where it is.
+  void _flyTo(Offset camera, double zoom) {
+    final d = document!;
+    _fly.stop();
+    if (MediaQuery.disableAnimationsOf(context) ||
+        ((d.camera - camera).distance < 1 && (d.zoom - zoom).abs() < .001)) {
+      d
+        ..zoom = zoom
+        ..camera = camera;
+      _cameraChanged();
+      return;
+    }
+    final centre = _viewport.center(Offset.zero);
+    final z0 = d.zoom, from = (centre - d.camera) / z0;
+    final to = (centre - camera) / zoom;
+    _flyStep = () {
+      if (document != d) return _fly.stop();
+      final t = Motion.emphasized.transform(_fly.value);
+      d.zoom = z0 * math.pow(zoom / z0, t);
+      d.camera = centre - Offset.lerp(from, to, t)! * d.zoom;
+      _cameraChanged();
+    };
+    _fly.forward(from: 0);
+  }
+
+  void _holdMaterial(PointerDownEvent e, StudyCard card) {
+    final d = document!, tool = _tool;
+    if (!d.canTransformCard(card)) return;
+    _cardHoldOrigin = e.localPosition;
+    _holdCue.value = e.localPosition;
+    _cardHoldTimer = Timer(canvasCardHoldDelay, () {
+      _cancelCardHold();
+      if (!mounted ||
+          document != d ||
+          _tool != tool ||
+          _pointers.length != 1 ||
+          !_pointers.containsKey(e.pointer) ||
+          !d.cards.contains(card) ||
+          !d.canTransformCard(card))
+        return;
+      _panCamera = null;
+      _detail.clear();
+      _regionSelection = null;
+      _selectionReady = false;
+      _selectionBounds = null;
+      _selection
+        ..clear()
+        ..add(card.id);
+      _dragCard = card.id;
+      _resize = false;
+      _last = _world(_pointers[e.pointer]!);
+      _heldCardNeedsCheckpoint = true;
+      unawaited(HapticFeedback.selectionClick());
+      setState(() {});
+      _scene.value++;
+    });
+  }
+
+  void _down(PointerDownEvent e) {
+    _trackStylusPresence(e);
+    if (e.kind == PointerDeviceKind.touch && _touchBlocked) return;
+    _cancelCardHold();
+    _realStylus(e);
+    if (_overControls(e.position)) return;
+    _fly.stop();
+    final d = document!;
+    final hitPoint = _world(e.localPosition);
+    final hitCard = d.cards
+        .where(
+          (c) =>
+              c.type != 'conversation' &&
+              d.visible(c.layer) &&
+              c.rect.contains(hitPoint),
+        )
+        .lastOrNull;
+    // Static material bodies are part of the pan surface. Keep their title
+    // actions and PDF paging controls interactive; ink still uses the pen.
+    final materialBody =
+        hitCard != null &&
+        const {'pdfdoc', 'pdf', 'image'}.contains(hitCard.type) &&
+        hitPoint.dy >= hitCard.rect.top + 36 &&
+        hitPoint.dy < hitCard.rect.bottom - (hitCard.type == 'pdfdoc' ? 36 : 0);
+    final passiveVideoBody =
+        hitCard != null &&
+        const {'lecture', 'video'}.contains(hitCard.type) &&
+        (_writing ||
+            _tool == StudyTool.hand ||
+            _videoSurfacePointers.contains(e.pointer)) &&
+        hitPoint.dy >= hitCard.rect.top + 36 &&
+        hitPoint.dy < hitCard.rect.bottom - 20;
+    if (hitCard != null &&
+        _tool != StudyTool.hand &&
+        e.buttons != kMiddleMouseButton) {
+      final actions =
+          _cardHeaderActions[hitCard.id]?.currentContext?.findRenderObject()
+              as RenderBox?;
+      final headerAction =
+          actions != null &&
+          actions.hasSize &&
+          actions.size.contains(actions.globalToLocal(e.position));
+      final resizeHandle =
+          e.kind == PointerDeviceKind.mouse &&
+          !hitCard.collapsed &&
+          (hitPoint - hitCard.rect.bottomRight).distance < 28 / d.zoom;
+      final content = hitPoint.dy >= hitCard.rect.top + 36 && !resizeHandle;
+      if (headerAction ||
+          (content &&
+              !materialBody &&
+              !passiveVideoBody &&
+              (hitCard.type == 'conversation' || !_writing)))
+        return;
+    }
+    final stylus =
+        e.kind == PointerDeviceKind.stylus ||
+        e.kind == PointerDeviceKind.invertedStylus;
+    if (_erasing || _selectionDragging || _lasso.isNotEmpty) return;
+    if (_drawingPointer != null && e.pointer != _drawingPointer) return;
+    if (stylus) {
+      _pointers.clear();
+      _panCamera = null;
+    }
+    _pointers[e.pointer] = e.localPosition;
+    if (e.kind == PointerDeviceKind.touch) _touchPointers.add(e.pointer);
+    if (_pointers.length == 2 && _drawingPointer == null) {
+      _dragCard = null;
+      _heldCardNeedsCheckpoint = false;
+      final p = _pointers.values.toList();
+      _marquee = null;
+      _lasso.clear();
+      _selectionDragging = false;
+      _pinchDistance = (p[0] - p[1]).distance;
+      _pinchZoom = d.zoom;
+      _pinchWorld = _world((p[0] + p[1]) / 2);
+      return;
+    }
+    if (_pointers.length > 1 || _drawingPointer != null) return;
+    final p = _world(e.localPosition);
+    _start = _last = p;
+    if (_penButtons && stylus && (e.buttons & kPrimaryStylusButton) != 0) {
+      _temporaryEraser = true;
+      _beginErase(e, p);
+      return;
+    }
+    if (_tool == StudyTool.region && e.kind != PointerDeviceKind.touch) {
+      if (_selectionReady &&
+          _selectionBounds != null &&
+          _selectionBounds!.inflate(16 / d.zoom).contains(p) &&
+          (_selection.isNotEmpty || _detail.strokeIds.isNotEmpty)) {
+        d.checkpoint();
+        _selectionDragging = true;
+        _selectionResize =
+            (p - _selectionBounds!.bottomRight).distance < 22 / d.zoom;
+        return;
+      }
+      _selectionReady = false;
+      _selectionBounds = null;
+      _lasso
+        ..clear()
+        ..add(p);
+      _detail.clear();
+      _regionSelection = null;
+      _marquee = Rect.fromPoints(p, p);
+      _selection.clear();
+      _scene.value++;
+      return;
+    }
+    if (e.kind == PointerDeviceKind.touch ||
+        _tool == StudyTool.hand ||
+        ((materialBody || passiveVideoBody) && _tool == StudyTool.select) ||
+        e.buttons == kMiddleMouseButton) {
+      _panCamera = d.camera;
+      _start = e.localPosition;
+      final touchCard = e.kind == PointerDeviceKind.touch && hitCard != null;
+      if ((touchCard || materialBody || passiveVideoBody) &&
+          !stylus &&
+          e.buttons != kMiddleMouseButton &&
+          (e.kind == PointerDeviceKind.touch || _tool == StudyTool.select)) {
+        _holdMaterial(e, hitCard);
+      }
+      return;
+    }
+    if (_tool == StudyTool.eraser ||
+        e.kind == PointerDeviceKind.invertedStylus) {
+      _temporaryEraser = e.kind == PointerDeviceKind.invertedStylus;
+      _beginErase(e, p);
+      return;
+    }
+    if (_ink) {
+      if (!d.editable(d.activeLayer)) {
+        _toast(l10n.studyLayerUnavailable);
+        return;
+      }
+      if (d.strokes.length >= 29000 ||
+          d.strokes.fold<int>(0, (n, s) => n + s.points.length) >= 490000) {
+        _toast(l10n.studyInkLimit);
+        return;
+      }
+      _pointBudget = math.min(
+        20000,
+        499900 - d.strokes.fold<int>(0, (n, s) => n + s.points.length),
+      );
+      _drawingPointer = e.pointer;
+      _pressureStart = e.localPosition;
+      _resetShape();
+      _gestureBrush = _brush;
+      _gestureWidth = _penWidth;
+      _gestureColor = _color;
+      _points = [InkPoint(p, _pressure(e))];
+      _prefix.clear();
+      _prefixEnd = 0;
+      _anchor = '';
+      for (final c in d.cards.reversed) {
+        if (d.visible(c.layer) && c.rect.contains(p)) {
+          _anchor = c.id;
+          break;
+        }
+      }
+      _watchPressure(e);
+      _watchShape(e);
+      _live.value++;
+      return;
+    }
+    final hits = d.cards.where(
+      (a) =>
+          a.type != 'conversation' && d.visible(a.layer) && a.rect.contains(p),
+    );
+    if (hits.isNotEmpty) {
+      final c = hits.last;
+      if (!_selection.contains(c.id)) {
+        _detail.clear();
+        _regionSelection = null;
+        _selection.clear();
+        _selection.add(c.id);
+      }
+      if (!stylus &&
+          d.canTransformCard(c) &&
+          (p.dy < c.rect.top + 38 ||
+              (!c.collapsed &&
+                  (p - c.rect.bottomRight).distance < 28 / d.zoom))) {
+        d.checkpoint();
+        _dragCard = c.id;
+        _resize =
+            !c.collapsed && (p - c.rect.bottomRight).distance < 28 / d.zoom;
+      }
+    } else {
+      _selection.clear();
+      _detail.clear();
+      _regionSelection = null;
+      _selectionReady = false;
+      _selectionBounds = null;
+      _panCamera = d.camera;
+      _start = e.localPosition;
+    }
+    setState(() {});
+    _scene.value++;
+  }
+
+  double _pressure(PointerEvent e) =>
+      e.kind == PointerDeviceKind.stylus ||
+          e.kind == PointerDeviceKind.invertedStylus
+      ? ((e.pressure - e.pressureMin) /
+                math.max(.001, e.pressureMax - e.pressureMin))
+            .clamp(.05, 1)
+      : .7;
+  void _move(PointerMoveEvent e) {
+    _trackStylusPresence(e);
+    if (_drawingPointer == e.pointer) _realStylus(e);
+    final d = document!;
+    if (!_pointers.containsKey(e.pointer)) return;
+    if (_cardHoldOrigin != null) {
+      if ((e.localPosition - _cardHoldOrigin!).distance <= 8) {
+        _pointers[e.pointer] = e.localPosition;
+        return;
+      }
+      _cancelCardHold();
+    }
+    _pointers[e.pointer] = e.localPosition;
+    if (!_gesturing.value) _gesturing.value = true;
+    if (_pointers.length == 2 &&
+        _pinchDistance != null &&
+        _drawingPointer == null) {
+      final p = _pointers.values.toList();
+      d.zoom =
+          (_pinchZoom! * (p[0] - p[1]).distance / math.max(1, _pinchDistance!))
+              .clamp(.05, 8);
+      d.camera = (p[0] + p[1]) / 2 - _pinchWorld! * d.zoom;
+      _cameraChanged();
+      return;
+    }
+    if (_pointers.length > 1) return;
+    final p = _world(e.localPosition);
+    if (_panCamera != null) {
+      d.camera = _panCamera! + e.localPosition - _start!;
+      _cameraChanged();
+      return;
+    }
+    if (_drawingPointer == e.pointer) {
+      if (_shape != null) {
+        _adjustShape(p);
+        return;
+      }
+      _watchPressure(e);
+      _watchShape(e);
+      final previous = _points.last,
+          delta = (p - previous.p) * (1 - _gestureBrush.smoothing * .7);
+      if (delta.distance < .4 / d.zoom || _points.length >= _pointBudget)
+        return;
+      final steps = (delta.distance / 4).ceil().clamp(
+        1,
+        math.min(100, _pointBudget - _points.length),
+      );
+      for (var i = 1; i <= steps; i++) {
+        final t = i / steps;
+        _points.add(
+          InkPoint(
+            previous.p + delta * t,
+            previous.pressure + (_pressure(e) - previous.pressure) * t,
+          ),
+        );
+      }
+      while (_points.length - _prefixEnd > 65) {
+        _prefix.add(
+          StudyStroke(
+            id: studyId(),
+            layer: d.activeLayer,
+            points: _points.sublist(_prefixEnd, _prefixEnd + 65),
+            color: _gestureColor,
+            width: _gestureWidth,
+            brush: _gestureBrush,
+            tool: _tool == StudyTool.highlighter ? 'highlighter' : 'pen',
+            anchor: _anchor,
+            page:
+                d.cards
+                    .where((c) => c.id == _anchor && c.type == 'pdfdoc')
+                    .firstOrNull
+                    ?.page ??
+                0,
+          ),
+        );
+        _prefixEnd += 64;
+        _scene.value++;
+      }
+      _live.value++;
+      return;
+    }
+    if (_erasing) {
+      _updateEraserCursor(e.localPosition);
+      if (_eraserMode == 'lasso') {
+        if (_eraserLasso.length < 1024 &&
+            (_eraserLasso.last - p).distance > 3 / d.zoom)
+          _eraserLasso.add(p);
+        _cursor.value++;
+      } else {
+        _eraseAt(_last!, p);
+      }
+      _last = p;
+      return;
+    }
+    if (_selectionDragging && _selectionBounds != null) {
+      final from = _selectionBounds!;
+      final delta = p - _last!;
+      final to = _selectionResize
+          ? Rect.fromLTWH(
+              from.left,
+              from.top,
+              math.max(12 / d.zoom, from.width + delta.dx),
+              math.max(12 / d.zoom, from.height + delta.dy),
+            )
+          : from.shift(delta);
+      _transformSelection(from, to);
+      _last = p;
+      return;
+    }
+    if (_dragCard != null) {
+      _moveHeldCard(p);
+      return;
+    }
+    if (_marquee != null) {
+      _marquee = _lassoRectangle
+          ? Rect.fromPoints(_start!, p)
+          : _marquee!.expandToInclude(Rect.fromPoints(p, p));
+      if (_lasso.length < 2048 && (_lasso.last - p).distance > 2 / d.zoom)
+        _lasso.add(p);
+      _cursor.value++;
+    }
+  }
+
+  void _moveHeldCard(Offset p) {
+    final d = document!;
+    final c = d.cards.firstWhere((a) => a.id == _dragCard), old = c.rect;
+    final delta = p - _last!;
+    if (delta == Offset.zero) return;
+    if (_heldCardNeedsCheckpoint) {
+      d.checkpoint();
+      _heldCardNeedsCheckpoint = false;
+    }
+    final next = _resize
+        ? Rect.fromLTWH(
+            old.left,
+            old.top,
+            math.max(
+              c.type == 'conversation' ? 240 : 280,
+              old.width + delta.dx,
+            ),
+            math.max(
+              c.type == 'conversation' ? 160 : 180,
+              old.height + delta.dy,
+            ),
+          )
+        : old.shift(delta);
+    d.transformCards(_resize ? {c.id} : _selection, old, next);
+    _last = p;
+  }
+
+  Widget _videoInput(Widget child) => VideoCardHoldScope(
+    onSurfaceDown: (e) => _videoSurfacePointers.add(e.pointer),
+    onSurfaceEnd: (e) => _videoSurfacePointers.remove(e.pointer),
+    child: child,
+  );
+
+  void _up(PointerEvent e) {
+    _trackStylusPresence(e);
+    final d = document!;
+    if (!_pointers.containsKey(e.pointer)) return;
+    _cancelCardHold();
+    _touchPointers.remove(e.pointer);
+    if (_drawingPointer == e.pointer) {
+      _clearPrediction();
+      _lastRealStylusTime = null;
+      _cancelShapeHold();
+    }
+    _pressureTimer?.cancel();
+    _pressureTimer = null;
+    _pressureOrigin = null;
+    _pressureStart = null;
+    _pointers.remove(e.pointer);
+    if (_pointers.isEmpty) _gesturing.value = false;
+    if (e is PointerCancelEvent && _drawingPointer == e.pointer) {
+      _resetShape();
+      _points = [];
+      _prefix.clear();
+      _prefixEnd = 0;
+      _drawingPointer = null;
+      _scene.value++;
+      _live.value++;
+    }
+    if (_drawingPointer == e.pointer) {
+      final d = document!;
+      d.addStroke(
+        StudyStroke(
+          id: studyId(),
+          layer: d.activeLayer,
+          points: List.of(_points),
+          color: _gestureColor,
+          width: _gestureWidth,
+          brush: _gestureBrush,
+          tool: _tool == StudyTool.highlighter ? 'highlighter' : 'pen',
+          anchor: _anchor,
+          page:
+              d.cards
+                  .where((c) => c.id == _anchor && c.type == 'pdfdoc')
+                  .firstOrNull
+                  ?.page ??
+              0,
+        ),
+      );
+      _commitShape();
+      final added = d.strokes.last;
+      _detail.clear();
+      _detail.strokeIds.addAll(
+        d.strokes.where((s) => s.gesture == added.gesture).map((s) => s.id),
+      );
+      var region = d.strokes
+          .where((s) => _detail.strokeIds.contains(s.id))
+          .map((s) => s.bounds)
+          .reduce((a, b) => a.expandToInclude(b))
+          .inflate(16);
+      _regionSelection = region;
+      _selection.clear();
+      final anchored = d.cards.where((c) => c.id == _anchor).firstOrNull;
+      if (anchored != null) {
+        _selection.add(anchored.id);
+        _detail.objectId = anchored.id;
+        region = region.intersect(_sourceBounds(anchored));
+        _detail.region = _normalizeRegion(region, _sourceBounds(anchored));
+      } else {
+        _detail.region = region;
+      }
+      _points = [];
+      _prefix.clear();
+      _prefixEnd = 0;
+      _drawingPointer = null;
+      _resetShape();
+      _scene.value++;
+      _live.value++;
+    }
+    if (_pointers.length == 1 && _pinchDistance != null) {
+      _pinchDistance = null;
+      _panCamera = d.camera;
+      _start = _pointers.values.single;
+    }
+    if (_pointers.isEmpty) {
+      if (_erasing && _eraserMode == 'lasso' && e is! PointerCancelEvent) {
+        d.eraseLasso(_eraserLasso);
+        _eraserLasso.clear();
+      }
+      if (_tool == StudyTool.region &&
+          _marquee != null &&
+          e is! PointerCancelEvent) {
+        _finishSelection();
+      }
+      _selectionDragging = false;
+      _temporaryEraser = false;
+      _eraserCursor = null;
+      _cursor.value++;
+      _lasso.clear();
+      _eraserLasso.clear();
+      _panCamera = null;
+      _start = _last = null;
+      _marquee = null;
+      _dragCard = null;
+      _heldCardNeedsCheckpoint = false;
+      _erasing = false;
+      _pinchDistance = null;
+      _scene.value++;
+      setState(() {});
+    }
+  }
+
+  void _scroll(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent ||
+        _drawingPointer != null ||
+        _overControls(e.position))
+      return;
+    GestureBinding.instance.pointerSignalResolver.register(e, (_) {
+      _fly.stop();
+      final d = document!;
+      if (HardwareKeyboard.instance.isMetaPressed ||
+          HardwareKeyboard.instance.isControlPressed) {
+        final p = _world(e.localPosition);
+        d.zoom = (d.zoom * math.exp(-e.scrollDelta.dy * .002)).clamp(.05, 8);
+        d.camera = e.localPosition - p * d.zoom;
+      } else {
+        d.camera -= e.scrollDelta;
+      }
+      _cameraChanged();
+    });
+  }
+
+  void _zoomBy(double factor) {
+    _fly.stop();
+    final d = document!,
+        center = _viewport.center(Offset.zero),
+        p = _world(_viewport.center(Offset.zero));
+    d.zoom = (d.zoom * factor).clamp(.05, 8);
+    d.camera = center - p * d.zoom;
+    _cameraChanged();
+  }
+
+  void _fit() {
+    final d = document!;
+    final cards = d.cards.where(
+      (a) => a.type != 'conversation' && d.visible(a.layer),
+    );
+    var r = cards.isEmpty
+        ? const Rect.fromLTWH(0, 0, 880, 550)
+        : cards.first.rect;
+    for (final c in cards) {
+      r = r.expandToInclude(c.rect);
+    }
+    final zoom = math
+        .min(
+          (_viewport.width - 100) / r.width,
+          (_viewport.height - 100) / r.height,
+        )
+        .clamp(.05, 1.5)
+        .toDouble();
+    _flyTo(_viewport.center(Offset.zero) - r.center * zoom, zoom);
+  }
+
+  void _toast(String s) {
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
+  }
+
+  Future<void> _expandPDFColumn(StudyCard root) async {
+    if (_importing) return;
+    final d = document!;
+    setState(() => _importing = true);
+    try {
+      d.beginPDFColumn(root);
+      if (!await flush()) return;
+      for (var page = 1; page <= root.pageCount; page++) {
+        if (!mounted || !d.cards.contains(root) || root.pdfColumn != root.id)
+          return;
+        if (d.pdfPages(root.id).any((c) => c.page == page)) continue;
+        setState(() => _status = '正在展开课件 $page / ${root.pageCount} 页');
+        final data = await widget.api.studyPDFPage(
+          widget.ctl.lectureId,
+          root.source,
+          page,
+        ) as Map;
+        if (!mounted || !d.cards.contains(root) || root.pdfColumn != root.id)
+          return;
+        d.appendPDFPage(root, page, data);
+        if (!await flush()) return;
+      }
+    } catch (e) {
+      if (mounted) _toast('展开未完成：$e。已展开的页面和笔迹已保留，可点击“继续展开整列”重试');
+    } finally {
+      if (mounted)
+        setState(() {
+          _importing = false;
+        });
+    }
+  }
+
+  Future<void> _collapsePDFColumn(String id) async {
+    try {
+      document!.collapsePDFColumn(id);
+      await flush();
+    } catch (e) {
+      if (mounted) _toast('$e');
+    }
+  }
+
+  Future<void> _import({
+    String? courseware,
+    bool wholeCourse = false,
+    Offset? at,
+  }) async {
+    if (_importing) return;
+    XFile? file;
+    if (courseware == null) {
+      file = await openFile(
+        acceptedTypeGroups: [
+          XTypeGroup(
+            label: l10n.studyMaterials,
+            extensions: [
+              'pdf',
+              'png',
+              'jpg',
+              'jpeg',
+              'gif',
+              'webp',
+              'txt',
+              'md',
+              'markdown',
+              'mp4',
+              'mov',
+              'm4v',
+              'webm',
+              'mkv',
+            ],
+          ),
+        ],
+      );
+      if (!mounted || file == null) return;
+    }
+    final d = document!;
+    if (!d.editable(d.activeLayer)) {
+      _toast(l10n.studyPickLayer);
+      return;
+    }
+    setState(() {
+      _importing = true;
+      _status = l10n.studyImporting;
+    });
+    try {
+      dynamic out;
+      if (courseware != null) {
+        out = wholeCourse
+            ? await widget.api.importStudyMaterial(
+                widget.ctl.lectureId,
+                courseware,
+              )
+            : await widget.api.importStudyCourseware(
+                widget.ctl.lectureId,
+                courseware,
+              );
+      } else {
+        final length = await file!.length();
+        if (length > 300 << 20) throw FormatException(l10n.studyFileTooLarge);
+        out = await widget.api.importStudyAsset(
+          widget.ctl.lectureId,
+          file.name,
+          file.openRead(),
+          length,
+        );
+      }
+      if (!mounted) return;
+      final cards = [
+        for (final a in out['objects'] as List) StudyCard.fromJson(a as Map),
+      ];
+      if (cards.length + d.cards.length > 2000)
+        throw FormatException(l10n.studyCardLimit);
+      final center = at ?? _world(_viewport.center(Offset.zero));
+      d.checkpoint();
+      var y = center.dy - (at == null ? 120 : 60);
+      for (final c in cards) {
+        c.layer = d.activeLayer;
+        c.rect = Rect.fromLTWH(center.dx - 160, y, c.rect.width, c.rect.height);
+        y += c.rect.height + 36;
+      }
+      d.cards.addAll(cards);
+      _selection
+        ..clear()
+        ..add(cards.first.id);
+      d.changed();
+      _tool = StudyTool.select;
+      await flush();
+    } catch (e) {
+      _toast(l10n.studyImportError('$e'));
+    } finally {
+      if (mounted)
+        setState(() {
+          _importing = false;
+          if (_saveError == null) _status = l10n.studySaved;
+        });
+    }
+  }
+
+  Future<void> _text([StudyCard? card]) async {
+    final input = TextEditingController(text: card?.text ?? '');
+    final text = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(card == null ? l10n.studyAddText : l10n.studyEditText),
+        content: SizedBox(
+          width: 500,
+          child: TextField(
+            controller: input,
+            autofocus: true,
+            minLines: 5,
+            maxLines: 15,
+            maxLength: 200000,
+            decoration: InputDecoration(hintText: l10n.studyTextHint),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, input.text),
+            child: Text(l10n.commonSave),
+          ),
+        ],
+      ),
+    );
+    // Dialog animations can retain the input after the route result completes.
+    Future.delayed(const Duration(milliseconds: 400), input.dispose);
+    if (!mounted || text == null) return;
+    final d = document!;
+    if (!d.editable(card?.layer ?? d.activeLayer)) {
+      _toast(l10n.studyLocked);
+      return;
+    }
+    d.checkpoint();
+    if (card != null) {
+      card.text = text;
+    } else {
+      final p = _world(_viewport.center(Offset.zero));
+      final c = StudyCard(
+        id: studyId(),
+        type: 'text',
+        layer: d.activeLayer,
+        rect: Rect.fromLTWH(p.dx - 100, p.dy - 100, 480, 360),
+        title: l10n.studyTextCard,
+        text: text,
+      );
+      d.cards.add(c);
+      _selection
+        ..clear()
+        ..add(c.id);
+    }
+    d.changed();
+  }
+
+  Future<void> _ask() async {
+    if (_selectionReady &&
+        _selectionBounds != null &&
+        _tool == StudyTool.region) {
+      _update(() => _quickAsk = true);
+    } else {
+      await _openConversation();
+    }
+  }
+
+  Future<void> _sendQuickQuestion() async {
+    final text = _quickInput.text.trim();
+    if (text.isEmpty || _quickSending) return;
+    _update(() => _quickSending = true);
+    try {
+      await _startConversation(send: text, allowImages: _quickImages);
+      if (!mounted) return;
+      _quickInput.clear();
+      _update(() {
+        _quickAsk = false;
+        _tool = StudyTool.select;
+      });
+    } catch (e) {
+      if (mounted) _toast('无法发送选区问题：$e');
+    } finally {
+      if (mounted) _update(() => _quickSending = false);
+    }
+  }
+
+  /// The player's full side panel (outline, AI tools) as a dialog.
+  void _openPlayerPanel() => showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      child: SizedBox(
+        width: 480,
+        height: math.min(600, _viewport.height - 48),
+        child: widget.panel,
+      ),
+    ),
+  );
+
+  void _layers() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => SafeArea(
+          child: SizedBox(
+            height: 330,
+            child: Column(
+              children: [
+                ListTile(
+                  title: Text(l10n.studyLayers),
+                  trailing: IconButton(
+                    tooltip: l10n.studyAddLayer,
+                    icon: const Icon(Icons.add),
+                    onPressed: () {
+                      final d = document!;
+                      if (d.layers.length >= 32) return;
+                      d.checkpoint();
+                      final l = StudyLayer(
+                        studyId(),
+                        l10n.studyLayerName(d.layers.length + 1),
+                      );
+                      d.layers.add(l);
+                      d.activeLayer = l.id;
+                      d.changed();
+                      update(() {});
+                    },
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final l in document!.layers)
+                        ListTile(
+                          selected: document!.activeLayer == l.id,
+                          title: Text(l.name),
+                          onTap: () {
+                            setState(() => document!.activeLayer = l.id);
+                            update(() {});
+                          },
+                          leading: IconButton(
+                            tooltip: l10n.studyToggleVisible,
+                            icon: Icon(
+                              l.visible
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              document!.checkpoint();
+                              l.visible = !l.visible;
+                              document!.changed();
+                              update(() {});
+                            },
+                          ),
+                          trailing: IconButton(
+                            tooltip: l10n.studyToggleLocked,
+                            icon: Icon(
+                              l.locked
+                                  ? Icons.lock_outline
+                                  : Icons.lock_open_outlined,
+                            ),
+                            onPressed: () {
+                              document!.checkpoint();
+                              l.locked = !l.locked;
+                              document!.changed();
+                              update(() {});
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> exportRecovery() async {
+    if (document == null) return;
+    final dest = await getSaveLocation(
+      suggestedName: '学习画布-${widget.ctl.lectureId}.json',
+    );
+    if (dest == null || !mounted) return;
+    try {
+      await File(dest.path).writeAsString(jsonEncode(document!.json()));
+      _toast(l10n.studyRecoverySaved);
+    } catch (e) {
+      _toast(l10n.studyExportError('$e'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.fullscreen) return widget.video;
+    if (_loadError != null)
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('画布打开失败：$_loadError'),
+            TextButton(onPressed: _load, child: const Text('重试')),
+          ],
+        ),
+      );
+    final d = document;
+    if (d == null) return const Center(child: CircularProgressIndicator());
+    return LayoutBuilder(
+      builder: (_, size) {
+        _viewport = Size(size.maxWidth, size.maxHeight);
+        return _canvas(d);
+      },
+    );
+  }
+
+  void _moveDock(String id, StudyDockPlacement next) {
+    setState(() {
+      switch (id) {
+        case 'ai':
+          _aiPlacement = next;
+          _stageOpen = true;
+        default:
+          _penPlacement = next;
+          _dockSmall = false;
+      }
+    });
+    unawaited(_saveLayout());
+  }
+
+  Rect get _visibleWorld => Rect.fromLTWH(
+    -document!.camera.dx / document!.zoom,
+    -document!.camera.dy / document!.zoom,
+    _viewport.width / document!.zoom,
+    _viewport.height / document!.zoom,
+  );
+
+  Widget _canvas(StudyDocument d) {
+    final cardIds = d.cards.map((c) => c.id).toSet();
+    _cardHeaderActions.removeWhere((id, _) => !cardIds.contains(id));
+    final stage = _visibleWorld.inflate(
+      math.max(_viewport.width, _viewport.height) / d.zoom,
+    );
+    _stageRect = stage;
+    return RepaintBoundary(
+      key: _inputSurface,
+      child: ClipRect(
+        child: Listener(
+          key: const ValueKey('study-input'),
+          behavior: HitTestBehavior.translucent,
+          onPointerHover: (e) {
+            _trackStylusPresence(e);
+            if (_tool == StudyTool.eraser ||
+                e.kind == PointerDeviceKind.invertedStylus)
+              _updateEraserCursor(e.localPosition);
+          },
+          onPointerDown: _down,
+          onPointerMove: _move,
+          onPointerUp: _up,
+          onPointerCancel: _up,
+          onPointerSignal: _scroll,
+          onPointerPanZoomStart: (e) {
+            if (_drawingPointer != null ||
+                _erasing ||
+                _overControls(e.position))
+              return;
+            _fly.stop();
+            _pinchZoom = d.zoom;
+            _pinchWorld = _world(e.localPosition);
+            _panCamera = d.camera;
+          },
+          onPointerPanZoomUpdate: (e) {
+            if (_pinchWorld == null || _pinchZoom == null || _panCamera == null)
+              return;
+            d.zoom = (_pinchZoom! * e.scale).clamp(.05, 8);
+            d.camera = e.localPosition + e.pan - _pinchWorld! * d.zoom;
+            _cameraChanged();
+          },
+          onPointerPanZoomEnd: (_) {
+            _pinchWorld = null;
+            _panCamera = null;
+          },
+          child: MouseRegion(
+            onExit: (_) {
+              _eraserCursor = null;
+              _cursor.value++;
+            },
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.hardEdge,
+              children: [
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    key: _capture,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(
+                          child: RepaintBoundary(
+                            child: CustomPaint(
+                              painter: _Paper(
+                                document: d,
+                                repaint: _camera,
+                                style: _paperStyle,
+                                color: _paperColor,
+                                scheme: Theme.of(context).colorScheme,
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Camera changes transform an already laid-out world. Media widgets and
+                        // recorded ink are retained until the visible area leaves this bounded stage.
+                        Positioned(
+                          left: 0,
+                          top: 0,
+                          width: stage.width,
+                          height: stage.height,
+                          child: AnimatedBuilder(
+                            animation: _camera,
+                            builder: (_, child) => Transform(
+                              alignment: Alignment.topLeft,
+                              transform: Matrix4.identity()
+                                ..translate(
+                                  d.camera.dx + stage.left * d.zoom,
+                                  d.camera.dy + stage.top * d.zoom,
+                                )
+                                ..scale(d.zoom),
+                              child: child,
+                            ),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: RepaintBoundary(
+                                      child: CustomPaint(
+                                        painter: _ConnectionPainter(
+                                          d,
+                                          stage,
+                                          _scene,
+                                          chrome,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                for (final c in d.cards.where(
+                                  (a) =>
+                                      a.type != 'conversation' &&
+                                      d.visible(a.layer) &&
+                                      (a.type == 'lecture' ||
+                                          a.type == 'video' ||
+                                          a.rect.overlaps(stage)),
+                                ))
+                                  Positioned(
+                                    key: ValueKey('study-card/${c.id}'),
+                                    left: c.rect.left - stage.left,
+                                    top: c.rect.top - stage.top,
+                                    width: c.rect.width,
+                                    height: c.rect.height,
+                                    child: RepaintBoundary(child: _card(c)),
+                                  ),
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: RepaintBoundary(
+                                      child: CustomPaint(
+                                        painter: _InkScene(
+                                          document: d,
+                                          live: _prefix,
+                                          stage: stage,
+                                          repaint: _scene,
+                                          dark: _dark,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                painter: _InkTail(
+                                  document: d,
+                                  points: () =>
+                                      _shapePreview ??
+                                      (_predicted.isEmpty
+                                          ? _points
+                                          : [
+                                              ..._points.skip(_prefixEnd),
+                                              ..._predicted,
+                                            ]),
+                                  start: () =>
+                                      _predicted.isEmpty ? _prefixEnd : 0,
+                                  color: () =>
+                                      _dark &&
+                                          !studyOnPrintedPage(
+                                            d.cards
+                                                .where((c) => c.id == _anchor)
+                                                .firstOrNull
+                                                ?.type,
+                                          )
+                                      ? inkOnDark(
+                                          _gestureColor,
+                                          _tool == StudyTool.highlighter
+                                              ? 'highlighter'
+                                              : 'pen',
+                                        )
+                                      : _gestureColor,
+                                  width: () => _gestureWidth,
+                                  brush: () => _gestureBrush,
+                                  tool: () => _tool,
+                                  repaint: Listenable.merge([
+                                    _live,
+                                    _scene,
+                                    _camera,
+                                  ]),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        key: const ValueKey('study-feedback'),
+                        painter: _InteractionFeedback(
+                          this,
+                          Listenable.merge([_cursor, _scene, _camera]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (Platform.isMacOS)
+                  const Positioned(
+                    top: 0,
+                    left: 80,
+                    right: 0,
+                    height: 22,
+                    child: DragToMoveArea(child: SizedBox.expand()),
+                  ),
+                _assetDropTarget(),
+                _dropOutline(),
+                _HoldCue(at: _holdCue),
+                _DockGroup(
+                  topInset: _topBarsBottom + 8,
+                  children: [_penDock(), if (!_stageOpen) _aiDock()],
+                ),
+                _fixedTopBars(),
+                _agentStage(),
+                _selectionToolbar(),
+                _shelf(),
+                if (_viewport.width >= 600)
+                  Positioned(
+                    right: studyZoomInset,
+                    bottom: studyZoomInset,
+                    child: GlassSurface(
+                      key: _zoomKey,
+                      radius: Corners.full,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Space.xxs,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: l10n.studyZoomOut,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _zoomBy(1 / 1.2),
+                            icon: const Icon(Icons.remove_rounded, size: 18),
+                          ),
+                          ValueListenableBuilder<int>(
+                            valueListenable: _camera,
+                            builder: (_, value, child) => SizedBox(
+                              width: 44,
+                              child: Text(
+                                '${(d.zoom * 100).round()}%',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: l10n.studyZoomIn,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _zoomBy(1.2),
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                          ),
+                          IconButton(
+                            tooltip: l10n.studyFit,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: _fit,
+                            icon: const Icon(
+                              Icons.fit_screen_outlined,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _card(StudyCard c) {
+    final d = document!,
+        selected = _selection.contains(c.id),
+        chrome = StudyChrome.of(context),
+        cs = Theme.of(context).colorScheme;
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(Corners.lg),
+      side: BorderSide(
+        color: selected
+            ? chrome.accent
+            : cs.onSurface.withValues(alpha: _dark ? .12 : .08),
+        width: selected ? 2 : 1,
+      ),
+    );
+    Widget action(String tooltip, IconData icon, VoidCallback? onPressed) =>
+        IconButton(
+          tooltip: tooltip,
+          onPressed: onPressed,
+          iconSize: 16,
+          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+          padding: EdgeInsets.zero,
+          color: cs.onSurfaceVariant,
+          icon: Icon(icon),
+        );
+    final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
+    // Rare actions live in one menu so the header never runs out of room.
+    final more = <(String, IconData, VoidCallback?)>[
+      if (!pdfColumn)
+        (
+          c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
+          c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
+          () {
+            d.checkpoint();
+            c.collapsed = !c.collapsed;
+            if (c.collapsed) {
+              c.expandedH = c.rect.height;
+              c.rect = Rect.fromLTWH(c.rect.left, c.rect.top, c.rect.width, 60);
+            } else {
+              c.rect = Rect.fromLTWH(
+                c.rect.left,
+                c.rect.top,
+                c.rect.width,
+                math.max(c.type == 'conversation' ? 160 : 240, c.expandedH),
+              );
+            }
+            d.changed();
+          },
+        ),
+      if (c.pdfColumn.isNotEmpty)
+        (
+          l10n.studyCardFoldColumn,
+          Icons.vertical_align_center_rounded,
+          _importing ? null : () => _collapsePDFColumn(c.pdfColumn),
+        ),
+      if (c.generated)
+        (
+          l10n.studyCardEditKnowledge,
+          Icons.edit_outlined,
+          () => _editKnowledge(c),
+        ),
+      if (c.type == 'text')
+        (l10n.studyEditText, Icons.edit_outlined, () => _text(c)),
+      if (c.type != 'lecture' && !pdfColumn)
+        (
+          l10n.studyCardDelete,
+          Icons.delete_outline_rounded,
+          () {
+            d.checkpoint();
+            d.cards.removeWhere((v) => v.id == c.id);
+            d.connections.removeWhere((v) => v.from == c.id || v.to == c.id);
+            d.strokes.removeWhere((v) => v.anchor == c.id);
+            d.changed();
+          },
+        ),
+    ];
+    return IgnorePointer(
+      ignoring: _writing || _tool == StudyTool.hand || !d.editable(c.layer),
+      child: Container(
+        decoration: ShapeDecoration(
+          color: chrome.paper,
+          shape: shape,
+          // Dark cards separate by a tonal step; a shadow would only muddy.
+          shadows: _dark
+              ? null
+              : [
+                  BoxShadow(
+                    color: chrome.shadow,
+                    blurRadius: 24,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 36,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: c.type == 'lecture'
+                      ? chrome.accentSoft
+                      : Colors.transparent,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: cs.onSurface.withValues(alpha: .08),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: Space.md),
+                    Icon(
+                      switch (c.type) {
+                        'lecture' || 'video' => Icons.smart_display_outlined,
+                        'text' => Icons.notes_rounded,
+                        'conversation' => Icons.forum_outlined,
+                        'image' => Icons.image_outlined,
+                        'note' ||
+                        'explanation' ||
+                        'knowledge' => Icons.lightbulb_outline_rounded,
+                        'practice' => Icons.quiz_outlined,
+                        _ => Icons.description_outlined,
+                      },
+                      size: 16,
+                      color: c.type == 'conversation'
+                          ? cs.primary
+                          : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Space.sm),
+                    Expanded(
+                      child: Tooltip(
+                        message: c.title,
+                        waitDuration: const Duration(milliseconds: 600),
+                        child: Text(
+                          c.type == 'pdf' && c.pdfColumn.isNotEmpty
+                              ? l10n.studyCardPdfPage(
+                                  c.title,
+                                  c.page,
+                                  c.pageCount,
+                                )
+                              : c.title,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: chrome.ink),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                    Row(
+                      key: _cardHeaderActions.putIfAbsent(
+                        c.id,
+                        () => GlobalKey(),
+                      ),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (c.type == 'pdfdoc' &&
+                            (c.pdfColumn.isEmpty ||
+                                d.pdfPages(c.id).length < c.pageCount))
+                          action(
+                            c.pdfColumn.isEmpty ? '在画布展开为一列' : '继续展开整列',
+                            Icons.view_agenda_outlined,
+                            _importing ? null : () => _expandPDFColumn(c),
+                          ),
+                        if (c.type != 'conversation')
+                          Draggable<String>(
+                            data: c.id,
+                            feedback: Material(
+                              type: MaterialType.transparency,
+                              child: GlassSurface(
+                                depth: GlassDepth.float,
+                                radius: Corners.full,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: Space.md,
+                                  vertical: Space.sm,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.add_comment_outlined,
+                                      size: 16,
+                                      color: cs.primary,
+                                    ),
+                                    const SizedBox(width: Space.sm),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 220,
+                                      ),
+                                      child: Text(
+                                        c.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            child: action(
+                              l10n.studyCardAsk,
+                              Icons.add_comment_outlined,
+                              () => _chooseConversation(c),
+                            ),
+                          ),
+                        if (more.isNotEmpty)
+                          MenuAnchor(
+                            menuChildren: [
+                              for (final (label, icon, run) in more)
+                                MenuItemButton(
+                                  leadingIcon: Icon(icon, size: 18),
+                                  onPressed: run,
+                                  child: Text(label),
+                                ),
+                            ],
+                            builder: (context, menu, _) => action(
+                              l10n.studyCardMore,
+                              Icons.more_horiz_rounded,
+                              () => menu.isOpen ? menu.close() : menu.open(),
+                            ),
+                          ),
+                      ],
+                    ),
+                    Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 16,
+                      color: chrome.inkFaint,
+                    ),
+                    const SizedBox(width: Space.sm),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: OverflowBox(
+                minHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
+                maxHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
+                child: Offstage(
+                  offstage: c.collapsed,
+                  child: switch (c.type) {
+                    'pdfdoc' => _PDFBody(owner: this, card: c),
+                    'conversation' => _ThreadNode(owner: this, card: c),
+                    'lecture' => Column(
+                      children: [
+                        Expanded(child: _videoInput(widget.video)),
+                        TextButton.icon(
+                          key: const ValueKey('study-video-shelf'),
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
+                          ),
+                          onPressed: () => _toggleShelf(_ShelfTab.transcript),
+                          icon: const Icon(Icons.subtitles_outlined, size: 16),
+                          label: Text(
+                            l10n.studyShelfFromVideo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    'image' || 'pdf' => Image(
+                      image: ResizeImage(
+                        NetworkImage(widget.api.fileUrl(c.path)),
+                        width: 1500,
+                        height: 1500,
+                        policy: ResizeImagePolicy.fit,
+                      ),
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, error, stack) =>
+                          Center(child: Text(l10n.studyImageFailed)),
+                    ),
+                    'video' => _videoInput(
+                      _LocalVideo(
+                        key: _localVideoKeys.putIfAbsent(
+                          c.id,
+                          () => GlobalKey<_LocalVideoState>(),
+                        ),
+                        url: c.path.isEmpty
+                            ? widget.api.studyMediaUrl(
+                                widget.ctl.lectureId,
+                                c.id,
+                              )
+                            : widget.api.fileUrl(c.path),
+                        initialMs: _localVideoTimes[c.id] ?? 0,
+                        onPosition: (ms) => _localVideoTimes[c.id] = ms,
+                      ),
+                    ),
+                    'note' ||
+                    'explanation' ||
+                    'knowledge' ||
+                    'practice' => _KnowledgeBody(
+                      card: c,
+                      onSource: _focusSource,
+                      editable: d.editable(c.layer),
+                      onBeginAnswer: d.checkpoint,
+                      onAnswer: (i, value) {
+                        if (d.editable(c.layer)) {
+                          c.responses['$i'] = value;
+                          d.changed();
+                        }
+                      },
+                    ),
+                    _ => SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: SelectableText(
+                          c.text,
+                          onSelectionChanged: (selection, cause) {
+                            if (!selection.isCollapsed) {
+                              _selection
+                                ..clear()
+                                ..add(c.id);
+                              _detail.clear();
+                              _detail
+                                ..objectId = c.id
+                                ..start = selection.start
+                                ..end = selection.end;
+                            }
+                          },
+                          style: TextStyle(
+                            fontSize: 16,
+                            height: 1.65,
+                            color: chrome.paperInk,
+                          ),
+                        ),
+                      ),
+                    ),
+                  },
+                ),
+              ),
+            ),
+            SizedBox(
+              height: 16,
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: Icon(
+                  Icons.south_east,
+                  size: 12,
+                  color: selected ? chrome.accent : chrome.inkFaint,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalVideo extends StatefulWidget {
+  const _LocalVideo({
+    super.key,
+    required this.url,
+    required this.initialMs,
+    required this.onPosition,
+  });
+  final String url;
+  final int initialMs;
+  final ValueChanged<int> onPosition;
+  @override
+  State<_LocalVideo> createState() => _LocalVideoState();
+}
+
+class _LocalVideoState extends State<_LocalVideo> {
+  late final player = Player();
+  late final controller = VideoController(player);
+  StreamSubscription? _errors;
+  StreamSubscription? _positions;
+  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    _errors = player.stream.error.listen((error) {
+      if (mounted) setState(() => _error = error);
+    });
+    _positions = player.stream.position.listen(
+      (p) => widget.onPosition(p.inMilliseconds),
+    );
+    unawaited(_open());
+  }
+
+  Future<void> _open() async {
+    try {
+      await controller.platform.future;
+      if (!mounted) return;
+      await player.open(Media(widget.url), play: false);
+      if (mounted && widget.initialMs > 0)
+        await player.seek(Duration(milliseconds: widget.initialMs));
+    } catch (error) {
+      if (mounted) setState(() => _error = '$error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _errors?.cancel();
+    _positions?.cancel();
+    unawaited(player.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _error == null
+      ? MaterialDesktopVideoControlsTheme(
+          normal: const MaterialDesktopVideoControlsThemeData(
+            modifyVolumeOnScroll: false,
+            playAndPauseOnTap: false,
+            toggleFullscreenOnDoublePress: false,
+            primaryButtonBar: [],
+            topButtonBar: [],
+            buttonBarHeight: 48,
+            seekBarContainerHeight: 36,
+            bottomButtonBarMargin: EdgeInsets.zero,
+          ),
+          fullscreen: const MaterialDesktopVideoControlsThemeData(),
+          child: MaterialVideoControlsTheme(
+            normal: const MaterialVideoControlsThemeData(
+              volumeGesture: false,
+              brightnessGesture: false,
+              seekGesture: false,
+              seekOnDoubleTap: false,
+              speedUpOnLongPress: false,
+              primaryButtonBar: [],
+              topButtonBar: [],
+              bottomButtonBar: [
+                MaterialPlayOrPauseButton(),
+                MaterialPositionIndicator(),
+                Spacer(),
+                MaterialFullscreenButton(),
+              ],
+              buttonBarHeight: 48,
+              seekBarContainerHeight: 36,
+              bottomButtonBarMargin: EdgeInsets.zero,
+            ),
+            fullscreen: const MaterialVideoControlsThemeData(),
+            child: VideoCardHoldRegion(
+              bottomControlsHeight: 84,
+              child: Video(controller: controller),
+            ),
+          ),
+        )
+      : Center(child: Text(l10n.studyLocalVideoError(_error!)));
+}
+
+/// The paper colour as shown: in dark mode each paper keeps a trace of its
+/// hue over the scheme's low container surface.
+Color studyPaperTone(int color, ColorScheme cs) =>
+    cs.brightness == Brightness.dark
+    ? Color.alphaBlend(
+        Color(color).withValues(alpha: color == 0xffffffff ? 0 : .06),
+        cs.surfaceContainerLow,
+      )
+    : Color(color);
+
+class _Paper extends CustomPainter {
+  _Paper({
+    this.document,
+    Listenable? repaint,
+    this.style = 'ruled',
+    this.color = 0xffffffff,
+    this.scheme,
+  }) : super(repaint: repaint);
+  final String style;
+  final int color;
+  final StudyDocument? document;
+
+  /// Tones the paper for dark mode; null paints [color] as stored.
+  final ColorScheme? scheme;
+  @override
+  void paint(Canvas c, Size s) {
+    final tone = scheme == null ? Color(color) : studyPaperTone(color, scheme!);
+    c.drawRect(Offset.zero & s, Paint()..color = tone);
+    if (style == 'blank') return;
+    var spacing = document == null ? 14.0 : 36 * document!.zoom;
+    while (document != null && spacing < 22) {
+      spacing *= 2;
+    }
+    final camera = document?.camera ?? Offset.zero;
+    final line = Paint()
+      ..color = tone.computeLuminance() > .5
+          ? const Color(0x1826354a)
+          : const Color(0x1fffffff)
+      ..strokeWidth = .7;
+    for (var y = camera.dy % spacing; y < s.height; y += spacing) {
+      if (style == 'ruled' || style == 'grid') {
+        c.drawLine(Offset(0, y), Offset(s.width, y), line);
+      } else {
+        for (var x = camera.dx % spacing; x < s.width; x += spacing) {
+          c.drawCircle(Offset(x, y), .8, line);
+        }
+      }
+    }
+    if (style == 'grid') {
+      for (var x = camera.dx % spacing; x < s.width; x += spacing) {
+        c.drawLine(Offset(x, 0), Offset(x, s.height), line);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Paper old) => true;
+}
+
+class _InkScene extends CustomPainter {
+  _InkScene({
+    required this.document,
+    required this.live,
+    required this.stage,
+    required Listenable repaint,
+    this.dark = false,
+  }) : super(repaint: repaint);
+  final StudyDocument document;
+  final List<StudyStroke> live;
+  final Rect stage;
+  final bool dark;
+  @override
+  void paint(Canvas c, Size s) {
+    final d = document;
+    c.save();
+    c.translate(-stage.left, -stage.top);
+    final viewport = stage;
+    final printed = dark
+        ? {
+            for (final card in d.cards)
+              if (studyOnPrintedPage(card.type)) card.id,
+          }
+        : const <String>{};
+    for (final stroke in [...d.strokes, ...live]) {
+      if (d.strokeVisible(stroke) && stroke.bounds.overlaps(viewport))
+        stroke.paint(c, dark: dark && !printed.contains(stroke.anchor));
+    }
+    c.restore();
+  }
+
+  @override
+  bool shouldRepaint(_InkScene old) =>
+      old.stage != stage || old.document != document || old.dark != dark;
+  @override
+  bool shouldRebuildSemantics(_InkScene old) => false;
+}
+
+class _InkTail extends CustomPainter {
+  _InkTail({
+    required this.document,
+    required this.points,
+    required this.start,
+    required this.color,
+    required this.width,
+    required this.tool,
+    required this.brush,
+    required Listenable repaint,
+  }) : super(repaint: repaint);
+  final StudyDocument document;
+  final List<InkPoint> Function() points;
+  final int Function() start, color;
+  final double Function() width;
+  final StudyTool Function() tool;
+  final StudyBrush Function() brush;
+  @override
+  void paint(Canvas c, Size s) {
+    final p = points();
+    if (p.isEmpty) return;
+    c.save();
+    c.translate(document.camera.dx, document.camera.dy);
+    c.scale(document.zoom);
+    paintInk(
+      c,
+      p.sublist(start()),
+      color(),
+      width(),
+      tool() == StudyTool.highlighter ? 'highlighter' : 'pen',
+      brush: brush(),
+    );
+    c.restore();
+  }
+
+  @override
+  bool shouldRepaint(_InkTail old) => true;
+  @override
+  bool shouldRebuildSemantics(_InkTail old) => false;
+}

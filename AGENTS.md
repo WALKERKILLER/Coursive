@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Coursive is a local-first study workspace for recorded lectures: a Flutter app, a Go daemon that owns the library, credentials and downloads, and a Node.js assistant host. The code is migrating into this repository module by module with its commit history ([docs/migration.md](docs/migration.md)); until a module lands, its contract lives in [docs/architecture.md](docs/architecture.md) and [docs/specs/](docs/specs/). Plugins, the plugin index and the mirror list live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins).
+Coursive is a local-first study workspace for recorded lectures: a Flutter app, a Go daemon that owns the library, credentials and downloads, and a Node.js assistant host. The app lives in `app/`, the daemon in `daemon/` and the assistant host in `agent/`, imported with their commit history ([docs/migration.md](docs/migration.md)); [docs/architecture.md](docs/architecture.md) maps them and [docs/specs/](docs/specs/) holds their contracts. Plugins, the plugin index and the mirror list live in [coursive-plugins](https://github.com/WALKERKILLER/coursive-plugins).
 
 ## Repository governance
 
@@ -28,7 +28,9 @@ Write code for human readers. Keep the primary logic path visible; introduce an 
 
 - Gates: `node scripts/run-gates.mjs`
 - Brand assets: `scripts/export-brand-icons.sh` regenerates every icon from `assets/brand/source/coursive-logo-4096.png`; commit the master and the exports together.
-- Test and lint: each module adds its commands here in the change that migrates it ([docs/migration.md](docs/migration.md)).
+- Test: `(cd daemon && go test -count=1 -race ./...) && (cd agent && npm test) && (cd app && flutter test)`
+- Lint: `(cd daemon && test -z "$(gofmt -l .)" && go vet ./...) && (cd agent && npm run check) && (cd app && flutter analyze --no-fatal-infos)`
+- Interface text: edit `app/lib/l10n/app_zh.arb`, then run `flutter gen-l10n` in `app/`.
 
 Run relevant tests while working and the shared gate runner before every commit. CI or an installed pre-commit hook may repeat the exhaustive matrix.
 
@@ -44,9 +46,9 @@ Run relevant tests while working and the shared gate runner before every commit.
 ## Project rules
 
 - Credentials stay inside the daemon: source-plugin secrets, sync and service tokens and model-provider API keys are sealed there and never logged, committed, or returned by an API (a token at most as its last 4 characters). Source plugins receive their own secrets only through the daemon vault. User data (the course library and the app's data directory) never enters the repository.
-- The core app has no sign-in and no startup gate beyond the daemon: it opens on the local library. Every connection to an external course platform is a source plugin ([draft spec](docs/specs/draft-source-provider-plugins.md)); core code, docs and assets never name a specific institution or platform.
-- Plugin downloads are verified against the signed index whatever mirror served them; mirrors receive GET requests only and never credentials ([draft spec](docs/specs/draft-plugin-marketplace.md)).
-- Assistant actions are recorded with their undo and follow the user's approval mode; deleting downloaded files always waits for confirmation, and the assistant cannot change the approval mode. The assistant's write guards change only through an Approved spec.
+- The core app has no sign-in and no startup gate beyond the daemon: it opens on the local library. Every connection to an external course platform is a source plugin ([spec 0024](docs/specs/0024-source-provider-plugins.md)); core code, docs and assets never name a specific institution or platform.
+- Plugin downloads are verified against the signed index whatever mirror served them; mirrors receive GET requests only and never credentials ([spec 0025](docs/specs/0025-plugin-marketplace.md)).
+- Assistant actions are recorded with their undo and follow the user's approval mode; deleting downloaded files always waits for confirmation, and the assistant cannot change the approval mode. The assistant's write guards (note overwrite and transcript coverage in `agent/src/tools.mjs`, the memory guard in `agent/src/memory.mjs`, operations and approval checks in `agent/src/operate.mjs`) change only through an Approved spec.
 - Do not copy code from GPL/AGPL projects; reimplement from protocols and documentation with provenance, and keep third-party asset `NOTICE` files.
 - A daemon route or JSON field change updates both clients (the app and the assistant host) in the same change.
 
@@ -80,6 +82,6 @@ Follow [docs/testing.md](docs/testing.md). Name the regression risk, then choose
 
 ## Enabled optional capabilities
 
-- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; each migrated module adds its own job, run only for changes that touch it.
+- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes.
 - Path-level owners live in [CODEOWNERS](CODEOWNERS). The `main` branch ruleset requires an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request.
 - Security vulnerabilities are reported per [SECURITY.md](SECURITY.md).

@@ -1,0 +1,5 @@
+{
+	"name": "official",
+	"owner": { "name": "Coursive" },
+	"plugins": [{ "source": "socratic", "featured": true }]
+}
