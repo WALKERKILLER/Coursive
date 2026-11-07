@@ -95,6 +95,7 @@ extension _StudyStage on StudyCanvasState {
     bool bind = true,
     bool pick = false,
     bool allowImages = false,
+    List<Map<String, dynamic>>? visuals,
     Offset? at,
   }) async {
     final d = document;
@@ -106,9 +107,9 @@ extension _StudyStage on StudyCanvasState {
             'selection': <String, dynamic>{},
             'include_video': false,
           };
-    final visual =
-        bind && _regionSelection != null && (send == null || allowImages)
-        ? await _captureSelection()
+    // With 「看图」 off no screenshot is taken at all.
+    final visual = bind && allowImages && _regionSelection != null
+        ? visuals ?? await _captureSelection()
         : <Map<String, dynamic>>[];
     if (!mounted) return;
     final card = StudyCard(
@@ -161,24 +162,32 @@ extension _StudyStage on StudyCanvasState {
     return rect;
   }
 
-  void _pinAnswer(Map turn) {
+  /// Keeps an answer as an editable card, linked to its turn and its sources.
+  void _pinAnswer(Map turn, String conversation) {
     final d = document;
-    final answer = '${turn['answer'] ?? ''}'.trim();
+    final answer = studyPlainAnswer('${turn['answer'] ?? ''}').trim();
     if (d == null || answer.isEmpty || !d.editable(d.activeLayer)) return;
+    final pinned = _pinnedCard(turn, conversation, const []);
+    if (pinned != null) {
+      _revealCard(pinned);
+      return;
+    }
     if (d.cards.length >= 2000) {
       _toast('画布卡片已达上限');
       return;
     }
+    final evidence = studyTurnEvidence(turn);
+    final seen = <String>{};
     final anchors = [
-      for (final source in (turn['result'] as Map?)?['sources'] as List? ?? [])
-        StudyAnchor.fromJson(source as Map),
-    ];
+      for (final a
+          in evidence?.map((e) => e['anchor']) ??
+              ((turn['result'] as Map?)?['sources'] as List? ?? []))
+        if (a is Map && seen.add(jsonEncode(a))) StudyAnchor.fromJson(a),
+    ].take(24).toList();
     final source = d.cards
         .where((c) => anchors.any((a) => a.objectId == c.id))
         .firstOrNull;
-    final rect = source == null
-        ? _freeSpot(const Size(400, 300))
-        : Rect.fromLTWH(source.rect.right + 24, source.rect.top, 400, 300);
+    final rect = _placeNear(source?.rect, const Size(400, 300));
     d.checkpoint();
     d.cards.add(
       StudyCard(
@@ -188,6 +197,7 @@ extension _StudyStage on StudyCanvasState {
         rect: rect,
         title: '${turn['question'] ?? 'AI 解答'}'.characters.take(60).toString(),
         text: answer,
+        generation: studyPinGeneration(conversation, '${turn['id']}'),
         sources: anchors,
       ),
     );
@@ -199,6 +209,42 @@ extension _StudyStage on StudyCanvasState {
     _toast('已留在画布，可移动、编辑或撤销');
   }
 
+  /// A free place beside [source] (right, below, then left), clear of cards
+  /// and ink; otherwise the next free spot in view.
+  Rect _placeNear(Rect? source, Size size) {
+    final d = document!;
+    if (source == null) return _freeSpot(size);
+    bool free(Rect r) =>
+        !d.cards.any(
+          (c) =>
+              c.type != 'conversation' &&
+              d.visible(c.layer) &&
+              c.rect.inflate(16).overlaps(r),
+        ) &&
+        !d.strokes.any((s) => d.visible(s.layer) && s.bounds.overlaps(r));
+    const gap = 24.0;
+    for (final start in [
+      Rect.fromLTWH(source.right + gap, source.top, size.width, size.height),
+      Rect.fromLTWH(source.left, source.bottom + gap, size.width, size.height),
+      Rect.fromLTWH(
+        source.left - gap - size.width,
+        source.top,
+        size.width,
+        size.height,
+      ),
+    ]) {
+      var r = start;
+      for (
+        var i = 0;
+        i < 8;
+        i++, r = r.shift(Offset(0, size.height / 2 + gap))
+      ) {
+        if (free(r)) return r;
+      }
+    }
+    return _freeSpot(size);
+  }
+
   /// Brings [rect] into view at the current zoom when it is not already.
   void _reveal(Rect rect) {
     final d = document!;
@@ -207,12 +253,30 @@ extension _StudyStage on StudyCanvasState {
     _flyTo(_viewport.center(Offset.zero) - rect.center * d.zoom, d.zoom);
   }
 
-  /// The card an answer was pinned as, while it still holds the answer.
-  StudyCard? _pinnedCard(Map turn) {
+  /// The card a turn was pinned as, found by its generation; edits keep the
+  /// link. Cards pinned before generations match by text only when that
+  /// answer occurs once in [turns].
+  StudyCard? _pinnedCard(Map turn, String conversation, List turns) {
+    final d = document;
+    if (d == null) return null;
+    final generation = studyPinGeneration(conversation, '${turn['id']}');
+    final linked = d.cards
+        .where((c) => c.type == 'text' && c.generation == generation)
+        .lastOrNull;
+    if (linked != null || turns.isEmpty) return linked;
     final answer = '${turn['answer'] ?? ''}'.trim();
-    if (answer.isEmpty) return null;
-    return document?.cards
-        .where((c) => c.type == 'text' && c.text == answer)
+    final same = turns.where(
+      (t) => '${(t as Map)['answer'] ?? ''}'.trim() == answer,
+    );
+    if (answer.isEmpty || same.length != 1) return null;
+    final plain = studyPlainAnswer(answer).trim();
+    return d.cards
+        .where(
+          (c) =>
+              c.type == 'text' &&
+              c.generation.isEmpty &&
+              (c.text == answer || c.text == plain),
+        )
         .lastOrNull;
   }
 
@@ -793,6 +857,16 @@ class _StageViewState extends State<_StageView>
         raw['state'] == 'cancelled';
     final working = newest && widget.busy && answer.isEmpty && !failed;
     final sources = ((raw['result'] as Map?)?['sources'] as List?) ?? const [];
+    final evidence = studyTurnEvidence(raw);
+    final conversation = widget.thread?.conversationId ?? '';
+    final pin = raw['state'] == 'done'
+        ? _PinButton(
+            key: ValueKey('study-pin-answer-${raw['id']}'),
+            pinned: owner._pinnedCard(raw, conversation, widget.turns),
+            onPin: () => owner._pinAnswer(raw, conversation),
+            onShow: (card) => owner._revealCard(card),
+          )
+        : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.md),
       child: Column(
@@ -861,18 +935,50 @@ class _StageViewState extends State<_StageView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectionArea(child: CoursiveMarkdown(answer)),
-                  if (raw['state'] == 'done')
+                  SelectionArea(
+                    child: evidence == null
+                        ? CoursiveMarkdown(answer)
+                        : CoursiveMarkdown(
+                            studyEvidenceMarkdown(answer, evidence),
+                            evidenceBuilder: (id, _) {
+                              final i = evidence.indexWhere(
+                                (e) => '${e['id']}' == id,
+                              );
+                              return i < 0
+                                  ? const SizedBox.shrink()
+                                  : _CitationMark(
+                                      owner: owner,
+                                      evidence: evidence[i],
+                                      number: i + 1,
+                                    );
+                            },
+                          ),
+                  ),
+                  if (evidence != null && raw['state'] == 'done')
+                    Padding(
+                      padding: const EdgeInsets.only(top: Space.sm),
+                      child: _Provenance(
+                        owner: owner,
+                        evidence: evidence,
+                        suggestions:
+                            (raw['result'] as Map)['suggestions'] as List? ??
+                            const [],
+                        trailing: pin,
+                        onFollowup: (text) {
+                          widget.input.text = text;
+                          widget.input.selection = TextSelection.collapsed(
+                            offset: text.length,
+                          );
+                          _focus.requestFocus();
+                        },
+                      ),
+                    )
+                  else if (pin != null)
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
-                      child: _PinButton(
-                        key: ValueKey('study-pin-answer-${raw['id']}'),
-                        pinned: owner._pinnedCard(raw),
-                        onPin: () => owner._pinAnswer(raw),
-                        onShow: (card) => owner._revealCard(card),
-                      ),
+                      child: pin,
                     ),
-                  if (sources.isNotEmpty) ...[
+                  if (evidence == null && sources.isNotEmpty) ...[
                     const SizedBox(height: Space.sm),
                     Wrap(
                       spacing: Space.xs,
@@ -1086,6 +1192,11 @@ class _StageViewState extends State<_StageView>
                     // composition keeps Enter for itself.
                     canRequestFocus: false,
                     onKeyEvent: (_, e) {
+                      if (e is KeyDownEvent &&
+                          e.logicalKey == LogicalKeyboardKey.escape &&
+                          owner._goBack()) {
+                        return KeyEventResult.handled;
+                      }
                       if (e is! KeyDownEvent ||
                           (e.logicalKey != LogicalKeyboardKey.enter &&
                               e.logicalKey != LogicalKeyboardKey.numpadEnter) ||

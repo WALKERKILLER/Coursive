@@ -161,6 +161,7 @@ extension _StudyInteraction on StudyCanvasState {
     _quickAsk = false;
     _quickError = null;
     _quickImages = false;
+    _quickVisuals = [];
     _selectionReady = true;
     _cursor.value++;
     if (_captureLasso) unawaited(_captureRegionCard());
@@ -318,200 +319,630 @@ extension _StudyInteraction on StudyCanvasState {
     d.changed();
   }
 
+  void _clearSelection() => _update(() {
+    _selectionReady = false;
+    _selectionBounds = null;
+    _regionSelection = null;
+    _quickAsk = false;
+    _selection.clear();
+    _detail.clear();
+    _cursor.value++;
+  });
+
+  /// What the selection binds, one entry per source, as the composer names it.
+  List<_Bound> _boundSources() {
+    final d = document!;
+    return [
+      for (final c in d.cards)
+        if (c.type != 'conversation' &&
+            d.visible(c.layer) &&
+            (_selection.contains(c.id) || _detail.objectId == c.id))
+          _Bound(
+            id: c.id,
+            label: c.title.isNotEmpty
+                ? c.title
+                : c.type == 'lecture'
+                ? l10n.studyBoundLecture
+                : l10n.studyBoundCard,
+            detail: [
+              if (c.type == 'pdfdoc' && c.page > 0)
+                l10n.studySourcePage(c.page),
+              if (_detail.objectId == c.id && _detail.region != null)
+                l10n.studyBoundRegion,
+            ].join(' · '),
+            icon: switch (c.type) {
+              'lecture' || 'video' => Icons.smart_display_outlined,
+              'image' => Icons.image_outlined,
+              'pdf' || 'pdfdoc' => Icons.description_outlined,
+              _ => Icons.notes_rounded,
+            },
+            readable: _readable(
+              c,
+              _detail.objectId == c.id ? _detail.region : null,
+            ),
+          ),
+      if (_detail.strokeIds.isNotEmpty)
+        _Bound(
+          id: 'selected-ink',
+          label: l10n.studyBoundInk(_detail.strokeIds.length),
+          icon: Icons.gesture_rounded,
+          readable: false,
+        ),
+    ];
+  }
+
+  /// Whether the daemon will find words to read: a page region reads the
+  /// words at least half inside it, as `studyRegionSpan` does. Null when
+  /// only a run can tell (a transcript).
+  bool? _readable(StudyCard c, Rect? region) {
+    if (c.type == 'lecture' || c.type == 'video') return null;
+    if (region == null) {
+      return const {'image', 'pdf'}.contains(c.type)
+          ? false
+          : c.contentText.trim().isNotEmpty;
+    }
+    if (c.type != 'pdfdoc' || c.quarterTurns % 4 != 0) return false;
+    double n(Object? v) => v is num && v.isFinite ? v.toDouble() : 0;
+    return c.textBoxes.any((b) {
+      final box = Rect.fromLTWH(n(b['x']), n(b['y']), n(b['w']), n(b['h']));
+      if (box.isEmpty || n(b['end']) <= n(b['start'])) return false;
+      final hit = box.intersect(region);
+      return hit.width > 0 &&
+          hit.height > 0 &&
+          hit.width * hit.height >= box.width * box.height / 2;
+    });
+  }
+
+  void _unbind(String id) => _update(() {
+    if (id == 'selected-ink') {
+      _detail.strokeIds.clear();
+    } else if (_detail.objectId == id) {
+      _detail
+        ..objectId = null
+        ..start = 0
+        ..end = 0
+        ..region = _regionSelection;
+    }
+    _selection.remove(id);
+    // A crop belongs to the binding it was taken from.
+    _quickVisuals = [];
+    if (_quickImages) unawaited(_previewQuickVision());
+  });
+
+  void _bindCard(String id) => _update(() {
+    _selection.add(id);
+    _quickVisuals = [];
+    if (_quickImages) unawaited(_previewQuickVision());
+  });
+
+  Future<void> _setQuickVision(bool on) async {
+    _update(() {
+      _quickImages = on;
+      _quickVisuals = [];
+      _quickError = null;
+    });
+    if (on) await _previewQuickVision();
+  }
+
+  /// Takes the crops 「看图」 will send, so the learner sees them first.
+  Future<void> _previewQuickVision() async {
+    if (_quickCapturing) return;
+    _update(() => _quickCapturing = true);
+    try {
+      final images = await _captureSelection();
+      if (mounted && _quickImages) _update(() => _quickVisuals = images);
+    } catch (e) {
+      if (mounted && _quickImages) {
+        _update(() => _quickError = l10n.studyQuickSendFailed('$e'));
+      }
+    } finally {
+      if (mounted) _update(() => _quickCapturing = false);
+    }
+  }
+
   Widget _selectionToolbar() {
     if (_tool != StudyTool.region ||
         !_selectionReady ||
         _selectionBounds == null ||
         _selectionDragging)
       return const SizedBox.shrink();
-    final hasContent = _selection.isNotEmpty || _detail.strokeIds.isNotEmpty;
     return AnimatedBuilder(
       animation: _camera,
-      builder: (_, child) {
+      builder: (context, _) {
         final d = document!, r = _selectionBounds!;
-        final width = math.min(600.0, math.max(160.0, _viewport.width - 24));
-        final left = (r.center.dx * d.zoom + d.camera.dx - width / 2).clamp(
-          12.0,
-          math.max(12.0, _viewport.width - width - 12),
+        final anchor = Rect.fromPoints(
+          r.topLeft * d.zoom + d.camera,
+          r.bottomRight * d.zoom + d.camera,
         );
-        final top = (r.top * d.zoom + d.camera.dy - 58).clamp(
-          8.0,
-          math.max(8.0, _viewport.height - 64),
-        );
-        Widget action(String label, IconData icon, VoidCallback? onPressed) =>
-            TextButton.icon(
-              onPressed: onPressed,
-              icon: Icon(icon, size: 17),
-              label: Text(label),
-            );
-        return Positioned(
-          left: left.toDouble(),
-          top: top.toDouble(),
-          width: width,
-          child: Material(
-            key: _selectionMenuKey,
-            elevation: 5,
-            borderRadius: BorderRadius.circular(14),
-            child: _quickAsk
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.auto_awesome_outlined, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('study-quick-question'),
-                                controller: _quickInput,
-                                autofocus: true,
-                                maxLength: 4000,
-                                decoration: const InputDecoration(
-                                  hintText: '问问选中的内容…',
-                                  counterText: '',
-                                  border: InputBorder.none,
-                                ),
-                                onSubmitted: (_) => _sendQuickQuestion(),
-                              ),
-                            ),
-                            FilterChip(
-                              label: const Text('附选区图'),
-                              selected: _quickImages,
-                              onSelected: _quickSending
-                                  ? null
-                                  : (value) =>
-                                        _update(() => _quickImages = value),
-                              tooltip: '允许把此选区图片发送给视觉模型',
-                            ),
-                            IconButton(
-                              tooltip: '发送问题',
-                              icon: _quickSending
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.arrow_upward),
-                              onPressed: _quickSending
-                                  ? null
-                                  : _sendQuickQuestion,
-                            ),
-                            IconButton(
-                              tooltip: '收起提问',
-                              icon: const Icon(Icons.close),
-                              onPressed: () => _update(() => _quickAsk = false),
-                            ),
-                          ],
-                        ),
-                        if (_quickError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              _quickError!,
-                              key: const ValueKey('study-quick-error'),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        action('问 AI', Icons.auto_awesome_outlined, _ask),
-                        _selectionActions(),
-                        action(
-                          '复制',
-                          Icons.copy_outlined,
-                          hasContent ? _copySelection : null,
-                        ),
-                        action(
-                          '粘贴',
-                          Icons.content_paste,
-                          _copiedBounds == null ? null : _pasteSelection,
-                        ),
-                        action(
-                          '副本',
-                          Icons.control_point_duplicate,
-                          hasContent
-                              ? () {
-                                  _copySelection();
-                                  _pasteSelection();
-                                }
-                              : null,
-                        ),
-                        PopupMenuButton<int>(
-                          tooltip: '选区改色',
-                          enabled: _detail.strokeIds.isNotEmpty,
-                          icon: const Icon(Icons.palette_outlined, size: 20),
-                          itemBuilder: (_) => [
-                            for (final c in _penPalette.take(20))
-                              PopupMenuItem(
-                                value: c,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.circle, color: Color(c)),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                          onSelected: (c) {
-                            d.checkpoint();
-                            _transformSelection(r, r, color: c);
-                          },
-                        ),
-                        PopupMenuButton<double>(
-                          tooltip: '选区粗细',
-                          enabled: _detail.strokeIds.isNotEmpty,
-                          icon: const Icon(Icons.line_weight, size: 20),
-                          itemBuilder: (_) => [
-                            for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
-                              PopupMenuItem(
-                                value: w,
-                                child: Text('${w.toInt()}'),
-                              ),
-                          ],
-                          onSelected: (w) {
-                            d.checkpoint();
-                            _transformSelection(r, r, width: w);
-                          },
-                        ),
-                        action(
-                          '删除',
-                          Icons.delete_outline,
-                          hasContent ? _deleteSelection : null,
-                        ),
-                        IconButton(
-                          tooltip: '取消选择',
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => _update(() {
-                            _selectionReady = false;
-                            _selectionBounds = null;
-                            _regionSelection = null;
-                            _selection.clear();
-                            _detail.clear();
-                            _cursor.value++;
-                          }),
-                        ),
-                      ],
-                    ),
-                  ),
+        return Positioned.fill(
+          child: CustomSingleChildLayout(
+            delegate: _FloatingLayout(anchor, _topBarsBottom),
+            child: _Appear(
+              key: _selectionMenuKey,
+              child: _quickAsk
+                  ? _quickComposer(context)
+                  : _selectionBar(context),
+            ),
           ),
         );
       },
     );
   }
+
+  /// Three verbs for a selection, with editing in a menu.
+  Widget _selectionBar(BuildContext context) {
+    final d = document!, r = _selectionBounds!;
+    final ink = _detail.strokeIds.isNotEmpty;
+    return GlassSurface(
+      key: const ValueKey('study-selection-bar'),
+      radius: Corners.full,
+      depth: GlassDepth.float,
+      padding: const EdgeInsets.all(Space.xxs),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _BarAction(
+            label: l10n.studyAskAI,
+            icon: Icons.auto_awesome_outlined,
+            tooltip: l10n.studyAskHint,
+            primary: true,
+            onPressed: () => unawaited(_ask()),
+          ),
+          _BarAction(
+            label: l10n.studyExcerpt,
+            icon: Icons.crop_rounded,
+            tooltip: l10n.studyExcerptHint,
+            onPressed: _selectionBusy
+                ? null
+                : () => unawaited(_captureRegionCard()),
+          ),
+          _BarAction(
+            label: _linkStart == null ? l10n.studyRelate : l10n.studyRelateHere,
+            icon: _linkStart == null
+                ? Icons.link_rounded
+                : Icons.add_link_rounded,
+            tooltip: _linkStart == null
+                ? l10n.studyRelateHint
+                : l10n.studyRelateHereHint,
+            onPressed: _selectionBusy
+                ? null
+                : () => _selectionJob(_linkSelection),
+          ),
+          if (ink) ...[
+            PopupMenuButton<int>(
+              tooltip: '选区改色',
+              icon: const Icon(Icons.palette_outlined, size: 20),
+              itemBuilder: (_) => [
+                for (final c in _penPalette.take(20))
+                  PopupMenuItem(
+                    value: c,
+                    child: Row(
+                      children: [
+                        Icon(Icons.circle, color: Color(c)),
+                        const SizedBox(width: 12),
+                        Text(
+                          '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              onSelected: (c) {
+                d.checkpoint();
+                _transformSelection(r, r, color: c);
+              },
+            ),
+            PopupMenuButton<double>(
+              tooltip: '选区粗细',
+              icon: const Icon(Icons.line_weight, size: 20),
+              itemBuilder: (_) => [
+                for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
+                  PopupMenuItem(value: w, child: Text('${w.toInt()}')),
+              ],
+              onSelected: (w) {
+                d.checkpoint();
+                _transformSelection(r, r, width: w);
+              },
+            ),
+          ],
+          _selectionActions(),
+        ],
+      ),
+    );
+  }
+
+  /// 「问 AI」 in place: what is bound, the question, and whether pixels go too.
+  Widget _quickComposer(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final bound = _boundSources();
+    final unreadable =
+        bound.isNotEmpty && bound.every((b) => b.readable == false);
+    final d = document!;
+    final more =
+        d.cards
+            .where(
+              (c) =>
+                  c.type != 'conversation' &&
+                  d.visible(c.layer) &&
+                  !_selection.contains(c.id) &&
+                  _detail.objectId != c.id,
+            )
+            .toList()
+          // Nearby material first.
+          ..sort(
+            (a, b) => (a.rect.center - _selectionBounds!.center).distance
+                .compareTo((b.rect.center - _selectionBounds!.center).distance),
+          );
+    return SizedBox(
+      key: const ValueKey('study-quick-composer'),
+      width: math.min(380.0, _viewport.width - 24),
+      child: GlassSurface(
+        radius: Corners.lg,
+        depth: GlassDepth.float,
+        padding: const EdgeInsets.fromLTRB(
+          Space.md,
+          Space.sm,
+          Space.sm,
+          Space.sm,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: Space.xs,
+              runSpacing: Space.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final b in bound)
+                  _BoundChip(
+                    bound: b,
+                    onRemove: _quickSending ? null : () => _unbind(b.id),
+                  ),
+                if (more.isNotEmpty)
+                  MenuAnchor(
+                    menuChildren: [
+                      for (final c in more.take(12))
+                        MenuItemButton(
+                          onPressed: () => _bindCard(c.id),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 240),
+                            child: Text(
+                              c.title.isNotEmpty
+                                  ? c.title
+                                  : l10n.studyBoundCard,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                    ],
+                    builder: (context, menu, _) => IconButton(
+                      tooltip: l10n.studyBindMore,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _quickSending
+                          ? null
+                          : () => menu.isOpen ? menu.close() : menu.open(),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Focus(
+                    canRequestFocus: false,
+                    onKeyEvent: (_, e) {
+                      if (e is KeyDownEvent &&
+                          e.logicalKey == LogicalKeyboardKey.escape) {
+                        // The draft stays for the next 「问 AI」.
+                        _update(() => _quickAsk = false);
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: TextField(
+                      key: const ValueKey('study-quick-question'),
+                      controller: _quickInput,
+                      autofocus: true,
+                      maxLength: 4000,
+                      style: tt.bodyLarge,
+                      decoration: InputDecoration(
+                        hintText: l10n.studyQuickHint,
+                        counterText: '',
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        filled: false,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: Space.md,
+                        ),
+                      ),
+                      onSubmitted: (_) => _sendQuickQuestion(),
+                    ),
+                  ),
+                ),
+                IconButton.filled(
+                  tooltip: '发送问题',
+                  onPressed: _quickSending ? null : _sendQuickQuestion,
+                  icon: _quickSending
+                      ? SizedBox.square(
+                          dimension: 18,
+                          child: Icon(
+                            Icons.more_horiz_rounded,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        )
+                      : const Icon(Icons.arrow_upward_rounded),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                FilterChip(
+                  avatar: Icon(
+                    _quickImages
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                    size: 16,
+                  ),
+                  label: Text(l10n.studyAllowImages),
+                  tooltip: l10n.studyAllowImagesHint,
+                  selected: _quickImages,
+                  showCheckmark: false,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: _quickSending
+                      ? null
+                      : (v) => unawaited(_setQuickVision(v)),
+                ),
+                const SizedBox(width: Space.sm),
+                if (_quickImages && _quickCapturing)
+                  Icon(Icons.crop_rounded, size: 18, color: cs.outline)
+                else
+                  for (final v in _quickVisuals)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: Space.xs),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(Corners.xs),
+                        child: DecoratedBox(
+                          position: DecorationPosition.foreground,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: cs.outlineVariant),
+                            borderRadius: BorderRadius.circular(Corners.xs),
+                          ),
+                          child: Image.memory(
+                            base64Decode('${v['data']}'),
+                            key: ValueKey('study-quick-crop-${v['source_id']}'),
+                            height: 36,
+                            fit: BoxFit.contain,
+                            gaplessPlayback: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                const Spacer(),
+                Text(
+                  l10n.studyQuickKeys,
+                  style: tt.labelSmall?.copyWith(color: cs.outline),
+                ),
+              ],
+            ),
+            if (unreadable && !_quickImages)
+              Padding(
+                padding: const EdgeInsets.only(top: Space.xs),
+                child: Text(
+                  l10n.studyQuickNeedsVision,
+                  key: const ValueKey('study-quick-needs-vision'),
+                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ),
+            if (_quickError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: Space.xs),
+                child: Text(
+                  _quickError!,
+                  key: const ValueKey('study-quick-error'),
+                  style: tt.bodySmall?.copyWith(color: cs.error),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A source the quick composer will send.
+class _Bound {
+  const _Bound({
+    required this.id,
+    required this.label,
+    required this.icon,
+    this.detail = '',
+    this.readable,
+  });
+  final String id, label, detail;
+  final IconData icon;
+
+  /// Readable text is present; false needs 「看图」; null is unknown.
+  final bool? readable;
+}
+
+class _BoundChip extends StatelessWidget {
+  const _BoundChip({required this.bound, this.onRemove});
+  final _Bound bound;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final readable = bound.readable;
+    return Container(
+      key: ValueKey('study-bound-${bound.id}'),
+      height: 30,
+      padding: const EdgeInsetsDirectional.only(start: Space.sm),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(Corners.sm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(bound.icon, size: 14, color: cs.onSurfaceVariant),
+          const SizedBox(width: Space.xs),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 150),
+            child: Text(
+              bound.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tt.labelMedium,
+            ),
+          ),
+          if (bound.detail.isNotEmpty) ...[
+            const SizedBox(width: Space.xs),
+            Text(
+              bound.detail,
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+          if (readable != null) ...[
+            const SizedBox(width: Space.xs),
+            Tooltip(
+              message: readable
+                  ? l10n.studyBoundReadable
+                  : l10n.studyBoundNeedsVision,
+              child: Icon(
+                readable
+                    ? Icons.short_text_rounded
+                    : Icons.image_search_rounded,
+                size: 14,
+                color: readable ? cs.primary : cs.tertiary,
+              ),
+            ),
+          ],
+          SizedBox.square(
+            dimension: 30,
+            child: IconButton(
+              tooltip: l10n.studyBoundRemove,
+              padding: EdgeInsets.zero,
+              iconSize: 14,
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A selection-bar verb; the primary one is filled.
+class _BarAction extends StatelessWidget {
+  const _BarAction({
+    required this.label,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.primary = false,
+  });
+  final String label, tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    const size = Size(44, 44);
+    final shape = const StadiumBorder();
+    return Tooltip(
+      message: tooltip,
+      child: primary
+          ? FilledButton.tonalIcon(
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(minimumSize: size, shape: shape),
+              icon: Icon(icon, size: 18),
+              label: Text(label),
+            )
+          : TextButton.icon(
+              onPressed: onPressed,
+              style: TextButton.styleFrom(minimumSize: size, shape: shape),
+              icon: Icon(icon, size: 18),
+              label: Text(label),
+            ),
+    );
+  }
+}
+
+/// Places a floating control 8 dp off the anchor's top-right corner, below it
+/// when the top is covered, and 12 dp inside the window.
+class _FloatingLayout extends SingleChildLayoutDelegate {
+  _FloatingLayout(this.anchor, this.topInset);
+  final Rect anchor;
+  final double topInset;
+  static const gap = 8.0, edge = 12.0;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints c) =>
+      BoxConstraints.loose(
+        Size(
+          math.max(0, c.maxWidth - 2 * edge),
+          math.max(0, c.maxHeight - 2 * edge),
+        ),
+      );
+
+  @override
+  Offset getPositionForChild(Size size, Size child) {
+    final x = (anchor.right - child.width).clamp(
+      edge,
+      math.max(edge, size.width - child.width - edge),
+    );
+    final top = topInset + edge, bottom = size.height - edge;
+    var y = anchor.top - gap - child.height;
+    if (y < top) y = anchor.bottom + gap;
+    // Neither side has room: stay inside the window over the selection.
+    if (y + child.height > bottom) {
+      y = (anchor.top - gap - child.height).clamp(
+        top,
+        math.max(top, bottom - child.height),
+      );
+    }
+    return Offset(x.toDouble(), y);
+  }
+
+  @override
+  bool shouldRelayout(_FloatingLayout old) =>
+      old.anchor != anchor || old.topInset != topInset;
+}
+
+/// A short scale-and-fade as a floating control appears or changes mode.
+class _Appear extends StatelessWidget {
+  const _Appear({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    key: ValueKey(child.key),
+    tween: Tween(begin: 0, end: 1),
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : Motion.short4,
+    curve: Motion.emphasizedDecelerate,
+    builder: (_, t, child) => Opacity(
+      opacity: t,
+      child: Transform.scale(
+        scale: .96 + .04 * t,
+        alignment: Alignment.bottomRight,
+        child: child,
+      ),
+    ),
+    child: child,
+  );
 }
 
 class _InteractionFeedback extends CustomPainter {

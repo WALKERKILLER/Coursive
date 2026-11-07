@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -126,6 +127,43 @@ func TestStudyContextIndependentTextSelections(t *testing.T) {
 	for _, s := range out.Sources {
 		if strings.Contains(s.ID, "lecture") {
 			t.Fatal("unselected video was included")
+		}
+	}
+}
+
+func TestStudyConversationValidatesGroundedResults(t *testing.T) {
+	l, _ := reviewFixture(t)
+	ctx := context.Background()
+	anchor := `{"id":"object-pdf","object_id":"pdf","kind":"pdf","page":2,"start":4,"end":12}`
+	save := func(id, result string) error {
+		c, e := l.StudyConversation(ctx, "one", id, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		c.Turns = []StudyTurn{{ID: "turn", Question: "q", Answer: "a", State: "done", Result: json.RawMessage(result)}}
+		_, e = l.StudyConversation(ctx, "one", id, &c)
+		return e
+	}
+	good := `{"schema_version":2,"sources":[],"evidence":[{"id":"e1","source_id":"object-pdf","kind":"exact_text","status":"verified","label":"第 2 页","anchor":` + anchor + `}],"suggestions":[{"kind":"open_source","evidence_id":"e1"},{"kind":"ask_followup","text":"再举一个例子"}]}`
+	if e := save("good", good); e != nil {
+		t.Fatal("valid grounded result rejected", e)
+	}
+	if e := save("legacy", `{"sources":[{"anything":true}]}`); e != nil {
+		t.Fatal("legacy result rejected", e)
+	}
+	for name, result := range map[string]string{
+		"unknown kind":      `{"schema_version":2,"evidence":[{"id":"e1","kind":"guess","status":"verified","anchor":` + anchor + `}]}`,
+		"unknown status":    `{"schema_version":2,"evidence":[{"id":"e1","kind":"exact_text","status":"likely","anchor":` + anchor + `}]}`,
+		"duplicate id":      `{"schema_version":2,"evidence":[{"id":"e1","kind":"exact_text","status":"verified","anchor":` + anchor + `},{"id":"e1","kind":"exact_text","status":"verified","anchor":` + anchor + `}]}`,
+		"bad id":            `{"schema_version":2,"evidence":[{"id":"x1","kind":"exact_text","status":"verified","anchor":` + anchor + `}]}`,
+		"bad anchor":        `{"schema_version":2,"evidence":[{"id":"e1","kind":"exact_text","status":"verified","anchor":{"id":"object-pdf","object_id":"pdf","kind":"pdf","start":9,"end":2}}]}`,
+		"unissued jump":     `{"schema_version":2,"suggestions":[{"kind":"open_source","evidence_id":"e9"}]}`,
+		"action suggestion": `{"schema_version":2,"suggestions":[{"kind":"delete_card","text":"x"}]}`,
+		"too many":          `{"schema_version":2,"suggestions":[{"kind":"ask_followup","text":"a"},{"kind":"ask_followup","text":"b"},{"kind":"ask_followup","text":"c"}]}`,
+		"future schema":     `{"schema_version":3}`,
+	} {
+		if e := save("bad", result); !errors.Is(e, ErrStudyInvalid) {
+			t.Fatal(name, "accepted", e)
 		}
 	}
 }

@@ -105,3 +105,32 @@ func TestStudyKnowledgeAndBrushPersistence(t *testing.T) {
 		t.Fatal("invalid brush accepted", e)
 	}
 }
+
+func TestStudyRegionSpanUTF16(t *testing.T) {
+	// "学习 😀 go" in UTF-16: 学0 习1 space2 😀3-4 space5 g6 o7.
+	text := "学习 😀 go"
+	boxes := []StudyTextBox{
+		{Start: 0, End: 2, X: .1, Y: .1, W: .2, H: .1},
+		{Start: 3, End: 5, X: .35, Y: .1, W: .1, H: .1},
+		{Start: 6, End: 8, X: .1, Y: .3, W: .2, H: .1},
+	}
+	start, end, ok := studyRegionSpan(boxes, []float64{.3, .05, .2, .2})
+	if !ok || start != 3 || end != 5 {
+		t.Fatal("emoji box", start, end, ok)
+	}
+	if got, e := studySlice(text, start, end); e != nil || got != "😀" {
+		t.Fatal(got, e)
+	}
+	// Both lines are covered, so the span reads across them in order.
+	start, end, ok = studyRegionSpan(boxes, []float64{.05, .05, .5, .4})
+	if got, _ := studySlice(text, start, end); !ok || got != text {
+		t.Fatal("cross-line", got)
+	}
+	// A word less than half inside the region is left out.
+	if _, _, ok = studyRegionSpan(boxes, []float64{.25, .05, .08, .2}); ok {
+		t.Fatal("partial word selected")
+	}
+	if _, _, ok = studyRegionSpan(boxes, nil); ok {
+		t.Fatal("no region")
+	}
+}

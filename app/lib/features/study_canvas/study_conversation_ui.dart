@@ -53,7 +53,8 @@ extension _StudyModules on StudyCanvasState {
     if (newConversation || (state == null && picked)) {
       await _startConversation(bind: bind);
     } else if (state != null && picked) {
-      final visual = _regionSelection != null
+      final visual =
+          _regionSelection != null && state.data?['allow_images'] == true
           ? await _captureSelection()
           : <Map<String, dynamic>>[];
       if (!mounted) return;
@@ -541,6 +542,36 @@ class _ConversationBodyState extends State<_ConversationBody> {
     (t) => studyVisualFingerprint(source, quarterTurns: t),
   ).contains(visualFingerprints[id]);
 
+  /// 「看图」 was off when this selection was bound, so nothing was captured.
+  /// Opting in takes the crops now, while the canvas still shows exactly that
+  /// selection; otherwise the attachment is rebuilt or reported at send.
+  Future<void> captureBound() async {
+    final bound = query['selection'];
+    if (owner._regionSelection == null ||
+        bound is! Map ||
+        bound.isEmpty ||
+        jsonEncode(bound) != jsonEncode(owner._detail.json())) {
+      return;
+    }
+    try {
+      final images = await owner._captureSelection();
+      if (!mounted) return;
+      setState(() {
+        for (final image in images) {
+          final id = '${image['source_id']}';
+          visuals[id] = image;
+          final source = (preview?['sources'] as List? ?? [])
+              .whereType<Map>()
+              .where((s) => '${s['id']}' == id)
+              .firstOrNull;
+          if (source != null) visualFingerprints[id] = _fingerprint(source);
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    }
+  }
+
   Future<void> removeSource(Map source) async {
     final q = query;
     final id = source['anchor']['object_id'];
@@ -729,7 +760,14 @@ class _ConversationBodyState extends State<_ConversationBody> {
         turn['context_key'] = out['context_key'];
         turn['state'] = 'done';
         // Keep only answer provenance. Older hosts' operations must never run here.
-        turn['result'] = {'sources': out['sources'] ?? []};
+        turn['result'] = {
+          'sources': out['sources'] ?? [],
+          if (out['schema_version'] == 2) ...{
+            'schema_version': 2,
+            'evidence': out['evidence'] ?? [],
+            'suggestions': out['suggestions'] ?? [],
+          },
+        };
         await save();
         if (mounted) setState(() => busy = false);
       } else if (out['state'] == 'error' || out['state'] == 'cancelled') {
@@ -808,8 +846,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
                   ))
           ? data!['allow_images'] == true
           : null,
-      onAllowImages: (v) {
+      onAllowImages: (v) async {
         setState(() => data!['allow_images'] = v);
+        if (v) await captureBound();
         unawaited(save());
       },
       onDraft: () {

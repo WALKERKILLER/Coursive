@@ -47,6 +47,7 @@ part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
 part 'study_selection_tools.dart';
+part 'study_evidence.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -169,6 +170,25 @@ class StudyCanvasState extends State<StudyCanvas>
   bool _quickAsk = false, _quickSending = false, _quickImages = false;
   String? _quickError;
   final _quickInput = TextEditingController();
+
+  /// Crops previewed in the quick composer once 「看图」 is on.
+  List<Map<String, dynamic>> _quickVisuals = [];
+  bool _quickCapturing = false;
+
+  /// Views left by following citations, newest last; see [_goBack].
+  final _bookmarks = <_ViewMark>[];
+  final _returnKey = GlobalKey();
+
+  /// The citation under the pointer or keyboard focus, or the one just followed.
+  final _evidenceFocus = ValueNotifier<Map?>(null);
+  late final _evidenceSweep = AnimationController(
+    vsync: this,
+    duration: Motion.medium2,
+  );
+  late final _evidenceLanding = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
 
   /// The open 课次素材 tab, or null when the shelf is away.
   _ShelfTab? _shelfTab, _shelfShown;
@@ -447,6 +467,9 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  /// The system back action first returns from a followed citation.
+  bool returnFromSource() => document != null && _goBack();
+
   bool handleKey(KeyEvent e) {
     if (e is! KeyDownEvent || document == null) return false;
     // Typing in the composer or a card must not switch tools.
@@ -456,12 +479,34 @@ class StudyCanvasState extends State<StudyCanvas>
             focus.findAncestorWidgetOfExactType<EditableText>() != null))
       return false;
     final k = e.logicalKey;
-    if ((HardwareKeyboard.instance.isMetaPressed ||
-            HardwareKeyboard.instance.isControlPressed) &&
+    final keys = HardwareKeyboard.instance;
+    // Esc steps back one level: composer, selection, then a followed citation.
+    if (k == LogicalKeyboardKey.escape) {
+      if (_quickAsk) {
+        _update(() => _quickAsk = false);
+        return true;
+      }
+      if (_selectionReady) {
+        _clearSelection();
+        return true;
+      }
+      return _goBack();
+    }
+    if ((keys.isAltPressed && k == LogicalKeyboardKey.arrowLeft) ||
+        (keys.isMetaPressed && k == LogicalKeyboardKey.bracketLeft)) {
+      return _goBack();
+    }
+    if ((k == LogicalKeyboardKey.enter ||
+            k == LogicalKeyboardKey.numpadEnter) &&
+        _tool == StudyTool.region &&
+        _selectionReady &&
+        !_quickAsk) {
+      unawaited(_ask());
+      return true;
+    }
+    if ((keys.isMetaPressed || keys.isControlPressed) &&
         k == LogicalKeyboardKey.keyZ) {
-      HardwareKeyboard.instance.isShiftPressed
-          ? document!.redo()
-          : document!.undo();
+      keys.isShiftPressed ? document!.redo() : document!.undo();
       return true;
     }
     final tool = {
@@ -499,6 +544,9 @@ class StudyCanvasState extends State<StudyCanvas>
     _composerFocus.dispose();
     _idleInput.dispose();
     _quickInput.dispose();
+    _evidenceFocus.dispose();
+    _evidenceSweep.dispose();
+    _evidenceLanding.dispose();
     _gesturing.dispose();
     _dropHint.dispose();
     document?.removeListener(_changed);
@@ -535,6 +583,7 @@ class StudyCanvasState extends State<StudyCanvas>
       _aiDockKey,
       _zoomKey,
       _selectionMenuKey,
+      _returnKey,
       _moduleKey,
       _toolbarKey,
       _topBarKey,
@@ -1461,11 +1510,19 @@ class StudyCanvasState extends State<StudyCanvas>
           _detail.strokeIds.isEmpty) {
         throw FormatException(l10n.studySelectionNeedsSource);
       }
-      await _startConversation(send: text, allowImages: _quickImages);
+      await _startConversation(
+        send: text,
+        allowImages: _quickImages,
+        visuals: _quickImages && _quickVisuals.isNotEmpty
+            ? _quickVisuals
+            : null,
+      );
       if (!mounted) return;
       _quickInput.clear();
       _update(() {
         _quickAsk = false;
+        _quickImages = false;
+        _quickVisuals = [];
         _tool = StudyTool.select;
       });
     } catch (e) {
@@ -1855,6 +1912,16 @@ class StudyCanvasState extends State<StudyCanvas>
                     ),
                   ),
                 ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        key: const ValueKey('study-evidence'),
+                        painter: _EvidencePainter(this),
+                      ),
+                    ),
+                  ),
+                ),
                 if (Platform.isMacOS)
                   const Positioned(
                     top: 0,
@@ -1872,6 +1939,7 @@ class StudyCanvasState extends State<StudyCanvas>
                 ),
                 _fixedTopBars(),
                 _agentStage(),
+                _returnPill(),
                 _selectionToolbar(),
                 _shelf(),
                 if (_viewport.width >= 600)

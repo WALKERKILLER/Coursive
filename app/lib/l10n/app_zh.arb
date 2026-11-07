@@ -4566,5 +4566,101 @@
   "setupAsrConfigured": "已有启用的识别渠道；还需音频提取组件，网络、配额和模型运行状态请在转写设置查看",
   "setupConfigure": "配置",
   "setupPdfHelperMissing": "内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件",
-  "setupPdfUnsupported": "当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看"
+  "setupPdfUnsupported": "当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看",
+  "studyEvidenceStale": "来源已失效：原文已修改或删除",
+  "studyEvidenceOtherLecture": "此来源属于其他课次，请先打开对应课次",
+  "studyEvidenceMissing": "无法定位：来源已移除或所在图层已隐藏",
+  "studyEvidenceSeen": "看过的图像",
+  "studyEvidenceSeenBody": "助手读过这块选区的图像，画面内容以原图为准",
+  "studyEvidenceInk": "手写",
+  "studyEvidenceLocate": "定位",
+  "studyEvidenceSemantics": "引用 {number}：{locator}",
+  "@studyEvidenceSemantics": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "locator": {
+        "type": "String"
+      }
+    }
+  },
+  "studyReturn": "返回原处",
+  "studyReturnKeys": "Esc 或 Alt+←",
+  "studyReturnKeysMac": "Esc 或 ⌘[",
+  "studyCoveragePassages": "{count} 段原文",
+  "@studyCoveragePassages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyCoverageTranscript": "{count} 句讲解",
+  "@studyCoverageTranscript": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyCoverageVisual": "{count} 处看图",
+  "@studyCoverageVisual": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyCoverageStale": "{count} 处已失效",
+  "@studyCoverageStale": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyCoverageLead": "依据 {parts}",
+  "@studyCoverageLead": {
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "studyCoverageNone": "未引用资料原文，内容可能来自常识或推断",
+  "studySuggestOpen": "回看 {locator}",
+  "@studySuggestOpen": {
+    "placeholders": {
+      "locator": {
+        "type": "String"
+      }
+    }
+  },
+  "studySuggestFollowupHint": "填入输入框，确认后再发送",
+  "studyBoundLecture": "课程视频",
+  "studyBoundCard": "未命名卡片",
+  "studyBoundRegion": "局部",
+  "studyBoundInk": "{count} 笔手写",
+  "@studyBoundInk": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studyBoundReadable": "含可读文字",
+  "studyBoundNeedsVision": "没有可读文字，需要「看图」",
+  "studyBoundRemove": "移除此资料",
+  "studyBindMore": "添加卡片",
+  "studyExcerpt": "摘录",
+  "studyExcerptHint": "把选区截成带来源的卡片",
+  "studyRelate": "关联",
+  "studyRelateHint": "设为关联起点，再圈选另一处连接",
+  "studyRelateHere": "连到这里",
+  "studyRelateHereHint": "从关联起点连到这处选区",
+  "studySelectionClear": "取消选择",
+  "studyQuickHint": "问问选中的内容…",
+  "studyQuickKeys": "Enter 发送 · Esc 返回",
+  "studyQuickNeedsVision": "选中的内容没有可读文字。打开「看图」后，助手才能读懂它。"
 }

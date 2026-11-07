@@ -907,12 +907,23 @@ void main() {
         }
       });
       await t.pumpAndSettle();
-      await t.tap(find.byType(FilterChip));
+      // Opting in to 「看图」 takes the crop, outside the fake clock.
+      await t.runAsync(() async {
+        await t.tap(find.byType(FilterChip));
+        for (var i = 0; i < 30; i++) {
+          await t.pump();
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
       await t.enterText(find.byType(TextField).last, '解释这条实际笔迹');
       // Real raster readback must run outside the widget test's fake clock.
       await t.runAsync(() async {
         await t.tap(find.byTooltip('发送'));
         for (var i = 0; i < 80 && api.request == null; i++) {
+          await t.pump();
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        for (var i = 0; i < 20; i++) {
           await t.pump();
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }

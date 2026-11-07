@@ -60,56 +60,86 @@ extension _StudySelectionTools on StudyCanvasState {
     );
   }
 
-  Widget _selectionActions() => PopupMenuButton<String>(
-    key: const ValueKey('study-selection-actions'),
-    tooltip: l10n.studySelectionMore,
-    enabled: !_selectionBusy,
-    icon: Icon(_selectionBusy ? Icons.hourglass_top : Icons.more_horiz),
-    itemBuilder: (_) => [
-      PopupMenuItem(value: 'capture', child: Text(l10n.studyCaptureCard)),
-      PopupMenuItem(value: 'rotate', child: Text(l10n.studyRotateSelection)),
-      PopupMenuItem(
-        value: 'shape',
-        enabled: _detail.strokeIds.isNotEmpty,
-        child: Text(l10n.studyEditShape),
-      ),
-      PopupMenuItem(
-        value: 'recognize',
-        enabled: _detail.strokeIds.isNotEmpty,
-        child: Text(l10n.studyRecognizeInk),
-      ),
-      PopupMenuItem(
-        value: 'link',
-        child: Text(
-          _linkStart == null ? l10n.studyLinkStart : l10n.studyLinkFinish,
+  /// Editing actions for a selection, behind the bar's 「…」.
+  Widget _selectionActions() {
+    final content = _selection.isNotEmpty || _detail.strokeIds.isNotEmpty;
+    final ink = _detail.strokeIds.isNotEmpty;
+    return PopupMenuButton<String>(
+      key: const ValueKey('study-selection-actions'),
+      tooltip: l10n.studySelectionMore,
+      enabled: !_selectionBusy,
+      icon: Icon(_selectionBusy ? Icons.hourglass_top : Icons.more_horiz),
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 'copy', enabled: content, child: const Text('复制')),
+        PopupMenuItem(
+          value: 'paste',
+          enabled: _copiedBounds != null,
+          child: const Text('粘贴'),
         ),
-      ),
-      if (_linkStart != null)
-        PopupMenuItem(value: 'cancel-link', child: Text(l10n.studyLinkCancel)),
-      PopupMenuItem(value: 'filters', child: Text(l10n.studySelectionFilters)),
-    ],
-    onSelected: (value) {
-      switch (value) {
-        case 'capture':
-          _captureRegionCard();
-        case 'rotate':
-          _selectionJob(_rotateSelected);
-        case 'shape':
-          _selectionJob(_editSelectedShape);
-        case 'recognize':
-          _selectionJob(_recognizeSelectedInk);
-        case 'link':
-          _selectionJob(_linkSelection);
-        case 'cancel-link':
-          _update(() {
-            _linkStart = null;
-            _linkStartBounds = null;
-          });
-        case 'filters':
-          _editSelectionFilters();
-      }
-    },
-  );
+        PopupMenuItem(
+          value: 'duplicate',
+          enabled: content,
+          child: const Text('副本'),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: 'rotate', child: Text(l10n.studyRotateSelection)),
+        PopupMenuItem(
+          value: 'shape',
+          enabled: ink,
+          child: Text(l10n.studyEditShape),
+        ),
+        PopupMenuItem(
+          value: 'recognize',
+          enabled: ink,
+          child: Text(l10n.studyRecognizeInk),
+        ),
+        if (_linkStart != null)
+          PopupMenuItem(
+            value: 'cancel-link',
+            child: Text(l10n.studyLinkCancel),
+          ),
+        PopupMenuItem(
+          value: 'filters',
+          child: Text(l10n.studySelectionFilters),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'delete',
+          enabled: content,
+          child: const Text('删除'),
+        ),
+        PopupMenuItem(value: 'clear', child: Text(l10n.studySelectionClear)),
+      ],
+      onSelected: (value) {
+        switch (value) {
+          case 'copy':
+            _copySelection();
+          case 'paste':
+            _pasteSelection();
+          case 'duplicate':
+            _copySelection();
+            _pasteSelection();
+          case 'rotate':
+            _selectionJob(_rotateSelected);
+          case 'shape':
+            _selectionJob(_editSelectedShape);
+          case 'recognize':
+            _selectionJob(_recognizeSelectedInk);
+          case 'cancel-link':
+            _update(() {
+              _linkStart = null;
+              _linkStartBounds = null;
+            });
+          case 'filters':
+            _editSelectionFilters();
+          case 'delete':
+            _deleteSelection();
+          case 'clear':
+            _clearSelection();
+        }
+      },
+    );
+  }
 
   Future<void> _selectionJob(Future<void> Function() work) async {
     if (_selectionBusy || document == null) return;

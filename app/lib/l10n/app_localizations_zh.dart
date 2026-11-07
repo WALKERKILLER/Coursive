@@ -7401,4 +7401,131 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';
+
+  @override
+  String get studyEvidenceStale => '来源已失效：原文已修改或删除';
+
+  @override
+  String get studyEvidenceOtherLecture => '此来源属于其他课次，请先打开对应课次';
+
+  @override
+  String get studyEvidenceMissing => '无法定位：来源已移除或所在图层已隐藏';
+
+  @override
+  String get studyEvidenceSeen => '看过的图像';
+
+  @override
+  String get studyEvidenceSeenBody => '助手读过这块选区的图像，画面内容以原图为准';
+
+  @override
+  String get studyEvidenceInk => '手写';
+
+  @override
+  String get studyEvidenceLocate => '定位';
+
+  @override
+  String studyEvidenceSemantics(int number, String locator) {
+    return '引用 $number：$locator';
+  }
+
+  @override
+  String get studyReturn => '返回原处';
+
+  @override
+  String get studyReturnKeys => 'Esc 或 Alt+←';
+
+  @override
+  String get studyReturnKeysMac => 'Esc 或 ⌘[';
+
+  @override
+  String studyCoveragePassages(int count) {
+    return '$count 段原文';
+  }
+
+  @override
+  String studyCoverageTranscript(int count) {
+    return '$count 句讲解';
+  }
+
+  @override
+  String studyCoverageVisual(int count) {
+    return '$count 处看图';
+  }
+
+  @override
+  String studyCoverageStale(int count) {
+    return '$count 处已失效';
+  }
+
+  @override
+  String studyCoverageLead(String parts) {
+    return '依据 $parts';
+  }
+
+  @override
+  String get studyCoverageNone => '未引用资料原文，内容可能来自常识或推断';
+
+  @override
+  String studySuggestOpen(String locator) {
+    return '回看 $locator';
+  }
+
+  @override
+  String get studySuggestFollowupHint => '填入输入框，确认后再发送';
+
+  @override
+  String get studyBoundLecture => '课程视频';
+
+  @override
+  String get studyBoundCard => '未命名卡片';
+
+  @override
+  String get studyBoundRegion => '局部';
+
+  @override
+  String studyBoundInk(int count) {
+    return '$count 笔手写';
+  }
+
+  @override
+  String get studyBoundReadable => '含可读文字';
+
+  @override
+  String get studyBoundNeedsVision => '没有可读文字，需要「看图」';
+
+  @override
+  String get studyBoundRemove => '移除此资料';
+
+  @override
+  String get studyBindMore => '添加卡片';
+
+  @override
+  String get studyExcerpt => '摘录';
+
+  @override
+  String get studyExcerptHint => '把选区截成带来源的卡片';
+
+  @override
+  String get studyRelate => '关联';
+
+  @override
+  String get studyRelateHint => '设为关联起点，再圈选另一处连接';
+
+  @override
+  String get studyRelateHere => '连到这里';
+
+  @override
+  String get studyRelateHereHint => '从关联起点连到这处选区';
+
+  @override
+  String get studySelectionClear => '取消选择';
+
+  @override
+  String get studyQuickHint => '问问选中的内容…';
+
+  @override
+  String get studyQuickKeys => 'Enter 发送 · Esc 返回';
+
+  @override
+  String get studyQuickNeedsVision => '选中的内容没有可读文字。打开「看图」后，助手才能读懂它。';
 }

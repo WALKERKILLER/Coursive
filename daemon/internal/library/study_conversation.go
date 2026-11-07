@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -19,6 +20,72 @@ type StudyTurn struct {
 	Error      string          `json:"error,omitempty"`
 	Result     json.RawMessage `json:"result,omitempty"`
 }
+
+// StudyEvidence is one citation the assistant host issued for a passage,
+// transcript line or inspected region it read in a run (spec 0027).
+type StudyEvidence struct {
+	ID       string      `json:"id"`
+	SourceID string      `json:"source_id"`
+	Kind     string      `json:"kind"`
+	Status   string      `json:"status"`
+	Label    string      `json:"label,omitempty"`
+	Anchor   StudyAnchor `json:"anchor"`
+}
+
+// StudySuggestion is a next step the learner may choose; it runs nothing.
+type StudySuggestion struct {
+	Kind       string `json:"kind"`
+	EvidenceID string `json:"evidence_id,omitempty"`
+	Text       string `json:"text,omitempty"`
+}
+
+// StudyTurnResult is the part of a turn result the daemon understands.
+// Older turns carry only sources and keep loading unchanged.
+type StudyTurnResult struct {
+	SchemaVersion int               `json:"schema_version,omitempty"`
+	Evidence      []StudyEvidence   `json:"evidence,omitempty"`
+	Suggestions   []StudySuggestion `json:"suggestions,omitempty"`
+}
+
+func validStudyTurnResult(raw json.RawMessage) bool {
+	if len(raw) == 0 || string(raw) == "null" {
+		return true
+	}
+	var r StudyTurnResult
+	if json.Unmarshal(raw, &r) != nil || r.SchemaVersion < 0 || r.SchemaVersion > 2 || len(r.Evidence) > 24 || len(r.Suggestions) > 2 {
+		return false
+	}
+	issued := map[string]bool{}
+	for _, e := range r.Evidence {
+		if !studyEvidenceID.MatchString(e.ID) || issued[e.ID] || len(e.SourceID) > 120 || len(e.Label) > 400 || !validStudyAnchor(e.Anchor) {
+			return false
+		}
+		issued[e.ID] = true
+		switch e.Kind {
+		case "exact_text", "timestamped_transcript", "visual_observation":
+		default:
+			return false
+		}
+		switch e.Status {
+		case "verified", "stale", "unavailable":
+		default:
+			return false
+		}
+	}
+	for _, s := range r.Suggestions {
+		switch {
+		case s.Kind == "open_source" && issued[s.EvidenceID] && s.Text == "":
+		case s.Kind == "ask_followup" && s.EvidenceID == "" && s.Text != "" && len(s.Text) <= 600:
+		case s.Kind == "propose_outline" && s.EvidenceID == "" && len(s.Text) <= 600:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+var studyEvidenceID = regexp.MustCompile(`^e[0-9]{1,3}$`)
+
 type StudyConversation struct {
 	Version     int                 `json:"version"`
 	Revision    int64               `json:"revision"`
@@ -71,7 +138,7 @@ func (l *Library) StudyConversation(ctx context.Context, lecture, id string, nex
 	}
 	seen := map[string]bool{}
 	for _, t := range next.Turns {
-		if !validStudyID(t.ID) || seen[t.ID] || len(t.Question) > 16000 || len(t.Answer) > 48000 || len(t.ContextKey) > 128 || len(t.Error) > 4000 || len(t.Result) > 400000 {
+		if !validStudyID(t.ID) || seen[t.ID] || len(t.Question) > 16000 || len(t.Answer) > 48000 || len(t.ContextKey) > 128 || len(t.Error) > 4000 || len(t.Result) > 400000 || !validStudyTurnResult(t.Result) {
 			return old, ErrStudyInvalid
 		}
 		seen[t.ID] = true

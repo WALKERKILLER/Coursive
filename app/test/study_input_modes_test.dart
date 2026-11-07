@@ -18,6 +18,8 @@ void main() {
     final api = pdf.PDFApi(d.json());
     final key = await fixture.open(t, api);
     await selectInk(t);
+    await t.tap(find.byKey(const ValueKey('study-selection-actions')));
+    await t.pumpAndSettle();
     await t.tap(find.text('副本'));
     await t.pumpAndSettle();
     final current = key.currentState!.document!;

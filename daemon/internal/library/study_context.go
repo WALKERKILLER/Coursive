@@ -185,21 +185,28 @@ func validateStudyContent(o StudyObject) error {
 		}
 	}
 	for _, a := range o.Sources {
-		if !validStudyID(strings.TrimPrefix(a.ID, "object-")) || len(a.WorkspaceID) > 100 || (a.ObjectID != "" && !validStudyID(a.ObjectID)) || len(a.DocumentID) > 1000 || a.Start < 0 || a.End < a.Start || a.End > 1000000 || a.TimeStartMs < 0 || a.TimeEndMs < a.TimeStartMs || a.TimeEndMs > 7*24*3600*1000 || len(a.Fingerprint) > 100 || len(a.Quote) > 8000 || len(a.StrokeIDs) > 500 || !validRegion(a.Region, a.ObjectID != "") {
+		if !validStudyAnchor(a) {
 			return bad()
-		}
-		switch a.Kind {
-		case "pdf", "text", "image", "video", "ink", "note", "explanation", "knowledge", "practice":
-		default:
-			return bad()
-		}
-		for _, id := range a.StrokeIDs {
-			if !validStudyID(id) {
-				return bad()
-			}
 		}
 	}
 	return nil
+}
+
+func validStudyAnchor(a StudyAnchor) bool {
+	if !validStudyID(strings.TrimPrefix(a.ID, "object-")) || len(a.WorkspaceID) > 100 || (a.ObjectID != "" && !validStudyID(a.ObjectID)) || len(a.DocumentID) > 1000 || a.Start < 0 || a.End < a.Start || a.End > 1000000 || a.TimeStartMs < 0 || a.TimeEndMs < a.TimeStartMs || a.TimeEndMs > 7*24*3600*1000 || len(a.Fingerprint) > 100 || len(a.Quote) > 8000 || len(a.StrokeIDs) > 500 || !validRegion(a.Region, a.ObjectID != "") {
+		return false
+	}
+	switch a.Kind {
+	case "pdf", "text", "image", "video", "ink", "note", "explanation", "knowledge", "practice":
+	default:
+		return false
+	}
+	for _, id := range a.StrokeIDs {
+		if !validStudyID(id) {
+			return false
+		}
+	}
+	return true
 }
 
 // UTF-16 offsets are shared by SelectableText and JavaScript. Never split a surrogate pair.
@@ -277,6 +284,7 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 		if page := q.ObjectPages[o.ID]; page > 0 {
 			o.Page = page
 		}
+		var boxes []StudyTextBox
 		if o.Type == "pdfdoc" {
 			page, err := l.StudyPDFPage(ctx, id, o.Source, o.Page)
 			if err != nil {
@@ -284,6 +292,10 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 			}
 			o.Text = page.Text
 			o.Path = page.File
+			// Regions on a rotated card are not in page orientation; they stay visual.
+			if o.QuarterTurns%4 == 0 {
+				boxes = page.Boxes
+			}
 		}
 		selection := q.Selection
 		if scoped, ok := q.Selections[o.ID]; ok {
@@ -313,6 +325,14 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 				}
 				anchor.Start = selection.Start
 				anchor.End = selection.End
+			} else if start, end, ok := studyRegionSpan(boxes, anchor.Region); ok {
+				// A region on a page reads the words actually under it.
+				text, e = studySlice(text, start, end)
+				if e != nil {
+					return out, e
+				}
+				anchor.Start = start
+				anchor.End = end
 			} else if len(anchor.Region) > 0 {
 				text = ""
 			}
@@ -437,4 +457,34 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 	}
 	return out, nil
 }
+
+// studyRegionSpan returns the UTF-16 span of the page text covered by the
+// words whose boxes lie at least half inside region; both use normalized page
+// coordinates. Words between the first and last of them in reading order are
+// part of the span, so a selection across lines reads as continuous text.
+func studyRegionSpan(boxes []StudyTextBox, region []float64) (int, int, bool) {
+	if len(region) != 4 {
+		return 0, 0, false
+	}
+	x0, y0, x1, y1 := region[0], region[1], region[0]+region[2], region[1]+region[3]
+	start, end := -1, -1
+	for _, b := range boxes {
+		if b.W <= 0 || b.H <= 0 || b.End <= b.Start {
+			continue
+		}
+		w := math.Min(x1, b.X+b.W) - math.Max(x0, b.X)
+		h := math.Min(y1, b.Y+b.H) - math.Max(y0, b.Y)
+		if w <= 0 || h <= 0 || w*h < b.W*b.H/2 {
+			continue
+		}
+		if start < 0 || b.Start < start {
+			start = b.Start
+		}
+		if b.End > end {
+			end = b.End
+		}
+	}
+	return start, end, start >= 0
+}
+
 func pathBase(p string) string { parts := strings.Split(p, "/"); return parts[len(parts)-1] }

@@ -12872,6 +12872,228 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看'**
   String get setupPdfUnsupported;
+
+  /// No description provided for @studyEvidenceStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源已失效：原文已修改或删除'**
+  String get studyEvidenceStale;
+
+  /// No description provided for @studyEvidenceOtherLecture.
+  ///
+  /// In zh, this message translates to:
+  /// **'此来源属于其他课次，请先打开对应课次'**
+  String get studyEvidenceOtherLecture;
+
+  /// No description provided for @studyEvidenceMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法定位：来源已移除或所在图层已隐藏'**
+  String get studyEvidenceMissing;
+
+  /// No description provided for @studyEvidenceSeen.
+  ///
+  /// In zh, this message translates to:
+  /// **'看过的图像'**
+  String get studyEvidenceSeen;
+
+  /// No description provided for @studyEvidenceSeenBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手读过这块选区的图像，画面内容以原图为准'**
+  String get studyEvidenceSeenBody;
+
+  /// No description provided for @studyEvidenceInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'手写'**
+  String get studyEvidenceInk;
+
+  /// No description provided for @studyEvidenceLocate.
+  ///
+  /// In zh, this message translates to:
+  /// **'定位'**
+  String get studyEvidenceLocate;
+
+  /// No description provided for @studyEvidenceSemantics.
+  ///
+  /// In zh, this message translates to:
+  /// **'引用 {number}：{locator}'**
+  String studyEvidenceSemantics(int number, String locator);
+
+  /// No description provided for @studyReturn.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回原处'**
+  String get studyReturn;
+
+  /// No description provided for @studyReturnKeys.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esc 或 Alt+←'**
+  String get studyReturnKeys;
+
+  /// No description provided for @studyReturnKeysMac.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esc 或 ⌘['**
+  String get studyReturnKeysMac;
+
+  /// No description provided for @studyCoveragePassages.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 段原文'**
+  String studyCoveragePassages(int count);
+
+  /// No description provided for @studyCoverageTranscript.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 句讲解'**
+  String studyCoverageTranscript(int count);
+
+  /// No description provided for @studyCoverageVisual.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 处看图'**
+  String studyCoverageVisual(int count);
+
+  /// No description provided for @studyCoverageStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 处已失效'**
+  String studyCoverageStale(int count);
+
+  /// No description provided for @studyCoverageLead.
+  ///
+  /// In zh, this message translates to:
+  /// **'依据 {parts}'**
+  String studyCoverageLead(String parts);
+
+  /// No description provided for @studyCoverageNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'未引用资料原文，内容可能来自常识或推断'**
+  String get studyCoverageNone;
+
+  /// No description provided for @studySuggestOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'回看 {locator}'**
+  String studySuggestOpen(String locator);
+
+  /// No description provided for @studySuggestFollowupHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'填入输入框，确认后再发送'**
+  String get studySuggestFollowupHint;
+
+  /// No description provided for @studyBoundLecture.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程视频'**
+  String get studyBoundLecture;
+
+  /// No description provided for @studyBoundCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名卡片'**
+  String get studyBoundCard;
+
+  /// No description provided for @studyBoundRegion.
+  ///
+  /// In zh, this message translates to:
+  /// **'局部'**
+  String get studyBoundRegion;
+
+  /// No description provided for @studyBoundInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 笔手写'**
+  String studyBoundInk(int count);
+
+  /// No description provided for @studyBoundReadable.
+  ///
+  /// In zh, this message translates to:
+  /// **'含可读文字'**
+  String get studyBoundReadable;
+
+  /// No description provided for @studyBoundNeedsVision.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可读文字，需要「看图」'**
+  String get studyBoundNeedsVision;
+
+  /// No description provided for @studyBoundRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除此资料'**
+  String get studyBoundRemove;
+
+  /// No description provided for @studyBindMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加卡片'**
+  String get studyBindMore;
+
+  /// No description provided for @studyExcerpt.
+  ///
+  /// In zh, this message translates to:
+  /// **'摘录'**
+  String get studyExcerpt;
+
+  /// No description provided for @studyExcerptHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'把选区截成带来源的卡片'**
+  String get studyExcerptHint;
+
+  /// No description provided for @studyRelate.
+  ///
+  /// In zh, this message translates to:
+  /// **'关联'**
+  String get studyRelate;
+
+  /// No description provided for @studyRelateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'设为关联起点，再圈选另一处连接'**
+  String get studyRelateHint;
+
+  /// No description provided for @studyRelateHere.
+  ///
+  /// In zh, this message translates to:
+  /// **'连到这里'**
+  String get studyRelateHere;
+
+  /// No description provided for @studyRelateHereHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'从关联起点连到这处选区'**
+  String get studyRelateHereHint;
+
+  /// No description provided for @studySelectionClear.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消选择'**
+  String get studySelectionClear;
+
+  /// No description provided for @studyQuickHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'问问选中的内容…'**
+  String get studyQuickHint;
+
+  /// No description provided for @studyQuickKeys.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 发送 · Esc 返回'**
+  String get studyQuickKeys;
+
+  /// No description provided for @studyQuickNeedsVision.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的内容没有可读文字。打开「看图」后，助手才能读懂它。'**
+  String get studyQuickNeedsVision;
 }
 
 class _AppLocalizationsDelegate

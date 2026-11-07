@@ -90,7 +90,7 @@ void main() {
       final api = SelectionApi(d.json());
       await fixture.open(t, api);
       await enclose(t, const Rect.fromLTRB(180, 180, 620, 640));
-      if (images) await t.tap(find.text('附选区图'));
+      if (images) await t.tap(find.text('看图'));
       await send(t, api);
       expect(api.request?['question'], 'Explain this page');
       expect(api.selection?['objects'], ['page']);
@@ -197,7 +197,7 @@ void main() {
       final api = SelectionApi(d.json());
       final key = await fixture.open(t, api);
       await enclose(t, const Rect.fromLTRB(180, 200, 840, 440));
-      await t.tap(find.text('附选区图'));
+      await t.tap(find.text('看图'));
       await send(t, api);
       expect(api.request, isNull);
       expect(api.conversations, isEmpty);
@@ -211,7 +211,7 @@ void main() {
             .text,
         'Explain this page',
       );
-      await t.tap(find.text('附选区图'));
+      await t.tap(find.text('看图'));
       await send(t, api);
       expect(api.request?['visuals'], isEmpty);
       expect(api.selection?['objects'], ['p0', 'p1', 'p2']);
@@ -244,7 +244,7 @@ void main() {
     final api = SelectionApi(d.json());
     await fixture.open(t, api);
     await enclose(t, const Rect.fromLTRB(180, 200, 720, 440));
-    await t.tap(find.text('附选区图'));
+    await t.tap(find.text('看图'));
     await send(t, api);
     final images = api.request!['visuals'] as List;
     expect(images.map((v) => v['source_id']), ['object-p0', 'object-p1']);
@@ -295,9 +295,15 @@ void main() {
       }
       await g.up();
       await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('study-selection-actions')));
+      await t.pumpAndSettle();
       expect(
-        t.widget<TextButton>(find.widgetWithText(TextButton, '副本')).onPressed,
-        isNull,
+        t
+            .widget<PopupMenuItem<String>>(
+              find.widgetWithText(PopupMenuItem<String>, '副本'),
+            )
+            .enabled,
+        isFalse,
       );
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
