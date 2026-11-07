@@ -97,6 +97,7 @@ extension _StudyStage on StudyCanvasState {
     bool allowImages = false,
     List<Map<String, dynamic>>? visuals,
     Offset? at,
+    String? task,
   }) async {
     final d = document;
     if (d == null || !d.editable(d.activeLayer)) return;
@@ -130,6 +131,7 @@ extension _StudyStage on StudyCanvasState {
       'visuals': visual,
       'allow_images': allowImages,
       if (send != null && send.trim().isNotEmpty) 'send': send.trim(),
+      'task': ?task,
       if (pick) 'pick': true,
     };
     _idleInput.clear();
@@ -162,10 +164,16 @@ extension _StudyStage on StudyCanvasState {
     return rect;
   }
 
-  /// Keeps an answer as an editable card, linked to its turn and its sources.
-  void _pinAnswer(Map turn, String conversation) {
+  /// Keeps an answer, or a reviewed outline's [text], as an editable card
+  /// linked to its turn and its sources.
+  void _pinAnswer(
+    Map turn,
+    String conversation, {
+    String? text,
+    String? title,
+  }) {
     final d = document;
-    final answer = studyPlainAnswer('${turn['answer'] ?? ''}').trim();
+    final answer = (text ?? studyPlainAnswer('${turn['answer'] ?? ''}')).trim();
     if (d == null || answer.isEmpty || !d.editable(d.activeLayer)) return;
     final pinned = _pinnedCard(turn, conversation, const []);
     if (pinned != null) {
@@ -195,7 +203,9 @@ extension _StudyStage on StudyCanvasState {
         type: 'text',
         layer: d.activeLayer,
         rect: rect,
-        title: '${turn['question'] ?? 'AI 解答'}'.characters.take(60).toString(),
+        title: (title ?? '${turn['question'] ?? 'AI 解答'}').characters
+            .take(60)
+            .toString(),
         text: answer,
         generation: studyPinGeneration(conversation, '${turn['id']}'),
         sources: anchors,
@@ -492,6 +502,7 @@ class _StageView extends StatefulWidget {
     this.allowImages,
     this.onAllowImages,
     this.onDraft,
+    this.onOutline,
   });
 
   final StudyCanvasState owner;
@@ -514,6 +525,9 @@ class _StageView extends StatefulWidget {
   final bool? allowImages;
   final ValueChanged<bool>? onAllowImages;
   final VoidCallback? onDraft;
+
+  /// 「整理为复习提纲」 for this conversation's sources.
+  final VoidCallback? onOutline;
 
   @override
   State<_StageView> createState() => _StageViewState();
@@ -922,6 +936,8 @@ class _StageViewState extends State<_StageView>
                 ),
               ),
             )
+          else if (outlineProposal(raw) != null && raw['state'] == 'done')
+            _OutlineCard(owner: owner, turn: raw, thread: widget.thread)
           else if (answer.isNotEmpty)
             _Well(
               radius: _innerRadius,
@@ -964,6 +980,7 @@ class _StageViewState extends State<_StageView>
                             (raw['result'] as Map)['suggestions'] as List? ??
                             const [],
                         trailing: pin,
+                        onOutline: widget.onOutline,
                         onFollowup: (text) {
                           widget.input.text = text;
                           widget.input.selection = TextSelection.collapsed(
@@ -1048,6 +1065,8 @@ class _StageViewState extends State<_StageView>
                   TextButton(
                     onPressed: widget.busy
                         ? null
+                        : raw['task'] == 'propose_outline'
+                        ? widget.onOutline
                         : () => widget.onRetry?.call('${raw['question']}'),
                     style: TextButton.styleFrom(
                       foregroundColor: cs.onErrorContainer,
@@ -1775,4 +1794,94 @@ class _PinButton extends StatelessWidget {
             label: const Text('已在画布 · 查看'),
           ),
   );
+}
+
+/// An outline draft in the conversation: what it holds, how far its review
+/// went and the way into 「审核提纲」.
+class _OutlineCard extends StatelessWidget {
+  const _OutlineCard({required this.owner, required this.turn, this.thread});
+  final StudyCanvasState owner;
+  final Map turn;
+  final StudyCard? thread;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final p = outlineProposal(turn)!;
+    final stats = outlineStats(
+      p,
+      owner._staleEvidence(studyTurnEvidence(turn) ?? const []),
+    );
+    final sections = (p['sections'] as List? ?? const []).length;
+    final saved = p['state'] == 'accepted';
+    final open = owner._review?.turn == '${turn['id']}';
+    return _Well(
+      radius: _innerRadius,
+      color: _wellOf(cs),
+      outline: open ? cs.primary.withValues(alpha: .5) : null,
+      padding: const EdgeInsets.fromLTRB(
+        Space.lg,
+        Space.md,
+        Space.md,
+        Space.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.format_list_bulleted_rounded,
+                  size: 18,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Text(
+                  '${p['title']}',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Text(
+                saved ? l10n.outlineCardSaved : l10n.outlineCardDraft,
+                style: tt.labelSmall?.copyWith(
+                  color: saved ? cs.primary : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.xs),
+          Text(
+            [
+              l10n.outlineCardSummary(sections, stats.total),
+              l10n.outlineReviewed(stats.reviewed, stats.total),
+              if (stats.marks > 0) l10n.outlineMarksCount(stats.marks),
+            ].join(' · '),
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: Space.sm),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton.tonalIcon(
+              key: ValueKey('study-outline-review-${turn['id']}'),
+              onPressed: thread == null
+                  ? null
+                  : () => owner._openReview(thread!.id, '${turn['id']}'),
+              icon: const Icon(Icons.rate_review_outlined, size: 18),
+              label: Text(l10n.outlineOpenReview),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

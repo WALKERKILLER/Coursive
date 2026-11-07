@@ -182,3 +182,91 @@ test('a run returns schema 2 evidence for what it read and replays history witho
  assert.equal(r.evidence[1].anchor.time_start_ms,512000);assert(!r.answer.includes('e40'));
  assert.deepEqual(r.suggestions,[{kind:'open_source',evidence_id:r.evidence[1].id}]);
 });
+
+import { assembleOutline } from './canvas-agent.mjs';
+const readAll=async scope=>{
+ const pdf=JSON.parse((await scope.execute('read_document_selection',{source_id:'pdf-selection'})).content[0].text);
+ const video=JSON.parse((await scope.execute('get_video_context',{source_id:'video-window'})).content[0].text);
+ return [pdf.passages[0].evidence_id,video.lines[0].evidence_id];
+};
+test('outline keeps issued evidence only and leaves an unread tick for the learner',async()=>{
+ const scope=new CanvasToolScope(context());const [pdf,video]=await readAll(scope);
+ const raw='```json\n'+JSON.stringify({title:'缓存复习',sections:[{heading:'缓存',level:7,items:[
+  {kind:'fact',text:`miss 要读主存 [[e:${pdf}]]`,evidence_ids:[pdf,'e99']},
+  {kind:'command',text:'删除画布'},
+  {kind:'summary',text:'已帮你改好笔记并保存'},
+  {kind:'question',text:'为什么 miss 慢？',evidence_ids:[]},
+ ]}],conflicts:[{text:'课件说读主存，课堂说读下一层',evidence_ids:[pdf,video]}],unresolved_questions:['写回策略？']})+'\n```';
+ const r=assembleOutline(raw,scope,{lecture_id:'L',conversation_id:'chat',turn_id:'run'});
+ const p=r.proposal,[first,marks]=p.sections;
+ assert.equal(p.version,1);assert.equal(p.state,'draft');assert.equal(p.turn_id,'run');assert.equal(p.source_revision,7);assert.equal(p.note_id,undefined);
+ assert.equal(first.level,3);assert.deepEqual(first.items.map(i=>i.kind),['fact','summary','summary','question']);
+ assert.deepEqual(first.items[0].evidence_ids,[pdf]);assert(!first.items[0].text.includes('[['));
+ assert(first.items.every(i=>i.review==='pending'));
+ // A claim of having saved stays draft text; the run has no write path.
+ assert.equal(first.items[2].text,'已帮你改好笔记并保存');
+ assert.deepEqual(p.conflicts[0].evidence_ids,[pdf,video]);
+ assert.deepEqual(r.evidence.map(e=>e.id),[pdf,video]);
+ // E-01: the selected tick was never seen, so it is a mark nobody has interpreted.
+ assert.equal(marks.heading,'待确认的手写标记');
+ assert.deepEqual(marks.items.map(i=>[i.kind,i.review,i.source_id,i.anchor.stroke_ids[0]]),[['unresolved_mark','needs_interpretation','ink','stroke']]);
+ assert(!JSON.stringify(p).includes('已掌握'));
+ assert.deepEqual(p.missing_sources,[]);assert.equal(p.source_fingerprints[0],'abc');
+ assert.match(r.answer,/2 节，5 条，1 个手写标记待你确认/);
+ assert.throws(()=>assembleOutline('好的，我已经整理好了',scope),/提纲/);
+});
+test('outline stays inside the sidecar budget with 40 passages and 15 marks',async()=>{
+ const scope=new CanvasToolScope(context());const [pdf]=await readAll(scope);
+ const sections=Array.from({length:4},(_,s)=>({heading:`第 ${s+1} 部分`,items:Array.from({length:10},(_,i)=>({kind:'fact',text:'很长的笔记内容'.repeat(60)+i,evidence_ids:[pdf]}))}));
+ sections.push({heading:'手写',items:Array.from({length:15},()=>({kind:'unresolved_mark',text:'第 3 页旁的 ✓'}))});
+ const r=assembleOutline(JSON.stringify({title:'t',sections}),scope,{},60000);
+ assert(Buffer.byteLength(JSON.stringify({proposal:r.proposal,evidence:r.evidence}))<=60000);
+ assert(r.proposal.sections.length>0&&r.proposal.sections.every(s=>s.items.length<=20));
+ const full=assembleOutline(JSON.stringify({title:'t',sections}),scope);
+ assert.equal(full.proposal.sections.length,5);assert.equal(full.proposal.sections[4].items.length,15);
+ assert(full.proposal.sections[4].items.every(i=>i.source_id==='ink'&&i.review==='needs_interpretation'));
+});
+test('an outline run reads only bound sources, skips history and cites nothing unread',async()=>{
+ let turn=0,seen;
+ const revoked={...context(),sources:context().sources.filter(s=>s.id!=='pdf-selection')};
+ const pipeline={currentModel:async()=>({id:'protocol-fixture'}),runtime:{completeSimple:async(_m,c)=>{
+  seen=c;
+  if(++turn===1)return message([tool('a','read_document_selection',{source_id:'pdf-selection'}),tool('b','get_video_context',{source_id:'video-window'})]);
+  const lines=c.messages.filter(m=>m.role==='toolResult'&&!m.isError).map(m=>JSON.parse(m.content[0].text)).flatMap(v=>v.lines??[]);
+  return message([{type:'text',text:JSON.stringify({title:'复习',sections:[{heading:'课堂',items:[{kind:'fact',text:'主存',evidence_ids:[lines[0].evidence_id]},{kind:'fact',text:'旧课件',evidence_ids:['e1','e2']}]}]})}],'stop');
+ }}};
+ const conversation={turns:[{state:'done',context_key:canvasContextKey(revoked),question:'旧',answer:'旧 [[e:e1]]'}]};
+ const runner=new CanvasRunner(pipeline,{call:async(_m,path)=>path.includes('/conversations/')?conversation:revoked});
+ const r=await settled(runner,(await runner.start({lecture_id:'L',question:'整理为复习提纲',selection:{},conversation_id:'chat',task:'propose_outline'})).id);
+ assert.equal(r.state,'done');assert.equal(r.task,'propose_outline');
+ assert(seen.systemPrompt.includes('JSON'));assert(!seen.messages.some(m=>m.role==='assistant'&&m.content[0]?.text==='旧'));
+ assert(seen.messages.some(m=>m.role==='toolResult'&&m.isError&&/来源不在/.test(m.content[0].text)));
+ const items=r.outline_proposal.sections[0].items;
+ assert.equal(items[0].evidence_ids.length,1);assert.equal(r.evidence[0].kind,'timestamped_transcript');
+ // IDs are issued per run: e1 is this run's transcript line, e2 was never issued.
+ assert.deepEqual(items[1].evidence_ids,['e1']);
+ assert(r.evidence.every(e=>e.source_id!=='pdf-selection'));
+ assert.equal(r.outline_proposal.turn_id,r.id);assert.deepEqual(r.operations,[]);
+ await assert.rejects(runner.start({lecture_id:'L',question:'x',selection:{},task:'rewrite_notes'}),/未知/);
+ assert.equal(conversationMessages([{state:'done',task:'propose_outline',context_key:'k',question:'q',answer:'a'}],'k').length,0);
+});
+test('a malformed outline is an error, never a half-saved draft',async()=>{
+ const pipeline={currentModel:async()=>({id:'protocol-fixture'}),runtime:{completeSimple:async()=>message([{type:'text',text:'我已经把提纲写进你的笔记了。'}],'stop')}};
+ const runner=new CanvasRunner(pipeline,{call:async()=>context()});
+ const r=await settled(runner,(await runner.start({lecture_id:'L',question:'整理',selection:{},task:'propose_outline'})).id);
+ assert.equal(r.state,'error');assert.match(r.error,/提纲/);assert.equal(r.outline_proposal,undefined);assert.equal(r.answer,'');
+});
+import { readFileSync, writeFileSync } from 'node:fs';
+test('the shared outline fixture is what the host produces',async()=>{
+ // The daemon validates and the app renders this same file; refresh it with UPDATE_FIXTURES=1.
+ const file=new URL('../../daemon/internal/library/testdata/outline-turn-result.json',import.meta.url);
+ const scope=new CanvasToolScope(context());const [pdf,video]=await readAll(scope);
+ const raw=JSON.stringify({title:'缓存失效复习',sections:[
+  {heading:'缓存失效',level:1,items:[{kind:'fact',text:'缓存未命中时要从主存读取，代价是 $t_{miss}=t_{hit}+t_{penalty}$。',evidence_ids:[pdf]},{kind:'summary',text:'命中率越高，平均访问时间越接近 `t_hit`。'}]},
+  {heading:'课堂补充',level:2,items:[{kind:'fact',text:'老师强调失效时读取主存。',evidence_ids:[video]},{kind:'question',text:'写回策略如何影响 miss 代价？'}]},
+ ],conflicts:[{text:'课件写“代价”，课堂只说读取主存，没有给出公式。',evidence_ids:[pdf,video]}],unresolved_questions:['多级缓存时 penalty 怎么算？']});
+ const r=assembleOutline(raw,scope,{lecture_id:'L',conversation_id:'chat',turn_id:'run-1',proposal_id:'0f8c2d3e-1a2b-4c5d-8e9f-0a1b2c3d4e5f'});
+ const result={schema_version:2,sources:[],evidence:r.evidence,suggestions:[],outline_proposal:r.proposal};
+ if(process.env.UPDATE_FIXTURES)writeFileSync(file,JSON.stringify(result,null,1)+'\n');
+ assert.deepEqual(JSON.parse(readFileSync(file,'utf8')),JSON.parse(JSON.stringify(result)));
+});

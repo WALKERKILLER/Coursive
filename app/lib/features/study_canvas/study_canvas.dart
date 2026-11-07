@@ -21,6 +21,7 @@ import '../../core/models.dart';
 import '../../theme/glass.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/coursive_markdown.dart';
+import '../../widgets/pickers.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
 import '../player/video_card_hold.dart';
@@ -30,6 +31,8 @@ import 'study_query.dart';
 import 'study_visual.dart';
 import 'study_pdf_column.dart';
 import 'study_shape.dart';
+import 'outline_document.dart';
+import 'outline_pdf.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 
@@ -48,6 +51,8 @@ part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
 part 'study_selection_tools.dart';
 part 'study_evidence.dart';
+part 'study_outline_review.dart';
+part 'study_outline_export.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -178,6 +183,15 @@ class StudyCanvasState extends State<StudyCanvas>
   /// Views left by following citations, newest last; see [_goBack].
   final _bookmarks = <_ViewMark>[];
   final _returnKey = GlobalKey();
+
+  /// The outline under review and, on a narrow window, whether the review
+  /// steps down to show the source.
+  _ReviewTarget? _review;
+  bool _reviewPeek = false;
+  final _reviewKey = GlobalKey();
+
+  /// The review item last pointed at or focused.
+  FocusNode? _reviewFocus;
 
   /// The citation under the pointer or keyboard focus, or the one just followed.
   final _evidenceFocus = ValueNotifier<Map?>(null);
@@ -584,6 +598,7 @@ class StudyCanvasState extends State<StudyCanvas>
       _zoomKey,
       _selectionMenuKey,
       _returnKey,
+      _reviewKey,
       _moduleKey,
       _toolbarKey,
       _topBarKey,
@@ -1497,9 +1512,11 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
-  Future<void> _sendQuickQuestion() async {
+  /// Sends the quick composer's question, or with [outline] drafts a review
+  /// outline of the bound material, the question becoming its brief.
+  Future<void> _sendQuickQuestion({bool outline = false}) async {
     final text = _quickInput.text.trim();
-    if (text.isEmpty || _quickSending) return;
+    if ((text.isEmpty && !outline) || _quickSending) return;
     _update(() {
       _quickSending = true;
       _quickError = null;
@@ -1511,7 +1528,12 @@ class StudyCanvasState extends State<StudyCanvas>
         throw FormatException(l10n.studySelectionNeedsSource);
       }
       await _startConversation(
-        send: text,
+        send: !outline
+            ? text
+            : text.isEmpty
+            ? l10n.outlineAsk
+            : '${l10n.outlineAsk}：$text',
+        task: outline ? 'propose_outline' : null,
         allowImages: _quickImages,
         visuals: _quickImages && _quickVisuals.isNotEmpty
             ? _quickVisuals
@@ -1939,6 +1961,7 @@ class StudyCanvasState extends State<StudyCanvas>
                 ),
                 _fixedTopBars(),
                 _agentStage(),
+                _reviewPanel(),
                 _returnPill(),
                 _selectionToolbar(),
                 _shelf(),

@@ -365,7 +365,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
         if (initial['send'] is String) {
           data!['allow_images'] = initial['allow_images'] == true;
           input.text = initial['send'] as String;
-          await start();
+          await start(null, initial['task'] as String?);
         } else if (initial['pick'] == true) {
           await pickSources();
         }
@@ -589,7 +589,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
     await refreshContext();
   }
 
-  Future<void> start([String? retry]) async {
+  /// Asks [retry] or the composer's question; [task] `propose_outline`
+  /// drafts a review outline instead of an answer.
+  Future<void> start([String? retry, String? task]) async {
     final question = (retry ?? input.text).trim();
     if (question.isEmpty || busy || loading || data == null) return;
     _stopRequested = false;
@@ -670,6 +672,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     }
     final turn = <String, dynamic>{
       'id': studyId(),
+      'task': ?task,
       'question': question,
       'answer': '',
       'context_key': '',
@@ -710,6 +713,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       final out = await owner.widget.api.startCanvasRun({
         'lecture_id': owner.widget.ctl.lectureId,
         'conversation_id': widget.card.conversationId,
+        'task': ?task,
         'question': question,
         'selection': query,
         'allow_images': data!['allow_images'] == true,
@@ -739,6 +743,102 @@ class _ConversationBodyState extends State<_ConversationBody> {
     }
   }
 
+  /// 「整理为复习提纲」: the learner confirms which bound material is read and
+  /// whether images may be, then the outline runs like a question.
+  Future<void> outline() async {
+    if (busy || loading || data == null) return;
+    final sources = (preview?['sources'] as List? ?? const [])
+        .whereType<Map>()
+        .toList();
+    var images = data!['allow_images'] == true;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, update) {
+          final tt = Theme.of(c).textTheme;
+          final cs = Theme.of(c).colorScheme;
+          return AlertDialog(
+            title: Text(l10n.outlineConfirmTitle),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.outlineConfirmBody,
+                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: Space.md),
+                  if (sources.isEmpty)
+                    Text(
+                      l10n.outlineNoSources,
+                      style: tt.bodySmall?.copyWith(color: cs.error),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: SingleChildScrollView(
+                        child: Wrap(
+                          spacing: Space.xs,
+                          runSpacing: Space.xs,
+                          children: [
+                            for (final s in sources)
+                              Chip(
+                                avatar: Icon(switch ('${s['kind']}') {
+                                  'video' => Icons.smart_display_outlined,
+                                  'ink' => Icons.gesture_rounded,
+                                  'image' => Icons.image_outlined,
+                                  _ => Icons.description_outlined,
+                                }, size: 16),
+                                label: Text(
+                                  '${s['label'] ?? s['id']}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: Space.sm),
+                  SwitchListTile(
+                    key: const ValueKey('outline-confirm-images'),
+                    contentPadding: EdgeInsets.zero,
+                    value: images,
+                    title: Text(l10n.studyAllowImages),
+                    subtitle: Text(l10n.outlineImagesHint, style: tt.bodySmall),
+                    onChanged: (v) => update(() => images = v),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c, false),
+                child: Text(l10n.commonCancel),
+              ),
+              FilledButton(
+                key: const ValueKey('outline-confirm-start'),
+                onPressed: sources.isEmpty
+                    ? null
+                    : () => Navigator.pop(c, true),
+                child: Text(l10n.outlineConfirmStart),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (go != true || !mounted) return;
+    if (images != (data!['allow_images'] == true)) {
+      setState(() => data!['allow_images'] = images);
+      if (images) await captureBound();
+    }
+    await start(l10n.outlineAsk, 'propose_outline');
+  }
+
   Future<void> stop() async {
     _stopRequested = true;
     final id = runId;
@@ -766,10 +866,16 @@ class _ConversationBodyState extends State<_ConversationBody> {
             'schema_version': 2,
             'evidence': out['evidence'] ?? [],
             'suggestions': out['suggestions'] ?? [],
+            if (out['outline_proposal'] is Map)
+              'outline_proposal': out['outline_proposal'],
           },
         };
         await save();
         if (mounted) setState(() => busy = false);
+        // A finished draft opens for review; nothing is written until then.
+        if (mounted && outlineProposal(turn) != null) {
+          owner._openReview(widget.card.id, '${turn['id']}');
+        }
       } else if (out['state'] == 'error' || out['state'] == 'cancelled') {
         turn['state'] = out['state'];
         turn['error'] = out['error'];
@@ -822,6 +928,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       live: live,
       error: error ?? referenceNotice,
       onSend: (_) => start(),
+      onOutline: ready && !busy ? outline : null,
       onStop: stop,
       onRetry: start,
       onRemoveSource: removeSource,

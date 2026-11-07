@@ -290,6 +290,7 @@ func (s *Server) Handler() http.Handler {
 	h("PUT /api/lectures/{id}/study-canvas/conversations/{conversation}", s.studyConversation)
 	h("POST /api/lectures/{id}/study-canvas/material", s.studyMaterial)
 	h("GET /api/lectures/{id}/study-canvas/pdf-page", s.studyPDFPage)
+	h("POST /api/export/pdf-preview", s.exportPDFPreview)
 	h("GET /api/lectures/{id}/study-canvas/media-file/{object}", s.studyVideoFile)
 	h("POST /api/lectures/{id}/study-canvas/media", s.studyMedia)
 	h("GET /api/lectures/{id}/study-canvas/media/{media}", s.studyMedia)

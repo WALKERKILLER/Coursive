@@ -208,6 +208,15 @@ class Api {
   Future<dynamic> importStudyCourseware(String id, String path) => post(
     '/api/lectures/${Uri.encodeComponent(id)}/study-canvas/assets?path=${Uri.encodeComponent(path)}',
   );
+
+  /// Renders [page] of PDF bytes the app built, so the preview shows the
+  /// file that will be saved.
+  Future<dynamic> previewExportPDF(Uint8List pdf, int page) => upload(
+    '/api/export/pdf-preview',
+    {'page': '$page'},
+    Stream.value(pdf),
+    pdf.length,
+  );
   Future<dynamic> transcriptReview(String id) =>
       get('/agent/transcript-review/${Uri.encodeComponent(id)}');
   Future<dynamic> startTranscriptReview(String id) =>

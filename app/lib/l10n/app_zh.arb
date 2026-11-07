@@ -4662,5 +4662,210 @@
   "studySelectionClear": "取消选择",
   "studyQuickHint": "问问选中的内容…",
   "studyQuickKeys": "Enter 发送 · Esc 返回",
-  "studyQuickNeedsVision": "选中的内容没有可读文字。打开「看图」后，助手才能读懂它。"
+  "studyQuickNeedsVision": "选中的内容没有可读文字。打开「看图」后，助手才能读懂它。",
+  "outlineChoiceMastered": "已掌握",
+  "outlineChoiceKey": "重点",
+  "outlineChoiceReview": "待复习",
+  "outlineChoiceCustom": "自定义",
+  "outlineChoiceKeep": "保持原样",
+  "outlineTagUnconfirmed": "未确认",
+  "outlineTagCheck": "待查",
+  "outlineTagQuestion": "问题",
+  "outlineTagUnverified": "未核实",
+  "outlineConflicts": "来源说法不一致",
+  "outlineMarks": "手写标记",
+  "outlineChecks": "待查",
+  "outlineQuestions": "未解决的问题",
+  "outlineUnread": "未读取的资料",
+  "outlineAppendix": "待核实",
+  "outlineAppendixNote": "以下内容还没有经过你的确认，暂不作为结论。",
+  "outlineUntitled": "复习提纲",
+  "outlineSources": "来源",
+  "outlineOpenSource": "在 Coursive 中打开",
+  "outlinePdfMeta": "{date} · {sections} 节 · {items} 条 · {sources} 处来源",
+  "@outlinePdfMeta": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "sections": {
+        "type": "int"
+      },
+      "items": {
+        "type": "int"
+      },
+      "sources": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineContents": "目录",
+  "outlineSourceStale": "依据已失效",
+  "outlineReviewed": "已审核 {done}/{total}",
+  "@outlineReviewed": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineStaleCount": "依据失效 {n}",
+  "@outlineStaleCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineMarksCount": "{n} 个标记待解释",
+  "@outlineMarksCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineUnverifiedCount": "未核实 {n}",
+  "@outlineUnverifiedCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineClose": "关闭审核，草稿会保留",
+  "outlineUndo": "撤销",
+  "outlineAccept": "采纳",
+  "outlineUnaccept": "取消采纳",
+  "outlineToCheck": "标为待查",
+  "outlineUncheck": "取消待查",
+  "outlineEdit": "改写",
+  "outlineEditHint": "Enter 完成 · Shift+Enter 换行 · Esc 放弃",
+  "outlineSplit": "拆成两条",
+  "outlineMerge": "合并下一条",
+  "outlineMoveUp": "上移",
+  "outlineMoveDown": "下移",
+  "outlineDelete": "删除",
+  "outlineMore": "更多操作",
+  "outlineLevel": "切换标题层级",
+  "outlineAddItem": "添加条目",
+  "outlineDeleteSection": "删除章节，条目并入上一章",
+  "outlineKindSummary": "归纳",
+  "outlineEvidenceGone": "依据已失效",
+  "outlineKeepAsCheck": "保留为待查",
+  "outlineDropEvidence": "移除失效依据",
+  "outlineMarkHint": "这个标记是什么意思？只有你知道",
+  "outlineMarkUndo": "撤销选择",
+  "outlineCustomHint": "写下它的意思",
+  "outlineNoInk": "原来的笔迹已不在画布上",
+  "outlineShowInk": "在画布上查看这处笔迹",
+  "outlineSave": "保存为课程笔记",
+  "outlineUpdate": "更新课程笔记",
+  "outlineSaving": "正在保存…",
+  "outlineSaved": "已保存为本课笔记",
+  "outlineDirty": "有修改尚未更新到笔记",
+  "outlineSaveFailed": "无法保存笔记：{error}",
+  "@outlineSaveFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "outlineSaveConflict": "无法保存：这份笔记已在其他地方修改。本机的审核内容仍在，可以另存一份",
+  "outlineSaveCopy": "另存为新笔记",
+  "outlineRetry": "重试",
+  "outlineStateNotRecorded": "无法记录提纲状态：笔记已保存，重试不会重复创建",
+  "outlineTooManyItems": "每章最多 20 条",
+  "outlineExport": "导出",
+  "outlineExportMarkdown": "导出 Markdown",
+  "outlineExportPdf": "导出 PDF",
+  "outlineExportSaved": "已导出到 {path}",
+  "@outlineExportSaved": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "outlineExportFailed": "无法导出：{error}",
+  "@outlineExportFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "outlineKeys": "A 采纳 · F 待查 · Enter 改写 · Alt+↑↓ 移动 · Esc 关闭",
+  "outlinePeekOutline": "提纲",
+  "outlinePeekSource": "原文",
+  "outlineEmpty": "没有可审核的条目",
+  "outlineAsk": "整理为复习提纲",
+  "outlineAskHint": "确认资料后，助手把它们整理成草稿交给你审核",
+  "outlineQuick": "整理提纲",
+  "outlineConfirmTitle": "整理为复习提纲",
+  "outlineConfirmBody": "助手会读取下面这些资料，整理成草稿交给你逐条审核。保存为课程笔记之前，不会写入任何内容。",
+  "outlineConfirmStart": "开始整理",
+  "outlineImagesHint": "允许助手查看选区图像，用于读懂手写和扫描件",
+  "outlineNoSources": "这个对话还没有绑定资料",
+  "outlineCardSummary": "{sections} 节 · {items} 条",
+  "@outlineCardSummary": {
+    "placeholders": {
+      "sections": {
+        "type": "int"
+      },
+      "items": {
+        "type": "int"
+      }
+    }
+  },
+  "outlineCardSaved": "已存为笔记",
+  "outlineCardDraft": "草稿",
+  "outlineOpenReview": "审核提纲",
+  "outlinePdfTitle": "导出 PDF",
+  "outlinePaper": "纸张",
+  "outlineOrientation": "方向",
+  "outlinePortrait": "竖版",
+  "outlineLandscape": "横版",
+  "outlineMargins": "页边距",
+  "outlineMarginStandard": "标准",
+  "outlineMarginCompact": "紧凑",
+  "outlinePdfPage": "{page} / {count}",
+  "@outlinePdfPage": {
+    "placeholders": {
+      "page": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "outlinePdfTextLayer": "文字可选择复制",
+  "outlinePdfSave": "保存 PDF",
+  "outlinePdfMarkdown": "改存 Markdown",
+  "outlinePdfMissing": "无法导出 PDF：内嵌字体缺少「{chars}」等 {n} 个字符，可以改存 Markdown",
+  "@outlinePdfMissing": {
+    "placeholders": {
+      "chars": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "outlinePdfPreviewFailed": "无法预览：{error}。仍可保存同一份 PDF",
+  "@outlinePdfPreviewFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "outlinePrevPage": "上一页",
+  "outlineNextPage": "下一页"
 }

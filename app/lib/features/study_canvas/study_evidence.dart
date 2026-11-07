@@ -70,11 +70,16 @@ class _ViewMark {
     required this.zoom,
     required this.stageOpen,
     required this.selection,
+    this.reviewPeek = false,
+    this.focus,
   });
   final Offset camera;
   final double zoom;
-  final bool stageOpen;
+  final bool stageOpen, reviewPeek;
   final Set<String> selection;
+
+  /// What had keyboard focus, such as the outline item being edited.
+  final FocusNode? focus;
 
   /// The PDF page a card showed before navigation turned it, and the page
   /// navigation turned it to.
@@ -233,6 +238,13 @@ extension _StudyEvidence on StudyCanvasState {
       zoom: d.zoom,
       stageOpen: _stageOpen,
       selection: {..._selection},
+      reviewPeek: _reviewPeek,
+      // A click on a citation in the review leaves no node focused; the
+      // item it was clicked in is where the learner returns.
+      focus: switch (FocusManager.instance.primaryFocus) {
+        final FocusScopeNode _ when _review != null => _reviewFocus,
+        final node => node,
+      },
     );
     if (page != null && card != null) {
       mark
@@ -284,7 +296,10 @@ extension _StudyEvidence on StudyCanvasState {
     );
     _update(() {
       // A narrow window gives the whole view to the source until the return.
-      if (_viewport.width < 720) _stageOpen = false;
+      if (_viewport.width < 720) {
+        _stageOpen = false;
+        if (_review != null) _reviewPeek = true;
+      }
       _selection.clear();
       _regionSelection = null;
       _selectionReady = false;
@@ -305,6 +320,29 @@ extension _StudyEvidence on StudyCanvasState {
       _viewport.width - Space.lg,
       _viewport.height - Space.huge,
     );
+    // The open review takes its side, or the bottom of a narrow window.
+    if (_reviewRect case final r?) {
+      area = _reviewNarrow
+          ? Rect.fromLTRB(
+              area.left,
+              area.top,
+              area.right,
+              math.min(area.bottom, r.top - Space.sm),
+            )
+          : r.center.dx < _viewport.width / 2
+          ? Rect.fromLTRB(
+              math.max(area.left, r.right + Space.lg),
+              area.top,
+              area.right,
+              area.bottom,
+            )
+          : Rect.fromLTRB(
+              area.left,
+              area.top,
+              math.min(area.right, r.left - Space.lg),
+              area.bottom,
+            );
+    }
     if (_stageOpen && _viewport.width >= 720) {
       final w =
           math.min(420.0, math.max(240.0, _viewport.width - 16)) + Space.lg;
@@ -388,12 +426,20 @@ extension _StudyEvidence on StudyCanvasState {
     _evidenceFocus.value = null;
     _update(() {
       _stageOpen = mark.stageOpen;
+      _reviewPeek = mark.reviewPeek;
       _selection
         ..clear()
         ..addAll(mark.selection.where((id) => d.cards.any((c) => c.id == id)));
     });
     _scene.value++;
     _flyTo(mark.camera, mark.zoom);
+    // Back where the learner was typing or reviewing, focus included.
+    final focus = mark.focus;
+    if (focus != null && focus.context?.mounted == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (focus.context?.mounted == true) focus.requestFocus();
+      });
+    }
     return true;
   }
 
@@ -765,12 +811,16 @@ class _Provenance extends StatelessWidget {
     required this.evidence,
     required this.suggestions,
     required this.onFollowup,
+    this.onOutline,
     this.trailing,
   });
   final StudyCanvasState owner;
   final List<Map> evidence;
   final List suggestions;
   final ValueChanged<String> onFollowup;
+
+  /// Starts 「整理为复习提纲」 after the learner confirms its sources.
+  final VoidCallback? onOutline;
 
   /// Sits at the end of the coverage line (the pin button).
   final Widget? trailing;
@@ -823,6 +873,15 @@ class _Provenance extends StatelessWidget {
             tooltip: l10n.studySuggestFollowupHint,
             visualDensity: VisualDensity.compact,
             onPressed: () => onFollowup('${s['text']}'),
+          )
+        else if (s['kind'] == 'propose_outline' && onOutline != null)
+          ActionChip(
+            key: const ValueKey('study-suggest-outline'),
+            avatar: const Icon(Icons.format_list_bulleted_rounded, size: 16),
+            label: Text(l10n.outlineAsk),
+            tooltip: l10n.outlineAskHint,
+            visualDensity: VisualDensity.compact,
+            onPressed: onOutline,
           ),
     ];
     return Column(

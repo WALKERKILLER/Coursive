@@ -100,6 +100,16 @@ func (s *Server) studyPDFPage(w http.ResponseWriter, r *http.Request) (any, erro
 	return out, studyError(e)
 }
 
+// exportPDFPreview renders one page of a PDF the app is about to save.
+func (s *Server) exportPDFPreview(w http.ResponseWriter, r *http.Request) (any, error) {
+	page, e := strconv.Atoi(r.URL.Query().Get("page"))
+	if e != nil {
+		return nil, badRequest("页码无效")
+	}
+	out, e := library.PreviewPDF(r.Context(), http.MaxBytesReader(w, r.Body, library.PDFPreviewLimit+1), page)
+	return out, studyError(e)
+}
+
 func (s *Server) studyVideoFile(w http.ResponseWriter, r *http.Request) (any, error) {
 	s.studyMediaFile(w, r)
 	return nil, nil

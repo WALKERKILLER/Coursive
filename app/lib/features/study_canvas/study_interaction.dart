@@ -725,9 +725,28 @@ extension _StudyInteraction on StudyCanvasState {
                       ),
                     ),
                 const Spacer(),
-                Text(
-                  l10n.studyQuickKeys,
-                  style: tt.labelSmall?.copyWith(color: cs.outline),
+                Flexible(
+                  child: Text(
+                    l10n.studyQuickKeys,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelSmall?.copyWith(color: cs.outline),
+                  ),
+                ),
+                // The chips above are the material it reads; 「看图」 is the consent.
+                TextButton.icon(
+                  key: const ValueKey('study-quick-outline'),
+                  onPressed: _quickSending
+                      ? null
+                      : () => _sendQuickQuestion(outline: true),
+                  icon: const Icon(
+                    Icons.format_list_bulleted_rounded,
+                    size: 16,
+                  ),
+                  label: Text(l10n.outlineQuick),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
                 ),
               ],
             ),

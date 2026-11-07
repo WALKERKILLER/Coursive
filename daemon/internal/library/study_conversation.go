@@ -13,6 +13,7 @@ import (
 // Conversation history is independent of layout undo; deleting a card retains its recoverable sidecar.
 type StudyTurn struct {
 	ID         string          `json:"id"`
+	Task       string          `json:"task,omitempty"`
 	Question   string          `json:"question"`
 	Answer     string          `json:"answer"`
 	ContextKey string          `json:"context_key"`
@@ -42,9 +43,52 @@ type StudySuggestion struct {
 // StudyTurnResult is the part of a turn result the daemon understands.
 // Older turns carry only sources and keep loading unchanged.
 type StudyTurnResult struct {
-	SchemaVersion int               `json:"schema_version,omitempty"`
-	Evidence      []StudyEvidence   `json:"evidence,omitempty"`
-	Suggestions   []StudySuggestion `json:"suggestions,omitempty"`
+	SchemaVersion   int                   `json:"schema_version,omitempty"`
+	Evidence        []StudyEvidence       `json:"evidence,omitempty"`
+	Suggestions     []StudySuggestion     `json:"suggestions,omitempty"`
+	OutlineProposal *StudyOutlineProposal `json:"outline_proposal,omitempty"`
+}
+
+// StudyOutlineProposal is a review outline drafted from bound material
+// (spec 0028). It stays a draft in the conversation until the learner saves
+// it as a lecture note; only then is it accepted with that note's ID.
+type StudyOutlineProposal struct {
+	Version             int                   `json:"version"`
+	ProposalID          string                `json:"proposal_id"`
+	LectureID           string                `json:"lecture_id"`
+	ConversationID      string                `json:"conversation_id"`
+	TurnID              string                `json:"turn_id"`
+	SourceRevision      int64                 `json:"source_revision"`
+	SourceFingerprints  []string              `json:"source_fingerprints,omitempty"`
+	State               string                `json:"state"`
+	Title               string                `json:"title"`
+	Sections            []StudyOutlineSection `json:"sections"`
+	Conflicts           []StudyOutlineNote    `json:"conflicts,omitempty"`
+	UnresolvedQuestions []string              `json:"unresolved_questions,omitempty"`
+	MissingSources      []string              `json:"missing_sources,omitempty"`
+	NoteID              string                `json:"note_id,omitempty"`
+	NoteHash            string                `json:"note_hash,omitempty"`
+}
+type StudyOutlineSection struct {
+	ID      string             `json:"id"`
+	Heading string             `json:"heading"`
+	Level   int                `json:"level"`
+	Items   []StudyOutlineItem `json:"items"`
+}
+type StudyOutlineItem struct {
+	ID          string       `json:"id"`
+	Kind        string       `json:"kind"`
+	Text        string       `json:"text"`
+	EvidenceIDs []string     `json:"evidence_ids,omitempty"`
+	Review      string       `json:"review"`
+	SourceID    string       `json:"source_id,omitempty"`
+	Anchor      *StudyAnchor `json:"anchor,omitempty"`
+	Choice      string       `json:"choice,omitempty"`
+	ChoiceText  string       `json:"choice_text,omitempty"`
+}
+type StudyOutlineNote struct {
+	Text        string   `json:"text"`
+	EvidenceIDs []string `json:"evidence_ids,omitempty"`
 }
 
 func validStudyTurnResult(raw json.RawMessage) bool {
@@ -52,7 +96,15 @@ func validStudyTurnResult(raw json.RawMessage) bool {
 		return true
 	}
 	var r StudyTurnResult
-	if json.Unmarshal(raw, &r) != nil || r.SchemaVersion < 0 || r.SchemaVersion > 2 || len(r.Evidence) > 24 || len(r.Suggestions) > 2 {
+	if json.Unmarshal(raw, &r) != nil || r.SchemaVersion < 0 || r.SchemaVersion > 2 || len(r.Suggestions) > 2 {
+		return false
+	}
+	// An outline cites more of the bound material than one answer does.
+	limit := 24
+	if r.OutlineProposal != nil {
+		limit = 120
+	}
+	if len(r.Evidence) > limit {
 		return false
 	}
 	issued := map[string]bool{}
@@ -81,10 +133,103 @@ func validStudyTurnResult(raw json.RawMessage) bool {
 			return false
 		}
 	}
+	return r.OutlineProposal == nil || validStudyOutline(*r.OutlineProposal, issued)
+}
+
+func validStudyOutline(p StudyOutlineProposal, issued map[string]bool) bool {
+	cited := func(ids []string) bool {
+		if len(ids) > 24 {
+			return false
+		}
+		for _, id := range ids {
+			if !issued[id] {
+				return false
+			}
+		}
+		return true
+	}
+	if p.Version != 1 || !studyProposalID.MatchString(p.ProposalID) || len(p.LectureID) > 100 || len(p.ConversationID) > 100 || len(p.TurnID) > 100 || p.SourceRevision < 0 ||
+		len(p.SourceFingerprints) > 24 || strings.TrimSpace(p.Title) == "" || len(p.Title) > 400 || len(p.Sections) > 50 ||
+		len(p.Conflicts) > 20 || len(p.UnresolvedQuestions) > 20 || len(p.MissingSources) > 24 {
+		return false
+	}
+	// A draft is never linked to a note; an accepted outline always is.
+	switch {
+	case p.State == "draft" && p.NoteID == "" && p.NoteHash == "":
+	case p.State == "accepted" && studyOutlineID.MatchString(p.NoteID) && studyNoteHash.MatchString(p.NoteHash):
+	default:
+		return false
+	}
+	for _, f := range p.SourceFingerprints {
+		if len(f) > 128 {
+			return false
+		}
+	}
+	ids := map[string]bool{}
+	fresh := func(id string) bool {
+		if !studyOutlineID.MatchString(id) || ids[id] {
+			return false
+		}
+		ids[id] = true
+		return true
+	}
+	for _, s := range p.Sections {
+		if !fresh(s.ID) || len(s.Heading) > 400 || s.Level < 1 || s.Level > 3 || len(s.Items) > 20 {
+			return false
+		}
+		for _, it := range s.Items {
+			if !fresh(it.ID) || len(it.Text) > 4000 || !cited(it.EvidenceIDs) || len(it.SourceID) > 120 || len(it.ChoiceText) > 400 {
+				return false
+			}
+			switch it.Review {
+			case "pending", "confirmed", "to_check", "needs_interpretation":
+			default:
+				return false
+			}
+			switch it.Kind {
+			case "fact", "summary", "question":
+				if it.Choice != "" || it.ChoiceText != "" || it.Anchor != nil || it.Review == "needs_interpretation" {
+					return false
+				}
+			case "unresolved_mark":
+				// Only the learner gives a mark its meaning.
+				switch it.Choice {
+				case "", "mastered", "key", "review", "custom", "keep":
+				default:
+					return false
+				}
+				if (it.Choice == "custom") != (strings.TrimSpace(it.ChoiceText) != "") || (it.Choice == "") != (it.Review == "needs_interpretation") || it.Anchor != nil && !validStudyAnchor(*it.Anchor) {
+					return false
+				}
+			default:
+				return false
+			}
+		}
+	}
+	for _, c := range p.Conflicts {
+		if strings.TrimSpace(c.Text) == "" || len(c.Text) > 2000 || !cited(c.EvidenceIDs) {
+			return false
+		}
+	}
+	for _, q := range p.UnresolvedQuestions {
+		if len(q) > 1000 {
+			return false
+		}
+	}
+	for _, m := range p.MissingSources {
+		if len(m) > 400 {
+			return false
+		}
+	}
 	return true
 }
 
-var studyEvidenceID = regexp.MustCompile(`^e[0-9]{1,3}$`)
+var (
+	studyEvidenceID = regexp.MustCompile(`^e[0-9]{1,3}$`)
+	studyProposalID = regexp.MustCompile(`^[0-9a-f][0-9a-f-]{7,63}$`)
+	studyOutlineID  = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
+	studyNoteHash   = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
+)
 
 type StudyConversation struct {
 	Version     int                 `json:"version"`
@@ -142,6 +287,9 @@ func (l *Library) StudyConversation(ctx context.Context, lecture, id string, nex
 			return old, ErrStudyInvalid
 		}
 		seen[t.ID] = true
+		if t.Task != "" && t.Task != "propose_outline" {
+			return old, ErrStudyInvalid
+		}
 		switch t.State {
 		case "preparing", "running", "done", "error", "cancelled", "interrupted", "pending", "applied":
 		default:

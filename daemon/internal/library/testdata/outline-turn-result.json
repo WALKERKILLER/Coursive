@@ -1,0 +1,146 @@
+{
+ "schema_version": 2,
+ "sources": [],
+ "evidence": [
+  {
+   "id": "e1",
+   "source_id": "pdf-selection",
+   "kind": "exact_text",
+   "status": "verified",
+   "label": "Real parser fixture · p3",
+   "anchor": {
+    "id": "pdf-selection",
+    "workspace_id": "L",
+    "object_id": "pdf",
+    "kind": "pdf",
+    "document_id": "doc",
+    "page": 3,
+    "start": 10,
+    "end": 28,
+    "fingerprint": "abc",
+    "quote": "计算 cache miss 的代价。"
+   }
+  },
+  {
+   "id": "e2",
+   "source_id": "video-window",
+   "kind": "timestamped_transcript",
+   "status": "verified",
+   "label": "Lecture",
+   "anchor": {
+    "id": "video-window",
+    "workspace_id": "L",
+    "object_id": "lecture",
+    "kind": "video",
+    "time_start_ms": 512000,
+    "time_end_ms": 550000,
+    "quote": "缓存失效时需要读取主存。"
+   }
+  }
+ ],
+ "suggestions": [],
+ "outline_proposal": {
+  "version": 1,
+  "proposal_id": "0f8c2d3e-1a2b-4c5d-8e9f-0a1b2c3d4e5f",
+  "lecture_id": "L",
+  "conversation_id": "chat",
+  "turn_id": "run-1",
+  "source_revision": 7,
+  "source_fingerprints": [
+   "abc"
+  ],
+  "state": "draft",
+  "title": "缓存失效复习",
+  "sections": [
+   {
+    "id": "s1",
+    "heading": "缓存失效",
+    "level": 1,
+    "items": [
+     {
+      "id": "i1",
+      "kind": "fact",
+      "text": "缓存未命中时要从主存读取，代价是 $t_{miss}=t_{hit}+t_{penalty}$。",
+      "evidence_ids": [
+       "e1"
+      ],
+      "review": "pending"
+     },
+     {
+      "id": "i2",
+      "kind": "summary",
+      "text": "命中率越高，平均访问时间越接近 `t_hit`。",
+      "evidence_ids": [],
+      "review": "pending"
+     }
+    ]
+   },
+   {
+    "id": "s2",
+    "heading": "课堂补充",
+    "level": 2,
+    "items": [
+     {
+      "id": "i3",
+      "kind": "fact",
+      "text": "老师强调失效时读取主存。",
+      "evidence_ids": [
+       "e2"
+      ],
+      "review": "pending"
+     },
+     {
+      "id": "i4",
+      "kind": "question",
+      "text": "写回策略如何影响 miss 代价？",
+      "evidence_ids": [],
+      "review": "pending"
+     }
+    ]
+   },
+   {
+    "id": "s3",
+    "heading": "待确认的手写标记",
+    "level": 1,
+    "items": [
+     {
+      "id": "i5",
+      "kind": "unresolved_mark",
+      "text": "所选手写与圈画（1 笔）未能读取，请确认它的含义",
+      "evidence_ids": [],
+      "review": "needs_interpretation",
+      "source_id": "ink",
+      "anchor": {
+       "id": "ink",
+       "workspace_id": "L",
+       "object_id": "pdf",
+       "kind": "ink",
+       "region": [
+        0.1,
+        0.2,
+        0.3,
+        0.3
+       ],
+       "stroke_ids": [
+        "stroke"
+       ]
+      }
+     }
+    ]
+   }
+  ],
+  "conflicts": [
+   {
+    "text": "课件写“代价”，课堂只说读取主存，没有给出公式。",
+    "evidence_ids": [
+     "e1",
+     "e2"
+    ]
+   }
+  ],
+  "unresolved_questions": [
+   "多级缓存时 penalty 怎么算？"
+  ],
+  "missing_sources": []
+ }
+}
