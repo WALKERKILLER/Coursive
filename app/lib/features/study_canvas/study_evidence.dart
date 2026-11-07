@@ -341,6 +341,8 @@ extension _StudyEvidence on StudyCanvasState {
   }
 
   /// Restores the newest view left by a citation; false when there is none.
+  /// Alt+← / ⌘[ follow PDF readers' back navigation, e.g. Zotero's
+  /// (https://www.zotero.org/support/kb/keyboard_shortcuts).
   bool _goBack() {
     final d = document;
     if (d == null || _bookmarks.isEmpty) return false;

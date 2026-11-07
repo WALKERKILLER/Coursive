@@ -32,3 +32,4 @@ Structured citations are easy to render, but the model can still invent pages, t
 - [Grounded canvas answers](../specs/0027-grounded-canvas-answers.md)
 - [Scoped canvas tool runs](0017-scoped-canvas-tool-runs.md)
 - [Runtime behavior](../multimodal-canvas.md)
+- Citation interaction references, read 2026-11-07: [a NotebookLM citation is a button, not a reference](https://dev.to/anuis258/a-notebooklm-citation-is-a-button-not-a-reference-4he1), [NotebookLM help: citations](https://support.google.com/notebooklm/answer/16179559?hl=en), [RAG citation UX patterns](https://www.aydesign.ai/blog/ai-rag-citation-ux-design-patterns-2026)

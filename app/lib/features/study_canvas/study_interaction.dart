@@ -881,6 +881,8 @@ class _BarAction extends StatelessWidget {
 
 /// Places a floating control 8 dp off the anchor's top-right corner, below it
 /// when the top is covered, and 12 dp inside the window.
+/// After tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
+/// and the M3 floating toolbar guidance (https://m3.material.io/components/toolbars/guidelines).
 class _FloatingLayout extends SingleChildLayoutDelegate {
   _FloatingLayout(this.anchor, this.topInset);
   final Rect anchor;
