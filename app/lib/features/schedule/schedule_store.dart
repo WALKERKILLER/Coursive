@@ -91,7 +91,7 @@ class ScheduleStore extends ChangeNotifier {
     // Optimistic: reflect the change at once, then take the server's copy.
     _replace(ScheduleItem({...it.j, ...fields}));
     try {
-      _replace(ScheduleItem((await app.api.patch('/api/schedule/${it.id}', fields) as Map).cast<String, dynamic>()));
+      _replace(ScheduleItem((await app.api.patch('/api/schedule/${Uri.encodeComponent(it.id)}', fields) as Map).cast<String, dynamic>()));
     } catch (e) {
       _replace(it);
       rethrow;
@@ -102,7 +102,7 @@ class ScheduleStore extends ChangeNotifier {
     items.removeWhere((x) => x.id == it.id);
     notifyListeners();
     try {
-      await app.api.delete('/api/schedule/${it.id}');
+      await app.api.delete('/api/schedule/${Uri.encodeComponent(it.id)}');
     } catch (e) {
       _replace(it);
       rethrow;
@@ -113,7 +113,7 @@ class ScheduleStore extends ChangeNotifier {
   /// assignment is only hidden, so it is shown again.
   Future<ScheduleItem> restore(ScheduleItem it) async {
     if (!it.isLms) return add({...it.j}..remove('id'));
-    final back = ScheduleItem((await app.api.patch('/api/schedule/${it.id}', {'hidden': false}) as Map).cast<String, dynamic>());
+    final back = ScheduleItem((await app.api.patch('/api/schedule/${Uri.encodeComponent(it.id)}', {'hidden': false}) as Map).cast<String, dynamic>());
     _replace(back);
     return back;
   }

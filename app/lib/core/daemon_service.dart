@@ -119,7 +119,10 @@ class DaemonService extends ChangeNotifier {
     final args = ['-exit-on-stdin-eof'];
     if (agent != null) args.addAll(['-agent', agent]);
     if (node != null) args.addAll(['-node', node]);
-    await _launch(bin, args, {'COURSIVE_TOKEN': token});
+    await _launch(bin, args, {
+      'COURSIVE_TOKEN': token,
+      if (Platform.isMacOS) 'PATH': macOSDaemonPath(Platform.environment['PATH']),
+    });
   }
 
   Future<void> _spawnInWorkspace(Workspace ws) async {
@@ -231,3 +234,15 @@ class DaemonService extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Finder does not load shell profiles. Preserve explicit tool precedence and
+/// include the standard package-manager locations for daemon child processes.
+String macOSDaemonPath(String? inherited) => <String>{
+  ...?inherited?.split(':').where((part) => part.isNotEmpty),
+  '/opt/homebrew/bin',
+  '/usr/local/bin',
+  '/usr/bin',
+  '/bin',
+  '/usr/sbin',
+  '/sbin',
+}.join(':');

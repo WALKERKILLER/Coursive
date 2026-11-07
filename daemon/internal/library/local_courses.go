@@ -204,7 +204,7 @@ func localVideoDuration(ctx context.Context, filename string) (int64, error) {
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return 0, errors.New("无法导入视频：请先在设置中安装 ffmpeg（包含 ffprobe）")
+			return 0, errors.New("无法导入视频：未找到 ffprobe，请打开首页「功能准备」或设置 → 诊断安装 FFmpeg（包含 ffprobe）")
 		}
 		return 0, fmt.Errorf("%w：无法读取视频，请确认文件可播放", ErrLocalInvalid)
 	}

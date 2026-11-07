@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,9 @@ import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
 import '../assistant/runtime_setup.dart';
+import 'models_page.dart';
+import 'settings_page.dart';
+import '../setup/media_tools_help.dart';
 import '../setup/workspace_setup_page.dart';
 import '../../l10n/l10n.dart';
 
@@ -35,7 +39,9 @@ class _Check {
 class _DiagnosticsState extends State<Diagnostics> {
   Map<String, dynamic>? _runtime;
   List<String> _agentLog = const [];
-  bool? _pdfReady;
+  Map? _tools, _models, _asr;
+  bool _loading = false;
+  String? _pdfBackend;
 
   @override
   void initState() {
@@ -45,24 +51,43 @@ class _DiagnosticsState extends State<Diagnostics> {
 
   Future<void> _load() async {
     final app = context.read<AppState>();
-    final workspace = context.read<DaemonService>().workspace;
-    if (!app.connected) return;
-    try {
-      final rt = (await app.api.get('/api/agent/runtime') as Map)
-          .cast<String, dynamic>();
-      final st = await app.api.get('/api/agent/status') as Map;
-      final pdfReady = workspace == null
-          ? null
-          : await workspace.pdfAvailable();
-      if (!mounted) return;
-      setState(() {
-        _runtime = rt;
-        _agentLog = [for (final l in (st['logs'] as List?) ?? const []) '$l'];
-        _pdfReady = pdfReady;
-      });
-    } catch (_) {
-      // The checks below already show what is not reachable.
+    if (!app.connected || _loading) return;
+    setState(() {
+      _loading = true;
+      _runtime = null;
+      _tools = _models = _asr = null;
+      _pdfBackend = null;
+    });
+    // One unavailable service must not hide the other preparation checks.
+    Future<Map?> read(String path) async {
+      try {
+        return await app.api.get(path).timeout(const Duration(seconds: 12))
+            as Map;
+      } catch (_) {
+        return null;
+      }
     }
+
+    final results = await Future.wait([
+      read('/api/health'),
+      read('/api/agent/runtime'),
+      read('/api/agent/status'),
+      read('/agent/models'),
+      read('/api/asr'),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _tools = results[0]?['media_tools'] as Map?;
+      _pdfBackend = results[0]?['pdf_backend'] as String?;
+      _runtime = results[1]?.cast<String, dynamic>();
+      _agentLog = [
+        for (final l in (results[2]?['logs'] as List?) ?? const []) '$l',
+      ];
+      _models = results[3];
+      _asr = results[4];
+      _loading = false;
+    });
+    await app.refreshHealth();
   }
 
   static String get _platform => kIsWeb
@@ -107,37 +132,41 @@ class _DiagnosticsState extends State<Diagnostics> {
           'Ubuntu 24.04 · proot',
           _Health.ok,
         ),
-      if (daemon.workspace != null)
-        _Check(
-          Icons.picture_as_pdf_outlined,
-          'PDF 文档',
-          _pdfReady == true
-              ? '可在本机提取文字和页面图像'
-              : '首次导入 PDF 前安装组件；已迁入的 PDF 页面可直接查看',
-          !ready || _pdfReady == null
-              ? _Health.pending
-              : (_pdfReady! ? _Health.ok : _Health.attention),
-          action: ready && _pdfReady != true
-              ? WorkspacePDFButton(workspace: daemon.workspace!, onDone: _load)
-              : null,
-        ),
+      _mediaCheck(daemon, pdf: false),
+      _mediaCheck(daemon, pdf: true),
       _Check(
-        Icons.graphic_eq_rounded,
-        'ffmpeg',
-        h['ffmpeg'] == true
-            ? l10n.diagFfmpegOk
-            : (daemon.workspace != null
-                  ? l10n.diagFfmpegMissingWorkspace
-                  : l10n.diagFfmpegMissing),
-        !ready
+        Icons.auto_awesome_outlined,
+        l10n.setupModelTitle,
+        _models == null
+            ? l10n.setupUnknown
+            : (_models!['selected'] == null
+                  ? l10n.setupModelMissing
+                  : '${l10n.setupModelConfigured}\n${(_models!['selected']['vision'] == true || _models!['vision_ready'] == true) ? l10n.setupVisionConfigured : l10n.setupVisionMissing}'),
+        _models == null
             ? _Health.pending
-            : (h['ffmpeg'] == true ? _Health.ok : _Health.attention),
-        action: daemon.workspace != null && ready && h['ffmpeg'] != true
-            ? WorkspaceFFmpegButton(
-                workspace: daemon.workspace!,
-                onDone: app.refreshHealth,
-              )
-            : null,
+            : (_models!['selected'] != null ? _Health.ok : _Health.attention),
+        action: FilledButton.tonal(
+          onPressed: () async {
+            await Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const ModelsPage()));
+            if (mounted) _load();
+          },
+          child: Text(l10n.setupConfigure),
+        ),
+      ),
+      _Check(
+        Icons.record_voice_over_outlined,
+        l10n.setupAsrTitle,
+        _asr == null
+            ? l10n.setupUnknown
+            : (_asrEnabled ? l10n.setupAsrConfigured : l10n.setupAsrMissing),
+        _asr == null
+            ? _Health.pending
+            : (_asrEnabled ? _Health.ok : _Health.attention),
+        action: FilledButton.tonal(
+          onPressed: () => SettingsNav.open('transfer'),
+          child: Text(l10n.setupConfigure),
+        ),
       ),
       _Check(
         Icons.smart_toy_outlined,
@@ -155,12 +184,70 @@ class _DiagnosticsState extends State<Diagnostics> {
             : (agentState == 'ready' ? _Health.ok : _Health.attention),
         action: ready && agentState != 'ready' && agentState != 'starting'
             ? FilledButton.tonal(
-                onPressed: () => showRuntimeSetup(context),
+                onPressed: () async {
+                  await showRuntimeSetup(context);
+                  if (mounted) _load();
+                },
                 child: Text(l10n.diagSetupRuntime),
               )
             : null,
       ),
     ];
+  }
+
+  bool get _asrEnabled => (_asr?['channels'] as List? ?? const [])
+      .whereType<Map>()
+      .any((c) => c['enabled'] == true);
+
+  _Check _mediaCheck(DaemonService daemon, {required bool pdf}) {
+    if (pdf && _pdfBackend == 'unsupported') {
+      return _Check(
+        Icons.picture_as_pdf_outlined,
+        l10n.setupPdfTitle,
+        l10n.setupPdfUnsupported,
+        _Health.attention,
+      );
+    }
+    final nativePdf = pdf && _pdfBackend == 'pdfkit';
+    final names = pdf
+        ? (nativePdf ? ['study_pdf'] : ['pdfinfo', 'pdftoppm', 'pdftotext'])
+        : ['ffmpeg', 'ffprobe'];
+    final known =
+        (!pdf || _pdfBackend != null) &&
+        names.every((name) => _tools?[name] is bool);
+    final missing = names.where((name) => _tools?[name] != true).toList();
+    return _Check(
+      pdf ? Icons.picture_as_pdf_outlined : Icons.graphic_eq_rounded,
+      pdf ? l10n.setupPdfTitle : l10n.setupMediaTitle,
+      !known
+          ? l10n.setupUnknown
+          : missing.isEmpty
+          ? l10n.setupToolsPresent
+          : nativePdf
+          ? l10n.setupPdfHelperMissing
+          : l10n.setupToolsMissing(missing.join(', ')),
+      !known
+          ? _Health.pending
+          : missing.isEmpty
+          ? _Health.ok
+          : _Health.attention,
+      action: known && missing.isEmpty
+          ? null
+          : daemon.workspace != null
+          ? (pdf
+                ? WorkspacePDFButton(
+                    workspace: daemon.workspace!,
+                    onDone: _load,
+                  )
+                : WorkspaceFFmpegButton(
+                    workspace: daemon.workspace!,
+                    onDone: _load,
+                  ))
+          : TextButton(
+              onPressed: () => showMediaToolsHelp(context, pdf: pdf),
+              child: Text(l10n.setupInstallHelp),
+            ),
+    );
   }
 
   String _report(AppState app, DaemonService daemon, List<_Check> checks) => [
@@ -180,8 +267,18 @@ class _DiagnosticsState extends State<Diagnostics> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: Space.xl),
+        Text(l10n.setupIntro),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _loading ? null : _load,
+            icon: const Icon(Icons.refresh),
+            label: Text(l10n.setupRecheck),
+          ),
+        ),
         _Summary(
           checks: checks,
+          loading: _loading,
           subtitle:
               'Coursive ${app.health['version'] ?? ''} · $_platform${daemon.workspace != null ? l10n.diagWorkspaceSuffix : ''}',
           onCopy: () {
@@ -238,10 +335,12 @@ class _DiagnosticsState extends State<Diagnostics> {
 class _Summary extends StatelessWidget {
   const _Summary({
     required this.checks,
+    required this.loading,
     required this.subtitle,
     required this.onCopy,
   });
   final List<_Check> checks;
+  final bool loading;
   final String subtitle;
   final VoidCallback onCopy;
 
@@ -260,7 +359,7 @@ class _Summary extends StatelessWidget {
           )
         : pending
         ? (
-            l10n.commonChecking,
+            loading ? l10n.commonChecking : l10n.setupUnknown,
             Icons.more_horiz_rounded,
             cs.surfaceContainerHighest,
             cs.onSurfaceVariant,

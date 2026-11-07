@@ -232,6 +232,11 @@ jobs:
             CGO_ENABLED=0 GOOS=darwin GOARCH=$a go build -trimpath -ldflags="-s -w -X github.com/walkerkiller/coursive/daemon/internal/server.Version=$VERSION" -o "bin/coursive-daemon-$a" ./cmd/coursive-daemon
           done
           lipo -create -output bin/coursive-daemon bin/coursive-daemon-arm64 bin/coursive-daemon-amd64
+          for a in arm64 x86_64; do
+            xcrun swiftc -O -target "$a-apple-macosx11.0" ../scripts/desktop/study-pdf.swift -o "bin/coursive-study-pdf-$a"
+          done
+          lipo -create -output bin/coursive-study-pdf bin/coursive-study-pdf-arm64 bin/coursive-study-pdf-x86_64
+          lipo bin/coursive-study-pdf -verify_arch arm64 x86_64
           cd ../app
           flutter pub get
           flutter build macos --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number "$GITHUB_RUN_NUMBER"
@@ -243,7 +248,8 @@ jobs:
           app="app/build/macos/Build/Products/Release/Coursive.app"
           res="$app/Contents/Resources"
           # The daemon is code and sits beside the executable; the agent is data.
-          cp daemon/bin/coursive-daemon "$app/Contents/MacOS/"
+          cp daemon/bin/coursive-daemon daemon/bin/coursive-study-pdf "$app/Contents/MacOS/"
+          test -x "$app/Contents/MacOS/coursive-study-pdf"
           mkdir -p "$res/agent"
           cp -r agent/src agent/plugins agent/package.json agent/package-lock.json "$res/agent/"
           (cd "$res/agent" && npm ci --omit=dev)
