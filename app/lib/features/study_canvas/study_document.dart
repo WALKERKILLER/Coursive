@@ -53,6 +53,7 @@ class StudyCard {
     this.pdfColumn = '',
     this.collapsed = false,
     this.expandedH = 0,
+    this.quarterTurns = 0,
     List<StudyBlock>? blocks,
     List<StudyAnchor>? sources,
     Map<String, String>? responses,
@@ -66,7 +67,7 @@ class StudyCard {
   String pdfColumn;
   bool collapsed;
   double expandedH;
-  int page, pageCount;
+  int page, pageCount, quarterTurns;
   double pageAspect;
   List<Map> textBoxes;
   List<StudyBlock> blocks;
@@ -117,6 +118,7 @@ class StudyCard {
     pdfColumn: '${m['pdf_column'] ?? ''}',
     collapsed: m['collapsed'] == true,
     expandedH: _n(m['expanded_h']),
+    quarterTurns: (m['quarter_turns'] as num? ?? 0).toInt(),
     responses: Map<String, String>.from(m['responses'] as Map? ?? {}),
     blocks: [
       for (final b in m['blocks'] as List? ?? []) StudyBlock.fromJson(b as Map),
@@ -151,6 +153,7 @@ class StudyCard {
     if (pdfColumn.isNotEmpty) 'pdf_column': pdfColumn,
     'collapsed': collapsed,
     'expanded_h': expandedH,
+    if (quarterTurns != 0) 'quarter_turns': quarterTurns,
     'responses': responses,
     'blocks': blocks.map((b) => b.json()).toList(),
     'sources': sources.map((a) => a.json()).toList(),
@@ -241,12 +244,16 @@ int inkOnDark(int color, [String tool = 'pen']) {
   if (tool == 'highlighter') return color;
   final hsl = HSLColor.fromColor(Color(color));
   if (hsl.lightness >= .55) return color;
-  return hsl.withLightness((1 - hsl.lightness).clamp(.74, .92)).toColor().toARGB32();
+  return hsl
+      .withLightness((1 - hsl.lightness).clamp(.74, .92))
+      .toColor()
+      .toARGB32();
 }
 
 /// Whether ink anchored to [type] sits on a printed page (PDF, image) that
 /// keeps its light background in dark mode.
-bool studyOnPrintedPage(String? type) => type == 'pdf' || type == 'pdfdoc' || type == 'image';
+bool studyOnPrintedPage(String? type) =>
+    type == 'pdf' || type == 'pdfdoc' || type == 'image';
 
 void paintInk(
   Canvas canvas,
@@ -324,7 +331,7 @@ class _StudySnapshot {
 }
 
 class StudyDocument extends ChangeNotifier {
-  int revision = 0, edit = 0;
+  int revision = 0, edit = 0, formatVersion = 3;
   String baseHash = "";
   Set<String> appliedRuns = {};
   Offset camera = const Offset(40, 70);
@@ -355,9 +362,13 @@ class StudyDocument extends ChangeNotifier {
             layers.any((l) => l.id == s.layer && l.locked),
       );
   factory StudyDocument.fromJson(Map m) {
-    if (m['version'] != 1 && m['version'] != 2 && m['version'] != 3)
+    if (m['version'] != 1 &&
+        m['version'] != 2 &&
+        m['version'] != 3 &&
+        m['version'] != 4)
       throw FormatException(l10n.studyUnknownVersion);
     final d = StudyDocument();
+    d.formatVersion = math.max(3, (m['version'] as num).toInt());
     d.revision = (m['revision'] as num).toInt();
     d.baseHash = m['base_hash'] as String? ?? '';
     d.appliedRuns = (m['applied_runs'] as List? ?? []).cast<String>().toSet();
@@ -390,7 +401,10 @@ class StudyDocument extends ChangeNotifier {
   }
   StudyDocument();
   Map<String, dynamic> json() => {
-    'version': 3,
+    'version': math.max(
+      formatVersion,
+      cards.any((c) => c.quarterTurns != 0) ? 4 : 3,
+    ),
     'revision': revision,
     if (baseHash.isNotEmpty) 'base_hash': baseHash,
     'applied_runs': appliedRuns.toList(),
@@ -657,6 +671,53 @@ class StudyDocument extends ChangeNotifier {
     changed();
   }
 
+  /// Quarter turns retain axis-aligned card hit areas; image content rotates
+  /// together with its frame, while ink uses the same world-space pivot.
+  bool canRotateSelection(Set<String> cardsIds, Set<String> inkIds) {
+    final selected = cards.where((c) => cardsIds.contains(c.id)).toList();
+    return (selected.isNotEmpty || inkIds.isNotEmpty) &&
+        selected.every(
+          (c) => c.type == 'image' && !c.collapsed && canTransformCard(c),
+        ) &&
+        strokes
+            .where((s) => inkIds.contains(s.id) || cardsIds.contains(s.anchor))
+            .every((s) => editable(s.layer));
+  }
+
+  void rotateSelection(Set<String> cardIds, Set<String> inkIds, Offset pivot) {
+    if (!canRotateSelection(cardIds, inkIds)) return;
+    Offset turn(Offset p) => pivot + Offset(-(p - pivot).dy, (p - pivot).dx);
+    checkpoint();
+    for (final c in cards.where((c) => cardIds.contains(c.id))) {
+      c.rect = Rect.fromCenter(
+        center: turn(c.rect.center),
+        width: c.rect.height,
+        height: c.rect.width,
+      );
+      c.quarterTurns = (c.quarterTurns + 1) % 4;
+      formatVersion = 4;
+    }
+    strokes = [
+      for (final s in strokes)
+        if (inkIds.contains(s.id) || cardIds.contains(s.anchor))
+          StudyStroke(
+            id: s.id,
+            layer: s.layer,
+            anchor: s.anchor,
+            page: s.page,
+            gesture: s.gesture,
+            tool: s.tool,
+            brush: s.brush,
+            color: s.color,
+            width: s.width,
+            points: [for (final p in s.points) InkPoint(turn(p.p), p.pressure)],
+          )
+        else
+          s,
+    ];
+    changed();
+  }
+
   bool erase(Offset a, Offset b, double radius) {
     final hit = Rect.fromPoints(a, b).inflate(radius);
     var touched = false;
@@ -771,36 +832,16 @@ class StudyDocument extends ChangeNotifier {
     var region = Rect.fromPoints(polygon.first, polygon.first);
     for (final p in polygon)
       region = region.expandToInclude(Rect.fromPoints(p, p));
-    bool inside(Offset p) {
-      var yes = false;
-      for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        final a = polygon[i], b = polygon[j];
-        if ((a.dy > p.dy) != (b.dy > p.dy) &&
-            p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx)
-          yes = !yes;
-      }
-      return yes;
-    }
-
+    final loop = Path()..addPolygon(polygon, true);
     final hit = <String>{};
     for (final s in strokes.where(strokeVisible)) {
       if (!s.bounds.overlaps(region)) continue;
-      var selected = s.points.any((p) => inside(p.p));
-      for (var i = 1; !selected && i < s.points.length; i++) {
-        for (var j = 0; j < polygon.length; j++) {
-          if (_segmentsNear(
-            s.points[i - 1].p,
-            s.points[i].p,
-            polygon[j],
-            polygon[(j + 1) % polygon.length],
-            0,
-          )) {
-            selected = true;
-            break;
-          }
-        }
-      }
-      if (selected) hit.add(s.gesture);
+      final intersection = Path.combine(
+        PathOperation.intersect,
+        loop,
+        studyStrokeOutline(s),
+      );
+      if (!intersection.getBounds().isEmpty) hit.add(s.gesture);
     }
     return strokes
         .where((s) => strokeVisible(s) && hit.contains(s.gesture))
@@ -889,3 +930,70 @@ bool _segmentsNear(Offset a, Offset b, Offset c, Offset d, double r) {
       ) <=
       r;
 }
+
+/// Filled hit geometry matches the segment widths and caps used by paintInk.
+/// Chunk grouping remains a separate selection policy in strokesInPolygon.
+Path studyStrokeOutline(StudyStroke stroke) {
+  final outline = Path();
+  final points = stroke.points;
+  if (points.isEmpty) return outline;
+  if (points.length == 1) {
+    return outline..addOval(
+      Rect.fromCircle(center: points.first.p, radius: stroke.width / 2),
+    );
+  }
+  for (var i = 1; i < points.length; i++) {
+    final a = points[i - 1], b = points[i];
+    final pressure = (a.pressure + b.pressure) / 2;
+    final radius =
+        stroke.width /
+        2 *
+        (stroke.tool == 'highlighter'
+            ? 1
+            : stroke.brush?.radiusScale(pressure) ?? (.35 + .65 * pressure));
+    final delta = b.p - a.p;
+    if (delta.distance == 0) {
+      outline.addOval(Rect.fromCircle(center: a.p, radius: radius));
+      continue;
+    }
+    final tangent = delta / delta.distance;
+    final normal = Offset(-tangent.dy, tangent.dx) * radius;
+    final square = stroke.brush?.squareTip == true;
+    final start =
+        a.p -
+        (square && (stroke.tool != 'highlighter' || i == 1)
+            ? tangent * radius
+            : Offset.zero);
+    final end =
+        b.p +
+        (square && (stroke.tool != 'highlighter' || i == points.length - 1)
+            ? tangent * radius
+            : Offset.zero);
+    // Clockwise contours share a winding with addOval.
+    outline.addPolygon([
+      start - normal,
+      end - normal,
+      end + normal,
+      start + normal,
+    ], true);
+    if (!square || stroke.tool == 'highlighter' && i > 1)
+      outline.addOval(Rect.fromCircle(center: a.p, radius: radius));
+    if (!square || stroke.tool == 'highlighter' && i < points.length - 1)
+      outline.addOval(Rect.fromCircle(center: b.p, radius: radius));
+  }
+  return outline;
+}
+
+enum StudySelectionKind { ink, text, document, video, other }
+
+StudySelectionKind studyCardSelectionKind(StudyCard card) =>
+    switch (card.type) {
+      'text' ||
+      'note' ||
+      'explanation' ||
+      'knowledge' ||
+      'practice' => StudySelectionKind.text,
+      'pdfdoc' || 'pdf' || 'image' => StudySelectionKind.document,
+      'lecture' || 'video' => StudySelectionKind.video,
+      _ => StudySelectionKind.other,
+    };

@@ -321,12 +321,13 @@ class _ConversationBodyState extends State<_ConversationBody> {
   Map? preview, live;
   final visuals = <String, Map<String, dynamic>>{};
   final visualFingerprints = <String, String>{};
-  String? error, runId;
+  String? error, runId, referenceNotice;
   bool busy = false, loading = false;
+  bool _stopRequested = false;
   Timer? saveTimer, pollTimer;
   Future<void> saving = Future.value();
   Map<String, dynamic> get query =>
-      Map<String, dynamic>.from(data!['query'] as Map);
+      jsonDecode(jsonEncode(data!['query'])) as Map<String, dynamic>;
   List get turns => data!['turns'] as List;
   @override
   void initState() {
@@ -414,7 +415,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
     Map<String, dynamic> added,
     List<Map<String, dynamic>> images,
   ) async {
-    if (data == null || busy) return;
+    if (data == null || busy || loading) return;
+    final previous = query;
     final q = query;
     q['objects'] = {
       <String>[
@@ -422,6 +424,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
         ...((added['objects'] as List?) ?? []).cast<String>(),
       ],
     }.expand((v) => v).toSet().take(12).toList();
+    final replaced = (added['objects'] as List? ?? []).toSet();
+    if (replaced.contains((q['selection'] as Map?)?['object_id'])) {
+      q['selection'] = {};
+    }
+    for (final key in [
+      'selections',
+      'object_pages',
+      'object_video_ms',
+      'video_ranges',
+    ]) {
+      (q[key] as Map?)?.removeWhere((id, _) => replaced.contains(id));
+    }
     if ((added['selection'] as Map?)?.isNotEmpty == true)
       q['selection'] = added['selection'];
     if (added['include_video'] == true) {
@@ -442,6 +456,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
       ...?q['object_video_ms'] as Map?,
       ...?added['object_video_ms'] as Map?,
     };
+    visuals.removeWhere((id, _) => studyVisualBindingChanged(id, previous, q));
+    visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
     data!['query'] = q;
     for (final image in images) {
       visuals['${image['source_id']}'] = image;
@@ -451,14 +467,29 @@ class _ConversationBodyState extends State<_ConversationBody> {
     await refreshContext();
   }
 
-  Future<void> refreshContext() async {
-    if (data == null || !mounted) return;
+  Future<bool> refreshContext() async {
+    if (data == null || !mounted) return false;
+    bool repaired = false;
     setState(() => loading = true);
     try {
       if (!await owner.flush())
         throw FormatException(l10n.studyConversationUnsaved);
-      final q = query..['revision'] = owner.document!.revision;
+      if (!mounted || owner.document == null) return false;
+      final previous = query;
+      final q = reconcileStudyQuery(previous, owner.document!);
+      repaired = jsonEncode(previous) != jsonEncode(q);
+      q['revision'] = owner.document!.revision;
       data!['query'] = q;
+      if (repaired) {
+        referenceNotice = l10n.studyReferencesRemoved;
+        // Removing unrelated video timing fields must not discard a fresh PDF
+        // crop. Revoke only attachments whose actual source binding changed.
+        visuals.removeWhere(
+          (id, _) => studyVisualBindingChanged(id, previous, q),
+        );
+        visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
+        if (!await save() || !mounted) return true;
+      }
       final out = await owner.widget.api.studyContext(
         owner.widget.ctl.lectureId,
         q,
@@ -466,12 +497,17 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (mounted)
         setState(() {
           preview = out as Map;
+          final ids = (preview!['sources'] as List)
+              .map((s) => '${s['id']}')
+              .toSet();
+          visuals.removeWhere((id, _) => !ids.contains(id));
+          visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
           for (final source in preview!['sources'] as List) {
             final id = '${source['id']}';
             if (visuals.containsKey(id))
               visualFingerprints.putIfAbsent(
                 id,
-                () => '${source['anchor']['fingerprint']}',
+                () => _fingerprint(source as Map),
               );
           }
           error = null;
@@ -485,7 +521,25 @@ class _ConversationBodyState extends State<_ConversationBody> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
+    return repaired;
   }
+
+  int _turnsOf(Map source) {
+    final objectId = (source['anchor'] as Map?)?['object_id'];
+    return owner.document?.cards
+            .where((c) => c.id == objectId)
+            .firstOrNull
+            ?.quarterTurns ??
+        0;
+  }
+
+  String _fingerprint(Map source) =>
+      studyVisualFingerprint(source, quarterTurns: _turnsOf(source));
+
+  bool _rotatedOnly(String id, Map source) => List.generate(
+    4,
+    (t) => studyVisualFingerprint(source, quarterTurns: t),
+  ).contains(visualFingerprints[id]);
 
   Future<void> removeSource(Map source) async {
     final q = query;
@@ -498,6 +552,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     (q['selections'] as Map?)?.remove(id);
     (q['object_pages'] as Map?)?.remove(id);
     visuals.remove(source['id']);
+    visualFingerprints.remove(source['id']);
     data!['query'] = q;
     await save();
     await refreshContext();
@@ -505,24 +560,74 @@ class _ConversationBodyState extends State<_ConversationBody> {
 
   Future<void> start([String? retry]) async {
     final question = (retry ?? input.text).trim();
-    if (question.isEmpty || busy || data == null) return;
+    if (question.isEmpty || busy || loading || data == null) return;
+    _stopRequested = false;
+    runId = null;
     setState(() => busy = true);
-    await refreshContext();
-    if (preview == null || !mounted) {
+    final repaired = await refreshContext();
+    if (repaired || preview == null || !mounted || _stopRequested) {
       if (mounted) setState(() => busy = false);
       return;
     }
     if (data!['allow_images'] == true) {
-      for (final source in preview!['sources'] as List) {
-        final id = '${source['id']}';
-        if (visuals.containsKey(id) &&
-            visualFingerprints[id] != '${source['anchor']['fingerprint']}') {
+      try {
+        if (visuals.length > 2)
+          throw FormatException(l10n.studySelectionImageLimit);
+        for (final source in preview!['sources'] as List) {
+          final id = '${source['id']}';
+          if (visuals.containsKey(id) &&
+              visualFingerprints[id] != _fingerprint(source as Map)) {
+            // Only the card turned: the approved region is unchanged, so the
+            // crop is rebuilt below with the new rotation.
+            final region = (source['anchor'] as Map?)?['region'] as List?;
+            if (_rotatedOnly(id, source) &&
+                region != null &&
+                region.isNotEmpty) {
+              visuals.remove(id);
+              visualFingerprints.remove(id);
+            } else {
+              setState(() {
+                busy = false;
+                error = l10n.studyVisualChanged;
+              });
+              return;
+            }
+          }
+          if (source['kind'] == 'ink' && !visuals.containsKey(id)) {
+            throw FormatException(l10n.studyVisualExpired);
+          }
+          final region = (source['anchor'] as Map?)?['region'] as List?;
+          if (!visuals.containsKey(id) && region != null && region.isNotEmpty) {
+            if (visuals.length >= 2)
+              throw FormatException(l10n.studySelectionImageLimit);
+            final objectId = source['anchor']['object_id'];
+            final card = owner.document!.cards
+                .where((c) => c.id == objectId)
+                .firstOrNull;
+            final restored = await restoreStudyVisual(
+              source as Map,
+              owner.widget.api.studyImageBytes,
+              quarterTurns: card?.quarterTurns ?? 0,
+              cardSize:
+                  card != null && const {'image', 'pdf'}.contains(card.type)
+                  ? card.rect.size
+                  : null,
+            );
+            if (!mounted || _stopRequested) {
+              if (mounted) setState(() => busy = false);
+              return;
+            }
+            visuals[id] = restored;
+            visualFingerprints[id] = _fingerprint(source);
+          }
+        }
+      } catch (e) {
+        if (mounted)
           setState(() {
             busy = false;
-            error = l10n.studyVisualChanged;
+            error = '$e';
           });
-          return;
-        }
+        return;
       }
     }
     if (turns.length >= 300) {
@@ -540,14 +645,34 @@ class _ConversationBodyState extends State<_ConversationBody> {
       'state': 'preparing',
     };
     turns.add(turn);
-    input.clear();
+    // Recovery can take time; keep a newer draft, including when retrying history.
+    if (input.text.trim() == question) input.clear();
     setState(() {
       busy = true;
       error = null;
+      referenceNotice = null;
       live = null;
     });
-    if (!await save()) {
+    final saved = await save();
+    if (!mounted) return;
+    if (!saved) {
+      // An unsent question remains a draft, not a permanently preparing turn.
+      if (input.text.isEmpty) {
+        turns.remove(turn);
+        input.text = question;
+      } else {
+        // A newer draft typed during the save must not replace the failed question.
+        turn['state'] = 'error';
+        turn['error'] = error;
+      }
       setState(() => busy = false);
+      await save();
+      return;
+    }
+    if (_stopRequested) {
+      turn['state'] = 'cancelled';
+      setState(() => busy = false);
+      await save();
       return;
     }
     try {
@@ -562,8 +687,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
       runId = '${out['id']}';
       turn['id'] = runId;
       turn['state'] = 'running';
-      if (!mounted) {
+      if (!mounted || _stopRequested) {
+        turn['state'] = mounted ? 'cancelled' : 'interrupted';
         await owner.widget.api.cancelCanvasRun(runId!);
+        await save();
+        if (mounted) setState(() => busy = false);
         return;
       }
       await save();
@@ -577,6 +705,17 @@ class _ConversationBodyState extends State<_ConversationBody> {
           error = '$e';
         });
       await save();
+    }
+  }
+
+  Future<void> stop() async {
+    _stopRequested = true;
+    final id = runId;
+    if (id == null) return;
+    try {
+      await owner.widget.api.cancelCanvasRun(id);
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
     }
   }
 
@@ -613,6 +752,14 @@ class _ConversationBodyState extends State<_ConversationBody> {
   void dispose() {
     saveTimer?.cancel();
     pollTimer?.cancel();
+    _stopRequested = true;
+    if (data != null) {
+      for (final turn in turns) {
+        if (turn['state'] == 'preparing' || turn['state'] == 'running') {
+          turn['state'] = 'interrupted';
+        }
+      }
+    }
     if (busy && runId != null)
       unawaited(
         owner.widget.api.cancelCanvasRun(runId!).catchError((_) => null),
@@ -635,18 +782,30 @@ class _ConversationBodyState extends State<_ConversationBody> {
       busy: busy,
       loading: loading || (!ready && error == null),
       live: live,
-      error: error,
+      error: error ?? referenceNotice,
       onSend: (_) => start(),
-      onStop: runId == null
-          ? null
-          : () => owner.widget.api.cancelCanvasRun(runId!),
+      onStop: stop,
       onRetry: start,
       onRemoveSource: removeSource,
       onEditVideo: editVideo,
       onPickSources: ready ? pickSources : load,
       onInspectSources: preview == null ? null : inspectSources,
       allowImages:
-          ready && (visuals.isNotEmpty || data!['allow_images'] == true)
+          ready &&
+              (visuals.isNotEmpty ||
+                  data!['allow_images'] == true ||
+                  (preview?['sources'] as List? ?? []).any(
+                    (s) =>
+                        const {
+                          'pdf',
+                          'pdfdoc',
+                          'image',
+                          'ink',
+                          'video',
+                        }.contains(s['kind']) ||
+                        ((s['anchor'] as Map?)?['region'] as List? ?? [])
+                            .isNotEmpty,
+                  ))
           ? data!['allow_images'] == true
           : null,
       onAllowImages: (v) {

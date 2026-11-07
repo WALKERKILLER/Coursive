@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/features/study_canvas/study_document.dart';
 import '../lib/features/study_canvas/study_shape.dart';
 import 'study_canvas_ui_test.dart' as fixture;
+import 'study_pdf_column_test.dart' as pdf;
 import 'study_handwriting_test.dart' show close, saveReviewImage;
 
 List<Offset> polygon(List<Offset> corners) => [
@@ -269,7 +270,9 @@ void main() {
     final original = StudyDocument()
       ..camera = Offset.zero
       ..zoom = 1;
-    final key = await fixture.open(t, fixture.FixtureApi(original.json()));
+    original.cards.add(pdf.pdf());
+    final cardRect = original.cards.single.rect;
+    final key = await fixture.open(t, pdf.PDFApi(original.json()));
     await t.tap(find.byKey(const ValueKey('study-tool-pen')));
     await t.pumpAndSettle();
     final trace = ellipse(x: 95, y: 95, angle: 0);
@@ -277,6 +280,12 @@ void main() {
     await t.pump(const Duration(milliseconds: 750));
     await lift(t, trace.last);
     final d = key.currentState!.document!;
+    expect(
+      d.cards.single.rect,
+      cardRect,
+      reason: 'endpoint hold cannot drag the PDF',
+    );
+    expect(d.camera, Offset.zero);
     final fitted = d.strokes.expand((s) => s.points).map((p) => p.p).toList();
     expect(fitted, isNotEmpty);
     expect(

@@ -14,14 +14,20 @@ export const CANVAS_TOOLS = [
  { name:"inspect_canvas_region", description:"按需查看本次批准的选区、手写或图片视觉内容。不能看图时返回 unavailable，禁止猜测画面。", parameters:sourceParam },
 ];
 
-export function canvasContextKey(context) {
- const sources=context.sources.map(s=>({id:s.id,anchor:s.anchor})).sort((a,b)=>a.id.localeCompare(b.id));
- return createHash("sha256").update(JSON.stringify(sources)).digest("hex");
+export function canvasContextKey(context,{allow_images=false,visuals=[]}={}) {
+ const sources=context.sources.map(s=>({id:s.id,anchor:s.anchor,image_path:s.image_path})).sort((a,b)=>a.id.localeCompare(b.id));
+ // Restored text history must not reintroduce pixels the user has revoked or
+ // an earlier image that shared an empty scanned-page text fingerprint.
+ const images=allow_images?visuals.map(v=>({id:v.source_id,hash:createHash("sha256").update(v.data).digest("hex")})).sort((a,b)=>a.id.localeCompare(b.id)):[];
+ return createHash("sha256").update(JSON.stringify({sources,allow_images,images})).digest("hex");
 }
 export function conversationMessages(turns,key) {
  return (turns??[]).filter(t=>["done","applied","pending"].includes(t.state)&&t.context_key===key&&typeof t.question==="string"&&typeof t.answer==="string").slice(-8).flatMap(t=>[
  {role:"user",timestamp:0,content:[{type:"text",text:t.question.slice(0,4000)}]},
- {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.slice(0,6000)}],stopReason:"stop"}
+ {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.slice(0,6000)}],stopReason:"stop",
+  // Saved turns retain text, not provider usage. Zero lets the SDK estimate
+  // context from text without inventing historical token counts or charges.
+  usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}
  ]);
 }
 const SYSTEM = `你是 Coursive 的学习助手，在一个持久对话模块中依据用户手动指定的资料回答。
@@ -132,7 +138,7 @@ export class CanvasRunner {
     catch(e){toolSignal.throwIfAborted();return {mode:'unavailable',content:[{type:'text',text:'识图服务请求失败；未能理解选区，请检查识图模型与网络后重试。'}]};}
    }});
    view.sources=context.sources.map(s=>({...s.anchor,label:s.label}));view.editable_ids=[];view.revision=context.revision;view.state="running";
-   view.context_key=canvasContextKey(context);
+   view.context_key=canvasContextKey(context,request);
    let history=[];
    if(request.conversation_id){
     requireText(request.conversation_id,100);
@@ -153,7 +159,7 @@ export class CanvasRunner {
     if(!toolCalls.length){
      view.answer=res.content.filter(c=>c.type==="text").map(c=>c.text).join("").slice(0,12000);
      view.sources=context.sources.filter(s=>scope.seen.has(s.id)).map(s=>({...s.anchor,label:s.label}));
-     view.context_key=canvasContextKey(context);
+     view.context_key=canvasContextKey(context,request);
      view.operations=[];view.state="done";return;
     }
     for(const t of toolCalls){

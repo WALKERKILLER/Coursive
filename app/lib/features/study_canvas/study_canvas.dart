@@ -26,6 +26,8 @@ import '../player/lecture_player.dart';
 import '../player/video_card_hold.dart';
 import '../practice/quiz.dart';
 import 'study_document.dart';
+import 'study_query.dart';
+import 'study_visual.dart';
 import 'study_pdf_column.dart';
 import 'study_shape.dart';
 
@@ -44,6 +46,7 @@ part 'study_theme.dart';
 part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
+part 'study_selection_tools.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -116,7 +119,11 @@ class StudyCanvasState extends State<StudyCanvas>
   bool _selectionReady = false,
       _selectionDragging = false,
       _selectionResize = false;
-  bool _lassoRectangle = false;
+  bool _lassoRectangle = false, _captureLasso = false;
+  final _selectionKinds = StudySelectionKind.values.toSet();
+  bool _selectionBusy = false;
+  List<StudyAnchor>? _linkStart;
+  Rect? _linkStartBounds;
   Timer? _pressureTimer;
   Timer? _shapeTimer;
   Timer? _cardHoldTimer;
@@ -160,6 +167,7 @@ class StudyCanvasState extends State<StudyCanvas>
   final _gesturing = ValueNotifier(false);
   bool _stageOpen = false;
   bool _quickAsk = false, _quickSending = false, _quickImages = false;
+  String? _quickError;
   final _quickInput = TextEditingController();
 
   /// The open 课次素材 tab, or null when the shelf is away.
@@ -197,6 +205,7 @@ class StudyCanvasState extends State<StudyCanvas>
   Offset? _panCamera;
   Rect? _marquee;
   String? _dragCard;
+  int _cardTextEpoch = 0;
   bool _resize = false, _erasing = false;
   double? _pinchDistance, _pinchZoom;
   Offset? _pinchWorld;
@@ -248,6 +257,7 @@ class StudyCanvasState extends State<StudyCanvas>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) unawaited(_refreshFromSync());
     if (state != AppLifecycleState.resumed) {
+      _cancelCardHold();
       _cancelShapeHold();
       _clearPrediction();
     } else {
@@ -257,11 +267,15 @@ class StudyCanvasState extends State<StudyCanvas>
 
   bool get _editingCanvas =>
       _importing ||
+      _selectionBusy ||
       (document != null && document!.edit != _savedEdit) ||
       _saving != null ||
       _drawingPointer != null ||
       _erasing ||
       _dragCard != null;
+
+  bool get _wholeCardSelected =>
+      _selection.isNotEmpty && _detail.objectId == null;
 
   Future<void> _load({Map? synced}) async {
     try {
@@ -405,6 +419,10 @@ class StudyCanvasState extends State<StudyCanvas>
             '/api/lectures/${widget.ctl.lectureId}/study-canvas/draft',
             remote,
           );
+          final remoteVersion = (remote['version'] as num).toInt();
+          if (remoteVersion > 4)
+            throw FormatException(l10n.studyUnknownVersion);
+          d.formatVersion = math.max(d.formatVersion, remoteVersion);
           d.revision = (remote['revision'] as num).toInt();
           d.baseHash = remote['base_hash'] as String? ?? '';
           continue;
@@ -577,11 +595,33 @@ class StudyCanvasState extends State<StudyCanvas>
       if (!mounted ||
           document != d ||
           _tool != tool ||
+          _erasing ||
+          _shape != null ||
+          _pressureTimer != null ||
+          ModalRoute.of(context)?.isCurrent == false ||
           _pointers.length != 1 ||
           !_pointers.containsKey(e.pointer) ||
           !d.cards.contains(card) ||
           !d.canTransformCard(card))
         return;
+      // A touchdown hold selects an object; an endpoint hold after writing
+      // belongs to shape assist. See docs/decisions/0027-stylus-card-holds.md.
+      if (_drawingPointer == e.pointer) {
+        _drawingPointer = null;
+        _clearPrediction();
+        _lastRealStylusTime = null;
+        _resetShape();
+        _pressureStart = null;
+        _pressureOrigin = null;
+        _points = [];
+        _prefix.clear();
+        _prefixEnd = 0;
+        _live.value++;
+      }
+      // A completed card hold takes ownership from selectable text/editors.
+      // Close their selection handles before moving the enclosing card.
+      FocusManager.instance.primaryFocus?.unfocus();
+      _cardTextEpoch++;
       _panCamera = null;
       _detail.clear();
       _regionSelection = null;
@@ -624,6 +664,45 @@ class StudyCanvasState extends State<StudyCanvas>
         const {'pdfdoc', 'pdf', 'image'}.contains(hitCard.type) &&
         hitPoint.dy >= hitCard.rect.top + 36 &&
         hitPoint.dy < hitCard.rect.bottom - (hitCard.type == 'pdfdoc' ? 36 : 0);
+    // Text cards must reach the same touch hold router as media cards.
+    // Mouse text selection and embedded controls retain their normal behavior.
+    final selectedCard =
+        (_tool == StudyTool.select ||
+            (_ink && e.kind != PointerDeviceKind.mouse)) &&
+        e.kind != PointerDeviceKind.invertedStylus &&
+        !(_ink &&
+            _pressureEraser &&
+            e.kind == PointerDeviceKind.stylus &&
+            e.pressureMax > e.pressureMin &&
+            _pressure(e) >= _pressureThreshold) &&
+        e.buttons != kMiddleMouseButton &&
+        hitCard != null &&
+        _selection.contains(hitCard.id) &&
+        _detail.objectId == null &&
+        (hitPoint.dy < hitCard.rect.top + 36 ||
+            (_writing ||
+                !const {'lecture', 'video'}.contains(hitCard.type) ||
+                _videoSurfacePointers.contains(e.pointer))) &&
+        (hitCard.type != 'pdfdoc' || hitPoint.dy < hitCard.rect.bottom - 36) &&
+        d.canTransformCard(hitCard);
+    final directTextBody =
+        (e.kind == PointerDeviceKind.touch ||
+            (e.kind == PointerDeviceKind.stylus &&
+                _tool == StudyTool.select)) &&
+        hitCard != null &&
+        const {
+          'note',
+          'text',
+          'explanation',
+          'knowledge',
+          'practice',
+        }.contains(hitCard.type);
+    final selectedRegion =
+        _tool == StudyTool.region &&
+        _selectionReady &&
+        _selectionBounds != null &&
+        _selectionBounds!.inflate(16 / d.zoom).contains(hitPoint) &&
+        (_selection.isNotEmpty || _detail.strokeIds.isNotEmpty);
     final passiveVideoBody =
         hitCard != null &&
         const {'lecture', 'video'}.contains(hitCard.type) &&
@@ -650,6 +729,9 @@ class StudyCanvasState extends State<StudyCanvas>
       if (headerAction ||
           (content &&
               !materialBody &&
+              !directTextBody &&
+              !selectedRegion &&
+              !selectedCard &&
               !passiveVideoBody &&
               (hitCard.type == 'conversation' || !_writing)))
         return;
@@ -685,7 +767,14 @@ class StudyCanvasState extends State<StudyCanvas>
       _beginErase(e, p);
       return;
     }
-    if (_tool == StudyTool.region && e.kind != PointerDeviceKind.touch) {
+    if (e.kind == PointerDeviceKind.invertedStylus ||
+        (_tool == StudyTool.eraser && e.kind != PointerDeviceKind.touch)) {
+      _temporaryEraser = e.kind == PointerDeviceKind.invertedStylus;
+      _beginErase(e, p);
+      return;
+    }
+    if (_tool == StudyTool.region &&
+        (e.kind != PointerDeviceKind.touch || selectedRegion)) {
       if (_selectionReady &&
           _selectionBounds != null &&
           _selectionBounds!.inflate(16 / d.zoom).contains(p) &&
@@ -708,6 +797,33 @@ class StudyCanvasState extends State<StudyCanvas>
       _scene.value++;
       return;
     }
+    // Selection survives pointer-up. Re-grabbing it moves the object, not
+    // the camera; a second finger still enters the pinch branch above.
+    if (selectedCard) {
+      _panCamera = null;
+      _dragCard = hitCard.id;
+      _resize =
+          e.kind == PointerDeviceKind.mouse &&
+          !hitCard.collapsed &&
+          (p - hitCard.rect.bottomRight).distance < 28 / d.zoom;
+      _heldCardNeedsCheckpoint = true;
+      _cardTextEpoch++;
+      setState(() {});
+      return;
+    }
+    if (e.kind == PointerDeviceKind.touch && hitCard == null) {
+      _selection.clear();
+      _detail.clear();
+      _selectionReady = false;
+      _selectionBounds = null;
+      _scene.value++;
+    }
+    if (e.kind == PointerDeviceKind.stylus &&
+        _tool == StudyTool.select &&
+        hitCard != null) {
+      _holdMaterial(e, hitCard);
+      return;
+    }
     if (e.kind == PointerDeviceKind.touch ||
         _tool == StudyTool.hand ||
         ((materialBody || passiveVideoBody) && _tool == StudyTool.select) ||
@@ -721,12 +837,6 @@ class StudyCanvasState extends State<StudyCanvas>
           (e.kind == PointerDeviceKind.touch || _tool == StudyTool.select)) {
         _holdMaterial(e, hitCard);
       }
-      return;
-    }
-    if (_tool == StudyTool.eraser ||
-        e.kind == PointerDeviceKind.invertedStylus) {
-      _temporaryEraser = e.kind == PointerDeviceKind.invertedStylus;
-      _beginErase(e, p);
       return;
     }
     if (_ink) {
@@ -758,6 +868,9 @@ class StudyCanvasState extends State<StudyCanvas>
           _anchor = c.id;
           break;
         }
+      }
+      if (e.kind == PointerDeviceKind.stylus && hitCard != null) {
+        _holdMaterial(e, hitCard);
       }
       _watchPressure(e);
       _watchShape(e);
@@ -812,11 +925,13 @@ class StudyCanvasState extends State<StudyCanvas>
     final d = document!;
     if (!_pointers.containsKey(e.pointer)) return;
     if (_cardHoldOrigin != null) {
-      if ((e.localPosition - _cardHoldOrigin!).distance <= 8) {
+      final pen = e.kind == PointerDeviceKind.stylus;
+      if ((e.localPosition - _cardHoldOrigin!).distance > (pen ? 6 : 8)) {
+        _cancelCardHold();
+      } else if (!pen) {
         _pointers[e.pointer] = e.localPosition;
         return;
       }
-      _cancelCardHold();
     }
     _pointers[e.pointer] = e.localPosition;
     if (!_gesturing.value) _gesturing.value = true;
@@ -932,6 +1047,7 @@ class StudyCanvasState extends State<StudyCanvas>
   void _moveHeldCard(Offset p) {
     final d = document!;
     final c = d.cards.firstWhere((a) => a.id == _dragCard), old = c.rect;
+    if (!d.canTransformCard(c)) return;
     final delta = p - _last!;
     if (delta == Offset.zero) return;
     if (_heldCardNeedsCheckpoint) {
@@ -1335,8 +1451,16 @@ class StudyCanvasState extends State<StudyCanvas>
   Future<void> _sendQuickQuestion() async {
     final text = _quickInput.text.trim();
     if (text.isEmpty || _quickSending) return;
-    _update(() => _quickSending = true);
+    _update(() {
+      _quickSending = true;
+      _quickError = null;
+    });
     try {
+      if (_selection.isEmpty &&
+          _detail.objectId == null &&
+          _detail.strokeIds.isEmpty) {
+        throw FormatException(l10n.studySelectionNeedsSource);
+      }
       await _startConversation(send: text, allowImages: _quickImages);
       if (!mounted) return;
       _quickInput.clear();
@@ -1345,7 +1469,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _tool = StudyTool.select;
       });
     } catch (e) {
-      if (mounted) _toast('无法发送选区问题：$e');
+      if (mounted) _update(() => _quickError = l10n.studyQuickSendFailed('$e'));
     } finally {
       if (mounted) _update(() => _quickSending = false);
     }
@@ -1625,7 +1749,31 @@ class StudyCanvasState extends State<StudyCanvas>
                                     top: c.rect.top - stage.top,
                                     width: c.rect.width,
                                     height: c.rect.height,
-                                    child: RepaintBoundary(child: _card(c)),
+                                    child: RepaintBoundary(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          RotatedBox(
+                                            quarterTurns: c.quarterTurns,
+                                            child: _card(c),
+                                          ),
+                                          if (c.quarterTurns != 0)
+                                            Align(
+                                              alignment: Alignment.bottomRight,
+                                              child: IgnorePointer(
+                                                child: Icon(
+                                                  Icons.south_east,
+                                                  size: 12,
+                                                  color:
+                                                      _selection.contains(c.id)
+                                                      ? chrome.accent
+                                                      : chrome.inkFaint,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 Positioned.fill(
                                   child: IgnorePointer(
@@ -1816,7 +1964,16 @@ class StudyCanvasState extends State<StudyCanvas>
     final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
-      if (!pdfColumn)
+      if (!c.generated)
+        for (final source in c.sources)
+          (
+            l10n.studySelectionSource(
+              source.page > 0 ? '${source.kind} · ${source.page}' : source.kind,
+            ),
+            Icons.link,
+            () => _focusSource(source),
+          ),
+      if (!pdfColumn && c.quarterTurns == 0)
         (
           c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
@@ -1921,6 +2078,7 @@ class StudyCanvasState extends State<StudyCanvas>
                     Expanded(
                       child: Tooltip(
                         message: c.title,
+                        ignorePointer: true,
                         waitDuration: const Duration(milliseconds: 600),
                         child: Text(
                           c.type == 'pdf' && c.pdfColumn.isNotEmpty
@@ -2082,19 +2240,23 @@ class StudyCanvasState extends State<StudyCanvas>
                     'note' ||
                     'explanation' ||
                     'knowledge' ||
-                    'practice' => _KnowledgeBody(
-                      card: c,
-                      onSource: _focusSource,
-                      editable: d.editable(c.layer),
-                      onBeginAnswer: d.checkpoint,
-                      onAnswer: (i, value) {
-                        if (d.editable(c.layer)) {
-                          c.responses['$i'] = value;
-                          d.changed();
-                        }
-                      },
+                    'practice' => KeyedSubtree(
+                      key: ValueKey('${c.id}:$_cardTextEpoch'),
+                      child: _KnowledgeBody(
+                        card: c,
+                        onSource: _focusSource,
+                        editable: d.editable(c.layer),
+                        onBeginAnswer: d.checkpoint,
+                        onAnswer: (i, value) {
+                          if (d.editable(c.layer)) {
+                            c.responses['$i'] = value;
+                            d.changed();
+                          }
+                        },
+                      ),
                     ),
                     _ => SingleChildScrollView(
+                      key: ValueKey('${c.id}:$_cardTextEpoch'),
                       padding: const EdgeInsets.all(20),
                       child: Align(
                         alignment: Alignment.topLeft,
@@ -2128,11 +2290,13 @@ class StudyCanvasState extends State<StudyCanvas>
               height: 16,
               child: Align(
                 alignment: Alignment.bottomRight,
-                child: Icon(
-                  Icons.south_east,
-                  size: 12,
-                  color: selected ? chrome.accent : chrome.inkFaint,
-                ),
+                child: c.quarterTurns != 0
+                    ? null
+                    : Icon(
+                        Icons.south_east,
+                        size: 12,
+                        color: selected ? chrome.accent : chrome.inkFaint,
+                      ),
               ),
             ),
           ],

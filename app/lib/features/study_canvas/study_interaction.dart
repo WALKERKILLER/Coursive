@@ -69,6 +69,7 @@ extension _StudyInteraction on StudyCanvasState {
       final local = _pointers[pointer];
       if (local == null) return;
       final d = document!;
+      _cancelCardHold();
       _resetShape();
       d.checkpoint();
       // Keep writing before the hold; remove only the stationary trigger tail.
@@ -114,15 +115,27 @@ extension _StudyInteraction on StudyCanvasState {
         ? [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft]
         : List<Offset>.of(_lasso);
     _detail.clear();
-    _detail.strokeIds.addAll(d.strokesInPolygon(polygon));
+    if (_selectionKinds.contains(StudySelectionKind.ink))
+      _detail.strokeIds.addAll(d.strokesInPolygon(polygon));
     _selection.clear();
     // A loop on a document selects ink/visual context. It only moves the entire
     // document if the loop encloses the card, avoiding accidental PDF movement.
+    final loop = Path()..addPolygon(polygon, true);
     for (final c in d.cards.where(
-      (c) => c.type != 'conversation' && d.visible(c.layer),
+      (c) =>
+          c.type != 'conversation' &&
+          d.visible(c.layer) &&
+          _selectionKinds.contains(studyCardSelectionKind(c)),
     )) {
-      if (r.contains(c.rect.topLeft) && r.contains(c.rect.bottomRight))
-        _selection.add(c.id);
+      if (!r.contains(c.rect.topLeft) || !r.contains(c.rect.bottomRight))
+        continue;
+      // A free lasso's bounding rectangle is not its enclosed area.
+      final outside = Path.combine(
+        PathOperation.difference,
+        Path()..addRect(c.rect),
+        loop,
+      );
+      if (outside.getBounds().isEmpty) _selection.add(c.id);
     }
     _regionSelection = r;
     _selectionBounds = _boundsOfSelection() ?? r;
@@ -130,9 +143,10 @@ extension _StudyInteraction on StudyCanvasState {
         .where(
           (c) =>
               c.type != 'conversation' &&
+              _selectionKinds.contains(studyCardSelectionKind(c)) &&
               d.visible(c.layer) &&
-              c.rect.contains(r.center) &&
-              c.rect.overlaps(r),
+              _sourceBounds(c).contains(r.center) &&
+              _sourceBounds(c).overlaps(r),
         )
         .lastOrNull;
     if (anchored != null && _selection.isEmpty) {
@@ -145,9 +159,11 @@ extension _StudyInteraction on StudyCanvasState {
       _detail.region = r;
     }
     _quickAsk = false;
+    _quickError = null;
     _quickImages = false;
     _selectionReady = true;
     _cursor.value++;
+    if (_captureLasso) unawaited(_captureRegionCard());
   }
 
   Rect? _boundsOfSelection() {
@@ -249,6 +265,7 @@ extension _StudyInteraction on StudyCanvasState {
         layer: d.activeLayer,
         gesture: gestureIds[s.gesture],
         anchor: cardIds[s.anchor] ?? s.anchor,
+        page: s.page,
         points: [for (final p in s.points) InkPoint(p.p + delta, p.pressure)],
         color: s.color,
         width: s.width,
@@ -338,42 +355,68 @@ extension _StudyInteraction on StudyCanvasState {
             child: _quickAsk
                 ? Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Row(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.auto_awesome_outlined, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            key: const ValueKey('study-quick-question'),
-                            controller: _quickInput,
-                            autofocus: true,
-                            maxLength: 4000,
-                            decoration: const InputDecoration(
-                              hintText: '问问选中的内容…',
-                              counterText: '',
-                              border: InputBorder.none,
+                        Row(
+                          children: [
+                            const Icon(Icons.auto_awesome_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                key: const ValueKey('study-quick-question'),
+                                controller: _quickInput,
+                                autofocus: true,
+                                maxLength: 4000,
+                                decoration: const InputDecoration(
+                                  hintText: '问问选中的内容…',
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                ),
+                                onSubmitted: (_) => _sendQuickQuestion(),
+                              ),
                             ),
-                            onSubmitted: (_) => _sendQuickQuestion(),
+                            FilterChip(
+                              label: const Text('附选区图'),
+                              selected: _quickImages,
+                              onSelected: _quickSending
+                                  ? null
+                                  : (value) =>
+                                        _update(() => _quickImages = value),
+                              tooltip: '允许把此选区图片发送给视觉模型',
+                            ),
+                            IconButton(
+                              tooltip: '发送问题',
+                              icon: _quickSending
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.arrow_upward),
+                              onPressed: _quickSending
+                                  ? null
+                                  : _sendQuickQuestion,
+                            ),
+                            IconButton(
+                              tooltip: '收起提问',
+                              icon: const Icon(Icons.close),
+                              onPressed: () => _update(() => _quickAsk = false),
+                            ),
+                          ],
+                        ),
+                        if (_quickError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _quickError!,
+                              key: const ValueKey('study-quick-error'),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
                           ),
-                        ),
-                        FilterChip(
-                          label: const Text('附选区图'),
-                          selected: _quickImages,
-                          onSelected: _quickSending
-                              ? null
-                              : (value) => _update(() => _quickImages = value),
-                          tooltip: '允许把此选区图片发送给视觉模型',
-                        ),
-                        IconButton(
-                          tooltip: '发送问题',
-                          icon: const Icon(Icons.arrow_upward),
-                          onPressed: _quickSending ? null : _sendQuickQuestion,
-                        ),
-                        IconButton(
-                          tooltip: '收起提问',
-                          icon: const Icon(Icons.close),
-                          onPressed: () => _update(() => _quickAsk = false),
-                        ),
                       ],
                     ),
                   )
@@ -383,6 +426,7 @@ extension _StudyInteraction on StudyCanvasState {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         action('问 AI', Icons.auto_awesome_outlined, _ask),
+                        _selectionActions(),
                         action(
                           '复制',
                           Icons.copy_outlined,

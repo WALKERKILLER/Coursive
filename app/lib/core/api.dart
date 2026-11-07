@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+
+import '../l10n/l10n.dart';
 
 class ApiError implements Exception {
   ApiError(this.status, this.message, {this.captcha = false});
@@ -38,6 +41,32 @@ class Api {
   /// URL usable by media players and image loaders.
   String fileUrl(String rel) =>
       '$baseUrl/files/${rel.split('/').map(Uri.encodeComponent).join('/')}?token=$token';
+
+  /// Local approved material bytes for a recoverable canvas crop. Credentials
+  /// remain in the header; bound the stream before decoding an image.
+  Future<Uint8List> studyImageBytes(String rel) async {
+    final request = http.Request(
+      'GET',
+      uri('/files/${rel.split('/').map(Uri.encodeComponent).join('/')}'),
+    )..headers['Authorization'] = 'Bearer $token';
+    final response = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode >= 400) {
+      await response.stream.listen(null).cancel();
+      throw ApiError(response.statusCode, l10n.studyVisualReadFailed);
+    }
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in response.stream.timeout(
+      const Duration(seconds: 30),
+    )) {
+      if (bytes.length + chunk.length > 8 * 1024 * 1024) {
+        throw FormatException(l10n.studyVisualFileTooLarge);
+      }
+      bytes.add(chunk);
+    }
+    return bytes.takeBytes();
+  }
 
   /// One request by method; paths may carry a query string. Widgets take
   /// this as an [ApiCall] so tests can answer without a daemon.
@@ -162,7 +191,7 @@ class Api {
   Future<dynamic> cancelCanvasRun(String id) =>
       delete('/agent/canvas/runs/${Uri.encodeComponent(id)}');
 
-  /// Whole-document saves retain objects[].pdf_column and page-bound ink.
+  /// Whole-document saves retain version-4 image quarter_turns, sources and page-bound ink.
   Future<dynamic> saveStudyCanvas(String id, Map<String, dynamic> document) =>
       put('/api/lectures/${Uri.encodeComponent(id)}/study-canvas', document);
   Future<dynamic> importStudyAsset(

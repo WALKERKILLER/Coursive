@@ -291,6 +291,10 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 		}
 		text := studyText(o)
 		anchor := StudyAnchor{ID: "object-" + o.ID, WorkspaceID: id, ObjectID: o.ID, Kind: o.Type, DocumentID: o.DocumentID, Page: o.Page, SourceLectureID: o.SourceLectureID, OriginalPath: o.OriginalPath, Fingerprint: studyHash(text)}
+		// Paged PDF cards still use the PDF source-anchor contract.
+		if anchor.Kind == "pdfdoc" {
+			anchor.Kind = "pdf"
+		}
 		if (o.Type == "pdf" || o.Type == "pdfdoc") && anchor.DocumentID == "" {
 			anchor.DocumentID = o.Source
 		}

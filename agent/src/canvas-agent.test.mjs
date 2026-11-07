@@ -97,3 +97,29 @@ test('video tool prepares only its bound source and cites actual returned transc
  assert.deepEqual(requested,['video-window']);assert(scope.seen.has('video-window'));
  await assert.rejects(scope.execute('get_video_context',{source_id:'other-video'}),/来源不在/);
 });
+
+// Exercise the SDK boundary: protocol-only mocks never estimate replayed history.
+import { estimateContextTokens } from '@earendil-works/pi-ai/utils/estimate';
+test('restored conversation can be estimated by the shipped SDK before a follow-up',()=>{
+ const turns=[{state:'done',context_key:'same',question:'First question',answer:'Stored answer'}];
+ const messages=[...conversationMessages(turns,'same'),{role:'user',timestamp:1,content:[{type:'text',text:'Explain again'}]}];
+ const {tokens}=estimateContextTokens({messages});
+ assert(Number.isFinite(tokens));assert(tokens>0);
+ const restored=messages.find(m=>m.role==='assistant');
+ assert.equal(restored.usage.totalTokens,0,'unknown historical usage must not invent billing');
+ assert.equal(restored.usage.cost.total,0);
+ assert.equal(turns[0].answer,'Stored answer');
+});
+
+ test('conversation history scope includes vision consent and actual scanned-page pixels',()=>{
+  const c=context();
+  c.sources[0].image_path='assets/page-a.png';
+  const approved={allow_images:true,visuals:[{source_id:'pdf-selection',data:'first-crop'}]};
+  const key=canvasContextKey(c,approved);
+  const turns=[{state:'done',context_key:key,question:'read',answer:'private pixels'}];
+  assert.equal(conversationMessages(turns,canvasContextKey(c,approved)).length,2);
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c)),[]);
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c,{...approved,visuals:[{source_id:'pdf-selection',data:'second-crop'}]})),[]);
+  c.sources[0].image_path='assets/page-b.png';
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c,approved)),[]);
+ });

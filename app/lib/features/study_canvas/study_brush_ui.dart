@@ -38,6 +38,14 @@ extension _StudyBrushUI on StudyCanvasState {
   Future<void> _loadBrushSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      final kinds = prefs.getStringList('study.selection.kinds');
+      if (kinds != null)
+        _selectionKinds
+          ..clear()
+          ..addAll(
+            StudySelectionKind.values.where((k) => kinds.contains(k.name)),
+          );
       final raw = prefs.getString('study.brush-presets.v1');
       if (!mounted || raw == null || raw.length > 32000) return;
       final data = jsonDecode(raw) as Map;
@@ -115,6 +123,13 @@ extension _StudyBrushUI on StudyCanvasState {
 
   void _pickPen(int index) {
     _update(() {
+      if (_wholeCardSelected) {
+        _selection.clear();
+        _detail.clear();
+        _selectionBounds = null;
+        _regionSelection = null;
+        _scene.value++;
+      }
       _selectionReady = false;
       _eraserCursor = null;
       _cursor.value++;
@@ -135,6 +150,10 @@ extension _StudyBrushUI on StudyCanvasState {
         (tool == StudyTool.pen ||
             tool == StudyTool.highlighter ||
             tool == StudyTool.eraser)) {
+      if (_ink && _wholeCardSelected) {
+        _pickPen(_presetIndex);
+        return;
+      }
       _penSettings(eraser: tool == StudyTool.eraser);
       return;
     }

@@ -36,6 +36,7 @@ type StudyCamera struct {
 	Z float64 `json:"z"`
 }
 type StudyObject struct {
+	QuarterTurns    int               `json:"quarter_turns,omitempty"`
 	ID              string            `json:"id"`
 	Type            string            `json:"type"`
 	Layer           string            `json:"layer"`
@@ -265,7 +266,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 			return ErrStudyInvalid
 		}
 	}
-	if (d.Version != 1 && d.Version != 2 && d.Version != 3) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
+	if (d.Version != 1 && d.Version != 2 && d.Version != 3 && d.Version != 4) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
 		return invalid("版本或视图")
 	}
 	if len(d.Layers) < 1 || len(d.Layers) > 32 || len(d.Objects) > 2000 || len(d.Strokes) > 30000 {
@@ -295,6 +296,9 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 		return e == nil && st.Mode().IsRegular()
 	}
 	for _, a := range d.Objects {
+		if a.QuarterTurns < 0 || a.QuarterTurns > 3 || (a.QuarterTurns != 0 && (d.Version < 4 || a.Type != "image")) {
+			return invalid("旋转角度或画布版本")
+		}
 		if a.PDFColumn != "" && !validStudyID(a.PDFColumn) {
 			return invalid("PDF 列标识")
 		}
@@ -407,12 +411,15 @@ func (l *Library) SaveStudyCanvas(ctx context.Context, id string, d StudyDocumen
 	if e = validateStudy(d, r, dir); e != nil {
 		return d, e
 	}
-	if old.Version < 3 && d.Version == 3 && old.Revision > 0 {
+	if old.Version > d.Version {
+		return d, ErrStudyInvalid
+	}
+	if old.Version < d.Version && old.Revision > 0 {
 		previous, err := r.ReadFile(dir + "/study-canvas.json")
 		if err != nil {
 			return d, err
 		}
-		backup := dir + "/study-canvas.pre-v3.json"
+		backup := dir + fmt.Sprintf("/study-canvas.pre-v%d.json", d.Version)
 		if _, err = r.Lstat(backup); os.IsNotExist(err) {
 			if err = writeStudyBytes(r, backup, previous); err != nil {
 				return d, err
