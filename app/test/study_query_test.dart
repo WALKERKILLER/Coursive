@@ -54,6 +54,32 @@ class StaleLectureApi extends StaleConversationApi {
 }
 
 void main() {
+  test('daemon zero-valued video defaults do not invalidate a PDF binding', () {
+    final d = StudyDocument()
+      ..cards.add(
+        StudyCard(
+          id: 'page',
+          type: 'pdf',
+          layer: 'main',
+          rect: const Rect.fromLTWH(0, 0, 200, 100),
+        ),
+      );
+    final q = <String, dynamic>{
+      'objects': ['page'],
+      'selection': {},
+      'include_video': false,
+      'video_ms': 0,
+      'from_ms': 0,
+      'to_ms': 0,
+    };
+    expect(
+      reconcileStudyQuery(q, d),
+      q,
+      reason:
+          'the daemon serializes these defaults when reopening a conversation',
+    );
+  });
+
   for (final state in [
     'deleted',
     'hidden',

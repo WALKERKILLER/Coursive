@@ -1,5 +1,12 @@
 part of 'study_canvas.dart';
 
+// Render zoomed-out page text above logical-pixel resolution, while bounding
+// the full viewport raster to 12 megapixels (about 48 MB of pixel storage).
+double _selectionRasterRatio(Size viewport) => math.min(
+  4.0,
+  math.sqrt(12000000 / math.max(1, viewport.width * viewport.height)),
+);
+
 Rect _normalizeRegion(Rect r, Rect parent) => Rect.fromLTWH(
   ((r.left - parent.left) / parent.width).clamp(0, 1),
   ((r.top - parent.top) / parent.height).clamp(0, 1),
@@ -13,7 +20,7 @@ Rect _sourceBounds(StudyCard card) {
     card.rect.left,
     card.rect.top + 36,
     card.rect.width,
-    math.max(1, card.rect.height - 88),
+    math.max(1, card.rect.height - 72),
   );
   var width = area.width, height = width / card.pageAspect;
   if (height > area.height) {
@@ -27,66 +34,110 @@ extension _StudyAgentUI on StudyCanvasState {
   Future<List<Map<String, dynamic>>> _captureSelection() async {
     final d = document!;
     if (_regionSelection == null) return [];
+    final region = _regionSelection!;
+    final edit = d.edit, zoom = d.zoom, camera = d.camera;
+    String selectionBinding() =>
+        jsonEncode([_selection.toList(), _detail.json()]);
+    final binding = selectionBinding();
+    void checkCapture() {
+      if (!mounted ||
+          document != d ||
+          d.edit != edit ||
+          d.zoom != zoom ||
+          d.camera != camera ||
+          _regionSelection != region ||
+          selectionBinding() != binding) {
+        throw FormatException(l10n.studySelectionChanged);
+      }
+    }
+
+    // Resolve each attachment to the same source ID used by StudyContext.
+    // Whole-card lasso selections have no detail.objectId.
+    final targets = <String, Rect>{
+      if (_detail.strokeIds.isNotEmpty) 'selected-ink': region,
+      for (final card in d.cards)
+        if (d.visible(card.layer) &&
+            card.type != 'conversation' &&
+            (_selection.contains(card.id) || _detail.objectId == card.id))
+          (card.type == 'lecture' ? 'lecture-video' : 'object-${card.id}'):
+              region.intersect(_sourceBounds(card)),
+    };
+    targets.removeWhere((_, rect) => rect.isEmpty);
+    if (targets.isEmpty) throw FormatException(l10n.studySelectionNeedsSource);
+    if (targets.length > 2)
+      throw FormatException(l10n.studySelectionImageLimit);
     await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return [];
+    checkCapture();
     final boundary =
         _capture.currentContext?.findRenderObject() as RenderRepaintBoundary?;
     if (boundary == null) throw const FormatException('所选区域尚未显示，请移动到视口内重试');
-    final world = _regionSelection!,
-        r = Rect.fromLTWH(
+    final ratio = _selectionRasterRatio(boundary.size);
+    final full = await boundary.toImage(pixelRatio: ratio);
+    final images = <Map<String, dynamic>>[];
+    try {
+      checkCapture();
+      for (final target in targets.entries) {
+        final world = target.value;
+        final requested = Rect.fromLTWH(
           world.left * d.zoom + d.camera.dx,
           world.top * d.zoom + d.camera.dy,
           world.width * d.zoom,
           world.height * d.zoom,
-        ).intersect(Offset.zero & boundary.size);
-    if (r.isEmpty || r.width < 2 || r.height < 2)
-      throw const FormatException('所选区域不在当前视口内，请先定位到该区域');
-    // Cropping is performed locally; only the reviewed region leaves the renderer.
-    final full = await boundary.toImage(pixelRatio: 1);
-    Uint8List? bytes;
-    try {
-      for (final edge in [720.0, 480.0, 320.0]) {
-        final scale = math.min(1.0, edge / math.max(r.width, r.height));
-        final w = math.max(1, (r.width * scale).round()),
-            h = math.max(1, (r.height * scale).round());
-        final recorder = ui.PictureRecorder();
-        final canvas = Canvas(recorder);
-        canvas.drawColor(Colors.white, BlendMode.src);
-        canvas.drawImageRect(
-          full,
-          r,
-          Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
-          Paint()..filterQuality = FilterQuality.medium,
         );
-        final picture = recorder.endRecording();
-        final cropped = await picture.toImage(w, h);
-        try {
-          final data = await cropped.toByteData(format: ui.ImageByteFormat.png);
-          bytes = data?.buffer.asUint8List();
-        } finally {
-          cropped.dispose();
-          picture.dispose();
+        final r = requested.intersect(Offset.zero & boundary.size);
+        if ((r.width - requested.width).abs() > 1 ||
+            (r.height - requested.height).abs() > 1) {
+          throw FormatException(l10n.studySelectionClipped);
         }
-        if (bytes != null && bytes.length <= 450000) break;
+        if (r.isEmpty || r.width < 2 || r.height < 2)
+          throw const FormatException('所选区域不在当前视口内，请先定位到该区域');
+        Uint8List? bytes;
+        // Crop each reviewed source locally; do not label a multi-card image
+        // as one card or silently drop sources to fit the attachment limit.
+        for (final edge in [1200.0, 900.0, 600.0, 320.0]) {
+          final scale = math.min(ratio, edge / math.max(r.width, r.height));
+          final w = math.max(1, (r.width * scale).round()),
+              h = math.max(1, (r.height * scale).round());
+          final recorder = ui.PictureRecorder();
+          final canvas = Canvas(recorder);
+          canvas.drawColor(Colors.white, BlendMode.src);
+          canvas.drawImageRect(
+            full,
+            Rect.fromLTWH(
+              r.left * ratio,
+              r.top * ratio,
+              r.width * ratio,
+              r.height * ratio,
+            ),
+            Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+            Paint()..filterQuality = FilterQuality.medium,
+          );
+          final picture = recorder.endRecording();
+          final cropped = await picture.toImage(w, h);
+          try {
+            final data = await cropped.toByteData(
+              format: ui.ImageByteFormat.png,
+            );
+            bytes = data?.buffer.asUint8List();
+          } finally {
+            cropped.dispose();
+            picture.dispose();
+          }
+          if (bytes != null && bytes.length <= 450000) break;
+        }
+        if (bytes == null || bytes.length > 450000)
+          throw const FormatException('选区图像过大，请缩小后重试');
+        images.add({
+          'source_id': target.key,
+          'mime_type': 'image/png',
+          'data': base64Encode(bytes),
+        });
       }
     } finally {
       full.dispose();
     }
-    if (bytes == null || bytes.length > 450000)
-      throw const FormatException('选区图像过大，请缩小后重试');
-    final ids = <String>[];
-    if (_detail.strokeIds.isNotEmpty) ids.add('selected-ink');
-    if (_detail.objectId?.isNotEmpty == true)
-      ids.add('object-${_detail.objectId}');
-    if (ids.isEmpty) throw const FormatException('请选中笔迹或单个 PDF/图片区域后再使用视觉理解');
-    return [
-      for (final id in ids.take(2))
-        {
-          'source_id': id,
-          'mime_type': 'image/png',
-          'data': base64Encode(bytes),
-        },
-    ];
+    checkCapture();
+    return images;
   }
 
   Future<void> _focusSource(StudyAnchor a) async {

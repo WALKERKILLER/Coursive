@@ -56,7 +56,7 @@ class StudyAnchor {
     return StudyAnchor(
       id: '${m['id']}',
       objectId: '${m['object_id']}',
-      kind: '${m['kind']}',
+      kind: m['kind'] == 'pdfdoc' ? 'pdf' : '${m['kind']}',
       workspaceId: '${m['workspace_id'] ?? ''}',
       documentId: '${m['document_id'] ?? ''}',
       sourceLectureId: '${m['source_lecture_id'] ?? ''}',

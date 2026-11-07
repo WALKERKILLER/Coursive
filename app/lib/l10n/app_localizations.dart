@@ -12464,6 +12464,264 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。'**
   String get studyReferencesRemoved;
+
+  /// No description provided for @studySelectionNeedsSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'请圈选卡片、资料内容或笔迹后再附图提问'**
+  String get studySelectionNeedsSource;
+
+  /// No description provided for @studySelectionImageLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'每次最多附两张选区图，请缩小选区或关闭“附选区图”'**
+  String get studySelectionImageLimit;
+
+  /// No description provided for @studyQuickSendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法发送选区问题：{error}'**
+  String studyQuickSendFailed(String error);
+
+  /// No description provided for @studySelectionFilters.
+  ///
+  /// In zh, this message translates to:
+  /// **'套索选择对象'**
+  String get studySelectionFilters;
+
+  /// No description provided for @studySelectInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'手写笔迹'**
+  String get studySelectInk;
+
+  /// No description provided for @studySelectText.
+  ///
+  /// In zh, this message translates to:
+  /// **'文字与知识卡片'**
+  String get studySelectText;
+
+  /// No description provided for @studySelectDocument.
+  ///
+  /// In zh, this message translates to:
+  /// **'图片与 PDF'**
+  String get studySelectDocument;
+
+  /// No description provided for @studySelectVideo.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频'**
+  String get studySelectVideo;
+
+  /// No description provided for @studySelectOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他卡片'**
+  String get studySelectOther;
+
+  /// No description provided for @studyCaptureLasso.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图套索'**
+  String get studyCaptureLasso;
+
+  /// No description provided for @studyCaptureCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图成卡片'**
+  String get studyCaptureCard;
+
+  /// No description provided for @studySelectionMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区工具'**
+  String get studySelectionMore;
+
+  /// No description provided for @studyRotateSelection.
+  ///
+  /// In zh, this message translates to:
+  /// **'顺时针旋转 90°'**
+  String get studyRotateSelection;
+
+  /// No description provided for @studyRotateUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象'**
+  String get studyRotateUnsupported;
+
+  /// No description provided for @studyEditShape.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑形状锚点'**
+  String get studyEditShape;
+
+  /// No description provided for @studyShapeUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择一笔完整的直线、箭头、圆或多边形'**
+  String get studyShapeUnavailable;
+
+  /// No description provided for @studyRecognizeInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'手写转文字'**
+  String get studyRecognizeInk;
+
+  /// No description provided for @studyRecognizeConsent.
+  ///
+  /// In zh, this message translates to:
+  /// **'将选中的笔迹图片发送给已配置的模型，可能产生费用。识别后可以修改文字，再确认插入；原笔迹保留。'**
+  String get studyRecognizeConsent;
+
+  /// No description provided for @studyRecognizeStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始识别'**
+  String get studyRecognizeStart;
+
+  /// No description provided for @studyRecognizeReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'校正识别结果'**
+  String get studyRecognizeReview;
+
+  /// No description provided for @studyRecognizeInsert.
+  ///
+  /// In zh, this message translates to:
+  /// **'插入文字卡片'**
+  String get studyRecognizeInsert;
+
+  /// No description provided for @studyRecognizePrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请调用 inspect_canvas_region 查看 selected-ink 中的手写内容，并只输出逐字转录的文字，保留换行。不要解答、解释、添加标题或引用；不能辨认的字写作[无法辨认]。'**
+  String get studyRecognizePrompt;
+
+  /// No description provided for @studyRecognizeWorking.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在识别手写…'**
+  String get studyRecognizeWorking;
+
+  /// No description provided for @studyRecognizeFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'识别未完成，请检查模型配置后重试'**
+  String get studyRecognizeFailed;
+
+  /// No description provided for @studyLinkStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'设为链接起点'**
+  String get studyLinkStart;
+
+  /// No description provided for @studyLinkFinish.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接到此选区'**
+  String get studyLinkFinish;
+
+  /// No description provided for @studyLinkCancel.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消待连接起点'**
+  String get studyLinkCancel;
+
+  /// No description provided for @studyLinkPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'已记住起点，请圈选另一处，再选“连接到此选区”'**
+  String get studyLinkPending;
+
+  /// No description provided for @studyLinkTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区链接'**
+  String get studyLinkTitle;
+
+  /// No description provided for @studyLinkDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'点击下方来源定位到关联选区'**
+  String get studyLinkDescription;
+
+  /// No description provided for @studySelectionChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作期间画布已改变，请重新选择后重试'**
+  String get studySelectionChanged;
+
+  /// No description provided for @studyCaptureOutside.
+  ///
+  /// In zh, this message translates to:
+  /// **'请把整个选区移入屏幕后再截图'**
+  String get studyCaptureOutside;
+
+  /// No description provided for @studySelectionEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'请先圈选资料或笔迹'**
+  String get studySelectionEmpty;
+
+  /// No description provided for @studyShapeDragHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖动端点或顶点，虚线辅助对齐；确认后保存'**
+  String get studyShapeDragHint;
+
+  /// No description provided for @studySelectionError.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区操作失败：{error}'**
+  String studySelectionError(String error);
+
+  /// No description provided for @studySelectionSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'定位来源 · {label}'**
+  String studySelectionSource(String label);
+
+  /// No description provided for @studyVisualExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区图像已失效，请重新圈选并附图；问题已保留'**
+  String get studyVisualExpired;
+
+  /// No description provided for @studyVisualRegionInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区范围无效，请重新选择；问题已保留'**
+  String get studyVisualRegionInvalid;
+
+  /// No description provided for @studyVisualDimensionsTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'原图尺寸过大，请缩小图片后重试'**
+  String get studyVisualDimensionsTooLarge;
+
+  /// No description provided for @studyVisualPayloadTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区图像过大，请缩小选区后重试'**
+  String get studyVisualPayloadTooLarge;
+
+  /// No description provided for @studyVisualReadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区原图读取失败，请确认资料已下载后重试'**
+  String get studyVisualReadFailed;
+
+  /// No description provided for @studyVisualFileTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区原图超过 8 MiB，请缩小图片后重试'**
+  String get studyVisualFileTooLarge;
+
+  /// No description provided for @studySelectionClipped.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区有一部分在屏幕外，请缩小画布让选区完整显示后重试'**
+  String get studySelectionClipped;
 }
 
 class _AppLocalizationsDelegate
