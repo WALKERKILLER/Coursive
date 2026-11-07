@@ -327,7 +327,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
   Timer? saveTimer, pollTimer;
   Future<void> saving = Future.value();
   Map<String, dynamic> get query =>
-      Map<String, dynamic>.from(data!['query'] as Map);
+      jsonDecode(jsonEncode(data!['query'])) as Map<String, dynamic>;
   List get turns => data!['turns'] as List;
   @override
   void initState() {
@@ -415,7 +415,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
     Map<String, dynamic> added,
     List<Map<String, dynamic>> images,
   ) async {
-    if (data == null || busy) return;
+    if (data == null || busy || loading) return;
+    final previous = query;
     final q = query;
     q['objects'] = {
       <String>[
@@ -423,6 +424,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
         ...((added['objects'] as List?) ?? []).cast<String>(),
       ],
     }.expand((v) => v).toSet().take(12).toList();
+    final replaced = (added['objects'] as List? ?? []).toSet();
+    if (replaced.contains((q['selection'] as Map?)?['object_id'])) {
+      q['selection'] = {};
+    }
+    for (final key in [
+      'selections',
+      'object_pages',
+      'object_video_ms',
+      'video_ranges',
+    ]) {
+      (q[key] as Map?)?.removeWhere((id, _) => replaced.contains(id));
+    }
     if ((added['selection'] as Map?)?.isNotEmpty == true)
       q['selection'] = added['selection'];
     if (added['include_video'] == true) {
@@ -443,6 +456,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
       ...?q['object_video_ms'] as Map?,
       ...?added['object_video_ms'] as Map?,
     };
+    visuals.removeWhere((id, _) => studyVisualBindingChanged(id, previous, q));
+    visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
     data!['query'] = q;
     for (final image in images) {
       visuals['${image['source_id']}'] = image;
@@ -467,9 +482,12 @@ class _ConversationBodyState extends State<_ConversationBody> {
       data!['query'] = q;
       if (repaired) {
         referenceNotice = l10n.studyReferencesRemoved;
-        // Captured images may belong to a removed card or a changed ink selection.
-        visuals.clear();
-        visualFingerprints.clear();
+        // Removing unrelated video timing fields must not discard a fresh PDF
+        // crop. Revoke only attachments whose actual source binding changed.
+        visuals.removeWhere(
+          (id, _) => studyVisualBindingChanged(id, previous, q),
+        );
+        visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
         if (!await save() || !mounted) return true;
       }
       final out = await owner.widget.api.studyContext(
@@ -479,12 +497,17 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (mounted)
         setState(() {
           preview = out as Map;
+          final ids = (preview!['sources'] as List)
+              .map((s) => '${s['id']}')
+              .toSet();
+          visuals.removeWhere((id, _) => !ids.contains(id));
+          visualFingerprints.removeWhere((id, _) => !visuals.containsKey(id));
           for (final source in preview!['sources'] as List) {
             final id = '${source['id']}';
             if (visuals.containsKey(id))
               visualFingerprints.putIfAbsent(
                 id,
-                () => '${source['anchor']['fingerprint']}',
+                () => studyVisualFingerprint(source as Map),
               );
           }
           error = null;
@@ -512,6 +535,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     (q['selections'] as Map?)?.remove(id);
     (q['object_pages'] as Map?)?.remove(id);
     visuals.remove(source['id']);
+    visualFingerprints.remove(source['id']);
     data!['query'] = q;
     await save();
     await refreshContext();
@@ -519,7 +543,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
 
   Future<void> start([String? retry]) async {
     final question = (retry ?? input.text).trim();
-    if (question.isEmpty || busy || data == null) return;
+    if (question.isEmpty || busy || loading || data == null) return;
     _stopRequested = false;
     runId = null;
     setState(() => busy = true);
@@ -529,16 +553,54 @@ class _ConversationBodyState extends State<_ConversationBody> {
       return;
     }
     if (data!['allow_images'] == true) {
-      for (final source in preview!['sources'] as List) {
-        final id = '${source['id']}';
-        if (visuals.containsKey(id) &&
-            visualFingerprints[id] != '${source['anchor']['fingerprint']}') {
+      try {
+        if (visuals.length > 2)
+          throw FormatException(l10n.studySelectionImageLimit);
+        for (final source in preview!['sources'] as List) {
+          final id = '${source['id']}';
+          if (visuals.containsKey(id) &&
+              visualFingerprints[id] != studyVisualFingerprint(source as Map)) {
+            setState(() {
+              busy = false;
+              error = l10n.studyVisualChanged;
+            });
+            return;
+          }
+          if (source['kind'] == 'ink' && !visuals.containsKey(id)) {
+            throw FormatException(l10n.studyVisualExpired);
+          }
+          final region = (source['anchor'] as Map?)?['region'] as List?;
+          if (!visuals.containsKey(id) && region != null && region.isNotEmpty) {
+            if (visuals.length >= 2)
+              throw FormatException(l10n.studySelectionImageLimit);
+            final objectId = source['anchor']['object_id'];
+            final card = owner.document!.cards
+                .where((c) => c.id == objectId)
+                .firstOrNull;
+            final restored = await restoreStudyVisual(
+              source as Map,
+              owner.widget.api.studyImageBytes,
+              quarterTurns: card?.quarterTurns ?? 0,
+              cardSize:
+                  card != null && const {'image', 'pdf'}.contains(card.type)
+                  ? card.rect.size
+                  : null,
+            );
+            if (!mounted || _stopRequested) {
+              if (mounted) setState(() => busy = false);
+              return;
+            }
+            visuals[id] = restored;
+            visualFingerprints[id] = studyVisualFingerprint(source);
+          }
+        }
+      } catch (e) {
+        if (mounted)
           setState(() {
             busy = false;
-            error = l10n.studyVisualChanged;
+            error = '$e';
           });
-          return;
-        }
+        return;
       }
     }
     if (turns.length >= 300) {
@@ -556,7 +618,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
       'state': 'preparing',
     };
     turns.add(turn);
-    input.clear();
+    // Recovery can take time; keep a newer draft, including when retrying history.
+    if (input.text.trim() == question) input.clear();
     setState(() {
       busy = true;
       error = null;
@@ -701,7 +764,21 @@ class _ConversationBodyState extends State<_ConversationBody> {
       onPickSources: ready ? pickSources : load,
       onInspectSources: preview == null ? null : inspectSources,
       allowImages:
-          ready && (visuals.isNotEmpty || data!['allow_images'] == true)
+          ready &&
+              (visuals.isNotEmpty ||
+                  data!['allow_images'] == true ||
+                  (preview?['sources'] as List? ?? []).any(
+                    (s) =>
+                        const {
+                          'pdf',
+                          'pdfdoc',
+                          'image',
+                          'ink',
+                          'video',
+                        }.contains(s['kind']) ||
+                        ((s['anchor'] as Map?)?['region'] as List? ?? [])
+                            .isNotEmpty,
+                  ))
           ? data!['allow_images'] == true
           : null,
       onAllowImages: (v) {

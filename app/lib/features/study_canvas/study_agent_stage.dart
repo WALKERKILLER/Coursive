@@ -106,7 +106,8 @@ extension _StudyStage on StudyCanvasState {
             'selection': <String, dynamic>{},
             'include_video': false,
           };
-    final visual = bind && _regionSelection != null
+    final visual =
+        bind && _regionSelection != null && (send == null || allowImages)
         ? await _captureSelection()
         : <Map<String, dynamic>>[];
     if (!mounted) return;
@@ -961,6 +962,7 @@ class _StageViewState extends State<_StageView>
     final sources = widget.sources.cast<Map>();
     return DragTarget<String>(
       onWillAcceptWithDetails: (_) {
+        if (widget.busy || widget.loading) return false;
         setState(() => _hover = true);
         return true;
       },
@@ -1011,11 +1013,14 @@ class _StageViewState extends State<_StageView>
                                 onEditTime:
                                     s['kind'] == 'video' &&
                                         !widget.busy &&
+                                        !widget.loading &&
                                         widget.onEditVideo != null
                                     ? () => widget.onEditVideo!(s)
                                     : null,
                                 onRemove:
-                                    widget.busy || widget.onRemoveSource == null
+                                    widget.busy ||
+                                        widget.loading ||
+                                        widget.onRemoveSource == null
                                     ? null
                                     : () => widget.onRemoveSource!(s),
                                 onHover: (on) => setState(
@@ -1067,7 +1072,9 @@ class _StageViewState extends State<_StageView>
               children: [
                 IconButton(
                   tooltip: l10n.studyPickSources,
-                  onPressed: widget.busy ? null : widget.onPickSources,
+                  onPressed: widget.busy || widget.loading
+                      ? null
+                      : widget.onPickSources,
                   icon: Icon(
                     Icons.add_circle_outline_rounded,
                     color: cs.onSurfaceVariant,

@@ -179,6 +179,14 @@ func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
 	if e != nil || len(context.Sources) != 1 || context.Sources[0].Text != "Second" || context.Sources[0].Anchor.Page != 2 {
 		t.Fatal(e, context)
 	}
+	if context.Sources[0].Anchor.Kind != "pdf" {
+		t.Fatal("paged PDF anchor cannot be persisted", context.Sources[0].Anchor.Kind)
+	}
+	note := StudyObject{ID: "excerpt", Type: "text", Layer: first.Layer, W: 300, H: 200, Text: "Selected page", Sources: []StudyAnchor{context.Sources[0].Anchor}}
+	d.Objects = append(d.Objects, note)
+	if _, e = l.SaveStudyCanvas(ctx, "one", d); e != nil {
+		t.Fatal("PDF source reference rejected on save", e)
+	}
 	if _, e = l.StudyPDFPage(ctx, "one", first.Source, 3); e == nil {
 		t.Fatal("accepted out-of-range page")
 	}

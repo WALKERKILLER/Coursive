@@ -7180,4 +7180,141 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get studyReferencesRemoved =>
       '已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。';
+
+  @override
+  String get studySelectionNeedsSource => '请圈选卡片、资料内容或笔迹后再附图提问';
+
+  @override
+  String get studySelectionImageLimit => '每次最多附两张选区图，请缩小选区或关闭“附选区图”';
+
+  @override
+  String studyQuickSendFailed(String error) {
+    return '无法发送选区问题：$error';
+  }
+
+  @override
+  String get studySelectionFilters => '套索选择对象';
+
+  @override
+  String get studySelectInk => '手写笔迹';
+
+  @override
+  String get studySelectText => '文字与知识卡片';
+
+  @override
+  String get studySelectDocument => '图片与 PDF';
+
+  @override
+  String get studySelectVideo => '视频';
+
+  @override
+  String get studySelectOther => '其他卡片';
+
+  @override
+  String get studyCaptureLasso => '截图套索';
+
+  @override
+  String get studyCaptureCard => '截图成卡片';
+
+  @override
+  String get studySelectionMore => '选区工具';
+
+  @override
+  String get studyRotateSelection => '顺时针旋转 90°';
+
+  @override
+  String get studyRotateUnsupported => '旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象';
+
+  @override
+  String get studyEditShape => '编辑形状锚点';
+
+  @override
+  String get studyShapeUnavailable => '请选择一笔完整的直线、箭头、圆或多边形';
+
+  @override
+  String get studyRecognizeInk => '手写转文字';
+
+  @override
+  String get studyRecognizeConsent =>
+      '将选中的笔迹图片发送给已配置的模型，可能产生费用。识别后可以修改文字，再确认插入；原笔迹保留。';
+
+  @override
+  String get studyRecognizeStart => '开始识别';
+
+  @override
+  String get studyRecognizeReview => '校正识别结果';
+
+  @override
+  String get studyRecognizeInsert => '插入文字卡片';
+
+  @override
+  String get studyRecognizePrompt =>
+      '请调用 inspect_canvas_region 查看 selected-ink 中的手写内容，并只输出逐字转录的文字，保留换行。不要解答、解释、添加标题或引用；不能辨认的字写作[无法辨认]。';
+
+  @override
+  String get studyRecognizeWorking => '正在识别手写…';
+
+  @override
+  String get studyRecognizeFailed => '识别未完成，请检查模型配置后重试';
+
+  @override
+  String get studyLinkStart => '设为链接起点';
+
+  @override
+  String get studyLinkFinish => '连接到此选区';
+
+  @override
+  String get studyLinkCancel => '取消待连接起点';
+
+  @override
+  String get studyLinkPending => '已记住起点，请圈选另一处，再选“连接到此选区”';
+
+  @override
+  String get studyLinkTitle => '选区链接';
+
+  @override
+  String get studyLinkDescription => '点击下方来源定位到关联选区';
+
+  @override
+  String get studySelectionChanged => '操作期间画布已改变，请重新选择后重试';
+
+  @override
+  String get studyCaptureOutside => '请把整个选区移入屏幕后再截图';
+
+  @override
+  String get studySelectionEmpty => '请先圈选资料或笔迹';
+
+  @override
+  String get studyShapeDragHint => '拖动端点或顶点，虚线辅助对齐；确认后保存';
+
+  @override
+  String studySelectionError(String error) {
+    return '选区操作失败：$error';
+  }
+
+  @override
+  String studySelectionSource(String label) {
+    return '定位来源 · $label';
+  }
+
+  @override
+  String get studyVisualExpired => '选区图像已失效，请重新圈选并附图；问题已保留';
+
+  @override
+  String get studyVisualRegionInvalid => '选区范围无效，请重新选择；问题已保留';
+
+  @override
+  String get studyVisualDimensionsTooLarge => '原图尺寸过大，请缩小图片后重试';
+
+  @override
+  String get studyVisualPayloadTooLarge => '选区图像过大，请缩小选区后重试';
+
+  @override
+  String get studyVisualReadFailed => '选区原图读取失败，请确认资料已下载后重试';
+
+  @override
+  String get studyVisualFileTooLarge => '选区原图超过 8 MiB，请缩小图片后重试';
+
+  @override
+  String get studySelectionClipped => '选区有一部分在屏幕外，请缩小画布让选区完整显示后重试';
 }

@@ -95,6 +95,21 @@ class FixtureApi extends Api {
   @override
   Future<dynamic> studyContext(String id, Map<String, dynamic> query) async {
     selection = query;
+    final selected = query['selection'] as Map? ?? {};
+    if ((selected['stroke_ids'] as List? ?? []).isNotEmpty) {
+      return {
+        'sources': [
+          {
+            'id': 'selected-ink',
+            'kind': 'ink',
+            'label': '所选笔迹',
+            'availability': 'vision_required',
+            'text': '',
+            'anchor': {...selected, 'fingerprint': 'fixture-ink'},
+          },
+        ],
+      };
+    }
     return {
       'sources': [
         {
@@ -909,8 +924,9 @@ void main() {
       expect(bytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
       final codec = (await t.runAsync(() => ui.instantiateImageCodec(bytes)))!;
       final frame = (await t.runAsync(codec.getNextFrame))!;
-      expect(frame.image.width, lessThan(400));
-      expect(frame.image.height, lessThan(400));
+      expect(frame.image.width, lessThanOrEqualTo(1200));
+      expect(frame.image.height, lessThanOrEqualTo(1200));
+      expect(bytes.length, lessThanOrEqualTo(450000));
       final pixels = (await t.runAsync(
         () => frame.image.toByteData(format: ui.ImageByteFormat.rawRgba),
       ))!;

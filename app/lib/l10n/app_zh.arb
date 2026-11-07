@@ -4470,5 +4470,69 @@
   "lmsNoAnnouncements": "没有通知",
   "scheduleOpenOnPlatform": "在学习平台打开",
   "settingsProfileLocal": "资料只保存在本机",
-  "studyReferencesRemoved": "已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。"
+  "studyReferencesRemoved": "已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。",
+  "studySelectionNeedsSource": "请圈选卡片、资料内容或笔迹后再附图提问",
+  "studySelectionImageLimit": "每次最多附两张选区图，请缩小选区或关闭“附选区图”",
+  "studyQuickSendFailed": "无法发送选区问题：{error}",
+  "@studyQuickSendFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "studySelectionFilters": "套索选择对象",
+  "studySelectInk": "手写笔迹",
+  "studySelectText": "文字与知识卡片",
+  "studySelectDocument": "图片与 PDF",
+  "studySelectVideo": "视频",
+  "studySelectOther": "其他卡片",
+  "studyCaptureLasso": "截图套索",
+  "studyCaptureCard": "截图成卡片",
+  "studySelectionMore": "选区工具",
+  "studyRotateSelection": "顺时针旋转 90°",
+  "studyRotateUnsupported": "旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象",
+  "studyEditShape": "编辑形状锚点",
+  "studyShapeUnavailable": "请选择一笔完整的直线、箭头、圆或多边形",
+  "studyRecognizeInk": "手写转文字",
+  "studyRecognizeConsent": "将选中的笔迹图片发送给已配置的模型，可能产生费用。识别后可以修改文字，再确认插入；原笔迹保留。",
+  "studyRecognizeStart": "开始识别",
+  "studyRecognizeReview": "校正识别结果",
+  "studyRecognizeInsert": "插入文字卡片",
+  "studyRecognizePrompt": "请调用 inspect_canvas_region 查看 selected-ink 中的手写内容，并只输出逐字转录的文字，保留换行。不要解答、解释、添加标题或引用；不能辨认的字写作[无法辨认]。",
+  "studyRecognizeWorking": "正在识别手写…",
+  "studyRecognizeFailed": "识别未完成，请检查模型配置后重试",
+  "studyLinkStart": "设为链接起点",
+  "studyLinkFinish": "连接到此选区",
+  "studyLinkCancel": "取消待连接起点",
+  "studyLinkPending": "已记住起点，请圈选另一处，再选“连接到此选区”",
+  "studyLinkTitle": "选区链接",
+  "studyLinkDescription": "点击下方来源定位到关联选区",
+  "studySelectionChanged": "操作期间画布已改变，请重新选择后重试",
+  "studyCaptureOutside": "请把整个选区移入屏幕后再截图",
+  "studySelectionEmpty": "请先圈选资料或笔迹",
+  "studyShapeDragHint": "拖动端点或顶点，虚线辅助对齐；确认后保存",
+  "studySelectionError": "选区操作失败：{error}",
+  "@studySelectionError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "studySelectionSource": "定位来源 · {label}",
+  "@studySelectionSource": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "studyVisualExpired": "选区图像已失效，请重新圈选并附图；问题已保留",
+  "studyVisualRegionInvalid": "选区范围无效，请重新选择；问题已保留",
+  "studyVisualDimensionsTooLarge": "原图尺寸过大，请缩小图片后重试",
+  "studyVisualPayloadTooLarge": "选区图像过大，请缩小选区后重试",
+  "studyVisualReadFailed": "选区原图读取失败，请确认资料已下载后重试",
+  "studyVisualFileTooLarge": "选区原图超过 8 MiB，请缩小图片后重试",
+  "studySelectionClipped": "选区有一部分在屏幕外，请缩小画布让选区完整显示后重试"
 }
