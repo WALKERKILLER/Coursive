@@ -58,12 +58,15 @@ void main() {
       for (final kind in [
         ui.PointerDeviceKind.touch,
         ui.PointerDeviceKind.mouse,
+        ui.PointerDeviceKind.stylus,
       ]) {
+        await t.tapAt(const Offset(1300, 700));
+        await t.pumpAndSettle();
         final g = await t.startGesture(
           t.getCenter(find.byKey(const ValueKey('picture'))),
           kind: kind,
         );
-        await t.pump(const Duration(milliseconds: 700));
+        await t.pump(const Duration(milliseconds: 500));
         expect(actual.cards.single.rect, before);
         await t.pump(const Duration(milliseconds: 110));
         await g.moveBy(const Offset(60, 30));
@@ -76,6 +79,47 @@ void main() {
         actual.undo();
         await t.pumpAndSettle();
       }
+      final heldOnly = await t.startGesture(
+        t.getCenter(find.byKey(const ValueKey('picture'))),
+        kind: ui.PointerDeviceKind.stylus,
+      );
+      await t.pump(const Duration(milliseconds: 610));
+      await heldOnly.up();
+      await t.pumpAndSettle();
+      expect(taps, 0, reason: 'a stationary pen hold must not toggle playback');
+      await t.pump(const Duration(seconds: 2));
+      // Lift after selection, then start a new drag on the actual picture.
+      await t.drag(find.byKey(const ValueKey('picture')), const Offset(60, 30));
+      await t.pumpAndSettle();
+      expect(actual.cards.single.rect, before.shift(const Offset(100, 50)));
+      expect(actual.camera, camera);
+      actual.undo();
+      await t.pumpAndSettle();
+      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
+      await t.pumpAndSettle();
+      final pen = await t.startGesture(
+        t.getCenter(find.byKey(const ValueKey('picture'))),
+        kind: ui.PointerDeviceKind.stylus,
+      );
+      await t.pump(const Duration(milliseconds: 610));
+      await pen.moveBy(const Offset(60, 30));
+      await pen.up();
+      await t.pumpAndSettle();
+      expect(actual.cards.single.rect, before.shift(const Offset(100, 50)));
+      // In pen mode the canvas input layer intentionally covers the player.
+      await t.dragFrom(
+        t.getCenter(find.byKey(const ValueKey('picture'))),
+        const Offset(60, 30),
+        kind: ui.PointerDeviceKind.stylus,
+      );
+      await t.pumpAndSettle();
+      expect(actual.cards.single.rect, before.shift(const Offset(200, 100)));
+      expect(actual.strokes, isEmpty);
+      expect(actual.camera, camera);
+      actual.undo();
+      actual.undo();
+      await t.tap(find.byKey(const ValueKey('study-tool-select')));
+      await t.pump(const Duration(seconds: 2));
       await t.tap(find.byKey(const ValueKey('controls')));
       await t.pumpAndSettle();
       expect(taps, 1);
@@ -90,6 +134,9 @@ void main() {
       expect(scrubs, greaterThan(0));
       expect(actual.cards.single.rect, before);
       scrubs = 0;
+      // Clear the persistent object selection before testing camera panning.
+      await t.tapAt(const Offset(1300, 700));
+      await t.pumpAndSettle();
       await t.drag(find.byKey(const ValueKey('picture')), const Offset(80, 0));
       await t.pumpAndSettle();
       expect(scrubs, 0);

@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
-const canvasCardHoldDelay = Duration(milliseconds: 800);
+const canvasCardHoldDelay = Duration(milliseconds: 600);
 
 /// Marks picture contacts for the canvas's shared pan, pinch and hold router.
 /// Playback controls stay outside this surface and retain their own gestures.
@@ -80,7 +80,11 @@ class VideoCardHoldRegion extends StatelessWidget {
 class _PicturePan extends PanGestureRecognizer {
   _PicturePan(this.allows)
     : super(
-        supportedDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+        supportedDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.stylus,
+        },
       );
   bool Function(PointerEvent) allows;
   @override
@@ -92,7 +96,11 @@ class _PictureHold extends LongPressGestureRecognizer {
   _PictureHold(this.allows)
     : super(
         duration: canvasCardHoldDelay,
-        supportedDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
+        supportedDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.stylus,
+        },
       );
   bool Function(PointerEvent) allows;
   @override

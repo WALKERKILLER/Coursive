@@ -98,7 +98,7 @@ extension _StudyPenPalette on StudyCanvasState {
             anchor: _penItemKeys.putIfAbsent(i, GlobalKey.new),
             selected: i == _presetIndex && _ink,
             pick: () {
-              if (i == _presetIndex && _ink)
+              if (i == _presetIndex && _ink && !_wholeCardSelected)
                 _penSettings();
               else
                 _pickPen(i);

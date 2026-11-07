@@ -16,6 +16,7 @@ extension _StudyShapeInteraction on StudyCanvasState {
 
   void _watchShape(PointerEvent event) {
     if (!_presets[_presetIndex].shapeAssist ||
+        _cardHoldTimer != null ||
         _pressureTimer != null ||
         _shape != null ||
         !_ink) {

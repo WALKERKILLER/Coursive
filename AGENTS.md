@@ -58,6 +58,14 @@ Run relevant tests while working and the shared gate runner before every commit.
 - Never modify files outside the seeded paths (AGENTS.md, CLAUDE.md, docs/, scripts/, .agents/skills/, .github/, CONTRIBUTING.md, LICENSE, .editorconfig, .gitattributes, .repo-seed/) and the brand assets (`assets/brand/`) without asking.
 - Never read `.env` files or other secrets.
 
+## Local updates and backup retention
+
+- Update the existing application in place, preserving its bundle/package identifier and Android signing key. Keep one installed copy per device unless the user explicitly requests side-by-side versions; never leave runnable `.app` copies in build or backup directories where macOS can register them.
+- Back up only files an update will replace or migrate. Use one rolling rollback set outside the repository, with a file/hash manifest; ordinary code updates must not duplicate the course library, recordings, models, or full application. Before retiring a rollback set, verify the new installation and any newer backup needed to recover unique user edits.
+- Retain at most the latest verified installer per platform. Replace superseded installers after successful installation; remove task-generated staging directories, extracted frameworks, build caches and temporary device packages after validation. Keep small source diffs, build manifests and test reports for reproducibility.
+- Course files, handwritten strokes, conversations and device-specific credentials are user data, not disposable build output. Never overwrite them with another device's older snapshot or delete their only recoverable copy during cleanup.
+- Before and after deployment, verify the installed version, launch, course inventory and affected user-data hashes. Report incomplete device checks explicitly; a successful build alone is not installation acceptance.
+
 ## Documentation
 
 Follow [docs/AGENTS.md](docs/AGENTS.md): one home per fact, tutorials vs references, hygiene checklist.

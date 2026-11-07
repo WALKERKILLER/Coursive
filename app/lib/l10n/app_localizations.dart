@@ -12458,6 +12458,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'资料只保存在本机'**
   String get settingsProfileLocal;
+
+  /// No description provided for @studyReferencesRemoved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。'**
+  String get studyReferencesRemoved;
 }
 
 class _AppLocalizationsDelegate
