@@ -110,3 +110,16 @@ test('restored conversation can be estimated by the shipped SDK before a follow-
  assert.equal(restored.usage.cost.total,0);
  assert.equal(turns[0].answer,'Stored answer');
 });
+
+ test('conversation history scope includes vision consent and actual scanned-page pixels',()=>{
+  const c=context();
+  c.sources[0].image_path='assets/page-a.png';
+  const approved={allow_images:true,visuals:[{source_id:'pdf-selection',data:'first-crop'}]};
+  const key=canvasContextKey(c,approved);
+  const turns=[{state:'done',context_key:key,question:'read',answer:'private pixels'}];
+  assert.equal(conversationMessages(turns,canvasContextKey(c,approved)).length,2);
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c)),[]);
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c,{...approved,visuals:[{source_id:'pdf-selection',data:'second-crop'}]})),[]);
+  c.sources[0].image_path='assets/page-b.png';
+  assert.deepEqual(conversationMessages(turns,canvasContextKey(c,approved)),[]);
+ });

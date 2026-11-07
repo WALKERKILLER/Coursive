@@ -27,3 +27,24 @@
 - 绘图停留检测：`drag-20261107-tool-input.json`；几何识别：`drag-20261107-shape-recognition.json`；笔工具处理：`tool-type0-input.txt`。
 
 证据文件保存在调查工作区，不进入课程同步库；仓库只保留行为总结和 APK 摘要。混淆及反编译警告意味着静态证据不能替代真实手写笔测试，尤其不能证明所有输入模式、掌拒或不同 Notein 版本行为。没有复制 APK 实现代码或美术资源。
+
+
+## 套索与对象编辑的补充核验
+
+同一 APK 的 `LassoSettingsBottomSheetDialog` 通过 `o0OOoO0.Oooo0o0` 绑定设置。构造方法明确注册自由、矩形、截图三个模式，以及 shape/text/image 三个对象类型开关；设置恢复读取 `filter`、`showDualLinkIcon`、`isDualLinkFeatureEnabled`。后两项只证明双向链接的入口与开关存在，未验证完整链接创建和跳转流程。证据为 `lasso-audit-20261107-options-init.json`、`lasso-audit-20261107-options-values.json`，由 REA `inspect_android_method` 取得。
+
+`LassoParams` 分别保存选中对象列表、包围盒和自由套索轮廓。`InkStrokeInfo.onLassoEvent` 将屏幕套索逆变换到笔迹坐标，先粗筛，再以三角化区域与笔迹网格相交；不能以外接矩形替代真实轮廓。Coursive 的卡片全包含判定使用 Flutter Path 差集，笔迹沿用独立的线段/多边形算法，不复制 APK 算法。既有证据 `workspace-ink-lasso.json`，本次引用链证据 `lasso-audit-20261107-refs.json`。
+
+`ItemsEditorPanel.onFinish` 读取移动后的位置、大小与旋转，并更新套索轮廓坐标；`StrokesResizeAndRotateEditor` 为笔迹提供独立缩放/旋转控件；`ShapesAnchorEditor` 保有形状列表、锚点编辑模式和辅助线集合。`TextRecognizeDialogFragment` 关联套索来源及可编辑识别结果。证据为 `lasso-audit-20261107-commit.json`、`lasso-audit-20261107-transform-ui.json`、`lasso-audit-20261107-anchors.json`、`lasso-audit-20261107-recognize.json`。这些是静态结构与方法行为证据，识别服务效果、跨设备和实际触笔体验需另行验证。
+
+| 能力 | Coursive 当前对应状态 |
+| --- | --- |
+| 自由／矩形／截图三种套索模式 | 自由、矩形及截图成卡片共用选区；截图保留来源 |
+| 套索按形状、文本、图片过滤 | 提供手写、文字、图片/PDF、视频、其他五类 |
+| 选中笔迹或混合对象后旋转 | 笔迹及图片支持公共中心 90 度旋转；PDF、视频及任意角度不支持 |
+| 已提交形状的锚点再编辑与辅助线 | 识别整笔几何后打开端点/顶点编辑，确认后仍保存普通笔迹 |
+| 套索手写识别为可编辑文字 | 使用已配置模型识别纯笔迹图，校正后确认插入文字卡片 |
+| 选区双向链接 | 两个选区生成互相引用的来源卡片；Notein 完整交互仍未实测 |
+| 按实际笔迹网格精确命中 | 采用独立的压感笔段填充轮廓命中，不采用 APK 网格实现 |
+
+本表描述已核对的差异，不代表用户从未体验过对应功能，也不宣称穷尽 Notein 的功能目录。

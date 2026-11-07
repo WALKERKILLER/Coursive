@@ -24,9 +24,11 @@ Map<String, dynamic> reconcileStudyQuery(
   // Removing that binding must also revoke its context flag and time scope.
   if (!chosen.contains('lecture')) {
     if (out.containsKey('include_video')) out['include_video'] = false;
-    out.remove('video_ms');
-    out.remove('from_ms');
-    out.remove('to_ms');
+    // The daemon restores zero defaults on read; they carry no video scope.
+    // Preserve them so reopening a PDF-only conversation is not a repair.
+    for (final field in ['video_ms', 'from_ms', 'to_ms']) {
+      if (out[field] != 0) out.remove(field);
+    }
   }
   for (final key in [
     'selections',

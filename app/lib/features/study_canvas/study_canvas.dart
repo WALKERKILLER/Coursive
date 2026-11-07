@@ -27,6 +27,7 @@ import '../player/video_card_hold.dart';
 import '../practice/quiz.dart';
 import 'study_document.dart';
 import 'study_query.dart';
+import 'study_visual.dart';
 import 'study_pdf_column.dart';
 import 'study_shape.dart';
 
@@ -45,6 +46,7 @@ part 'study_theme.dart';
 part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
+part 'study_selection_tools.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -117,7 +119,11 @@ class StudyCanvasState extends State<StudyCanvas>
   bool _selectionReady = false,
       _selectionDragging = false,
       _selectionResize = false;
-  bool _lassoRectangle = false;
+  bool _lassoRectangle = false, _captureLasso = false;
+  final _selectionKinds = StudySelectionKind.values.toSet();
+  bool _selectionBusy = false;
+  List<StudyAnchor>? _linkStart;
+  Rect? _linkStartBounds;
   Timer? _pressureTimer;
   Timer? _shapeTimer;
   Timer? _cardHoldTimer;
@@ -161,6 +167,7 @@ class StudyCanvasState extends State<StudyCanvas>
   final _gesturing = ValueNotifier(false);
   bool _stageOpen = false;
   bool _quickAsk = false, _quickSending = false, _quickImages = false;
+  String? _quickError;
   final _quickInput = TextEditingController();
 
   /// The open 课次素材 tab, or null when the shelf is away.
@@ -260,6 +267,7 @@ class StudyCanvasState extends State<StudyCanvas>
 
   bool get _editingCanvas =>
       _importing ||
+      _selectionBusy ||
       (document != null && document!.edit != _savedEdit) ||
       _saving != null ||
       _drawingPointer != null ||
@@ -411,6 +419,10 @@ class StudyCanvasState extends State<StudyCanvas>
             '/api/lectures/${widget.ctl.lectureId}/study-canvas/draft',
             remote,
           );
+          final remoteVersion = (remote['version'] as num).toInt();
+          if (remoteVersion > 4)
+            throw FormatException(l10n.studyUnknownVersion);
+          d.formatVersion = math.max(d.formatVersion, remoteVersion);
           d.revision = (remote['revision'] as num).toInt();
           d.baseHash = remote['base_hash'] as String? ?? '';
           continue;
@@ -1439,8 +1451,16 @@ class StudyCanvasState extends State<StudyCanvas>
   Future<void> _sendQuickQuestion() async {
     final text = _quickInput.text.trim();
     if (text.isEmpty || _quickSending) return;
-    _update(() => _quickSending = true);
+    _update(() {
+      _quickSending = true;
+      _quickError = null;
+    });
     try {
+      if (_selection.isEmpty &&
+          _detail.objectId == null &&
+          _detail.strokeIds.isEmpty) {
+        throw FormatException(l10n.studySelectionNeedsSource);
+      }
       await _startConversation(send: text, allowImages: _quickImages);
       if (!mounted) return;
       _quickInput.clear();
@@ -1449,7 +1469,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _tool = StudyTool.select;
       });
     } catch (e) {
-      if (mounted) _toast('无法发送选区问题：$e');
+      if (mounted) _update(() => _quickError = l10n.studyQuickSendFailed('$e'));
     } finally {
       if (mounted) _update(() => _quickSending = false);
     }
@@ -1729,7 +1749,31 @@ class StudyCanvasState extends State<StudyCanvas>
                                     top: c.rect.top - stage.top,
                                     width: c.rect.width,
                                     height: c.rect.height,
-                                    child: RepaintBoundary(child: _card(c)),
+                                    child: RepaintBoundary(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          RotatedBox(
+                                            quarterTurns: c.quarterTurns,
+                                            child: _card(c),
+                                          ),
+                                          if (c.quarterTurns != 0)
+                                            Align(
+                                              alignment: Alignment.bottomRight,
+                                              child: IgnorePointer(
+                                                child: Icon(
+                                                  Icons.south_east,
+                                                  size: 12,
+                                                  color:
+                                                      _selection.contains(c.id)
+                                                      ? chrome.accent
+                                                      : chrome.inkFaint,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 Positioned.fill(
                                   child: IgnorePointer(
@@ -1920,7 +1964,16 @@ class StudyCanvasState extends State<StudyCanvas>
     final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
-      if (!pdfColumn)
+      if (!c.generated)
+        for (final source in c.sources)
+          (
+            l10n.studySelectionSource(
+              source.page > 0 ? '${source.kind} · ${source.page}' : source.kind,
+            ),
+            Icons.link,
+            () => _focusSource(source),
+          ),
+      if (!pdfColumn && c.quarterTurns == 0)
         (
           c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
@@ -2237,11 +2290,13 @@ class StudyCanvasState extends State<StudyCanvas>
               height: 16,
               child: Align(
                 alignment: Alignment.bottomRight,
-                child: Icon(
-                  Icons.south_east,
-                  size: 12,
-                  color: selected ? chrome.accent : chrome.inkFaint,
-                ),
+                child: c.quarterTurns != 0
+                    ? null
+                    : Icon(
+                        Icons.south_east,
+                        size: 12,
+                        color: selected ? chrome.accent : chrome.inkFaint,
+                      ),
               ),
             ),
           ],

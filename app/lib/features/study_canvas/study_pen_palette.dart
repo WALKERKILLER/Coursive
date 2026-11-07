@@ -136,15 +136,37 @@ extension _StudyPenPalette on StudyCanvasState {
           _action(
             '自由套索',
             Icons.gesture,
-            () => _update(() => _lassoRectangle = false),
-            selected: !_lassoRectangle,
+            () => _update(() {
+              _lassoRectangle = false;
+              _captureLasso = false;
+            }),
+            selected: !_lassoRectangle && !_captureLasso,
             compact: true,
           ),
           _action(
             '矩形框选',
             Icons.crop_free,
-            () => _update(() => _lassoRectangle = true),
-            selected: _lassoRectangle,
+            () => _update(() {
+              _lassoRectangle = true;
+              _captureLasso = false;
+            }),
+            selected: _lassoRectangle && !_captureLasso,
+            compact: true,
+          ),
+          _action(
+            l10n.studyCaptureLasso,
+            Icons.screenshot,
+            () => _update(() {
+              _lassoRectangle = true;
+              _captureLasso = true;
+            }),
+            selected: _captureLasso,
+            compact: true,
+          ),
+          _action(
+            l10n.studySelectionFilters,
+            Icons.filter_alt_outlined,
+            _editSelectionFilters,
             compact: true,
           ),
           _action('所选区域问 AI', Icons.auto_awesome_outlined, _ask, compact: true),

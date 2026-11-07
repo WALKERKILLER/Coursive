@@ -38,6 +38,14 @@ extension _StudyBrushUI on StudyCanvasState {
   Future<void> _loadBrushSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      final kinds = prefs.getStringList('study.selection.kinds');
+      if (kinds != null)
+        _selectionKinds
+          ..clear()
+          ..addAll(
+            StudySelectionKind.values.where((k) => kinds.contains(k.name)),
+          );
       final raw = prefs.getString('study.brush-presets.v1');
       if (!mounted || raw == null || raw.length > 32000) return;
       final data = jsonDecode(raw) as Map;

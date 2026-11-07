@@ -65,7 +65,8 @@ export const readStudyCanvas = (id) => get(studyCanvasPath(id));
 export const readStudyContext = (id, selection) => api('POST',`${studyCanvasPath(id)}/context`,selection);
 // Dedicated, selection-scoped canvas runs; these helpers do not extend general chat tools.
 export const canvasRunPath = (id = '') => `/agent/canvas/runs${id ? `/${encodeURIComponent(id)}` : ''}`;
-// Preserve objects[].pdf_column and page-bound ink in whole-document saves.
+// Pass through version-4 objects[].quarter_turns, sources and page-bound ink;
+// the daemon validates rotations and rejects document-version downgrades.
 export const saveStudyCanvas = (id, document) => api('PUT', studyCanvasPath(id), document);
 export const importStudyCourseware = (id, path) => api('POST', `${studyCanvasPath(id)}/assets?path=${encodeURIComponent(path)}`, {});
 export async function importStudyAsset(id, name, bytes) {
