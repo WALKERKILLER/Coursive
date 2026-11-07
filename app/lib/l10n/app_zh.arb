@@ -4469,5 +4469,6 @@
   "lmsDownloadToCourse": "下载到课程文件夹",
   "lmsNoAnnouncements": "没有通知",
   "scheduleOpenOnPlatform": "在学习平台打开",
-  "settingsProfileLocal": "资料只保存在本机"
+  "settingsProfileLocal": "资料只保存在本机",
+  "studyReferencesRemoved": "已移除失效或已隐藏的资料引用。请确认参考资料后再发送；如需手写截图，请重新框选。"
 }

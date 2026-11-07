@@ -69,6 +69,7 @@ extension _StudyInteraction on StudyCanvasState {
       final local = _pointers[pointer];
       if (local == null) return;
       final d = document!;
+      _cancelCardHold();
       _resetShape();
       d.checkpoint();
       // Keep writing before the hold; remove only the stationary trigger tail.
@@ -249,6 +250,7 @@ extension _StudyInteraction on StudyCanvasState {
         layer: d.activeLayer,
         gesture: gestureIds[s.gesture],
         anchor: cardIds[s.anchor] ?? s.anchor,
+        page: s.page,
         points: [for (final p in s.points) InkPoint(p.p + delta, p.pressure)],
         color: s.color,
         width: s.width,

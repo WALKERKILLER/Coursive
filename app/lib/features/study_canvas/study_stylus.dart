@@ -8,6 +8,9 @@ extension _StudyStylus on StudyCanvasState {
     if (e.kind != PointerDeviceKind.stylus &&
         e.kind != PointerDeviceKind.invertedStylus)
       return;
+    // Hover protects handwriting, but must not cancel deliberate navigation
+    // or moving selected objects. Actual pen contact remains authoritative.
+    if (e is PointerHoverEvent && !_ink && _tool != StudyTool.eraser) return;
     if (e is PointerDownEvent) _stylusPointers.add(e.pointer);
     if (e is PointerUpEvent || e is PointerCancelEvent) {
       _stylusPointers.remove(e.pointer);

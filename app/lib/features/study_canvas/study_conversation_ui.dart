@@ -321,8 +321,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
   Map? preview, live;
   final visuals = <String, Map<String, dynamic>>{};
   final visualFingerprints = <String, String>{};
-  String? error, runId;
+  String? error, runId, referenceNotice;
   bool busy = false, loading = false;
+  bool _stopRequested = false;
   Timer? saveTimer, pollTimer;
   Future<void> saving = Future.value();
   Map<String, dynamic> get query =>
@@ -451,14 +452,26 @@ class _ConversationBodyState extends State<_ConversationBody> {
     await refreshContext();
   }
 
-  Future<void> refreshContext() async {
-    if (data == null || !mounted) return;
+  Future<bool> refreshContext() async {
+    if (data == null || !mounted) return false;
+    bool repaired = false;
     setState(() => loading = true);
     try {
       if (!await owner.flush())
         throw FormatException(l10n.studyConversationUnsaved);
-      final q = query..['revision'] = owner.document!.revision;
+      if (!mounted || owner.document == null) return false;
+      final previous = query;
+      final q = reconcileStudyQuery(previous, owner.document!);
+      repaired = jsonEncode(previous) != jsonEncode(q);
+      q['revision'] = owner.document!.revision;
       data!['query'] = q;
+      if (repaired) {
+        referenceNotice = l10n.studyReferencesRemoved;
+        // Captured images may belong to a removed card or a changed ink selection.
+        visuals.clear();
+        visualFingerprints.clear();
+        if (!await save() || !mounted) return true;
+      }
       final out = await owner.widget.api.studyContext(
         owner.widget.ctl.lectureId,
         q,
@@ -485,6 +498,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     } finally {
       if (mounted) setState(() => loading = false);
     }
+    return repaired;
   }
 
   Future<void> removeSource(Map source) async {
@@ -506,9 +520,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
   Future<void> start([String? retry]) async {
     final question = (retry ?? input.text).trim();
     if (question.isEmpty || busy || data == null) return;
+    _stopRequested = false;
+    runId = null;
     setState(() => busy = true);
-    await refreshContext();
-    if (preview == null || !mounted) {
+    final repaired = await refreshContext();
+    if (repaired || preview == null || !mounted || _stopRequested) {
       if (mounted) setState(() => busy = false);
       return;
     }
@@ -544,10 +560,29 @@ class _ConversationBodyState extends State<_ConversationBody> {
     setState(() {
       busy = true;
       error = null;
+      referenceNotice = null;
       live = null;
     });
-    if (!await save()) {
+    final saved = await save();
+    if (!mounted) return;
+    if (!saved) {
+      // An unsent question remains a draft, not a permanently preparing turn.
+      if (input.text.isEmpty) {
+        turns.remove(turn);
+        input.text = question;
+      } else {
+        // A newer draft typed during the save must not replace the failed question.
+        turn['state'] = 'error';
+        turn['error'] = error;
+      }
       setState(() => busy = false);
+      await save();
+      return;
+    }
+    if (_stopRequested) {
+      turn['state'] = 'cancelled';
+      setState(() => busy = false);
+      await save();
       return;
     }
     try {
@@ -562,8 +597,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
       runId = '${out['id']}';
       turn['id'] = runId;
       turn['state'] = 'running';
-      if (!mounted) {
+      if (!mounted || _stopRequested) {
+        turn['state'] = mounted ? 'cancelled' : 'interrupted';
         await owner.widget.api.cancelCanvasRun(runId!);
+        await save();
+        if (mounted) setState(() => busy = false);
         return;
       }
       await save();
@@ -577,6 +615,17 @@ class _ConversationBodyState extends State<_ConversationBody> {
           error = '$e';
         });
       await save();
+    }
+  }
+
+  Future<void> stop() async {
+    _stopRequested = true;
+    final id = runId;
+    if (id == null) return;
+    try {
+      await owner.widget.api.cancelCanvasRun(id);
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
     }
   }
 
@@ -613,6 +662,14 @@ class _ConversationBodyState extends State<_ConversationBody> {
   void dispose() {
     saveTimer?.cancel();
     pollTimer?.cancel();
+    _stopRequested = true;
+    if (data != null) {
+      for (final turn in turns) {
+        if (turn['state'] == 'preparing' || turn['state'] == 'running') {
+          turn['state'] = 'interrupted';
+        }
+      }
+    }
     if (busy && runId != null)
       unawaited(
         owner.widget.api.cancelCanvasRun(runId!).catchError((_) => null),
@@ -635,11 +692,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
       busy: busy,
       loading: loading || (!ready && error == null),
       live: live,
-      error: error,
+      error: error ?? referenceNotice,
       onSend: (_) => start(),
-      onStop: runId == null
-          ? null
-          : () => owner.widget.api.cancelCanvasRun(runId!),
+      onStop: stop,
       onRetry: start,
       onRemoveSource: removeSource,
       onEditVideo: editVideo,

@@ -17,6 +17,8 @@ void main() {
         t,
         pdf.PDFApi((sheet()..cards.add(pdf.pdf())).json()),
       );
+      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
+      await t.pumpAndSettle();
       final d = key.currentState!.document!;
       final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
       final palm = await t.startGesture(

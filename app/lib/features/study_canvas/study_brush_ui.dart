@@ -115,6 +115,13 @@ extension _StudyBrushUI on StudyCanvasState {
 
   void _pickPen(int index) {
     _update(() {
+      if (_wholeCardSelected) {
+        _selection.clear();
+        _detail.clear();
+        _selectionBounds = null;
+        _regionSelection = null;
+        _scene.value++;
+      }
       _selectionReady = false;
       _eraserCursor = null;
       _cursor.value++;
@@ -135,6 +142,10 @@ extension _StudyBrushUI on StudyCanvasState {
         (tool == StudyTool.pen ||
             tool == StudyTool.highlighter ||
             tool == StudyTool.eraser)) {
+      if (_ink && _wholeCardSelected) {
+        _pickPen(_presetIndex);
+        return;
+      }
       _penSettings(eraser: tool == StudyTool.eraser);
       return;
     }

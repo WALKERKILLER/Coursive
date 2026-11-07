@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [0027](0027-stylus-card-holds.md)
 Class: feature
 
 ## Context and Problem Statement

@@ -254,7 +254,7 @@ func TestObsidianPlaces(t *testing.T) {
 // process) still cannot take writes or deletions out of the export folder:
 // they go through the os.Root handle, not through re-resolved paths.
 func TestObsidianWritesStayInsideAfterSwap(t *testing.T) {
-	vault, elsewhere := t.TempDir(), t.TempDir()
+	vault, elsewhere := canonicalExportVault(t), t.TempDir()
 	out := filepath.Join(vault, ObsidianFolder)
 	victim := filepath.Join(elsewhere, "keep.md")
 	if err := os.WriteFile(victim, []byte("outside"), 0o644); err != nil {
@@ -289,7 +289,7 @@ func TestObsidianWritesStayInsideAfterSwap(t *testing.T) {
 // The export folder itself replaced by a link between the check and the
 // export is refused.
 func TestOpenExportRootRefusesSwappedFolder(t *testing.T) {
-	base := t.TempDir()
+	base := canonicalExportVault(t)
 	real := filepath.Join(base, "real")
 	if err := os.Mkdir(real, 0o755); err != nil {
 		t.Fatal(err)
@@ -330,7 +330,7 @@ func TestOpenExportRootCreatesInsideVault(t *testing.T) {
 // link to the library (still inside the vault) must not get a folder
 // created in the library.
 func TestOpenExportRootNoCreateInLibraryInsideVault(t *testing.T) {
-	vault := t.TempDir()
+	vault := canonicalExportVault(t)
 	library := filepath.Join(vault, "library")
 	if err := os.Mkdir(library, 0o755); err != nil {
 		t.Fatal(err)
@@ -346,6 +346,17 @@ func TestOpenExportRootNoCreateInLibraryInsideVault(t *testing.T) {
 	if ents, _ := os.ReadDir(library); len(ents) != 0 {
 		t.Fatalf("created in the library: %v", ents)
 	}
+}
+
+// Match ObsidianRoot's canonical path contract even when macOS /var is a link.
+// Otherwise rejection fixtures can pass before reaching the swapped component.
+func canonicalExportVault(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 // A file in the library that is a symbolic link to something outside it is

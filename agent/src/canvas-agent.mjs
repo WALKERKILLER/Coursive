@@ -21,7 +21,10 @@ export function canvasContextKey(context) {
 export function conversationMessages(turns,key) {
  return (turns??[]).filter(t=>["done","applied","pending"].includes(t.state)&&t.context_key===key&&typeof t.question==="string"&&typeof t.answer==="string").slice(-8).flatMap(t=>[
  {role:"user",timestamp:0,content:[{type:"text",text:t.question.slice(0,4000)}]},
- {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.slice(0,6000)}],stopReason:"stop"}
+ {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.slice(0,6000)}],stopReason:"stop",
+  // Saved turns retain text, not provider usage. Zero lets the SDK estimate
+  // context from text without inventing historical token counts or charges.
+  usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}
  ]);
 }
 const SYSTEM = `你是 Coursive 的学习助手，在一个持久对话模块中依据用户手动指定的资料回答。
