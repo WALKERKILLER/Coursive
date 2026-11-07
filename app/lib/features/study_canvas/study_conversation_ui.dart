@@ -507,7 +507,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
             if (visuals.containsKey(id))
               visualFingerprints.putIfAbsent(
                 id,
-                () => studyVisualFingerprint(source as Map),
+                () => _fingerprint(source as Map),
               );
           }
           error = null;
@@ -523,6 +523,23 @@ class _ConversationBodyState extends State<_ConversationBody> {
     }
     return repaired;
   }
+
+  int _turnsOf(Map source) {
+    final objectId = (source['anchor'] as Map?)?['object_id'];
+    return owner.document?.cards
+            .where((c) => c.id == objectId)
+            .firstOrNull
+            ?.quarterTurns ??
+        0;
+  }
+
+  String _fingerprint(Map source) =>
+      studyVisualFingerprint(source, quarterTurns: _turnsOf(source));
+
+  bool _rotatedOnly(String id, Map source) => List.generate(
+    4,
+    (t) => studyVisualFingerprint(source, quarterTurns: t),
+  ).contains(visualFingerprints[id]);
 
   Future<void> removeSource(Map source) async {
     final q = query;
@@ -559,12 +576,22 @@ class _ConversationBodyState extends State<_ConversationBody> {
         for (final source in preview!['sources'] as List) {
           final id = '${source['id']}';
           if (visuals.containsKey(id) &&
-              visualFingerprints[id] != studyVisualFingerprint(source as Map)) {
-            setState(() {
-              busy = false;
-              error = l10n.studyVisualChanged;
-            });
-            return;
+              visualFingerprints[id] != _fingerprint(source as Map)) {
+            // Only the card turned: the approved region is unchanged, so the
+            // crop is rebuilt below with the new rotation.
+            final region = (source['anchor'] as Map?)?['region'] as List?;
+            if (_rotatedOnly(id, source) &&
+                region != null &&
+                region.isNotEmpty) {
+              visuals.remove(id);
+              visualFingerprints.remove(id);
+            } else {
+              setState(() {
+                busy = false;
+                error = l10n.studyVisualChanged;
+              });
+              return;
+            }
           }
           if (source['kind'] == 'ink' && !visuals.containsKey(id)) {
             throw FormatException(l10n.studyVisualExpired);
@@ -591,7 +618,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
               return;
             }
             visuals[id] = restored;
-            visualFingerprints[id] = studyVisualFingerprint(source);
+            visualFingerprints[id] = _fingerprint(source);
           }
         }
       } catch (e) {

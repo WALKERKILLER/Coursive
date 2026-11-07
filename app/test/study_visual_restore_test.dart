@@ -196,6 +196,37 @@ void main() {
     await t.pumpAndSettle();
   });
 
+  testWidgets('rotating the card rebuilds its crop instead of resending it', (
+    t,
+  ) async {
+    final api = RestoredApi();
+    final key = await fixture.open(t, api);
+    await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+    await t.pumpAndSettle();
+    await submit(t, api);
+    expect(api.loads, 1);
+    key.currentState!.document!.cards
+            .firstWhere((c) => c.id == 'page')
+            .quarterTurns =
+        1;
+    api.request = null;
+    await t.enterText(find.byType(TextField).last, '转过来再看');
+    await submit(t, api);
+    expect(api.loads, 2);
+    final image = (api.request!['visuals'] as List).single as Map;
+    await t.runAsync(() async {
+      final codec = await ui.instantiateImageCodec(base64Decode(image['data']));
+      final frame = await codec.getNextFrame();
+      // The region is in displayed coordinates: the right half of the turned
+      // 60x100 page, not the stale 50x60 upright crop.
+      expect([frame.image.width, frame.image.height], [30, 100]);
+      frame.image.dispose();
+      codec.dispose();
+    });
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+  });
+
   testWidgets('failed crop recovery keeps draft and permits retry', (t) async {
     final api = RestoredApi()..fail = true;
     await fixture.open(t, api);

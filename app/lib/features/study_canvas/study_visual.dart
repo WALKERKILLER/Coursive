@@ -6,9 +6,10 @@ import 'dart:ui' as ui;
 import '../../l10n/l10n.dart';
 
 /// A scanned page's text hash can be empty on every page. Include its visual
-/// identity so a crop cannot silently follow a different page or selection.
-String studyVisualFingerprint(Map source) =>
-    jsonEncode([source['image_path'], source['anchor']]);
+/// identity so a crop cannot silently follow a different page or selection,
+/// and the card's rotation, which the source anchor does not carry.
+String studyVisualFingerprint(Map source, {int quarterTurns = 0}) =>
+    jsonEncode([source['image_path'], source['anchor'], quarterTurns % 4]);
 
 bool studyVisualBindingChanged(String id, Map before, Map after) {
   if (id == 'selected-ink')
