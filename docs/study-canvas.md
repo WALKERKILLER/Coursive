@@ -32,6 +32,7 @@ PDF 模块标题栏的「在画布展开为一列」将各页按页码竖向铺�
 | 保存 | `PUT /api/lectures/{id}/study-canvas` | 完整文档及读取的 revision；返回递增后的 revision |
 | 文件导入 | `POST /api/lectures/{id}/study-canvas/assets?name=...` | 原始文件字节；返回 `objects` 卡片数组 |
 | 课件导入 | `POST /api/lectures/{id}/study-canvas/assets?path=...` | 当前课次内的原课件相对路径；返回同一对象结构 |
+| 导出预览 | `POST /api/export/pdf-preview?page=n` | 应用即将保存的 PDF 字节（不超过 40 MiB）；返回该页 PNG、页数与尺寸，不保存文件。仅供应用使用，Node 客户端不调用 |
 
 客户端读取 version 1/2/3，保存 version 3，包含 camera 的 x/y/z、layers、objects、strokes 和 connections。新字段定义见[多模态对象](multimodal-canvas.md)。不支持新版格式的旧应用拒绝 version 3，回退前须保留新版画布或恢复备份，不能用旧版覆盖新版文档。卡片记录 id/type/layer、x/y/w/h、title/text 及库内 path/source；笔迹记录 id/layer/anchor、tool/color/width 和 `[x,y,pressure]` 点列。导入素材引用只允许本课次 study-assets 内的常规文件；课程视频引用通过课程归属校验解析其他课次的本地视频；目录与文件符号链接均拒绝。所有接口使用现有 coursive-daemon 认证，Node 客户端同步声明接口；模型只返回回答与来源，完整画布文档由 Flutter 验证并保存。
 
