@@ -13,8 +13,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -413,7 +415,7 @@ func ok() map[string]bool { return map[string]bool{"ok": true} }
 
 func (s *Server) health(http.ResponseWriter, *http.Request) (any, error) {
 	return map[string]any{"version": Version, "ffmpeg": asr.HasFFmpeg(), "agent": s.Agent.Status(),
-		"sources": s.sourceState(), "library": s.Lib.Root}, nil
+		"sources": s.sourceState(), "library": s.Lib.Root, "media_tools": mediaTools(), "pdf_backend": pdfBackend()}, nil
 }
 
 // ---- courses ----
@@ -1056,4 +1058,36 @@ func (s *Server) files(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, abs)
+}
+
+// mediaTools reports executables available to the same process that runs jobs.
+// Presence is not a decoder, model or network connectivity test.
+func mediaTools() map[string]bool {
+	tools := make(map[string]bool)
+	for _, name := range []string{"ffmpeg", "ffprobe", "pdfinfo", "pdftoppm", "pdftotext"} {
+		_, err := exec.LookPath(name)
+		tools[name] = err == nil
+	}
+	tools["study_pdf"] = false
+	switch pdfBackend() {
+	case "pdfkit":
+		if exe, err := os.Executable(); err == nil {
+			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "coursive-study-pdf"))
+			tools["study_pdf"] = err == nil
+		}
+	case "poppler":
+		tools["study_pdf"] = tools["pdfinfo"] && tools["pdftoppm"] && tools["pdftotext"]
+	}
+	return tools
+}
+
+func pdfBackend() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "pdfkit"
+	case "linux":
+		return "poppler"
+	default:
+		return "unsupported"
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/png"
 	"io"
@@ -59,6 +60,9 @@ func studyPDFCommandFiles(ctx context.Context, files []*os.File, name string, ar
 	var out limitedPDFOutput
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
 	if err := cmd.Run(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("PDF 组件不可用：请打开首页「功能准备」或设置 → 诊断检查当前平台的 PDF 组件")
+		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("PDF 处理超时或已取消：%w", ctx.Err())
 		}
@@ -73,7 +77,7 @@ var studyPDFPages = regexp.MustCompile(`(?m)^Pages:\s+([0-9]+)\s*$`)
 func renderStudyPoppler(ctx context.Context, source, output string) error {
 	for _, tool := range []string{"pdfinfo", "pdftoppm", "pdftotext"} {
 		if _, err := exec.LookPath(tool); err != nil {
-			return fmt.Errorf("PDF 组件未安装：请到设置 → 诊断安装 PDF 组件（poppler-utils）")
+			return fmt.Errorf("PDF 组件未安装：请到首页「功能准备」或设置 → 诊断查看 Poppler 安装说明")
 		}
 	}
 	info, err := studyPDFCommand(ctx, "pdfinfo", source)

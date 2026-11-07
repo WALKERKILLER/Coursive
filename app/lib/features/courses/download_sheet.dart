@@ -62,7 +62,7 @@ class _SheetState extends State<_Sheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final ffmpeg = context.select<AppState, bool>((a) => a.health['ffmpeg'] != false);
+    final ffmpeg = context.select<AppState, bool>((a) => a.health['ffmpeg'] == true);
     // Options that cannot run show as off and are not sent.
     final picked = [for (final (k, _, _, _) in _kinds) if (_sel.contains(k) && (k != 'transcript' || ffmpeg)) k];
     return SafeArea(
