@@ -143,7 +143,10 @@ extension _StudySelectionTools on StudyCanvasState {
     ];
   }
 
-  Future<Uint8List> _regionImage(Rect region) async {
+  Future<Uint8List> _regionImage(
+    Rect region, {
+    List<Offset> polygon = const [],
+  }) async {
     final d = document!;
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) throw FormatException(l10n.studySelectionChanged);
@@ -173,7 +176,22 @@ extension _StudySelectionTools on StudyCanvasState {
         (screen.height * scale).roundToDouble(),
       );
       final recorder = ui.PictureRecorder();
-      Canvas(recorder).drawImageRect(
+      final canvas = Canvas(recorder);
+      if (polygon.length >= 3)
+        canvas.clipPath(
+          Path()..addPolygon(
+            polygon
+                .map(
+                  (p) => Offset(
+                    (p.dx - region.left) / region.width * size.width,
+                    (p.dy - region.top) / region.height * size.height,
+                  ),
+                )
+                .toList(),
+            true,
+          ),
+        );
+      canvas.drawImageRect(
         full,
         Rect.fromLTWH(
           screen.left * ratio,
@@ -293,6 +311,7 @@ extension _StudySelectionTools on StudyCanvasState {
       bounds.center,
     );
     _update(() {
+      _selectionPolygon = [];
       _selectionBounds = _regionSelection = _boundsOfSelection();
       _detail.region = _regionSelection;
       _detail.objectId = null;
@@ -354,6 +373,7 @@ extension _StudySelectionTools on StudyCanvasState {
       _detail.strokeIds
         ..clear()
         ..addAll(chunks.map((s) => s.id));
+      _selectionPolygon = [];
       _selectionBounds = _regionSelection = _boundsOfSelection();
       _cursor.value++;
     });

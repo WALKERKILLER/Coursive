@@ -51,6 +51,91 @@ Future<void> openConversation(WidgetTester t, SaveApi api) async {
 }
 
 void main() {
+  testWidgets(
+    'saved snapshots survive reopen, cancellation and retry without consuming the next draft',
+    (t) async {
+      final api = SaveApi()..gate = Completer<void>();
+      final snapshot = {
+        'id': 'saved-snapshot',
+        'resource': 'immutable.png',
+        'sha256': 'original-pixels',
+        'mime_type': 'image/png',
+        'width': 120,
+        'height': 80,
+        'selection': {
+          'bounds': [0, 0, 120, 80],
+          'sources': [],
+        },
+      };
+      api.doc =
+          (StudyDocument()
+                ..cards.add(
+                  StudyCard(
+                    id: 'chat',
+                    type: 'conversation',
+                    conversationId: 'saved',
+                    layer: 'main',
+                    rect: const Rect.fromLTWH(0, 0, 200, 200),
+                  ),
+                ))
+              .json();
+      api.conversations['saved'] = {
+        'id': 'saved',
+        'version': 2,
+        'revision': 1,
+        'draft': 'this screenshot',
+        'context_scope': 'course',
+        'draft_attachments': [snapshot],
+        'query': {'objects': [], 'selection': {}, 'include_video': false},
+        'turns': [],
+      };
+      await fixture.open(t, api);
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+      await t.pumpAndSettle();
+      await t.tap(find.byTooltip('发送').last);
+      await t.pump();
+      expect(api.entered, true);
+      await t.enterText(find.byType(TextField).last, 'next draft');
+      await t.tap(find.byTooltip('停止').last);
+      await t.pump();
+      api.gate!.complete();
+      await t.pumpAndSettle();
+      expect(api.request, isNull);
+      expect(api.conversations['saved']!['turns'].single['state'], 'cancelled');
+      expect(api.conversations['saved']!['turns'].single['attachments'], [
+        snapshot,
+      ]);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      api.gate = null;
+      await fixture.open(t, api);
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+      await t.pumpAndSettle();
+      expect(
+        t.widget<TextField>(find.byType(TextField).last).controller!.text,
+        'next draft',
+      );
+      await t.tap(find.widgetWithText(TextButton, '重试').last);
+      await t.pumpAndSettle();
+      expect(api.request!['attachments'], [snapshot]);
+      expect(
+        api.conversations['saved']!['turns'].single['id'],
+        api.request!['turn_id'],
+      );
+      expect(api.request!['turn_id'], isNot('run'));
+      expect(api.request!['question'], 'this screenshot');
+      expect(api.uploadedSnapshot, isNull);
+      expect(api.conversations['saved']!['turns'], hasLength(1));
+      expect(api.conversations['saved']!['draft_attachments'], isEmpty);
+      expect(
+        t.widget<TextField>(find.byType(TextField).last).controller!.text,
+        'next draft',
+      );
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+    },
+  );
+
   testWidgets('save failure keeps both the failed question and a newer draft', (
     t,
   ) async {

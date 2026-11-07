@@ -48,3 +48,11 @@
 | 按实际笔迹网格精确命中 | 采用独立的压感笔段填充轮廓命中，不采用 APK 网格实现 |
 
 本表描述已核对的差异，不代表用户从未体验过对应功能，也不宣称穷尽 Notein 的功能目录。
+
+## 选框边界与菜单定位（2026-11-08）
+
+本次重新通过本地 REA MCP 检查同一官方 APK。`ImageRectCropView.onTouchEvent` 在按下时命中四个角部控制区域，移动时只更新裁剪矩形相应边界，并限制最小间距和图片范围；未命中控制点时平移裁剪范围。`ItemsEditorPanel.OooO00o` 则更新编辑器旋转和尺寸，是对象变换的另一条路径。证据 `selection-20261108-crop-touch.json`（`ev_80036380d65991e88d4851eb9f3eecbabe96c0c747a36a53a51edd1a9ee7f7f0`）和 `selection-20261108-panel-position.json`。这些证据证明裁剪与对象变换应区分，不能据此声称 Notein 支持四条边的任意点拖动。
+
+`NoteInContextMenu.OooO0oO` 注册布局完成监听，`NoteInContextMenu$OooO00o.onLayoutChange` 按实际宽高设置位置，限制菜单宽度、横向边界和顶部位置，必要时启用横向滚动。证据 `selection-20261108-menu-placement.json`、`selection-20261108-menu-layout.json`（`ev_b4be3806cbd554eead030e1da08ec804376d3aaed0d0f184a4970941dbfd4d26`）。顶部夹取并不证明菜单始终避开选区。
+
+Coursive 根据用户要求独立实现四边与四角调整：只更新选区和重新命中对象，不变换原内容；自由套索调整外框时同步变换轮廓。菜单寻找选区与现有控件以外的空间，空间不足时使用画布之外的底栏。实现位于 `study_selection_geometry.dart`，未复制反编译代码或资源；触笔和菜单的真实 Notein 运行行为仍不是本次静态分析的结论。

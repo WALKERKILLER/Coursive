@@ -92,3 +92,14 @@ export const studyMediaFilePath = (id,object) => `${studyCanvasPath(id)}/media-f
 
 // Folder sync configuration is user-operated; assistant access is read-only.
 export async function folderSyncStatus() { return api("GET", "/api/sync"); }
+
+// Version-2 snapshots and course-only evidence. No general assistant permission change.
+export const readStudyAttachment = (lecture,id) => get(`${studyCanvasPath(lecture)}/attachments/${encodeURIComponent(id)}`);
+export const searchStudySources = (lecture,query) => api('POST',`${studyCanvasPath(lecture)}/sources/search`,{query});
+export const readStudySource = (lecture,source,offset=0,limit=12000) => api('POST',`${studyCanvasPath(lecture)}/sources/read`,{source,offset,limit});
+export const resolveStudySource = (lecture,source) => api('POST',`${studyCanvasPath(lecture)}/sources/resolve`,{source});
+export async function uploadStudyAttachment(lecture,bytes,selection){
+ const form=new FormData();form.append('image',new Blob([bytes],{type:'image/png'}),'selection.png');form.append('selection',JSON.stringify(selection));
+ const response=await fetch(`${BASE}${studyCanvasPath(lecture)}/attachments`,{method:'POST',headers:{Authorization:`Bearer ${TOKEN}`},body:form,signal:AbortSignal.timeout(60000)});
+ const result=await response.json();if(!response.ok)throw new Error(result.error??`HTTP ${response.status}`);return result;
+}

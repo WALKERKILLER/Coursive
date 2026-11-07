@@ -22,7 +22,8 @@ sealed class CoursiveRef {
   static CoursiveRef? parse(String url) {
     final u = Uri.tryParse(url);
     // coursive-app:// is the same link as exported for other programs.
-    if (u == null || (u.scheme != 'coursive' && u.scheme != 'coursive-app')) return null;
+    if (u == null || (u.scheme != 'coursive' && u.scheme != 'coursive-app'))
+      return null;
     final t = TimeLink.parse(url);
     if (t != null) return TimeRef(t.lectureId, t.seconds);
     final seg = u.pathSegments;
@@ -31,7 +32,11 @@ sealed class CoursiveRef {
       return idx == null ? null : SlideRef(seg[0], idx);
     }
     if (u.host == 'courseware' && seg.isNotEmpty) {
-      return CoursewareRef(seg[0], u.queryParameters['file'] ?? '', u.queryParameters['q'] ?? '');
+      return CoursewareRef(
+        seg[0],
+        u.queryParameters['file'] ?? '',
+        u.queryParameters['q'] ?? '',
+      );
     }
     if (u.host == 'lecture' && seg.isNotEmpty) return LectureRef(seg[0]);
     if (u.host == 'file' && seg.isNotEmpty) return FileRef(seg.join('/'));
@@ -84,14 +89,18 @@ Future<void> openLibraryFile(BuildContext context, String path) async {
   }
   final root = context.read<DaemonService>().libraryRoot;
   final ok = root.isNotEmpty && await openPath(p.join(root, rel));
-  if (!ok && context.mounted) showSnack(context, l10n.linkCannotOpenFile(p.posix.basename(rel)));
+  if (!ok && context.mounted)
+    showSnack(context, l10n.linkCannotOpenFile(p.posix.basename(rel)));
 }
 
 /// Opens a link that is not a `coursive://` reference: web and mail links in
 /// the system's handler; anything else says why nothing happens.
 Future<void> openPlainLink(BuildContext context, String url) async {
   final u = Uri.tryParse(url.trim());
-  final ok = u != null && const {'http', 'https', 'mailto'}.contains(u.scheme) && await launchUrl(u, mode: LaunchMode.externalApplication);
+  final ok =
+      u != null &&
+      const {'http', 'https', 'mailto'}.contains(u.scheme) &&
+      await launchUrl(u, mode: LaunchMode.externalApplication);
   if (!ok && context.mounted) showSnack(context, l10n.linkCannotOpen);
 }
 
@@ -150,7 +159,9 @@ String _prepareText(String s, String lectureId) {
       buf.write('\n\$\$\n${m[5]}\n\$\$\n');
     } else if (m[7] != null) {
       final body = m[7]!;
-      buf.write(_mathy.hasMatch(body) && !_cjk.hasMatch(body) ? '\$$body\$' : m[0]);
+      buf.write(
+        _mathy.hasMatch(body) && !_cjk.hasMatch(body) ? '\$$body\$' : m[0],
+      );
     } else {
       buf.write(m[0]);
     }
@@ -171,6 +182,7 @@ class CoursiveMarkdown extends StatelessWidget {
     this.lectureId = '',
     this.baseDir = '',
     this.onRef,
+    this.onCitation,
     this.onImage,
     this.isStreaming = false,
     this.animation = GptMarkdownAnimation.none,
@@ -187,6 +199,7 @@ class CoursiveMarkdown extends StatelessWidget {
   /// (a note's folder, or a parsed courseware folder).
   final String baseDir;
   final ValueChanged<CoursiveRef>? onRef;
+  final ValueChanged<String>? onCitation;
 
   /// Tap on an image; defaults to a zoomable viewer.
   final void Function(String url)? onImage;
@@ -205,19 +218,39 @@ class CoursiveMarkdown extends StatelessWidget {
       animation: animation,
       codeBuilder: codeBuilder,
       styleSheet: GptMarkdownStyleSheet(
-        latex: LatexStyle(scrollBlockHorizontally: true, padding: const EdgeInsets.symmetric(vertical: Space.xs)),
+        latex: LatexStyle(
+          scrollBlockHorizontally: true,
+          padding: const EdgeInsets.symmetric(vertical: Space.xs),
+        ),
       ),
       inlineLatexBuilder: (d) => d.asWidgetSpan(
         Math.tex(
           d.tex,
-          textStyle: d.style.copyWith(fontSize: (d.style.fontSize ?? 14) * 1.1, color: d.style.color ?? cs.onSurface),
-          parseOptions: const ParseOptions(strict: Strict.ignore, streaming: true),
-          onError: (_, _) => Text(d.source, style: d.style.copyWith(fontFamily: 'monospace', color: cs.error)),
+          textStyle: d.style.copyWith(
+            fontSize: (d.style.fontSize ?? 14) * 1.1,
+            color: d.style.color ?? cs.onSurface,
+          ),
+          parseOptions: const ParseOptions(
+            strict: Strict.ignore,
+            streaming: true,
+          ),
+          onError: (_, _) => Text(
+            d.source,
+            style: d.style.copyWith(fontFamily: 'monospace', color: cs.error),
+          ),
         ),
       ),
       onLinkTap: (url, _) {
+        final citation = Uri.tryParse(url);
+        if (citation?.scheme == "coursive" && citation?.host == "citation") {
+          if (citation!.pathSegments.length == 1)
+            onCitation?.call(citation.pathSegments.single);
+          return;
+        }
         final ref = CoursiveRef.parse(url);
-        ref != null && onRef != null ? onRef!(ref) : openPlainLink(context, url);
+        ref != null && onRef != null
+            ? onRef!(ref)
+            : openPlainLink(context, url);
       },
       inlineLinkBuilder: (d) {
         final ref = CoursiveRef.parse(d.url);
@@ -225,15 +258,40 @@ class CoursiveMarkdown extends StatelessWidget {
         return WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: switch (ref) {
-            TimeRef(:final lectureId) => TimestampChip(label: d.label, external: lectureId.isNotEmpty && lectureId != this.lectureId, onTap: () => onRef!(ref)),
-            SlideRef() => RefChip(icon: Icons.slideshow_outlined, label: d.label, onTap: () => onRef!(ref)),
-            CoursewareRef() => RefChip(icon: Icons.description_outlined, label: d.label, onTap: () => onRef!(ref)),
-            LectureRef() => RefChip(icon: Icons.ondemand_video_rounded, label: d.label, onTap: () => onRef!(ref)),
-            FileRef() => RefChip(icon: Icons.attach_file_rounded, label: d.label, onTap: () => onRef!(ref)),
+            TimeRef(:final lectureId) => TimestampChip(
+              label: d.label,
+              external: lectureId.isNotEmpty && lectureId != this.lectureId,
+              onTap: () => onRef!(ref),
+            ),
+            SlideRef() => RefChip(
+              icon: Icons.slideshow_outlined,
+              label: d.label,
+              onTap: () => onRef!(ref),
+            ),
+            CoursewareRef() => RefChip(
+              icon: Icons.description_outlined,
+              label: d.label,
+              onTap: () => onRef!(ref),
+            ),
+            LectureRef() => RefChip(
+              icon: Icons.ondemand_video_rounded,
+              label: d.label,
+              onTap: () => onRef!(ref),
+            ),
+            FileRef() => RefChip(
+              icon: Icons.attach_file_rounded,
+              label: d.label,
+              onTap: () => onRef!(ref),
+            ),
           },
         );
       },
-      imageBuilder: (context, url, w, h) => _MdImage(url: resolveImageUrl(context, url, baseDir), width: w, height: h, onTap: onImage),
+      imageBuilder: (context, url, w, h) => _MdImage(
+        url: resolveImageUrl(context, url, baseDir),
+        width: w,
+        height: h,
+        onTap: onImage,
+      ),
     );
   }
 }
@@ -242,14 +300,22 @@ class CoursiveMarkdown extends StatelessWidget {
 String resolveImageUrl(BuildContext context, String url, String baseDir) {
   final api = context.read<AppState>().api;
   final ref = CoursiveRef.parse(url);
-  if (ref is SlideRef) return slideImageUrl(api.baseUrl, api.token, ref.lectureId, ref.idx);
-  if (url.startsWith('coursive://file/')) return api.fileUrl(Uri.decodeFull(url.substring('coursive://file/'.length)));
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) return url;
+  if (ref is SlideRef)
+    return slideImageUrl(api.baseUrl, api.token, ref.lectureId, ref.idx);
+  if (url.startsWith('coursive://file/'))
+    return api.fileUrl(
+      Uri.decodeFull(url.substring('coursive://file/'.length)),
+    );
+  if (url.startsWith('http://') ||
+      url.startsWith('https://') ||
+      url.startsWith('data:'))
+    return url;
   final rel = p.posix.normalize(p.posix.join(baseDir, Uri.decodeFull(url)));
   return api.fileUrl(rel);
 }
 
-String slideImageUrl(String base, String token, String lectureId, int idx) => '$base/api/lectures/$lectureId/slides/$idx/image?token=$token';
+String slideImageUrl(String base, String token, String lectureId, int idx) =>
+    '$base/api/lectures/$lectureId/slides/$idx/image?token=$token';
 
 class _MdImage extends StatelessWidget {
   const _MdImage({required this.url, this.width, this.height, this.onTap});
@@ -263,25 +329,43 @@ class _MdImage extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Space.sm),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: height ?? 420, maxWidth: width ?? double.infinity),
+        constraints: BoxConstraints(
+          maxHeight: height ?? 420,
+          maxWidth: width ?? double.infinity,
+        ),
         child: MouseRegion(
           cursor: SystemMouseCursors.zoomIn,
           child: GestureDetector(
-            onTap: () => onTap != null ? onTap!(url) : showImageViewer(context, url),
+            onTap: () =>
+                onTap != null ? onTap!(url) : showImageViewer(context, url),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(Corners.md),
               child: Image.network(
                 url,
                 fit: BoxFit.contain,
-                frameBuilder: (_, child, frame, sync) => AnimatedOpacity(opacity: frame == null && !sync ? 0 : 1, duration: Motion.medium1, child: child),
+                frameBuilder: (_, child, frame, sync) => AnimatedOpacity(
+                  opacity: frame == null && !sync ? 0 : 1,
+                  duration: Motion.medium1,
+                  child: child,
+                ),
                 errorBuilder: (_, _, _) => Container(
                   padding: const EdgeInsets.all(Space.md),
                   color: cs.surfaceContainerHighest,
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.broken_image_outlined, size: 18, color: cs.onSurfaceVariant),
-                    const SizedBox(width: Space.sm),
-                    Text(l10n.markdownImageUnavailable, style: TextStyle(color: cs.onSurfaceVariant)),
-                  ]),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.broken_image_outlined,
+                        size: 18,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: Space.sm),
+                      Text(
+                        l10n.markdownImageUnavailable,
+                        style: TextStyle(color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -294,25 +378,40 @@ class _MdImage extends StatelessWidget {
 
 /// Full-window, zoomable image.
 Future<void> showImageViewer(BuildContext context, String url) => showDialog(
-      context: context,
-      useRootNavigator: true,
-      barrierColor: Colors.black87,
-      builder: (context) => Dialog.fullscreen(
-        backgroundColor: Colors.transparent,
-        child: Stack(children: [
-          Positioned.fill(child: InteractiveViewer(maxScale: 6, child: Center(child: Image.network(url, fit: BoxFit.contain)))),
-          Positioned(
-            top: Space.lg,
-            right: Space.lg,
-            child: IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded)),
+  context: context,
+  useRootNavigator: true,
+  barrierColor: Colors.black87,
+  builder: (context) => Dialog.fullscreen(
+    backgroundColor: Colors.transparent,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(child: Image.network(url, fit: BoxFit.contain)),
           ),
-        ]),
-      ),
-    );
+        ),
+        Positioned(
+          top: Space.lg,
+          right: Space.lg,
+          child: IconButton.filledTonal(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
 
 /// Compact tonal chip for a slide or courseware reference.
 class RefChip extends StatelessWidget {
-  const RefChip({super.key, required this.icon, required this.label, required this.onTap});
+  const RefChip({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -330,16 +429,30 @@ class RefChip extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(4, 1, 7, 1),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: (base.fontSize ?? 14) * 0.95, color: cs.onTertiaryContainer),
-              const SizedBox(width: 3),
-              Flexible(
-                child: Text(label,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: (base.fontSize ?? 14) * 0.95,
+                  color: cs.onTertiaryContainer,
+                ),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: base.copyWith(color: cs.onTertiaryContainer, fontSize: (base.fontSize ?? 14) * 0.88, fontWeight: FontWeight.w600, height: 1.3)),
-              ),
-            ]),
+                    style: base.copyWith(
+                      color: cs.onTertiaryContainer,
+                      fontSize: (base.fontSize ?? 14) * 0.88,
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

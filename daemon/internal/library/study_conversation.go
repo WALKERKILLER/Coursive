@@ -11,22 +11,26 @@ import (
 
 // Conversation history is independent of layout undo; deleting a card retains its recoverable sidecar.
 type StudyTurn struct {
-	ID         string          `json:"id"`
-	Question   string          `json:"question"`
-	Answer     string          `json:"answer"`
-	ContextKey string          `json:"context_key"`
-	State      string          `json:"state"`
-	Error      string          `json:"error,omitempty"`
-	Result     json.RawMessage `json:"result,omitempty"`
+	Attachments  []StudyAttachment `json:"attachments,omitempty"`
+	ContextScope string            `json:"context_scope,omitempty"`
+	ID           string            `json:"id"`
+	Question     string            `json:"question"`
+	Answer       string            `json:"answer"`
+	ContextKey   string            `json:"context_key"`
+	State        string            `json:"state"`
+	Error        string            `json:"error,omitempty"`
+	Result       json.RawMessage   `json:"result,omitempty"`
 }
 type StudyConversation struct {
-	Version     int                 `json:"version"`
-	Revision    int64               `json:"revision"`
-	ID          string              `json:"id"`
-	Draft       string              `json:"draft"`
-	Query       StudyContextRequest `json:"query"`
-	AllowImages bool                `json:"allow_images"`
-	Turns       []StudyTurn         `json:"turns"`
+	ContextScope     string              `json:"context_scope,omitempty"`
+	DraftAttachments []StudyAttachment   `json:"draft_attachments,omitempty"`
+	Version          int                 `json:"version"`
+	Revision         int64               `json:"revision"`
+	ID               string              `json:"id"`
+	Draft            string              `json:"draft"`
+	Query            StudyContextRequest `json:"query"`
+	AllowImages      bool                `json:"allow_images"`
+	Turns            []StudyTurn         `json:"turns"`
 }
 
 func readStudyConversation(root *os.Root, name, id string) (StudyConversation, error) {
@@ -42,6 +46,9 @@ func readStudyConversation(root *os.Root, name, id string) (StudyConversation, e
 		return out, ErrStudyLimit
 	}
 	e = json.Unmarshal(b, &out)
+	if out.ContextScope == "" {
+		out.ContextScope = "selected"
+	}
 	return out, e
 }
 func (l *Library) StudyConversation(ctx context.Context, lecture, id string, next *StudyConversation) (StudyConversation, error) {
@@ -63,22 +70,60 @@ func (l *Library) StudyConversation(ctx context.Context, lecture, id string, nex
 	if e != nil || next == nil {
 		return old, e
 	}
-	if next.ID != id || next.Version != 1 || next.Revision < 0 || len(next.Draft) > 16000 || len(next.Turns) > 300 || len(next.Query.Objects) > 12 {
+	if next.ID != id || (next.Version != 1 && next.Version != 2) || next.Version < old.Version || next.Revision < 0 || len(next.Draft) > 16000 || len(next.Turns) > 300 || len(next.Query.Objects) > 12 {
 		return old, ErrStudyInvalid
 	}
 	if next.Revision != old.Revision {
 		return old, ErrStudyConflict
+	}
+	if next.ContextScope == "" {
+		next.ContextScope = "selected"
+	}
+	if next.ContextScope != "selected" && next.ContextScope != "course" {
+		return old, ErrStudyInvalid
+	}
+	if next.Version == 1 && (next.ContextScope != "selected" || len(next.DraftAttachments) > 0) {
+		return old, ErrStudyInvalid
+	}
+	if e = validateStudyAttachments(root, dir, next.DraftAttachments); e != nil {
+		return old, e
 	}
 	seen := map[string]bool{}
 	for _, t := range next.Turns {
 		if !validStudyID(t.ID) || seen[t.ID] || len(t.Question) > 16000 || len(t.Answer) > 48000 || len(t.ContextKey) > 128 || len(t.Error) > 4000 || len(t.Result) > 400000 {
 			return old, ErrStudyInvalid
 		}
+		if t.ContextScope != "" && t.ContextScope != "selected" && t.ContextScope != "course" {
+			return old, ErrStudyInvalid
+		}
+		if next.Version == 1 && (len(t.Attachments) > 0 || t.ContextScope == "course") {
+			return old, ErrStudyInvalid
+		}
+		if e = validateStudyAttachments(root, dir, t.Attachments); e != nil {
+			return old, e
+		}
+		if e = validateStudyCitations(t.Result); e != nil {
+			return old, e
+		}
 		seen[t.ID] = true
 		switch t.State {
 		case "preparing", "running", "done", "error", "cancelled", "interrupted", "pending", "applied":
 		default:
 			return old, ErrStudyInvalid
+		}
+	}
+	if old.Version == 1 && next.Version == 2 {
+		if original, err := root.ReadFile(name); err == nil {
+			backup := dir + "/study-conversations/" + id + ".pre-v2.json"
+			if _, err = root.Lstat(backup); os.IsNotExist(err) {
+				if e = writeStudyBytes(root, backup, original); e != nil {
+					return old, e
+				}
+			} else if err != nil {
+				return old, err
+			}
+		} else if !os.IsNotExist(err) {
+			return old, err
 		}
 	}
 	next.Revision++

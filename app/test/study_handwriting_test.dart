@@ -1,3 +1,6 @@
+import 'study_quick_question_test.dart' show SelectionApi;
+import 'study_selection_tools_test.dart' show settleAsync;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -35,6 +38,8 @@ Future<void> close(WidgetTester t) async {
 
 Future<void> selectInk(WidgetTester t) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
+  await t.pumpAndSettle();
+  await t.tap(find.byTooltip('自由套索'));
   await t.pumpAndSettle();
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(
@@ -450,20 +455,17 @@ void main() {
           ],
         ),
       );
-      final api = fixture.FixtureApi(d.json());
+      final api = SelectionApi(d.json());
       final key = await fixture.open(t, api);
       await selectInk(t);
       final before = key.currentState!.document!.cards.single.rect;
-      await t.tap(find.text('问 AI').last);
-      await t.pumpAndSettle();
+      await t.tap(find.text('问小 c').last);
+      await settleAsync(t);
       expect(api.request, isNull);
-      await t.enterText(
-        find.byKey(const ValueKey('study-quick-question')),
-        '解释选区',
-      );
+      await t.enterText(find.byType(TextField).last, '解释选区');
       await t.runAsync(() async {
-        await t.tap(find.byTooltip('发送问题'));
-        for (var i = 0; i < 80 && api.request == null; i++) {
+        await t.tap(find.byTooltip('发送').last);
+        for (var i = 0; i < 80; i++) {
           await t.pump();
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }

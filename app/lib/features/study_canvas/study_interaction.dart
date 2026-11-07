@@ -114,6 +114,12 @@ extension _StudyInteraction on StudyCanvasState {
     final polygon = _lassoRectangle
         ? [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft]
         : List<Offset>.of(_lasso);
+    _setRegionSelection(r, polygon);
+    if (_captureLasso) unawaited(_captureRegionCard());
+  }
+
+  void _setRegionSelection(Rect r, List<Offset> polygon) {
+    final d = document!;
     _detail.clear();
     if (_selectionKinds.contains(StudySelectionKind.ink))
       _detail.strokeIds.addAll(d.strokesInPolygon(polygon));
@@ -137,33 +143,33 @@ extension _StudyInteraction on StudyCanvasState {
       );
       if (outside.getBounds().isEmpty) _selection.add(c.id);
     }
-    _regionSelection = r;
-    _selectionBounds = _boundsOfSelection() ?? r;
+    // Selection handles and the attachment crop must show the same area,
+    // including when the region contains only part of a card or some ink.
+    final region = r;
+    _selectionPolygon = List<Offset>.of(polygon);
+    _regionSelection = region;
+    _selectionBounds = region;
     final anchored = d.cards
         .where(
           (c) =>
               c.type != 'conversation' &&
               _selectionKinds.contains(studyCardSelectionKind(c)) &&
               d.visible(c.layer) &&
-              _sourceBounds(c).contains(r.center) &&
-              _sourceBounds(c).overlaps(r),
+              _sourceBounds(c).contains(region.center) &&
+              _sourceBounds(c).overlaps(region),
         )
         .lastOrNull;
     if (anchored != null && _selection.isEmpty) {
       _detail.objectId = anchored.id;
       _detail.region = _normalizeRegion(
-        r.intersect(_sourceBounds(anchored)),
+        region.intersect(_sourceBounds(anchored)),
         _sourceBounds(anchored),
       );
     } else {
-      _detail.region = r;
+      _detail.region = region;
     }
-    _quickAsk = false;
-    _quickError = null;
-    _quickImages = false;
     _selectionReady = true;
     _cursor.value++;
-    if (_captureLasso) unawaited(_captureRegionCard());
   }
 
   Rect? _boundsOfSelection() {
@@ -200,6 +206,7 @@ extension _StudyInteraction on StudyCanvasState {
       width: width,
     );
     _selectionBounds = _boundsOfSelection() ?? to;
+    _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
     _detail.objectId = '';
@@ -277,9 +284,9 @@ extension _StudyInteraction on StudyCanvasState {
     }
     _tool = StudyTool.region;
     _selectionBounds = _boundsOfSelection();
+    _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
-    _quickAsk = false;
     _selectionReady = true;
     d.changed();
   }
@@ -318,7 +325,56 @@ extension _StudyInteraction on StudyCanvasState {
     d.changed();
   }
 
-  Widget _selectionToolbar() {
+  void _measureSelectionControls() {
+    if (_selectionMeasurePending || !_selectionReady) return;
+    _selectionMeasurePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionMeasurePending = false;
+      if (!mounted || !_selectionReady) return;
+      final surface =
+          _inputSurface.currentContext?.findRenderObject() as RenderBox?;
+      if (surface == null || !surface.hasSize) return;
+      final obstacles = <Rect>[];
+      for (final key in [
+        _dockKey,
+        _aiDockKey,
+        _zoomKey,
+        _shelfKey,
+        ..._stageKeys,
+      ]) {
+        final box = key.currentContext?.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize && box.attached) {
+          obstacles.add(
+            surface.globalToLocal(box.localToGlobal(Offset.zero)) & box.size,
+          );
+        }
+      }
+      if (!listEquals(obstacles, _selectionObstacles)) {
+        _update(() => _selectionObstacles = obstacles);
+      }
+    });
+  }
+
+  Rect? _selectionMenuRect() {
+    final r = _selectionBounds;
+    if (r == null) return null;
+    final d = document!;
+    return studySelectionMenuRect(
+      Rect.fromPoints(
+        r.topLeft * d.zoom + d.camera,
+        r.bottomRight * d.zoom + d.camera,
+      ),
+      Rect.fromLTRB(
+        12,
+        _topBarsBottom + 8,
+        math.max(12, _viewport.width - 12),
+        math.max(_topBarsBottom + 8, _viewport.height - 12),
+      ),
+      _selectionObstacles,
+    );
+  }
+
+  Widget _selectionToolbar({bool docked = false}) {
     if (_tool != StudyTool.region ||
         !_selectionReady ||
         _selectionBounds == null ||
@@ -329,186 +385,115 @@ extension _StudyInteraction on StudyCanvasState {
       animation: _camera,
       builder: (_, child) {
         final d = document!, r = _selectionBounds!;
-        final width = math.min(600.0, math.max(160.0, _viewport.width - 24));
-        final left = (r.center.dx * d.zoom + d.camera.dx - width / 2).clamp(
-          12.0,
-          math.max(12.0, _viewport.width - width - 12),
-        );
-        final top = (r.top * d.zoom + d.camera.dy - 58).clamp(
-          8.0,
-          math.max(8.0, _viewport.height - 64),
-        );
+        final placement = docked ? null : _selectionMenuRect();
+        if (!docked && placement == null) return const SizedBox.shrink();
         Widget action(String label, IconData icon, VoidCallback? onPressed) =>
             TextButton.icon(
               onPressed: onPressed,
               icon: Icon(icon, size: 17),
               label: Text(label),
             );
-        return Positioned(
-          left: left.toDouble(),
-          top: top.toDouble(),
-          width: width,
-          child: Material(
-            key: _selectionMenuKey,
-            elevation: 5,
-            borderRadius: BorderRadius.circular(14),
-            child: _quickAsk
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.auto_awesome_outlined, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('study-quick-question'),
-                                controller: _quickInput,
-                                autofocus: true,
-                                maxLength: 4000,
-                                decoration: const InputDecoration(
-                                  hintText: '问问选中的内容…',
-                                  counterText: '',
-                                  border: InputBorder.none,
-                                ),
-                                onSubmitted: (_) => _sendQuickQuestion(),
-                              ),
-                            ),
-                            FilterChip(
-                              label: const Text('附选区图'),
-                              selected: _quickImages,
-                              onSelected: _quickSending
-                                  ? null
-                                  : (value) =>
-                                        _update(() => _quickImages = value),
-                              tooltip: '允许把此选区图片发送给视觉模型',
-                            ),
-                            IconButton(
-                              tooltip: '发送问题',
-                              icon: _quickSending
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.arrow_upward),
-                              onPressed: _quickSending
-                                  ? null
-                                  : _sendQuickQuestion,
-                            ),
-                            IconButton(
-                              tooltip: '收起提问',
-                              icon: const Icon(Icons.close),
-                              onPressed: () => _update(() => _quickAsk = false),
-                            ),
-                          ],
-                        ),
-                        if (_quickError != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              _quickError!,
-                              key: const ValueKey('study-quick-error'),
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  )
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        action('问 AI', Icons.auto_awesome_outlined, _ask),
-                        _selectionActions(),
-                        action(
-                          '复制',
-                          Icons.copy_outlined,
-                          hasContent ? _copySelection : null,
-                        ),
-                        action(
-                          '粘贴',
-                          Icons.content_paste,
-                          _copiedBounds == null ? null : _pasteSelection,
-                        ),
-                        action(
-                          '副本',
-                          Icons.control_point_duplicate,
-                          hasContent
-                              ? () {
-                                  _copySelection();
-                                  _pasteSelection();
-                                }
-                              : null,
-                        ),
-                        PopupMenuButton<int>(
-                          tooltip: '选区改色',
-                          enabled: _detail.strokeIds.isNotEmpty,
-                          icon: const Icon(Icons.palette_outlined, size: 20),
-                          itemBuilder: (_) => [
-                            for (final c in _penPalette.take(20))
-                              PopupMenuItem(
-                                value: c,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.circle, color: Color(c)),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                          onSelected: (c) {
-                            d.checkpoint();
-                            _transformSelection(r, r, color: c);
-                          },
-                        ),
-                        PopupMenuButton<double>(
-                          tooltip: '选区粗细',
-                          enabled: _detail.strokeIds.isNotEmpty,
-                          icon: const Icon(Icons.line_weight, size: 20),
-                          itemBuilder: (_) => [
-                            for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
-                              PopupMenuItem(
-                                value: w,
-                                child: Text('${w.toInt()}'),
-                              ),
-                          ],
-                          onSelected: (w) {
-                            d.checkpoint();
-                            _transformSelection(r, r, width: w);
-                          },
-                        ),
-                        action(
-                          '删除',
-                          Icons.delete_outline,
-                          hasContent ? _deleteSelection : null,
-                        ),
-                        IconButton(
-                          tooltip: '取消选择',
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () => _update(() {
-                            _selectionReady = false;
-                            _selectionBounds = null;
-                            _regionSelection = null;
-                            _selection.clear();
-                            _detail.clear();
-                            _cursor.value++;
-                          }),
-                        ),
-                      ],
-                    ),
+        final menu = Material(
+          key: _selectionMenuKey,
+          elevation: 5,
+          borderRadius: BorderRadius.circular(14),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                action(
+                  l10n.studyAskC,
+                  Icons.auto_awesome_outlined,
+                  _selectionBusy ? null : _ask,
+                ),
+                _snapshotDragHandle(),
+                if (_snapshotPreparing)
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
+                _selectionActions(),
+                action(
+                  '复制',
+                  Icons.copy_outlined,
+                  hasContent ? _copySelection : null,
+                ),
+                action(
+                  '粘贴',
+                  Icons.content_paste,
+                  _copiedBounds == null ? null : _pasteSelection,
+                ),
+                action(
+                  '副本',
+                  Icons.control_point_duplicate,
+                  hasContent
+                      ? () {
+                          _copySelection();
+                          _pasteSelection();
+                        }
+                      : null,
+                ),
+                PopupMenuButton<int>(
+                  tooltip: '选区改色',
+                  enabled: _detail.strokeIds.isNotEmpty,
+                  icon: const Icon(Icons.palette_outlined, size: 20),
+                  itemBuilder: (_) => [
+                    for (final c in _penPalette.take(20))
+                      PopupMenuItem(
+                        value: c,
+                        child: Row(
+                          children: [
+                            Icon(Icons.circle, color: Color(c)),
+                            const SizedBox(width: 12),
+                            Text(
+                              '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                  onSelected: (c) {
+                    d.checkpoint();
+                    _transformSelection(r, r, color: c);
+                  },
+                ),
+                PopupMenuButton<double>(
+                  tooltip: '选区粗细',
+                  enabled: _detail.strokeIds.isNotEmpty,
+                  icon: const Icon(Icons.line_weight, size: 20),
+                  itemBuilder: (_) => [
+                    for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
+                      PopupMenuItem(value: w, child: Text('${w.toInt()}')),
+                  ],
+                  onSelected: (w) {
+                    d.checkpoint();
+                    _transformSelection(r, r, width: w);
+                  },
+                ),
+                action(
+                  '删除',
+                  Icons.delete_outline,
+                  hasContent ? _deleteSelection : null,
+                ),
+                IconButton(
+                  tooltip: '取消选择',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => _update(() {
+                    _selectionReady = false;
+                    _selectionBounds = null;
+                    _regionSelection = null;
+                    _selection.clear();
+                    _detail.clear();
+                    _cursor.value++;
+                  }),
+                ),
+              ],
+            ),
           ),
         );
+        if (docked) return Center(child: SizedBox(height: 48, child: menu));
+        return Positioned.fromRect(rect: placement!, child: menu);
       },
     );
   }
@@ -552,12 +537,10 @@ class _InteractionFeedback extends CustomPainter {
         final box = Rect.fromPoints(screen(r.topLeft), screen(r.bottomRight));
         dash(Path()..addRect(box));
         if (s._selectionReady) {
-          canvas.drawCircle(
-            box.bottomRight,
-            7,
-            Paint()..color = state.chrome.paper,
-          );
-          canvas.drawCircle(box.bottomRight, 7, line);
+          for (final point in studySelectionHandles(box).values) {
+            canvas.drawCircle(point, 5, Paint()..color = state.chrome.paper);
+            canvas.drawCircle(point, 5, line);
+          }
         }
       }
     }

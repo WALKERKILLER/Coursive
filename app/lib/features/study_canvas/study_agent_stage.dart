@@ -96,6 +96,7 @@ extension _StudyStage on StudyCanvasState {
     bool pick = false,
     bool allowImages = false,
     Offset? at,
+    StudySnapshot? snapshot,
   }) async {
     final d = document;
     if (d == null || !d.editable(d.activeLayer)) return;
@@ -106,10 +107,10 @@ extension _StudyStage on StudyCanvasState {
             'selection': <String, dynamic>{},
             'include_video': false,
           };
-    final visual =
-        bind && _regionSelection != null && (send == null || allowImages)
-        ? await _captureSelection()
-        : <Map<String, dynamic>>[];
+    snapshot ??= bind && _regionSelection != null
+        ? await _prepareSelectionSnapshot()
+        : null;
+    final draft = _idleInput.text;
     if (!mounted) return;
     final card = StudyCard(
       id: studyId(),
@@ -126,7 +127,9 @@ extension _StudyStage on StudyCanvasState {
     d.changed();
     _initialConversations[card.id] = {
       'query': query,
-      'visuals': visual,
+      'visuals': <Map<String, dynamic>>[],
+      'snapshot': snapshot,
+      'draft': draft,
       'allow_images': allowImages,
       if (send != null && send.trim().isNotEmpty) 'send': send.trim(),
       if (pick) 'pick': true,
@@ -428,6 +431,12 @@ class _StageView extends StatefulWidget {
     this.allowImages,
     this.onAllowImages,
     this.onDraft,
+    this.attachments = const [],
+    this.pendingSnapshots = const [],
+    this.contextScope = 'course',
+    this.onRemoveAttachment,
+    this.onSnapshotRetry,
+    this.onRemovePending,
   });
 
   final StudyCanvasState owner;
@@ -443,7 +452,12 @@ class _StageView extends StatefulWidget {
   final Map? live;
   final String? error;
   final VoidCallback? onStop, onPickSources, onInspectSources;
-  final ValueChanged<String>? onRetry;
+  final List attachments;
+  final List<StudySnapshot> pendingSnapshots;
+  final String contextScope;
+  final ValueChanged<Map>? onRemoveAttachment;
+  final ValueChanged<StudySnapshot>? onSnapshotRetry, onRemovePending;
+  final ValueChanged<Map>? onRetry;
   final ValueChanged<Map>? onRemoveSource, onEditVideo;
 
   /// Null hides the vision switch (no visual selection is bound).
@@ -462,6 +476,7 @@ class _StageViewState extends State<_StageView>
     duration: const Duration(milliseconds: 1400),
   );
   final _composer = GlobalKey(), _panel = GlobalKey(), _stage = GlobalKey();
+  final _messages = ScrollController();
   bool _hover = false;
   String? _focusSource;
   bool _looping = false;
@@ -476,6 +491,7 @@ class _StageViewState extends State<_StageView>
   @override
   void initState() {
     super.initState();
+    owner._messageScroll[widget.thread?.id] = _messages;
     _claim();
     owner._composerFocus.addListener(_focusChanged);
   }
@@ -535,6 +551,9 @@ class _StageViewState extends State<_StageView>
     owner._stageKeys.removeAll(_keys);
     owner._composerFocus.removeListener(_focusChanged);
     _localFocus.dispose();
+    if (owner._messageScroll[widget.thread?.id] == _messages)
+      owner._messageScroll.remove(widget.thread?.id);
+    _messages.dispose();
     _flow.dispose();
     super.dispose();
   }
@@ -772,6 +791,7 @@ class _StageViewState extends State<_StageView>
       ).createShader(r),
       blendMode: BlendMode.dstIn,
       child: ListView.builder(
+        controller: _messages,
         reverse: true,
         shrinkWrap: true,
         padding: const EdgeInsets.only(top: Space.xl),
@@ -818,6 +838,13 @@ class _StageViewState extends State<_StageView>
               ),
             ),
           ),
+          if ((raw['attachments'] as List? ?? []).isNotEmpty)
+            Wrap(
+              children: [
+                for (final a in (raw['attachments'] as List).cast<Map>())
+                  _attachmentTile(a),
+              ],
+            ),
           const SizedBox(height: Space.sm),
           if (working)
             Align(
@@ -861,7 +888,29 @@ class _StageViewState extends State<_StageView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectionArea(child: CoursiveMarkdown(answer)),
+                  SelectionArea(
+                    child: CoursiveMarkdown(
+                      answer,
+                      onCitation: (id) {
+                        final citation = StudyCitation.fromResult(
+                          raw['result'] as Map?,
+                        ).where((c) => c.id == id).firstOrNull;
+                        if (citation != null) owner._focusCitation(citation);
+                      },
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 4,
+                    children: [
+                      for (final citation in StudyCitation.fromResult(
+                        raw['result'] as Map?,
+                      ))
+                        ActionChip(
+                          label: Text(citation.label),
+                          onPressed: () => owner._focusCitation(citation),
+                        ),
+                    ],
+                  ),
                   if (raw['state'] == 'done')
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
@@ -942,7 +991,7 @@ class _StageViewState extends State<_StageView>
                   TextButton(
                     onPressed: widget.busy
                         ? null
-                        : () => widget.onRetry?.call('${raw['question']}'),
+                        : () => widget.onRetry?.call(raw),
                     style: TextButton.styleFrom(
                       foregroundColor: cs.onErrorContainer,
                     ),
@@ -956,20 +1005,67 @@ class _StageViewState extends State<_StageView>
     );
   }
 
+  Widget _attachmentTile(Map attachment, {bool removable = false}) {
+    final url = owner.widget.api.studyAttachmentUrl(
+      owner.widget.ctl.lectureId,
+      '${attachment['id']}',
+    );
+    return SizedBox(
+      width: 120,
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: () => showDialog<void>(
+              context: context,
+              builder: (c) => Dialog(
+                child: InteractiveViewer(
+                  child: Image.network(url, fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            child: Image.network(
+              url,
+              width: 120,
+              height: 72,
+              fit: BoxFit.contain,
+              errorBuilder: (_, error, stack) =>
+                  const Icon(Icons.broken_image_outlined),
+            ),
+          ),
+          if (removable)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: IconButton(
+                tooltip: l10n.studySnapshotRemove,
+                onPressed: () => widget.onRemoveAttachment?.call(attachment),
+                icon: const Icon(Icons.close, size: 16),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _composerPane(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final sources = widget.sources.cast<Map>();
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (_) {
-        if (widget.busy || widget.loading) return false;
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data is! String && details.data is! StudySelectionDrop)
+          return false;
+        if (widget.loading) return false;
         setState(() => _hover = true);
         return true;
       },
       onLeave: (_) => setState(() => _hover = false),
       onAcceptWithDetails: (v) {
         setState(() => _hover = false);
-        widget.onDrop(v.data);
+        if (v.data is StudySelectionDrop)
+          owner._acceptSnapshot(v.data as StudySelectionDrop);
+        else
+          widget.onDrop(v.data as String);
       },
       builder: (context, _, _) => _Well(
         key: _composer,
@@ -981,6 +1077,57 @@ class _StageViewState extends State<_StageView>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text(
+              widget.contextScope == 'course'
+                  ? l10n.studyCourseScope
+                  : l10n.studySelectedScope,
+              style: tt.labelSmall,
+            ),
+            if (widget.attachments.isNotEmpty ||
+                widget.pendingSnapshots.isNotEmpty)
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final a in widget.attachments.cast<Map>())
+                    _attachmentTile(a, removable: true),
+                  for (final pending in widget.pendingSnapshots)
+                    SizedBox(
+                      width: 140,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.memory(
+                            pending.bytes,
+                            width: 100,
+                            height: 60,
+                            fit: BoxFit.contain,
+                          ),
+                          if (pending.error != null)
+                            Text('${pending.error}', maxLines: 2),
+                          if (pending.uploading)
+                            const LinearProgressIndicator()
+                          else
+                            Row(
+                              children: [
+                                IconButton(
+                                  tooltip: l10n.studySnapshotRetry,
+                                  onPressed: () =>
+                                      widget.onSnapshotRetry?.call(pending),
+                                  icon: const Icon(Icons.refresh),
+                                ),
+                                IconButton(
+                                  tooltip: l10n.studySnapshotRemove,
+                                  onPressed: () =>
+                                      widget.onRemovePending?.call(pending),
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             if (sources.isNotEmpty || widget.loading)
               SizedBox(
                 height: 36,

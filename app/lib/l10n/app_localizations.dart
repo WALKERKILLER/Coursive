@@ -12872,6 +12872,78 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看'**
   String get setupPdfUnsupported;
+
+  /// No description provided for @studyAskC.
+  ///
+  /// In zh, this message translates to:
+  /// **'问小 c'**
+  String get studyAskC;
+
+  /// No description provided for @studySnapshotDrag.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖入对话，附上选区截图'**
+  String get studySnapshotDrag;
+
+  /// No description provided for @studySnapshotVideoFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试'**
+  String get studySnapshotVideoFailed;
+
+  /// No description provided for @studySnapshotTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图超过 3 MiB，请缩小选区'**
+  String get studySnapshotTooLarge;
+
+  /// No description provided for @studyCourseScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前课程本地材料'**
+  String get studyCourseScope;
+
+  /// No description provided for @studySelectedScope.
+  ///
+  /// In zh, this message translates to:
+  /// **'手动绑定的材料'**
+  String get studySelectedScope;
+
+  /// No description provided for @studySnapshotPreparing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在准备截图…'**
+  String get studySnapshotPreparing;
+
+  /// No description provided for @studySnapshotRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除截图'**
+  String get studySnapshotRemove;
+
+  /// No description provided for @studySnapshotRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试上传'**
+  String get studySnapshotRetry;
+
+  /// No description provided for @studyReturnToQuestion.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回提问处'**
+  String get studyReturnToQuestion;
+
+  /// No description provided for @studyCitationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源已变更或不可用，保留当前阅读位置'**
+  String get studyCitationUnavailable;
+
+  /// No description provided for @studySourceExcerpt.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源原文：{text}'**
+  String studySourceExcerpt(String text);
 }
 
 class _AppLocalizationsDelegate

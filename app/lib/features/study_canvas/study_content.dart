@@ -167,3 +167,20 @@ class StudySelection {
     'stroke_ids': strokeIds.toList(),
   };
 }
+
+/// A course source has an original file identity. It acquires a canvas object
+/// identity only when navigation resolves/imports that source successfully.
+class StudyCitation {
+  StudyCitation({required this.id, required this.label, required this.source});
+  final String id, label;
+  final Map<String, dynamic> source;
+  factory StudyCitation.fromJson(Map value) => StudyCitation(
+    id: '${value['id']}',
+    label: '${value['label']}',
+    source: Map<String, dynamic>.from(value['source'] as Map),
+  );
+  static List<StudyCitation> fromResult(Map? result) => [
+    for (final c in result?['citations'] as List? ?? [])
+      if (c is Map && c['source'] is Map) StudyCitation.fromJson(c),
+  ];
+}

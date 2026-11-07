@@ -7401,4 +7401,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';
+
+  @override
+  String get studyAskC => '问小 c';
+
+  @override
+  String get studySnapshotDrag => '拖入对话，附上选区截图';
+
+  @override
+  String get studySnapshotVideoFailed => '无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试';
+
+  @override
+  String get studySnapshotTooLarge => '截图超过 3 MiB，请缩小选区';
+
+  @override
+  String get studyCourseScope => '当前课程本地材料';
+
+  @override
+  String get studySelectedScope => '手动绑定的材料';
+
+  @override
+  String get studySnapshotPreparing => '正在准备截图…';
+
+  @override
+  String get studySnapshotRemove => '移除截图';
+
+  @override
+  String get studySnapshotRetry => '重试上传';
+
+  @override
+  String get studyReturnToQuestion => '返回提问处';
+
+  @override
+  String get studyCitationUnavailable => '来源已变更或不可用，保留当前阅读位置';
+
+  @override
+  String studySourceExcerpt(String text) {
+    return '来源原文：$text';
+  }
 }

@@ -4566,5 +4566,24 @@
   "setupAsrConfigured": "已有启用的识别渠道；还需音频提取组件，网络、配额和模型运行状态请在转写设置查看",
   "setupConfigure": "配置",
   "setupPdfHelperMissing": "内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件",
-  "setupPdfUnsupported": "当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看"
+  "setupPdfUnsupported": "当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看",
+  "studyAskC": "问小 c",
+  "studySnapshotDrag": "拖入对话，附上选区截图",
+  "studySnapshotVideoFailed": "无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试",
+  "studySnapshotTooLarge": "截图超过 3 MiB，请缩小选区",
+  "studyCourseScope": "当前课程本地材料",
+  "studySelectedScope": "手动绑定的材料",
+  "studySnapshotPreparing": "正在准备截图…",
+  "studySnapshotRemove": "移除截图",
+  "studySnapshotRetry": "重试上传",
+  "studyReturnToQuestion": "返回提问处",
+  "studyCitationUnavailable": "来源已变更或不可用，保留当前阅读位置",
+  "studySourceExcerpt": "来源原文：{text}",
+  "@studySourceExcerpt": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  }
 }
