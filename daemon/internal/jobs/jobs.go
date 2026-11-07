@@ -643,7 +643,7 @@ func (m *Manager) localVideo(ctx context.Context, lectureID string) string {
 
 func (m *Manager) runTranscript(ctx context.Context, j store.Job, p progressFn) error {
 	if !asr.HasFFmpeg() {
-		return errors.New("未找到 ffmpeg，无法提取音频")
+		return errors.New("未找到 ffmpeg，无法提取音频；请打开首页「功能准备」或设置 → 诊断查看安装说明，安装后重新检查并重试任务")
 	}
 	if _, _, _, err := m.Lib.EnsureLecture(ctx, j.LectureID); err != nil {
 		return err

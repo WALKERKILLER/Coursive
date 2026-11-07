@@ -1195,7 +1195,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadNeedsFfmpeg.
   ///
   /// In zh, this message translates to:
-  /// **'需要安装 ffmpeg'**
+  /// **'请先在首页「功能准备」检查并安装 ffmpeg'**
   String get downloadNeedsFfmpeg;
 
   /// No description provided for @downloadNoCourseware.
@@ -7279,7 +7279,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagFfmpegOk.
   ///
   /// In zh, this message translates to:
-  /// **'转写可用'**
+  /// **'已找到 ffmpeg（还需配置识别渠道）'**
   String get diagFfmpegOk;
 
   /// No description provided for @diagFfmpegMissingWorkspace.
@@ -7393,7 +7393,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagAllGood.
   ///
   /// In zh, this message translates to:
-  /// **'一切正常'**
+  /// **'组件与配置已找到'**
   String get diagAllGood;
 
   /// No description provided for @diagCopy.
@@ -12458,6 +12458,156 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'资料只保存在本机'**
   String get settingsProfileLocal;
+
+  /// No description provided for @setupTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'功能准备'**
+  String get setupTitle;
+
+  /// No description provided for @setupIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'看在线视频无需先下载整段录像，也不需要转写组件。离线学习需下载；转写会复用本地录像，没有时获取临时音视频。以下检查互相独立，可按需要配置。'**
+  String get setupIntro;
+
+  /// No description provided for @setupRecheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'重新检查'**
+  String get setupRecheck;
+
+  /// No description provided for @setupUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'未检查成功，请重新检查'**
+  String get setupUnknown;
+
+  /// No description provided for @setupToolsPresent.
+  ///
+  /// In zh, this message translates to:
+  /// **'组件已找到（未测试解码）'**
+  String get setupToolsPresent;
+
+  /// No description provided for @setupToolsMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'缺少组件：{tools}'**
+  String setupToolsMissing(String tools);
+
+  /// No description provided for @setupMediaTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频导入与音频提取'**
+  String get setupMediaTitle;
+
+  /// No description provided for @setupPdfTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机 PDF 导入'**
+  String get setupPdfTitle;
+
+  /// No description provided for @setupInstallHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装说明'**
+  String get setupInstallHelp;
+
+  /// No description provided for @setupInstallIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'这些组件安装在当前设备；其他设备需分别准备。安装完成后返回并重新检查。如果修改了系统 PATH，请完全退出并重开应用。'**
+  String get setupInstallIntro;
+
+  /// No description provided for @setupMacInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'macOS：已安装 Homebrew 时，在终端运行下面的命令。没有 Homebrew 时，先按 brew.sh 的官方说明安装。'**
+  String get setupMacInstall;
+
+  /// No description provided for @setupWindowsInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'Windows：从 FFmpeg 官网的 Windows 下载入口获取构建，确认包含 ffmpeg.exe 与 ffprobe.exe。将 FFmpeg 的 bin 目录加入用户 PATH 后重开应用。'**
+  String get setupWindowsInstall;
+
+  /// No description provided for @setupLinuxInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'Linux：使用发行版的软件包管理器安装 FFmpeg 和 Poppler 工具。Ubuntu / Debian 可运行下面的命令。'**
+  String get setupLinuxInstall;
+
+  /// No description provided for @setupOtherInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'请在运行后台服务的设备上安装 FFmpeg 和 Poppler 工具，并确保它们在后台服务的 PATH 中。'**
+  String get setupOtherInstall;
+
+  /// No description provided for @setupModelTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 模型与看图'**
+  String get setupModelTitle;
+
+  /// No description provided for @setupModelMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'请选择模型并配置模型服务；运行环境就绪后才能读取配置'**
+  String get setupModelMissing;
+
+  /// No description provided for @setupModelConfigured.
+  ///
+  /// In zh, this message translates to:
+  /// **'已选择模型；实际可用性请在模型设置中测试'**
+  String get setupModelConfigured;
+
+  /// No description provided for @setupVisionMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'看图尚未配置：请选择支持图像的模型或单独配置视觉模型'**
+  String get setupVisionMissing;
+
+  /// No description provided for @setupVisionConfigured.
+  ///
+  /// In zh, this message translates to:
+  /// **'看图模型已配置；未发送图片进行连通性测试'**
+  String get setupVisionConfigured;
+
+  /// No description provided for @setupAsrTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'转写渠道'**
+  String get setupAsrTitle;
+
+  /// No description provided for @setupAsrMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有启用的识别渠道，请选择云端渠道或安装本地模型'**
+  String get setupAsrMissing;
+
+  /// No description provided for @setupAsrConfigured.
+  ///
+  /// In zh, this message translates to:
+  /// **'已有启用的识别渠道；还需音频提取组件，网络、配额和模型运行状态请在转写设置查看'**
+  String get setupAsrConfigured;
+
+  /// No description provided for @setupConfigure.
+  ///
+  /// In zh, this message translates to:
+  /// **'配置'**
+  String get setupConfigure;
+
+  /// No description provided for @setupPdfHelperMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件'**
+  String get setupPdfHelperMissing;
+
+  /// No description provided for @setupPdfUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看'**
+  String get setupPdfUnsupported;
 }
 
 class _AppLocalizationsDelegate

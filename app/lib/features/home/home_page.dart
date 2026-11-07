@@ -23,6 +23,7 @@ import '../courses/course_page.dart';
 import '../notifications/notification_center.dart';
 import '../player/player_page.dart';
 import 'first_course.dart';
+import '../settings/settings_page.dart';
 import '../profile/profile_dialog.dart';
 import '../schedule/schedule_page.dart';
 import '../schedule/schedule_store.dart';
@@ -116,6 +117,24 @@ class _HomePageState extends State<HomePage> {
                   greeting: _greeting(),
                   now: now,
                   compact: compact,
+                ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: ContentWidth(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: pad),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      SettingsNav.open('diagnostics');
+                      ShellScope.of(context).goTo(Tabs.settings);
+                    },
+                    icon: const Icon(Icons.checklist_rounded),
+                    label: Text(l10n.setupTitle),
+                  ),
                 ),
               ),
             ),
@@ -253,7 +272,9 @@ class _HomePageState extends State<HomePage> {
           if (!first)
             _header(
               context,
-              latestTerm.isEmpty ? l10n.commonCourses : l10n.homeThisTermCourses,
+              latestTerm.isEmpty
+                  ? l10n.commonCourses
+                  : l10n.homeThisTermCourses,
               pad,
               action: TextButton(
                 onPressed: () => ShellScope.of(context).goTo(Tabs.courses),
@@ -305,7 +326,11 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-          SliverToBoxAdapter(child: SizedBox(height: Space.huge + MediaQuery.paddingOf(context).bottom)),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: Space.huge + MediaQuery.paddingOf(context).bottom,
+            ),
+          ),
         ],
       ),
     );

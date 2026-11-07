@@ -25,6 +25,7 @@ const json = (v) => JSON.stringify(v, null, 1);
 const enc = encodeURIComponent;
 
 const GUIDE = {
+ setup: `首页 → 功能准备及设置 → 诊断可检查组件。在线播放按需缓冲，不必先下载整段视频；离线播放需下载。转写复用本地视频，没有时获取临时音视频，再用 ffmpeg 提取音频。导入本地视频还需 ffprobe；macOS PDF 导入需应用自带的 PDFKit 辅助程序；Linux/Android 需 pdfinfo、pdftoppm、pdftotext，Windows 画布 PDF 导入尚未支持。助手运行环境和模型配置分开检查；看图还需支持图像的模型或视觉模型。media_tools 只表示可执行文件存在，不代表模型、网络或解码已验证。缺失字段表示未检查。`,
 	overview: `Coursive 是录播课程的桌面/移动学习客户端。课程来自本机导入的视频，或来自已安装的来源插件。主要页面：
 - 首页：继续观看、即将到来的日程、最近课程、下载动态。
 - 课程：全部课程（可置顶、改别名、设颜色），点进课程看节次列表，可多选批量下载。
@@ -263,7 +264,11 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 			parameters: Type.Object({
 				topic: Type.Union(Object.keys(GUIDE).map((k) => Type.Literal(k)), { description: "Feature area" }),
 			}),
-			execute: async (_id, { topic }) => text(GUIDE[topic] ?? GUIDE.overview),
+			execute: async (_id, { topic }) => {
+                if (topic !== "setup") return text(GUIDE[topic] ?? GUIDE.overview);
+                const h = await get("/api/health");
+                return text(`${GUIDE.setup}\n${json({ffmpeg: h.ffmpeg, media_tools: h.media_tools ?? null, pdf_backend: h.pdf_backend ?? null})}`);
+            },
 		},
 		{
 			name: "current_context",
