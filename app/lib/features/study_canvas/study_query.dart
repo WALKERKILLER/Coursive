@@ -20,6 +20,14 @@ Map<String, dynamic> reconcileStudyQuery(
       .where(cards.contains)
       .toSet();
   if (out.containsKey('objects')) out['objects'] = chosen.toList();
+  // The daemon can append lecture subtitles independently of objects.
+  // Removing that binding must also revoke its context flag and time scope.
+  if (!chosen.contains('lecture')) {
+    if (out.containsKey('include_video')) out['include_video'] = false;
+    out.remove('video_ms');
+    out.remove('from_ms');
+    out.remove('to_ms');
+  }
   for (final key in [
     'selections',
     'object_pages',

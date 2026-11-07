@@ -31,7 +31,127 @@ class StaleConversationApi extends fixture.FixtureApi {
   }
 }
 
+Map<String, dynamic> lectureQuery() => {
+  'objects': ['lecture', 'text'],
+  'include_video': true,
+  'video_ms': 5000,
+  'from_ms': 1000,
+  'to_ms': 10000,
+  'object_video_ms': {'lecture': 5000, 'text': 2000},
+  'video_ranges': {
+    'lecture': [1000, 10000],
+    'text': [0, 3000],
+  },
+};
+
+class StaleLectureApi extends StaleConversationApi {
+  StaleLectureApi(super.doc);
+  @override
+  Future<dynamic> studyConversation(String lecture, String id) async => {
+    ...await super.studyConversation(lecture, id) as Map,
+    'query': lectureQuery(),
+  };
+}
+
 void main() {
+  for (final state in [
+    'deleted',
+    'hidden',
+    'unselected',
+    'selected',
+    'disabled',
+  ]) {
+    test('lecture context follows the $state lecture binding', () {
+      final d = StudyDocument()
+        ..layers.add(StudyLayer('hidden', 'hidden', visible: false));
+      for (final id in ['lecture', 'text']) {
+        if (id == 'lecture' && state == 'deleted') continue;
+        d.cards.add(
+          StudyCard(
+            id: id,
+            type: id == 'lecture' ? 'lecture' : 'video',
+            layer: id == 'lecture' && state == 'hidden' ? 'hidden' : 'main',
+            rect: const Rect.fromLTWH(0, 0, 200, 100),
+          ),
+        );
+      }
+      final q = lectureQuery();
+      if (state == 'unselected') q['objects'] = ['text'];
+      if (state == 'disabled') q['include_video'] = false;
+      final before = jsonEncode(q);
+      final fixed = reconcileStudyQuery(q, d);
+      final retained = state == 'selected' || state == 'disabled';
+      expect(fixed['include_video'], state == 'selected');
+      for (final field in ['video_ms', 'from_ms', 'to_ms']) {
+        expect(fixed.containsKey(field), retained);
+        if (retained) expect(fixed[field], q[field]);
+      }
+      expect((fixed['video_ranges'] as Map).containsKey('lecture'), retained);
+      expect(
+        (fixed['object_video_ms'] as Map).containsKey('lecture'),
+        retained,
+      );
+      expect(fixed['video_ranges']['text'], [0, 3000]);
+      expect(fixed['object_video_ms']['text'], 2000);
+      expect(jsonEncode(q), before);
+      expect(reconcileStudyQuery(fixed, d), fixed);
+    });
+  }
+
+  for (final hidden in [false, true]) {
+    testWidgets(
+      'reopened ${hidden ? 'hidden' : 'deleted'} lecture stays out of AI requests',
+      (t) async {
+        final d = StudyDocument()
+          ..layers.add(StudyLayer('hidden', 'hidden', visible: false))
+          ..cards.add(
+            StudyCard(
+              id: 'text',
+              type: 'text',
+              layer: 'main',
+              rect: const Rect.fromLTWH(0, 0, 200, 100),
+              text: '保留的资料',
+            ),
+          );
+        if (hidden) {
+          d.cards.add(
+            StudyCard(
+              id: 'lecture',
+              type: 'lecture',
+              layer: 'hidden',
+              rect: const Rect.fromLTWH(300, 0, 200, 100),
+            ),
+          );
+        }
+        final api = StaleLectureApi(d.json());
+        await fixture.open(t, api);
+        await t.tap(find.byTooltip('添加模块'));
+        await t.pumpAndSettle();
+        await t.tap(find.widgetWithText(PopupMenuItem<String>, 'AI 对话'));
+        await t.pumpAndSettle();
+        expect(api.request, isNull);
+        expect(api.conversations.values.single['draft'], '保留我的问题');
+        await t.tap(find.byTooltip('发送').last);
+        await t.pumpAndSettle();
+        for (final q in [
+          api.selection!,
+          api.conversations.values.single['query'],
+          api.request!['selection'],
+        ]) {
+          expect(q['objects'], ['text']);
+          expect(q['include_video'], false);
+          for (final field in ['video_ms', 'from_ms', 'to_ms']) {
+            expect(q.containsKey(field), false);
+          }
+          expect(q['video_ranges'].containsKey('lecture'), false);
+          expect(q['object_video_ms'].containsKey('lecture'), false);
+        }
+        await t.pumpWidget(const SizedBox());
+        await t.pumpAndSettle();
+      },
+    );
+  }
+
   test(
     'stale references are removed without widening scope or changing the input',
     () {
