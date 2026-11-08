@@ -1,5 +1,9 @@
 import { Type } from "typebox";
 
+function renderedText(answer) {
+	return answer.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]*`/g, "");
+}
+
 export const COURSE_TOOLS = [
 	{
 		name: "search_course_materials",
@@ -56,20 +60,32 @@ export class CanvasCourseSources {
 		const number = this.evidence.size + 1;
 		const id = "e" + number;
 		const location = result.page ? "第" + result.page + "页"
-			: result.time_start_ms ? Math.floor(result.time_start_ms / 1000) + "秒" : "文本摘录";
+			: result.time_end_ms > (result.time_start_ms ?? 0) ? Math.floor((result.time_start_ms ?? 0) / 1000) + "–" + Math.ceil(result.time_end_ms / 1000) + "秒" : "文本摘录";
 		const label = [result.lecture, result.label, location].filter(Boolean).join(" · ");
 		this.evidence.set(id, { id, number, label, source: result });
 		return { ...result, citation: "[" + number + "](coursive://citation/" + id + ")" };
 	}
 
 	citations(answer) {
-		const used = new Set([...answer.matchAll(/\[[^\]\n]+\]\(coursive:\/\/citation\/(e\d+)\)/g)].map(m => m[1]));
+		const used = new Set([...renderedText(answer).matchAll(/\[[^\]\n]+\]\(coursive:\/\/citation\/(e\d+)\)/g)].map(m => m[1]));
 		return [...this.evidence.values()].filter(e => used.has(e.id)).map(e => {
 			// Persist an identity and range. Re-read the text on navigation instead
 			// of duplicating up to 12000 characters per citation in every turn.
 			const { text, snippet, ...source } = e.source;
 			return { ...e, source };
 		});
+	}
+
+	// Check literal quotations immediately associated with a citation. This is
+	// a narrow integrity check, not a semantic verifier for paraphrased answers.
+	invalidQuotations(answer) {
+		const invalid = new Set();
+		const compact = text => text.replace(/[\s\p{P}]/gu, "");
+		for (const match of renderedText(answer).matchAll(/“([^”]{12,})”[ \t，。:：,.;；]*\[[^\]\n]+\]\(coursive:\/\/citation\/(e\d+)\)/g)) {
+			const source = this.evidence.get(match[2]);
+			if (source && !compact(source.source.text).includes(compact(match[1]))) invalid.add(match[2]);
+		}
+		return [...invalid];
 	}
 
 	sanitize(answer) {

@@ -6384,9 +6384,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyUnknownVersion => '画布版本不受支持';
 
   @override
-  String studyLocalVideoError(String error) {
-    return '无法播放此视频：$error';
-  }
+  String get studyLocalVideoError => '无法播放此视频。请检查本地文件后重新打开画布。';
 
   @override
   String get localCourse => '本地课程';

@@ -185,23 +185,36 @@ func (l *Library) ReadStudyCourseSource(ctx context.Context, lecture string, q S
 	if end < len(r) {
 		out.NextOffset = end
 	}
-	// Timestamp precision requires matching indexed words in the real local file.
-	if item.Category == "transcript" && q.Source.TimeStartMs > 0 {
-		segs, e := l.Store.Segments(ctx, item.LectureID, q.Source.TimeStartMs, q.Source.TimeStartMs+1)
+	// Bound every verified sentence in the excerpt, not only the search hit.
+	// Repeated text cannot establish a unique transcript time.
+	if item.Category == "transcript" {
+		segs, e := l.Store.Segments(ctx, item.LectureID, 0, 0)
 		if e != nil {
 			return out, e
 		}
+		matched := false
 		for _, seg := range segs {
-			if seg.StartMs == q.Source.TimeStartMs && strings.Contains(out.Text, seg.Text) {
+			if seg.Text == "" || !strings.Contains(out.Text, seg.Text) || strings.Count(string(text), seg.Text) != 1 {
+				continue
+			}
+			at := strings.Index(string(text), seg.Text)
+			start := len([]rune(string(text[:at])))
+			stop := start + len([]rune(seg.Text))
+			if start < q.Offset || stop > end {
+				continue
+			}
+			if !matched || seg.StartMs < out.TimeStartMs {
 				out.TimeStartMs = seg.StartMs
-				out.TimeEndMs = seg.EndMs
-				for _, candidate := range items {
-					if candidate.LectureID == item.LectureID && candidate.Category == "video" {
-						out.VideoPath = candidate.Path
-						break
-					}
+			}
+			out.TimeEndMs = max(out.TimeEndMs, seg.EndMs)
+			matched = true
+		}
+		if matched {
+			for _, candidate := range items {
+				if candidate.LectureID == item.LectureID && candidate.Category == "video" {
+					out.VideoPath = candidate.Path
+					break
 				}
-				break
 			}
 		}
 	}

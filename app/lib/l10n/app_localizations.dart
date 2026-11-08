@@ -11119,8 +11119,8 @@ abstract class AppLocalizations {
   /// No description provided for @studyLocalVideoError.
   ///
   /// In zh, this message translates to:
-  /// **'无法播放此视频：{error}'**
-  String studyLocalVideoError(String error);
+  /// **'无法播放此视频。请检查本地文件后重新打开画布。'**
+  String get studyLocalVideoError;
 
   /// No description provided for @localCourse.
   ///

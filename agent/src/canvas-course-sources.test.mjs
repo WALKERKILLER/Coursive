@@ -114,7 +114,7 @@ test('history obeys retry cutoff, scope boundary, and does not turn old citation
   {id:'future',state:'done',context_scope:'course',question:'future',answer:'future',attachments:[{id:'future',sha256:hash}]},
  ];
  const runner=new CanvasRunner({currentModel:async()=>({id:'fixture'}),runtime:{completeSimple:async(_model,request)=>{
-  const text=JSON.stringify(request.messages);assert.match(text,/allowed/);assert.doesNotMatch(text,/revoked|future|selected/);
+  const text=JSON.stringify(request.messages);assert.match(text,/allowed/);assert.doesNotMatch(text,/revoked|future|selected|coursive:\/\/citation/);
   return {content:[{type:'text',text:'not re-read [1](coursive://citation/e1)'}],stopReason:'stop'};
  }}},{call:async(_method,path)=>path.endsWith('/context')?context:{turns},loadImage:async()=>{throw Error('must not load inaccessible history');}});
  const done=await finish(runner,(await runner.start({lecture_id:'lecture',conversation_id:'same',turn_id:'retry',question:'retry',selection:{},context_scope:'course',attachments:[]})).id);
@@ -139,4 +139,41 @@ test('a new screenshot leaves older saved screenshots discoverable for explicit 
  loadImage:async(path)=>{loaded.push(path);return {bytes,mimeType:'image/png'};},vision:async()=>({mode:'image',content:[{type:'image',data:'pixels',mimeType:'image/png'}]})});
  const done=await finish(runner,(await runner.start({lecture_id:'lecture',conversation_id:'same',selection:{},question:'compare to old',context_scope:'course',attachments:[{id:'new',sha256:hash}]})).id);
  assert.equal(done.state,'done');assert.equal(loaded.length,2);assert.match(loaded[0],/new\/image$/);assert.match(loaded[1],/old\/image$/);
+});
+
+test('transcript citation label covers the verified interval including zero', async () => {
+ const timed={...evidence,time_end_ms:12345};
+ const scope=new CanvasCourseSources(async(method,path)=>path.endsWith('/search')?[source]:timed,'/course');
+ await scope.execute('search_course_materials',{query:'x'});
+ await scope.execute('read_course_source',{source_id:'file'});
+ assert.match(scope.citations('[1](coursive://citation/e1)')[0].label,/0–13秒/);
+});
+
+test('a copied historical quotation cannot attach to a new source with the same evidence ID',async()=>{
+ const passage='这段原文介绍银行家算法的安全性检查。';
+ const actual={...evidence,text:passage,end:[...passage].length};
+ let round=0;
+ const runner=new CanvasRunner({currentModel:async()=>({id:'fixture'}),runtime:{completeSimple:async(_model,request)=>{
+  round++;
+  if(round===1)return {content:[{type:'toolCall',id:'s',name:'search_course_materials',arguments:{query:'banker'}}]};
+  if(round===2)return {content:[{type:'toolCall',id:'r',name:'read_course_source',arguments:{source_id:'file'}}]};
+  if(round===3)return {content:[{type:'text',text:'“这段完全不同的旧引文介绍信号量与进程同步。”[1](coursive://citation/e1)'}],stopReason:'stop'};
+  assert.match(request.messages.at(-1).content[0].text,/系统引用核验/);
+  return {content:[{type:'text',text:`“${passage}”[1](coursive://citation/e1)`}],stopReason:'stop'};
+ }}},{call:async(_method,path)=>path.endsWith('/context')?context:path.endsWith('/search')?[source]:actual});
+ const done=await finish(runner,(await runner.start({lecture_id:'lecture',selection:{},question:'quote',context_scope:'course'})).id);
+ assert.equal(done.state,'done');assert.equal(round,4);assert.match(done.answer,/银行家算法/);assert.equal(done.citations.length,1);
+ assert(done.trace.some(t=>t.tool==='validate_citations'&&t.status==='retry'));
+});
+
+test('literal quote checks ignore punctuation and code examples without treating topic labels as quotes',async()=>{
+ const passage='我们来看一道银行家算法的练习题啊，这个题非常重要。';
+ const actual={...evidence,text:passage,end:[...passage].length};
+ const scope=new CanvasCourseSources(async(_m,path)=>path.endsWith('/search')?[source]:actual,'/course');
+ await scope.execute('search_course_materials',{query:'x'});
+ await scope.execute('read_course_source',{source_id:'file'});
+ assert.deepEqual(scope.invalidQuotations('“我们来看一道银行家算法的练习题啊。”[1](coursive://citation/e1)'),[]);
+ assert.deepEqual(scope.invalidQuotations('“这是不存在于该来源的另一段直接引文。”[1](coursive://citation/e1)'),['e1']);
+ assert.deepEqual(scope.citations('example `[1](coursive://citation/e1)`'),[]);
+ assert.deepEqual(scope.invalidQuotations('“下面这个题目的名字是银行家算法的例子”，见如下解释。 [1](coursive://citation/e1)'),[]);
 });

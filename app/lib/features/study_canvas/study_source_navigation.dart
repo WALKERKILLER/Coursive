@@ -106,8 +106,7 @@ extension _StudySourceNavigation on StudyCanvasState {
         } else {
           final local = _localVideoKeys[card.id]?.currentState;
           if (local != null) {
-            await local.player.seek(Duration(milliseconds: a.timeStartMs));
-            await local.player.pause();
+            await local.seekPaused(a.timeStartMs);
           }
           _localVideoTimes[card.id] = a.timeStartMs;
         }
@@ -261,6 +260,7 @@ extension _StudySourceNavigation on StudyCanvasState {
         d.checkpoint();
         d.cards.add(card);
         d.changed();
+        if (!await flush() || !mounted || document != d) return;
         _update(() {});
         await WidgetsBinding.instance.endOfFrame;
       }

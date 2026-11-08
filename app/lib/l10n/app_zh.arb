@@ -3962,14 +3962,7 @@
   },
   "studyDefaultLayer": "学习笔记",
   "studyUnknownVersion": "画布版本不受支持",
-  "studyLocalVideoError": "无法播放此视频：{error}",
-  "@studyLocalVideoError": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "studyLocalVideoError": "无法播放此视频。请检查本地文件后重新打开画布。",
   "localCourse": "本地课程",
   "localCourseCreate": "新建课程",
   "localCourseName": "课程名称",

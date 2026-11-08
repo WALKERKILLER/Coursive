@@ -71,6 +71,16 @@ class NavigationApi extends fixture.FixtureApi {
   int resolves = 0;
   bool unavailable = false;
   Completer<void>? gate;
+  Completer<void>? saveGate;
+  @override
+  Future<dynamic> saveStudyCanvas(
+    String id,
+    Map<String, dynamic> document,
+  ) async {
+    if (saveGate != null) await saveGate!.future;
+    return super.saveStudyCanvas(id, document);
+  }
+
   @override
   Future<dynamic> resolveStudySource(String lecture, Map source) async {
     resolves++;
@@ -81,6 +91,37 @@ class NavigationApi extends fixture.FixtureApi {
 }
 
 void main() {
+  testWidgets(
+    'source navigation waits for the imported reference to be saved',
+    (t) async {
+      final api = NavigationApi();
+      final key = await fixture.open(t, api);
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+      await t.pumpAndSettle();
+      api.saveGate = Completer<void>();
+      final d = key.currentState!.document!,
+          before = key.currentState!.document!.camera;
+      await t.tap(
+        find.widgetWithText(ActionChip, 'Lecture 1 · notes.txt · 文本摘录'),
+      );
+      await t.pump();
+      await t.pump(const Duration(seconds: 1));
+      expect(d.camera, before);
+      expect(find.text('返回提问处'), findsNothing);
+      api.saveGate!.complete();
+      await t.pumpAndSettle();
+      expect(
+        (api.doc['objects'] as List).where(
+          (c) => c['original_path'] == evidence(1)['path'],
+        ),
+        hasLength(1),
+      );
+      expect(find.text('返回提问处'), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+    },
+  );
+
   testWidgets('a user pan interrupts citation navigation immediately', (
     t,
   ) async {

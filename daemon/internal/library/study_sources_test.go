@@ -217,3 +217,18 @@ func TestTranscriptEvidenceStartsAtActualHitAndBoundsVideoTime(t *testing.T) {
 		t.Fatal("timestamp advertised without words", short, e)
 	}
 }
+
+func TestTranscriptReadTimeCoversLaterQuotedSentences(t *testing.T) {
+	l, segs := reviewFixture(t)
+	ctx := context.Background()
+	lec, _ := l.Store.Lecture(ctx, "one")
+	_ = os.WriteFile(l.Abs(lec.Dir+"/recording.mp4"), []byte("local video"), 0600)
+	out, e := l.ReadStudyCourseSource(ctx, "one", StudySourceRead{Source: StudyCourseSource{Path: lec.Dir + "/transcript.md", TimeStartMs: segs[0].StartMs}})
+	if e != nil || out.TimeStartMs != segs[0].StartMs || out.TimeEndMs != segs[1].EndMs || out.VideoPath == "" {
+		t.Fatal(out, e)
+	}
+	resolved, e := l.ResolveStudyCourseSource(ctx, "one", StudySourceRead{Source: out})
+	if e != nil || resolved.TimeEndMs != out.TimeEndMs {
+		t.Fatal(resolved, e)
+	}
+}

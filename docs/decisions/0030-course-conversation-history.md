@@ -21,7 +21,7 @@ Preserve conversational continuity and saved pixels while retaining conversation
 
 ## Decision Outcome
 
-Use the last eight completed course turns before the current saved turn. A selected-scope turn is a boundary. Retain exact input hashes for run identity; selected-mode legacy history still requires an exact match. The current turn ID prevents retry from reading later messages. New screenshots enter model input directly; a text-only follow-up rereads the two most recent distinct saved screenshots. Other screenshots in the bounded history are available through the visual tool. Every read validates the saved attachment against the current lecture endpoint and its hash. Historical answers never supply new citation authority.
+Use the last eight completed course turns before the current saved turn. A selected-scope turn is a boundary. Retain exact input hashes for run identity; selected-mode legacy history still requires an exact match. The current turn ID prevents retry from reading later messages. New screenshots enter model input directly; a text-only follow-up rereads the two most recent distinct saved screenshots. Other screenshots in the bounded history are available through the visual tool. Every read validates the saved attachment against the current lecture endpoint and its hash. Historical answers never supply new citation authority; their run-local citation links are removed before model replay so a reused evidence ID cannot be mistaken for its earlier source.
 
 ## Pros and Cons of the Options
 

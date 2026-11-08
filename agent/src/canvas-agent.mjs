@@ -26,7 +26,7 @@ export function canvasContextKey(context,{allow_images=false,visuals=[],attachme
 export function conversationMessages(turns,key,{course=false}={}) {
  return (turns??[]).filter(t=>["done","applied","pending"].includes(t.state)&&(course?t.context_scope==="course":t.context_key===key)&&typeof t.question==="string"&&typeof t.answer==="string").slice(-8).flatMap(t=>[
  {role:"user",timestamp:0,content:[{type:"text",text:t.question.slice(0,4000)}]},
- {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.slice(0,6000)}],stopReason:"stop",
+ {role:"assistant",timestamp:0,content:[{type:"text",text:t.answer.replace(/\[([^\]\n]+)\]\(coursive:\/\/citation\/[^)]+\)/g,"[历史来源，需重新读取]").slice(0,6000)}],stopReason:"stop",
   // Saved turns retain text, not provider usage. Zero lets the SDK estimate
   // context from text without inventing historical token counts or charges.
   usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}
@@ -38,7 +38,7 @@ const SYSTEM = `你是 Coursive 的学习助手，在一个持久对话模块中
 当前用户消息中的截图或标明“识图模型观察”的内容由系统从已校验附件提供，属于本轮已读取的视觉输入，不是用户手打的题面。本轮没有新附件时会重新提供前文最近的截图，不能因为没有新上传就称没有上下文。可直接据此回答；需要再次查看时，用 attachments 清单中的 source_id 调用 inspect_canvas_region。sources 是独立的画布对象清单，sources 为空不否定 attachments，也不限制课程检索。
 没有随消息提供的扫描件或手写需用 inspect_canvas_region 按已授权来源读取；unavailable 仅说明对应来源读取失败，不否定已提供的其他附件。不要猜测模糊细节或伪造内容、引用，也不要把内部工具名或授权术语当作给用户的解释。
 结合课堂时用 get_video_context 读取绑定时间段；缺失字幕时只能提取已选本地短片段（最多180秒）按需转录。缺少组件或本地文件时说明限制，不上传完整视频。
-课程模式可使用 search_course_materials 搜索当前课程本地材料，再 read_course_source 读取证据；不能把搜索摘要当作已读资料。课程引用必须原样使用工具返回的 [编号](coursive://citation/eN)，不得编造引用编号。
+课程模式可使用 search_course_materials 搜索当前课程本地材料，再 read_course_source 读取证据；不能把搜索摘要当作已读资料，也不能把本次未命中说成整门课不存在。带时间的引用覆盖工具返回的起止区间，不把搜索命中时刻当作所引句子的精确时刻。课程引用必须原样使用工具返回的 [编号](coursive://citation/eN)，不得编造引用编号。
 引用必须来自本轮实际读取的来源，在回答中写明资料名称及页码或时间。界面在回答下提供已读来源定位按钮。不要声称理解未读取的资料，不执行 HTML/JavaScript。单次最多20个工具调用。`;
 
 function requireText(v,max=240){if(typeof v!=="string"||!v.trim()||v.length>max)throw new Error("字段缺失或过长");return v;}
@@ -201,7 +201,7 @@ export class CanvasRunner {
    view.context_key=canvasContextKey(context,request);
    const history=conversationMessages(priorTurns,view.context_key,{course:!!course});
    const messages=[...history,{role:"user",timestamp:Date.now(),content:[{type:"text",text:request.question},...snapshotContent]}];
-   let calls=0;
+   let calls=0,quoteRepairs=0;
    for(let round=0;round<12;round++){
     signal.throwIfAborted();
     let res;
@@ -213,6 +213,14 @@ export class CanvasRunner {
     messages.push(res);const toolCalls=res.content.filter(c=>c.type==="toolCall");
     if(!toolCalls.length){
      view.answer=res.content.filter(c=>c.type==="text").map(c=>c.text).join("").slice(0,12000);
+     const invalidQuotes=course?.invalidQuotations(view.answer)??[];
+     if(invalidQuotes.length){
+      view.answer="";
+      if(++quoteRepairs>2)throw new Error("引文与已读来源不一致，请缩小问题后重试");
+      trace("validate_citations","retry");
+      messages.push({role:"user",timestamp:Date.now(),content:[{type:"text",text:`系统引用核验：${invalidQuotes.join(', ')} 中找不到回答的直接引文。请重新核对本轮 read_course_source 的 text 和 citation，必要时重新读取；不要把前文的原句绑定到另一份本轮来源。修正后给出完整回答，无法核实时不要声称是原文。`}]});
+      continue;
+     }
      view.answer=course?course.sanitize(view.answer):view.answer.replace(/\[([^\]\n]+)\]\(coursive:\/\/citation\/[^)]+\)/g,'[$1]');
      view.citations=course?.citations(view.answer)??[];
      view.sources=context.sources.filter(s=>scope.seen.has(s.id)).map(s=>({...s.anchor,label:s.label}));

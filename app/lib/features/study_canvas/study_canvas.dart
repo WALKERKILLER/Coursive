@@ -2285,6 +2285,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                   c.id,
                                 )
                               : widget.api.fileUrl(c.path),
+                          prepare: flush,
                           initialMs: _localVideoTimes[c.id] ?? 0,
                           onPosition: (ms) => _localVideoTimes[c.id] = ms,
                         ),
@@ -2364,10 +2365,12 @@ class _LocalVideo extends StatefulWidget {
     super.key,
     required this.url,
     required this.initialMs,
+    required this.prepare,
     required this.onPosition,
   });
   final String url;
   final int initialMs;
+  final Future<bool> Function() prepare;
   final ValueChanged<int> onPosition;
   @override
   State<_LocalVideo> createState() => _LocalVideoState();
@@ -2378,29 +2381,43 @@ class _LocalVideoState extends State<_LocalVideo> {
   late final controller = VideoController(player);
   StreamSubscription? _errors;
   StreamSubscription? _positions;
-  String? _error;
+  bool _failed = false;
+  late final Future<bool> ready;
   @override
   void initState() {
     super.initState();
     _errors = player.stream.error.listen((error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted) setState(() => _failed = true);
     });
     _positions = player.stream.position.listen(
       (p) => widget.onPosition(p.inMilliseconds),
     );
-    unawaited(_open());
+    ready = _open();
   }
 
-  Future<void> _open() async {
+  Future<bool> _open() async {
     try {
+      // The media route resolves saved canvas objects. Publishing the reference
+      // must finish before the player requests its authenticated URL.
+      if (!await widget.prepare()) throw const FormatException('Save failed');
+      if (!mounted) return false;
       await controller.platform.future;
-      if (!mounted) return;
+      if (!mounted) return false;
       await player.open(Media(widget.url), play: false);
       if (mounted && widget.initialMs > 0)
         await player.seek(Duration(milliseconds: widget.initialMs));
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      return mounted && !_failed;
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+      return false;
     }
+  }
+
+  Future<void> seekPaused(int milliseconds) async {
+    if (!await ready || !mounted || _failed)
+      throw const FormatException('Video unavailable');
+    await player.seek(Duration(milliseconds: milliseconds));
+    await player.pause();
   }
 
   @override
@@ -2412,7 +2429,7 @@ class _LocalVideoState extends State<_LocalVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => _error == null
+  Widget build(BuildContext context) => !_failed
       ? MaterialDesktopVideoControlsTheme(
           normal: const MaterialDesktopVideoControlsThemeData(
             modifyVolumeOnScroll: false,
@@ -2451,7 +2468,7 @@ class _LocalVideoState extends State<_LocalVideo> {
             ),
           ),
         )
-      : Center(child: Text(l10n.studyLocalVideoError(_error!)));
+      : Center(child: Text(l10n.studyLocalVideoError));
 }
 
 /// The paper colour as shown: in dark mode each paper keeps a trace of its
