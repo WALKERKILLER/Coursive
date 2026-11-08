@@ -18,7 +18,8 @@ extension _StudySourceNavigation on StudyCanvasState {
   /// that runs joins it instead of importing the material twice.
   Future<void> _followCourseEvidence(Map evidence) {
     final source = Map<String, dynamic>.from(evidence['course_source'] as Map);
-    final key = '${source['id']}:${source['offset']}:${source['end']}';
+    final key =
+        '${source['id']}:${source['fingerprint']}:${source['offset']}:${source['end']}';
     return _sourceNavigations.putIfAbsent(
       key,
       () => _resolveCourseEvidence(
@@ -49,15 +50,21 @@ extension _StudySourceNavigation on StudyCanvasState {
       final video = source['video_path'] != null;
       final excerpt = !video && !exactPDF;
       final identity = excerpt
-          ? 'excerpt:${source['id']}:${source['offset']}:${source['fingerprint']}'
+          ? 'excerpt:${source['id']}:${source['offset']}:${source['end']}:${source['fingerprint']}'
           : '';
+      final legacyIdentity =
+          'excerpt:${source['id']}:${source['offset']}:${source['fingerprint']}';
       var card = d.cards
           .where(
             (c) =>
                 c.originalPath == path &&
                 c.sourceLectureId == lecture &&
                 (excerpt
-                    ? c.documentId == identity
+                    ? (c.documentId == identity ||
+                          // Legacy cards omitted the end offset. Reuse only an
+                          // unchanged full excerpt, never a shorter prefix.
+                          c.documentId == legacyIdentity &&
+                              c.contentText == text)
                     : c.type == (video ? 'video' : 'pdfdoc')),
           )
           .firstOrNull;
