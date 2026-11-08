@@ -70,6 +70,9 @@ class NavigationApi extends fixture.FixtureApi {
     };
   }
   int resolves = 0;
+  final texts = <String, String>{
+    for (var i = 1; i <= 2; i++) 'file-$i:0:18': 'Original passage $i',
+  };
   bool unavailable = false;
   Completer<void>? gate;
   Completer<void>? saveGate;
@@ -87,7 +90,11 @@ class NavigationApi extends fixture.FixtureApi {
     resolves++;
     if (gate != null) await gate!.future;
     if (unavailable) throw Exception('source changed');
-    return jsonDecode(jsonEncode(source));
+    // Saved evidence omits text; the real resolve endpoint reads it again.
+    return {
+      ...jsonDecode(jsonEncode(source)) as Map,
+      'text': texts['${source['id']}:${source['offset']}:${source['end']}'],
+    };
   }
 }
 
@@ -104,6 +111,76 @@ Future<void> follow(WidgetTester t, int n) =>
 final back = find.byKey(const ValueKey('study-return'));
 
 void main() {
+  for (final concurrent in [false, true]) {
+    testWidgets(
+      'different excerpt lengths stay distinct (concurrent: $concurrent)',
+      (t) async {
+        final api = NavigationApi();
+        final turns = api.conversations['saved']!['turns'] as List;
+        final citations = (turns.single['result'] as Map)['citations'] as List;
+        final longer = '${evidence(1)['text']} with additional context';
+        api.texts['file-1:0:${longer.runes.length}'] = longer;
+        citations[1]['source'] = {
+          ...evidence(1),
+          'text': longer,
+          'end': longer.runes.length,
+        };
+        final key = await fixture.open(t, api);
+        if (!concurrent) {
+          key.currentState!.document!.cards.add(
+            StudyCard(
+              id: 'legacy-excerpt',
+              type: 'text',
+              layer: 'main',
+              rect: const Rect.fromLTWH(400, 400, 480, 360),
+              text: evidence(1)['text'] as String,
+              originalPath: evidence(1)['path'] as String,
+              sourceLectureId: evidence(1)['lecture_id'] as String,
+              documentId: 'excerpt:file-1:0:fingerprint-1',
+            ),
+          );
+        }
+        await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+        await t.pumpAndSettle();
+        if (concurrent) api.gate = Completer<void>();
+        await follow(t, 1);
+        if (concurrent) {
+          await t.pump();
+        } else {
+          await t.pumpAndSettle();
+          expect(
+            key.currentState!.document!.cards
+                .where((c) => c.type == 'text')
+                .single
+                .id,
+            'legacy-excerpt',
+          );
+        }
+        await follow(t, 2);
+        await t.pump();
+        if (concurrent) {
+          // Different ranges must both resolve; only identical clicks coalesce.
+          final resolves = api.resolves;
+          api.gate!.complete();
+          await t.pumpAndSettle();
+          expect(resolves, 2);
+        } else {
+          await t.pumpAndSettle();
+        }
+        final cards = key.currentState!.document!.cards.where(
+          (c) => c.type == 'text',
+        );
+        expect(
+          cards.map((c) => c.text),
+          unorderedEquals([evidence(1)['text'], longer]),
+        );
+        expect(back, findsOneWidget);
+        await t.pumpWidget(const SizedBox());
+        await t.pumpAndSettle();
+      },
+    );
+  }
+
   testWidgets(
     'source navigation waits for the imported reference to be saved',
     (t) async {
