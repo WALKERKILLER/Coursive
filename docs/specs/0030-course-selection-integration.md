@@ -1,11 +1,12 @@
 # Course selection integrated with grounded answers
 
 Artifact-Version: 1
-Status: Draft
+Status: Approved
+Approved-By: maintainer, explicit request on 2026-11-08 to merge pull request 32 and release it
 
 ## Intent
 
-[0029](0029-course-selection-conversations.md) (pull request 31) and [0027](0027-grounded-canvas-answers.md) / [0028](0028-reviewed-outlines-and-paged-export.md) (epic 18) were built in parallel for the same canvas conversation. They disagree on four points: how a selection is asked about, whether a conversation reads the whole course by default, how citations are written, and how a learner gets back from a followed source. This draft keeps one of each, following the settled epic 18 route, and keeps everything else from 0029. It needs a maintainer's approval because it changes the default reading scope that 0029 approved.
+[0029](0029-course-selection-conversations.md) (pull request 31) and [0027](0027-grounded-canvas-answers.md) / [0028](0028-reviewed-outlines-and-paged-export.md) (epic 18) were built in parallel for the same canvas conversation. They disagree on four points: how a selection is asked about, whether a conversation reads the whole course by default, how citations are written, and how a learner gets back from a followed source. This spec keeps one of each, following the settled epic 18 route, and keeps everything else from 0029. It changes the default reading scope that 0029 approved, which is why it needed a maintainer's approval.
 
 Non-goals: new model capabilities, new storage formats beyond 0029's version 2 conversation, removing the legacy `visuals` path.
 
@@ -31,4 +32,4 @@ Node host: course reads issue evidence through `CanvasToolScope.issue`; the quot
 
 ## Evidence
 
-Pending approval. Deterministic tests: [course evidence and history](../../agent/src/canvas-course-sources.test.mjs), [daemon validation](../../daemon/internal/library/study_conversation_test.go), [asking and screenshots](../../app/test/study_quick_question_test.dart), [course and legacy navigation](../../app/test/study_source_navigation_test.dart), [region editing](../../app/test/study_region_resize_test.dart).
+Deterministic tests: [course evidence and history](../../agent/src/canvas-course-sources.test.mjs), [daemon validation](../../daemon/internal/library/study_conversation_test.go), [asking and screenshots](../../app/test/study_quick_question_test.dart), [course and legacy navigation](../../app/test/study_source_navigation_test.dart), [region editing](../../app/test/study_region_resize_test.dart).
