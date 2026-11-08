@@ -13694,6 +13694,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'下一页'**
   String get outlineNextPage;
+
+  /// No description provided for @studySourcesCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 份资料'**
+  String studySourcesCount(int count);
+
+  /// No description provided for @studySourcesReading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读 · {label}'**
+  String studySourcesReading(String label);
+
+  /// No description provided for @studySourcesShow.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开资料列表'**
+  String get studySourcesShow;
+
+  /// No description provided for @studySourcesHide.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起资料列表'**
+  String get studySourcesHide;
 }
 
 class _AppLocalizationsDelegate

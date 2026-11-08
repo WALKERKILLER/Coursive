@@ -920,16 +920,20 @@ class _StageViewState extends State<_StageView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Pulse(color: cs.primary),
+                    const ReadingOrb(),
                     const SizedBox(width: Space.sm),
                     Flexible(
-                      child: Text(
-                        _stepLabel(widget.live, widget.sources),
-                        style: tt.labelLarge?.copyWith(
-                          color: cs.onSurfaceVariant,
+                      child: ReadingShimmer(
+                        active: true,
+                        color: cs.onSurfaceVariant,
+                        child: Text(
+                          _stepLabel(widget.live, widget.sources),
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -1107,90 +1111,73 @@ class _StageViewState extends State<_StageView>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (sources.isNotEmpty || widget.loading)
-              SizedBox(
-                height: 36,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Space.xs,
-                        ),
-                        children: [
-                          for (final s in sources)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.only(
-                                end: Space.xs,
-                              ),
-                              child: _SourcePill(
-                                source: s,
-                                reading:
-                                    _readingNow(
-                                      widget.live,
-                                      widget.sources,
-                                    ).contains(
-                                      '${(s['anchor'] as Map?)?['object_id']}',
-                                    ),
-                                onFocus: () => owner._focusSource(
-                                  StudyAnchor.fromJson(s['anchor'] as Map),
-                                ),
-                                onEditTime:
-                                    s['kind'] == 'video' &&
-                                        !widget.busy &&
-                                        !widget.loading &&
-                                        widget.onEditVideo != null
-                                    ? () => widget.onEditVideo!(s)
-                                    : null,
-                                onRemove:
-                                    widget.busy ||
-                                        widget.loading ||
-                                        widget.onRemoveSource == null
-                                    ? null
-                                    : () => widget.onRemoveSource!(s),
-                                onHover: (on) => setState(
-                                  () => _focusSource = on
-                                      ? '${(s['anchor'] as Map?)?['object_id']}'
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          if (widget.loading)
-                            const Center(
-                              child: SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                        ],
+              _SourceTray(
+                sources: sources.toList(),
+                loading: widget.loading,
+                reading: _readingNow(widget.live, widget.sources),
+                build: (s, {required bool row}) {
+                  final id = '${(s['anchor'] as Map?)?['object_id']}';
+                  final reading = _readingNow(
+                    widget.live,
+                    widget.sources,
+                  ).contains(id);
+                  void onHover(bool on) =>
+                      setState(() => _focusSource = on ? id : null);
+                  void onFocus() => owner._focusSource(
+                    StudyAnchor.fromJson(s['anchor'] as Map),
+                  );
+                  final onEditTime =
+                      s['kind'] == 'video' &&
+                          !widget.busy &&
+                          !widget.loading &&
+                          widget.onEditVideo != null
+                      ? () => widget.onEditVideo!(s)
+                      : null;
+                  final onRemove =
+                      widget.busy ||
+                          widget.loading ||
+                          widget.onRemoveSource == null
+                      ? null
+                      : () => widget.onRemoveSource!(s);
+                  return row
+                      ? _SourceRow(
+                          source: s,
+                          reading: reading,
+                          onFocus: onFocus,
+                          onHover: onHover,
+                          onEditTime: onEditTime,
+                          onRemove: onRemove,
+                        )
+                      : _SourcePill(
+                          source: s,
+                          reading: reading,
+                          onFocus: onFocus,
+                          onHover: onHover,
+                          onEditTime: onEditTime,
+                          onRemove: onRemove,
+                        );
+                },
+                trailing: [
+                  if (widget.allowImages != null)
+                    Tooltip(
+                      message: l10n.studyAllowImagesHint,
+                      child: FilterChip(
+                        avatar: const Icon(Icons.visibility_outlined, size: 16),
+                        label: Text(l10n.studyAllowImages),
+                        selected: widget.allowImages!,
+                        showCheckmark: false,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: widget.busy ? null : widget.onAllowImages,
                       ),
                     ),
-                    if (widget.allowImages != null)
-                      Tooltip(
-                        message: l10n.studyAllowImagesHint,
-                        child: FilterChip(
-                          avatar: const Icon(
-                            Icons.visibility_outlined,
-                            size: 16,
-                          ),
-                          label: Text(l10n.studyAllowImages),
-                          selected: widget.allowImages!,
-                          showCheckmark: false,
-                          visualDensity: VisualDensity.compact,
-                          onSelected: widget.busy ? null : widget.onAllowImages,
-                        ),
-                      ),
-                    if (widget.onInspectSources != null)
-                      IconButton(
-                        tooltip: l10n.studyInspectSources,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: widget.onInspectSources,
-                        icon: const Icon(Icons.manage_search_rounded, size: 20),
-                      ),
-                  ],
-                ),
+                  if (widget.onInspectSources != null)
+                    IconButton(
+                      tooltip: l10n.studyInspectSources,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: widget.onInspectSources,
+                      icon: const Icon(Icons.manage_search_rounded, size: 20),
+                    ),
+                ],
               ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1300,6 +1287,357 @@ class _StageViewState extends State<_StageView>
   }
 }
 
+/// The materials bound to a conversation. They sit in one line beside
+/// 「看图」 while they fit; past that the line folds into a count that opens
+/// a list, where every item keeps its name, range and remove button.
+class _SourceTray extends StatefulWidget {
+  const _SourceTray({
+    required this.sources,
+    required this.loading,
+    required this.reading,
+    required this.build,
+    required this.trailing,
+  });
+
+  final List<Map> sources;
+  final bool loading;
+
+  /// Card ids being read now.
+  final Set<String> reading;
+  final Widget Function(Map source, {required bool row}) build;
+  final List<Widget> trailing;
+
+  @override
+  State<_SourceTray> createState() => _SourceTrayState();
+}
+
+class _SourceTrayState extends State<_SourceTray> {
+  bool _open = false;
+  bool _folded = false;
+
+  bool _isReading(Map s) =>
+      widget.reading.contains('${(s['anchor'] as Map?)?['object_id']}');
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sources = widget.sources;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 36,
+          child: Row(
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final scaler = MediaQuery.textScalerOf(context);
+                    final tt = Theme.of(context).textTheme;
+                    final needed = sources.fold<double>(
+                      0,
+                      (w, s) => w + _SourcePill.width(s, tt, scaler) + Space.xs,
+                    );
+                    // One material never folds; its name gives way instead.
+                    final folded =
+                        sources.length > 1 &&
+                        needed > box.maxWidth - Space.xs * 2;
+                    if (folded != _folded) {
+                      // Layout decides; the list follows on the next frame.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        setState(() {
+                          _folded = folded;
+                          if (!folded) _open = false;
+                        });
+                      });
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.xs),
+                      child: Row(
+                        children: [
+                          if (folded)
+                            Flexible(
+                              child: _TraySummary(
+                                sources: sources,
+                                reading: sources.where(_isReading).firstOrNull,
+                                open: _open,
+                                onTap: () => setState(() => _open = !_open),
+                              ),
+                            )
+                          else
+                            for (final s in sources)
+                              Flexible(
+                                child: Padding(
+                                  padding: const EdgeInsetsDirectional.only(
+                                    end: Space.xs,
+                                  ),
+                                  child: widget.build(s, row: false),
+                                ),
+                              ),
+                          if (widget.loading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: Space.xs,
+                              ),
+                              child: SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              ...widget.trailing,
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: Motion.medium2,
+          curve: Motion.emphasized,
+          alignment: Alignment.topCenter,
+          child: _open && _folded
+              ? Container(
+                  key: const ValueKey('study-source-list'),
+                  margin: const EdgeInsets.only(top: Space.xs),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: .04),
+                    borderRadius: BorderRadius.circular(Corners.md),
+                  ),
+                  constraints: const BoxConstraints(maxHeight: 4.5 * 40),
+                  child: Scrollbar(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: Space.xs),
+                      children: [
+                        for (final s in sources) widget.build(s, row: true),
+                      ],
+                    ),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+/// The folded tray: the first materials' icons, how many there are, or
+/// the one being read, and a chevron for the list.
+class _TraySummary extends StatelessWidget {
+  const _TraySummary({
+    required this.sources,
+    required this.reading,
+    required this.open,
+    required this.onTap,
+  });
+
+  final List<Map> sources;
+  final Map? reading;
+  final bool open;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final shown = sources.take(3).toList();
+    final label = reading == null
+        ? l10n.studySourcesCount(sources.length)
+        : l10n.studySourcesReading('${reading!['label']}');
+    return Tooltip(
+      message: open ? l10n.studySourcesHide : l10n.studySourcesShow,
+      child: ReadingGlow(
+        active: reading != null,
+        child: Material(
+          key: const ValueKey('study-source-summary'),
+          color: open
+              ? cs.secondaryContainer
+              : cs.onSurface.withValues(alpha: .06),
+          shape: const StadiumBorder(),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                Space.xs,
+                Space.xs,
+                Space.sm,
+                Space.xs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Overlapping discs, like a stack of cards seen edge on.
+                  SizedBox(
+                    width: 20.0 + 12 * (shown.length - 1),
+                    height: 22,
+                    child: Stack(
+                      children: [
+                        for (final (i, s) in shown.indexed)
+                          PositionedDirectional(
+                            start: 12.0 * i,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: cs.surfaceContainerHighest,
+                                border: Border.all(
+                                  color: cs.surface,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Icon(
+                                _sourceIcon(s),
+                                size: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: Space.sm),
+                  Flexible(
+                    child: ReadingShimmer(
+                      active: reading != null,
+                      color: cs.onSurface,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: Space.xxs),
+                  AnimatedRotation(
+                    turns: open ? .5 : 0,
+                    duration: Motion.short4,
+                    curve: Motion.standard,
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bound material in the opened list: the whole name, its range, whether
+/// it is being read, and a remove button that is always reachable.
+class _SourceRow extends StatelessWidget {
+  const _SourceRow({
+    required this.source,
+    required this.reading,
+    required this.onFocus,
+    required this.onHover,
+    this.onRemove,
+    this.onEditTime,
+  });
+
+  final Map source;
+  final bool reading;
+  final VoidCallback onFocus;
+  final ValueChanged<bool> onHover;
+  final VoidCallback? onRemove, onEditTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final detail = _SourcePill.detail(source);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.xs,
+        vertical: Space.xxs,
+      ),
+      child: ReadingGlow(
+        active: reading,
+        radius: Corners.sm,
+        halo: 4,
+        child: MouseRegion(
+          onEnter: (_) => onHover(true),
+          onExit: (_) => onHover(false),
+          child: Material(
+            key: ValueKey('study-source-row-${source['id']}'),
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Corners.sm),
+              onTap: onFocus,
+              child: SizedBox(
+                height: 36,
+                child: Row(
+                  children: [
+                    const SizedBox(width: Space.sm),
+                    Icon(
+                      _sourceIcon(source),
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Space.sm),
+                    Expanded(
+                      child: Text(
+                        '${source['label']}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelLarge?.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                    if (detail != null)
+                      GestureDetector(
+                        onTap: onEditTime,
+                        child: Text(
+                          detail,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            decoration: onEditTime == null
+                                ? null
+                                : TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dotted,
+                          ),
+                        ),
+                      ),
+                    if (reading) ...[
+                      const SizedBox(width: Space.sm),
+                      const ReadingOrb(size: 8),
+                    ],
+                    if (onRemove != null)
+                      IconButton(
+                        tooltip: l10n.studyRemoveSource,
+                        iconSize: 16,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.close_rounded),
+                      )
+                    else
+                      const SizedBox(width: Space.sm),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A bound material in the composer: tap to find it on the canvas.
 class _SourcePill extends StatelessWidget {
   const _SourcePill({
@@ -1316,104 +1654,128 @@ class _SourcePill extends StatelessWidget {
   final ValueChanged<bool> onHover;
   final VoidCallback? onRemove, onEditTime;
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+  /// The page or time range shown after a material's name.
+  static String? detail(Map source) {
     final a = source['anchor'] as Map? ?? const {};
     final page = a['page'];
-    final label = '${source['label']}';
-    final range = source['kind'] == 'video'
+    if (page != null) return l10n.studySourcePage(page);
+    return source['kind'] == 'video'
         ? l10n.studyVideoRange(
             ((a['time_start_ms'] as num? ?? 0) / 1000).round(),
             ((a['time_end_ms'] as num? ?? 0) / 1000).round(),
           )
         : null;
-    final detail = page != null ? l10n.studySourcePage(page) : range;
+  }
+
+  /// The width [build] lays a pill out at, with its remove button: the
+  /// tray folds when the pills would not fit beside 「看图」.
+  static double width(Map source, TextTheme tt, TextScaler scaler) {
+    double measure(String s, TextStyle? style) => (TextPainter(
+      text: TextSpan(text: s, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout()).width;
+    final d = detail(source);
+    return Space.sm +
+        2 +
+        16 +
+        Space.xs +
+        2 +
+        math.min(160.0, measure('${source['label']}', tt.labelMedium)) +
+        (d == null ? 0 : Space.xs + measure(d, tt.labelSmall)) +
+        28 +
+        2;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final label = '${source['label']}';
+    final detail = _SourcePill.detail(source);
     return MouseRegion(
       onEnter: (_) => onHover(true),
       onExit: (_) => onHover(false),
-      child: AnimatedContainer(
-        duration: Motion.short4,
-        decoration: ShapeDecoration(
-          shape: StadiumBorder(
-            side: BorderSide(
-              color: reading ? cs.primary : Colors.transparent,
-              width: 1.5,
-            ),
+      child: ReadingGlow(
+        active: reading,
+        child: AnimatedContainer(
+          duration: Motion.short4,
+          decoration: ShapeDecoration(
+            shape: const StadiumBorder(),
+            color: reading
+                ? cs.surfaceContainerHighest
+                : cs.onSurface.withValues(alpha: .06),
           ),
-          color: reading
-              ? cs.primaryContainer
-              : cs.onSurface.withValues(alpha: .06),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: onFocus,
-            child: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                Space.sm + 2,
-                0,
-                onRemove == null ? Space.md : 0,
-                0,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _sourceIcon(source),
-                    size: 16,
-                    color: reading
-                        ? cs.onPrimaryContainer
-                        : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: Space.xs + 2),
-                  Tooltip(
-                    message: label,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 160),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.labelMedium?.copyWith(
-                          color: reading ? cs.onPrimaryContainer : cs.onSurface,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: onFocus,
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  Space.sm + 2,
+                  0,
+                  onRemove == null ? Space.md : 0,
+                  0,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _sourceIcon(source),
+                      size: 16,
+                      color: reading ? cs.onSurface : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Space.xs + 2),
+                    Flexible(
+                      child: Tooltip(
+                        message: label,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelMedium?.copyWith(
+                              color: cs.onSurface,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (detail != null) ...[
-                    const SizedBox(width: Space.xs),
-                    GestureDetector(
-                      onTap: onEditTime,
-                      child: Text(
-                        detail,
-                        style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          decoration: onEditTime == null
-                              ? null
-                              : TextDecoration.underline,
-                          decorationStyle: TextDecorationStyle.dotted,
+                    if (detail != null) ...[
+                      const SizedBox(width: Space.xs),
+                      GestureDetector(
+                        onTap: onEditTime,
+                        child: Text(
+                          detail,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            decoration: onEditTime == null
+                                ? null
+                                : TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dotted,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
+                    if (onRemove != null)
+                      IconButton(
+                        tooltip: l10n.studyRemoveSource,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 14,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                   ],
-                  if (onRemove != null)
-                    IconButton(
-                      tooltip: l10n.studyRemoveSource,
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 14,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
-                      ),
-                      padding: EdgeInsets.zero,
-                      onPressed: onRemove,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1421,53 +1783,6 @@ class _SourcePill extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A soft breathing dot for a step in progress (still under reduced motion).
-class _Pulse extends StatefulWidget {
-  const _Pulse({required this.color});
-  final Color color;
-  @override
-  State<_Pulse> createState() => _PulseState();
-}
-
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    MediaQuery.disableAnimationsOf(context)
-        ? _c.value = 1
-        : _c.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: Tween(
-      begin: .35,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _c, curve: Motion.standard)),
-    child: ScaleTransition(
-      scale: Tween(
-        begin: .7,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _c, curve: Motion.standard)),
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-        child: const SizedBox.square(dimension: 8),
-      ),
-    ),
-  );
 }
 
 /// Threads from bound cards to the composer. A thread at rest is a faint
@@ -1547,12 +1862,21 @@ class _FlowPainter extends CustomPainter {
           end.dx,
           end.dy,
         );
-      final active = reading.contains(c.id) || c.id == focus;
+      final lit = busy && reading.contains(c.id);
+      final active = lit || reading.contains(c.id) || c.id == focus;
       final line = Paint()
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = active ? 2 : 1.25
         ..color = scheme.primary.withValues(alpha: active ? .85 : .32);
+      // The thread being read carries the reading light's hues.
+      if (lit) {
+        line.shader = LinearGradient(
+          colors: [
+            for (final h in readingHues.take(4)) h.withValues(alpha: .9),
+          ],
+        ).createShader(Rect.fromPoints(start, end));
+      }
       _dashed(
         canvas,
         path,
@@ -1566,7 +1890,19 @@ class _FlowPainter extends CustomPainter {
         active ? 4 : 3,
         Paint()..color = scheme.primary.withValues(alpha: active ? .9 : .5),
       );
-      if (active) {
+      if (lit) {
+        // What is being read wears the turning light (Apple Intelligence's
+        // edge light), breathing a little as it turns.
+        paintReadingLight(
+          canvas,
+          RRect.fromRectAndRadius(
+            r.inflate(3),
+            Radius.circular(Corners.md * d.zoom + 3),
+          ),
+          flow.value,
+          strength: .85 + .15 * math.sin(flow.value * math.pi * 2),
+        );
+      } else if (active) {
         final glow = .35 + .3 * math.sin(flow.value * math.pi * 2).abs();
         canvas.drawRRect(
           RRect.fromRectAndRadius(

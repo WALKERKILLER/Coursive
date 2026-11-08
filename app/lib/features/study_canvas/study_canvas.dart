@@ -33,6 +33,7 @@ import 'study_pdf_column.dart';
 import 'study_shape.dart';
 import 'outline_document.dart';
 import 'outline_pdf.dart';
+import 'reading_glow.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 

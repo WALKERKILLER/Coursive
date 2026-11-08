@@ -4867,5 +4867,23 @@
     }
   },
   "outlinePrevPage": "上一页",
-  "outlineNextPage": "下一页"
+  "outlineNextPage": "下一页",
+  "studySourcesCount": "{count} 份资料",
+  "@studySourcesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "studySourcesReading": "正在读 · {label}",
+  "@studySourcesReading": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "studySourcesShow": "展开资料列表",
+  "studySourcesHide": "收起资料列表"
 }

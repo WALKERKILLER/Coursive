@@ -7853,4 +7853,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get outlineNextPage => '下一页';
+
+  @override
+  String studySourcesCount(int count) {
+    return '$count 份资料';
+  }
+
+  @override
+  String studySourcesReading(String label) {
+    return '正在读 · $label';
+  }
+
+  @override
+  String get studySourcesShow => '展开资料列表';
+
+  @override
+  String get studySourcesHide => '收起资料列表';
 }
