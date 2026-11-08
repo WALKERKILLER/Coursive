@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/features/settings/asr_bench.dart';
+import 'package:coursive/features/settings/asr_model_mark.dart';
 import 'package:coursive/features/settings/local_asr_page.dart';
 
 Map<String, dynamic> model(
@@ -195,5 +196,39 @@ void main() {
     expect(put.$3, {'dir': '/mnt/big/models', 'move': true});
     expect(find.text('正在移动模型'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.ancestor(of: find.text('更改位置'), matching: find.byWidgetPredicate((w) => w is FilledButton))).onPressed, isNull);
+  });
+
+  test('each model family carries its maker\'s mark', () {
+    expect(asrModelMark('qwen3-asr-0.6b')?.asset, 'assets/providers/qwen-color.svg');
+    expect(asrModelMark('qwen3-asr-1.7b')?.asset, 'assets/providers/qwen-color.svg', reason: 'a new size keeps the family icon');
+    expect(asrModelMark('sensevoice-small')?.asset, 'assets/providers/alibaba-color.svg');
+    expect(asrModelMark('firered-asr2-aed')?.asset, 'assets/brands/firered.png');
+    expect(asrModelMark('whisper-large-v3-turbo'), (asset: 'assets/providers/openai.svg', mono: true));
+    expect(asrModelMark('unknown'), isNull);
+    expect(asrModelMark(null), isNull);
+  });
+
+  testWidgets('model cards show the maker\'s mark beside the name', (tester) async {
+    final page = state();
+    (page['status'] as Map)['models'] = [
+      model('qwen3-asr-0.6b', 'Qwen3-ASR 0.6B', 6.9, 0.16, 2400, tags: ['recommended']),
+      model('firered-asr2-aed', 'FireRedASR2 AED', 6.5, 0.3, 3000),
+      model('other', 'Other', 8, 0.1, 400),
+    ];
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LocalAsrPage(api: (method, path, [body]) async => page, events: const Stream.empty()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final marks = tester.widgetList<AsrMarkImage>(find.byType(AsrMarkImage)).map((m) => m.mark.asset).toList();
+    expect(marks, ['assets/providers/qwen-color.svg', 'assets/brands/firered.png']);
+    final mark = tester.getRect(find.byType(AsrMarkImage).first);
+    final name = tester.getRect(find.text('Qwen3-ASR 0.6B').last);
+    expect(mark.right, lessThanOrEqualTo(name.left));
+    expect((mark.center.dy - name.center.dy).abs(), lessThan(4));
   });
 }

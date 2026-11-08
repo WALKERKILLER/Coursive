@@ -57,6 +57,7 @@ type Event struct {
 
 type channel struct {
 	id, name, note string
+	model          string // catalog id of the local model, "" for cloud channels
 	eng            Engine
 	slots          int  // chunks in flight at most
 	local          bool // runs on this machine: no quota, audio never leaves
@@ -80,6 +81,7 @@ type ChannelStatus struct {
 	Name      string  `json:"name"`
 	Note      string  `json:"note"`
 	Local     bool    `json:"local"`
+	Model     string  `json:"model,omitempty"` // catalog id of the local model
 	Enabled   bool    `json:"enabled"`
 	State     string  `json:"state"` // ready | busy | cooling | quota | disabled
 	Busy      int     `json:"busy"`
@@ -141,8 +143,9 @@ func (p *Pool) SetConfig(c PoolConfig) {
 	p.signal()
 }
 
-// SetLocal adds, replaces or (with a nil engine) removes the local channel.
-func (p *Pool) SetLocal(name, note string, eng Engine) {
+// SetLocal adds, replaces or (with a nil engine) removes the local channel;
+// model is the catalog id of the recogniser behind it.
+func (p *Pool) SetLocal(name, note, model string, eng Engine) {
 	p.mu.Lock()
 	idx := -1
 	for i, c := range p.chans {
@@ -155,9 +158,9 @@ func (p *Pool) SetLocal(name, note string, eng Engine) {
 		p.chans = append(p.chans[:idx:idx], p.chans[idx+1:]...)
 	case eng != nil && idx >= 0:
 		c := p.chans[idx]
-		c.name, c.note, c.eng = name, note, eng
+		c.name, c.note, c.model, c.eng = name, note, model, eng
 	case eng != nil:
-		c := &channel{id: LocalID, name: name, note: note, eng: eng, slots: 1, local: true}
+		c := &channel{id: LocalID, name: name, note: note, model: model, eng: eng, slots: 1, local: true}
 		if s := p.saved[LocalID]; s != nil {
 			c.OK, c.Fail, c.LastErr, c.LastUsed = s.OK, s.Fail, s.LastErr, s.LastUsed
 		}
@@ -221,7 +224,7 @@ func (p *Pool) Status() (PoolConfig, []ChannelStatus, []Event) {
 	now := time.Now()
 	out := make([]ChannelStatus, 0, len(p.chans))
 	for _, c := range p.chans {
-		st := ChannelStatus{ID: c.id, Name: c.name, Note: c.note, Local: c.local, Enabled: p.enabledLocked(c), Busy: c.inflight, Slots: c.slots,
+		st := ChannelStatus{ID: c.id, Name: c.name, Note: c.note, Local: c.local, Model: c.model, Enabled: p.enabledLocked(c), Busy: c.inflight, Slots: c.slots,
 			UsedSecs: c.usedLocked(now), QuotaSecs: quotaAudio.Seconds(), OK: c.OK, Fail: c.Fail, LastError: c.LastErr, LastUsed: c.LastUsed}
 		if c.local {
 			st.QuotaSecs = 0
