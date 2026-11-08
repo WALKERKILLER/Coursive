@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/features/study_canvas/study_document.dart';
+import '../lib/l10n/l10n.dart';
 import 'study_canvas_ui_test.dart' as fixture;
 
 Future<void> lasso(WidgetTester t, Rect rect, {bool tool = true}) async {
@@ -157,4 +158,23 @@ void main() {
       await t.pumpAndSettle();
     },
   );
+
+  testWidgets('on a phone the bar fits: secondary verbs keep only icons', (
+    t,
+  ) async {
+    await fixture.open(t, fixture.FixtureApi(page().json()));
+    t.view.physicalSize = const Size(412, 900);
+    await t.pumpAndSettle();
+    await lasso(t, const Rect.fromLTRB(220, 400, 380, 520));
+    expect(t.takeException(), isNull);
+    final bar = t.getRect(find.byKey(const ValueKey('study-selection-bar')));
+    expect(bar.left, greaterThanOrEqualTo(12));
+    expect(bar.right, lessThanOrEqualTo(412 - 12));
+    expect(find.text('问 AI'), findsOneWidget);
+    expect(find.text('摘录'), findsNothing);
+    expect(find.byTooltip(l10n.studyExcerptHint), findsOneWidget);
+    expect(find.byTooltip(l10n.studyRelateHint), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+  });
 }

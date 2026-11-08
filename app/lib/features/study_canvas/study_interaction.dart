@@ -531,82 +531,108 @@ extension _StudyInteraction on StudyCanvasState {
   Widget _selectionBar(BuildContext context) {
     final d = document!, r = _selectionBounds!;
     final ink = _detail.strokeIds.isNotEmpty;
+    // On a phone the secondary verbs keep their tooltips and drop their
+    // labels; anything still too wide scrolls inside the bar.
+    final compact = _viewport.width < 520;
     return GlassSurface(
       key: const ValueKey('study-selection-bar'),
       radius: Corners.full,
       depth: GlassDepth.float,
       padding: const EdgeInsets.all(Space.xxs),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _BarAction(
-            label: l10n.studyAskAI,
-            icon: Icons.auto_awesome_outlined,
-            tooltip: l10n.studyAskHint,
-            primary: true,
-            onPressed: () => unawaited(_ask()),
-          ),
-          _BarAction(
-            label: l10n.studyExcerpt,
-            icon: Icons.crop_rounded,
-            tooltip: l10n.studyExcerptHint,
-            onPressed: _selectionBusy
-                ? null
-                : () => unawaited(_captureRegionCard()),
-          ),
-          _BarAction(
-            label: _linkStart == null ? l10n.studyRelate : l10n.studyRelateHere,
-            icon: _linkStart == null
-                ? Icons.link_rounded
-                : Icons.add_link_rounded,
-            tooltip: _linkStart == null
-                ? l10n.studyRelateHint
-                : l10n.studyRelateHereHint,
-            onPressed: _selectionBusy
-                ? null
-                : () => _selectionJob(_linkSelection),
-          ),
-          // Drag into the conversation, or tap, to attach the region's pixels.
-          _snapshotDragHandle(),
-          if (ink) ...[
-            PopupMenuButton<int>(
-              tooltip: '选区改色',
-              icon: const Icon(Icons.palette_outlined, size: 20),
-              itemBuilder: (_) => [
-                for (final c in _penPalette.take(20))
-                  PopupMenuItem(
-                    value: c,
-                    child: Row(
-                      children: [
-                        Icon(Icons.circle, color: Color(c)),
-                        const SizedBox(width: 12),
-                        Text(
-                          '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
-                        ),
-                      ],
-                    ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: math.max(0, _viewport.width - 24 - 2 * Space.xxs),
+        ),
+        child: IconButtonTheme(
+          // 44 dp keeps the touch target while five icons fit a phone.
+          data: compact
+              ? IconButtonThemeData(
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
+                )
+              : IconButtonTheme.of(context),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _BarAction(
+                  label: l10n.studyAskAI,
+                  icon: Icons.auto_awesome_outlined,
+                  tooltip: l10n.studyAskHint,
+                  primary: true,
+                  onPressed: () => unawaited(_ask()),
+                ),
+                _BarAction(
+                  label: l10n.studyExcerpt,
+                  icon: Icons.crop_rounded,
+                  tooltip: l10n.studyExcerptHint,
+                  compact: compact,
+                  onPressed: _selectionBusy
+                      ? null
+                      : () => unawaited(_captureRegionCard()),
+                ),
+                _BarAction(
+                  label: _linkStart == null
+                      ? l10n.studyRelate
+                      : l10n.studyRelateHere,
+                  icon: _linkStart == null
+                      ? Icons.link_rounded
+                      : Icons.add_link_rounded,
+                  tooltip: _linkStart == null
+                      ? l10n.studyRelateHint
+                      : l10n.studyRelateHereHint,
+                  compact: compact,
+                  onPressed: _selectionBusy
+                      ? null
+                      : () => _selectionJob(_linkSelection),
+                ),
+                // Drag into the conversation, or tap, to attach the region's pixels.
+                _snapshotDragHandle(),
+                if (ink) ...[
+                  PopupMenuButton<int>(
+                    tooltip: '选区改色',
+                    icon: const Icon(Icons.palette_outlined, size: 20),
+                    itemBuilder: (_) => [
+                      for (final c in _penPalette.take(20))
+                        PopupMenuItem(
+                          value: c,
+                          child: Row(
+                            children: [
+                              Icon(Icons.circle, color: Color(c)),
+                              const SizedBox(width: 12),
+                              Text(
+                                '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                    onSelected: (c) {
+                      d.checkpoint();
+                      _transformSelection(r, r, color: c);
+                    },
+                  ),
+                  PopupMenuButton<double>(
+                    tooltip: '选区粗细',
+                    icon: const Icon(Icons.line_weight, size: 20),
+                    itemBuilder: (_) => [
+                      for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
+                        PopupMenuItem(value: w, child: Text('${w.toInt()}')),
+                    ],
+                    onSelected: (w) {
+                      d.checkpoint();
+                      _transformSelection(r, r, width: w);
+                    },
+                  ),
+                ],
+                _selectionActions(),
               ],
-              onSelected: (c) {
-                d.checkpoint();
-                _transformSelection(r, r, color: c);
-              },
             ),
-            PopupMenuButton<double>(
-              tooltip: '选区粗细',
-              icon: const Icon(Icons.line_weight, size: 20),
-              itemBuilder: (_) => [
-                for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
-                  PopupMenuItem(value: w, child: Text('${w.toInt()}')),
-              ],
-              onSelected: (w) {
-                d.checkpoint();
-                _transformSelection(r, r, width: w);
-              },
-            ),
-          ],
-          _selectionActions(),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -938,11 +964,12 @@ class _BarAction extends StatelessWidget {
     required this.tooltip,
     required this.onPressed,
     this.primary = false,
+    this.compact = false,
   });
   final String label, tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool primary;
+  final bool primary, compact;
 
   @override
   Widget build(BuildContext context) {
@@ -957,6 +984,8 @@ class _BarAction extends StatelessWidget {
               icon: Icon(icon, size: 18),
               label: Text(label),
             )
+          : compact
+          ? IconButton(onPressed: onPressed, icon: Icon(icon, size: 18))
           : TextButton.icon(
               onPressed: onPressed,
               style: TextButton.styleFrom(minimumSize: size, shape: shape),

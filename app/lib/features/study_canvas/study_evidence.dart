@@ -701,6 +701,20 @@ class _CitationMarkState extends State<_CitationMark> {
     setState(() {});
   }
 
+  /// Centred over the mark, but slid sideways to stay 12 dp inside the
+  /// screen: on a phone a mark near the edge has no room for half a preview.
+  double _previewShift(BuildContext overlay) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return 0;
+    final width = MediaQuery.sizeOf(overlay).width;
+    final x = box.localToGlobal(box.size.topCenter(Offset.zero)).dx;
+    const half = _CitationPreview.maxWidth / 2, edge = 12.0;
+    if (width < 2 * (half + edge)) return width / 2 - x;
+    if (x - half < edge) return edge - (x - half);
+    if (x + half > width - edge) return width - edge - (x + half);
+    return 0;
+  }
+
   void _follow() {
     _pinned = _hover = _focus = false;
     _portal.hide();
@@ -757,11 +771,11 @@ class _CitationMarkState extends State<_CitationMark> {
     );
     return OverlayPortal(
       controller: _portal,
-      overlayChildBuilder: (_) => CompositedTransformFollower(
+      overlayChildBuilder: (overlay) => CompositedTransformFollower(
         link: _link,
         targetAnchor: Alignment.topCenter,
         followerAnchor: Alignment.bottomCenter,
-        offset: const Offset(0, -Space.xs),
+        offset: Offset(_previewShift(overlay), -Space.xs),
         child: Align(
           alignment: Alignment.bottomCenter,
           child: TapRegion(
@@ -862,6 +876,8 @@ class _CitationPreview extends StatelessWidget {
   final String? problem;
   final VoidCallback? onLocate;
 
+  static const double maxWidth = 300;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -870,7 +886,7 @@ class _CitationPreview extends StatelessWidget {
     final label = '${evidence['label'] ?? ''}';
     final locator = owner._evidenceLocator(evidence);
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 300),
+      constraints: const BoxConstraints(maxWidth: maxWidth),
       child: GlassSurface(
         depth: GlassDepth.float,
         radius: Corners.md,
