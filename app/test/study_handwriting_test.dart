@@ -1,5 +1,4 @@
 import 'study_quick_question_test.dart' show SelectionApi;
-import 'study_selection_tools_test.dart' show settleAsync;
 
 import 'dart:convert';
 import 'dart:io';
