@@ -177,7 +177,7 @@ func TestLocalChannelHasNoQuota(t *testing.T) {
 	if _, _, _, err := p.pick(60, nil); err == nil {
 		t.Fatal("expected no enabled channel")
 	}
-	p.SetLocal("本地", "", &fake{})
+	p.SetLocal("本地", "", "qwen3-asr-0.6b", &fake{})
 	p.mu.Lock()
 	p.chans[0].Usage = []use{{At: time.Now().Unix(), Secs: quotaAudio.Seconds() * 2}}
 	p.mu.Unlock()
@@ -187,10 +187,10 @@ func TestLocalChannelHasNoQuota(t *testing.T) {
 	}
 	p.release(c)
 	_, chans, _ := p.Status()
-	if chans[0].ID != LocalID || !chans[0].Local || chans[0].QuotaSecs != 0 || chans[0].State != "ready" {
+	if chans[0].ID != LocalID || !chans[0].Local || chans[0].QuotaSecs != 0 || chans[0].State != "ready" || chans[0].Model != "qwen3-asr-0.6b" {
 		t.Fatalf("status %+v", chans[0])
 	}
-	p.SetLocal("", "", nil)
+	p.SetLocal("", "", "", nil)
 	if _, chans, _ := p.Status(); len(chans) != 2 {
 		t.Fatalf("local channel not removed: %d", len(chans))
 	}

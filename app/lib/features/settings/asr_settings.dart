@@ -8,6 +8,7 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/organic_shapes.dart';
+import 'asr_model_mark.dart';
 import 'local_asr_page.dart';
 import '../../l10n/l10n.dart';
 
@@ -71,6 +72,7 @@ class _AsrSettingsState extends State<AsrSettings> {
     final strategy = '${widget.server['asr.strategy'] ?? 'balance'}';
     final conc = ((widget.server['asr.concurrency'] as num?) ?? 2).toDouble();
     final local = _chans.where((c) => c['local'] == true).firstOrNull;
+    final localMark = asrModelMark(local?['model']);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.symmetric(vertical: Space.sm),
@@ -83,8 +85,10 @@ class _AsrSettingsState extends State<AsrSettings> {
         child: ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: Space.lg, vertical: Space.xs),
           shape: RoundedRectangleBorder(borderRadius: Corners.all(Corners.lg)),
-          leading: Icon(local != null ? Icons.offline_bolt_rounded : Icons.computer_rounded,
-              color: local != null ? cs.onSecondaryContainer : cs.onPrimaryContainer),
+          leading: localMark != null
+              ? AsrMarkImage(localMark, size: 24)
+              : Icon(local != null ? Icons.offline_bolt_rounded : Icons.computer_rounded,
+                  color: local != null ? cs.onSecondaryContainer : cs.onPrimaryContainer),
           title: Text(local != null ? l10n.asrLocalEnabled : l10n.asrTryLocal,
               style: TextStyle(color: local != null ? cs.onSecondaryContainer : cs.onPrimaryContainer)),
           subtitle: Text(local != null ? l10n.asrLocalUnlimited(local['name']) : l10n.asrLocalHint,
@@ -173,7 +177,11 @@ class _ChannelCard extends StatelessWidget {
         decoration: BoxDecoration(color: cs.surfaceContainerHigh, borderRadius: BorderRadius.circular(Corners.lg)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            _Mark(text: '${c['name']}'.characters.first, asset: _channelMarks[c['id']], busy: state == 'busy'),
+            _Mark(
+              text: '${c['name']}'.split(' · ').last.characters.first,
+              mark: local ? asrModelMark(c['model']) : _channelMarks[c['id']],
+              busy: state == 'busy',
+            ),
             const SizedBox(width: Space.md),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -280,19 +288,31 @@ class _EventLog extends StatelessWidget {
 }
 
 /// The service icon of each cloud channel (assets/brands, see NOTICE).
-const _channelMarks = {'bcut': 'assets/brands/bcut.png', 'jianying': 'assets/brands/jianying.png'};
+const _channelMarks = <String, AsrMark>{
+  'bcut': (asset: 'assets/brands/bcut.png', mono: false),
+  'jianying': (asset: 'assets/brands/jianying.png', mono: false),
+};
 
 /// Channel badge: a soft cookie shape that turns while the channel works,
-/// filled with the service's icon when there is one.
+/// filled with the service's app icon, or holding the model maker's mark.
 class _Mark extends StatelessWidget {
-  const _Mark({required this.text, required this.busy, this.asset});
+  const _Mark({required this.text, required this.busy, this.mark});
   final String text;
   final bool busy;
-  final String? asset;
+  final AsrMark? mark;
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final icon = asset;
+    final icon = mark?.asset;
+    if (icon != null && icon.endsWith('.svg')) {
+      return TweenAnimationBuilder<double>(
+        tween: Tween(end: busy ? 1 : 0),
+        duration: Motion.long2,
+        curve: Motion.emphasized,
+        builder: (_, t, child) => CustomPaint(painter: _MarkPainter(t, cs.surfaceContainerLowest), child: child),
+        child: SizedBox.square(dimension: 40, child: Center(child: AsrMarkImage(mark!, size: 22, label: text))),
+      );
+    }
     if (icon != null) {
       return TweenAnimationBuilder<double>(
         tween: Tween(end: busy ? 1 : 0),

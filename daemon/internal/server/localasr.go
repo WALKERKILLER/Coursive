@@ -34,15 +34,15 @@ func (s *Server) applyLocalASR(ctx context.Context) {
 	}
 	_, model, threads := s.localASROptions(ctx)
 	if model == "" {
-		s.Jobs.ASR.SetLocal("", "", nil)
+		s.Jobs.ASR.SetLocal("", "", "", nil)
 		return
 	}
 	r, err := s.Local.Recognizer(model, threads)
 	if err != nil {
-		s.Jobs.ASR.SetLocal("", "", nil)
+		s.Jobs.ASR.SetLocal("", "", "", nil)
 		return
 	}
-	s.Jobs.ASR.SetLocal("本地 · "+r.Model.Name, "在本机识别，音频不上传，不受免费额度限制", r)
+	s.Jobs.ASR.SetLocal("本地 · "+r.Model.Name, "在本机识别，音频不上传，不受免费额度限制", r.Model.ID, r)
 }
 
 // OnLocalASR announces install progress and selects the first model a user

@@ -12,6 +12,7 @@ import '../../widgets/coursive_markdown.dart' show openPlainLink;
 import '../../widgets/pickers.dart';
 import '../../widgets/states.dart';
 import 'asr_bench.dart';
+import 'asr_model_mark.dart';
 import '../../l10n/l10n.dart';
 
 typedef _J = Map<String, dynamic>;
@@ -568,6 +569,7 @@ class _ModelCard extends StatelessWidget {
                   runSpacing: Space.xs,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (asrModelMark(m['id']) case final mark?) AsrMarkImage(mark, size: 20),
                     Text('${m['name']}', style: tt.titleMedium),
                     for (final t in jsonList(m['tags']))
                       if (_tagLabels[t] != null) _Tag(_tagLabels[t]!, strong: t == 'recommended'),
