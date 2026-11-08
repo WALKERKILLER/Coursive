@@ -152,6 +152,22 @@ func TestStudyConversationValidatesGroundedResults(t *testing.T) {
 	if e := save("legacy", `{"sources":[{"anything":true}]}`); e != nil {
 		t.Fatal("legacy result rejected", e)
 	}
+	fp := strings.Repeat("a", 64)
+	course := func(source string) string {
+		return `{"schema_version":2,"evidence":[{"id":"e1","source_id":"course-x","kind":"exact_text","status":"verified","anchor":{"id":"x","kind":"text","start":3,"end":9,"quote":"原文"},"course_source":` + source + `}]}`
+	}
+	if e := save("course", course(`{"id":"x","path":"a/b.md","offset_unit":"rune","offset":3,"end":9,"fingerprint":"`+fp+`"}`)); e != nil {
+		t.Fatal("course evidence rejected", e)
+	}
+	for name, source := range map[string]string{
+		"course text kept": `{"id":"x","path":"a/b.md","offset_unit":"rune","offset":3,"end":5,"text":"原文","fingerprint":"` + fp + `"}`,
+		"course escape":    `{"id":"x","path":"../b.md","offset_unit":"rune","offset":3,"end":9,"fingerprint":"` + fp + `"}`,
+		"course utf16":     `{"id":"x","path":"a/b.md","offset_unit":"utf16","offset":3,"end":9,"fingerprint":"` + fp + `"}`,
+	} {
+		if e := save("bad", course(source)); !errors.Is(e, ErrStudyInvalid) {
+			t.Fatal(name, "accepted", e)
+		}
+	}
 	for name, result := range map[string]string{
 		"unknown kind":      `{"schema_version":2,"evidence":[{"id":"e1","kind":"guess","status":"verified","anchor":` + anchor + `}]}`,
 		"unknown status":    `{"schema_version":2,"evidence":[{"id":"e1","kind":"exact_text","status":"likely","anchor":` + anchor + `}]}`,

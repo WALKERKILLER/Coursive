@@ -6384,9 +6384,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyUnknownVersion => '画布版本不受支持';
 
   @override
-  String studyLocalVideoError(String error) {
-    return '无法播放此视频：$error';
-  }
+  String get studyLocalVideoError => '无法播放此视频。请检查本地文件后重新打开画布。';
 
   @override
   String get localCourse => '本地课程';
@@ -7869,4 +7867,43 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studySourcesHide => '收起资料列表';
+
+  @override
+  String get studySnapshotDrag => '拖入对话，附上选区截图';
+
+  @override
+  String get studySnapshotVideoFailed => '无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试';
+
+  @override
+  String get studySnapshotTooLarge => '截图超过 3 MiB，请缩小选区';
+
+  @override
+  String get studySnapshotRemove => '移除截图';
+
+  @override
+  String get studySnapshotRetry => '重试上传';
+
+  @override
+  String get studyCitationUnavailable => '来源已变更或不可用，保留当前阅读位置';
+
+  @override
+  String get studyCourseScopeChip => '全课程';
+
+  @override
+  String get studyCourseScopeHint => '允许助手检索并读取本课程的本地资料；关闭时只读你绑定的内容';
+
+  @override
+  String get studyAgentSearchingCourse => '正在检索本课程资料…';
+
+  @override
+  String get studyAgentReadingCourse => '正在读课程资料…';
+
+  @override
+  String get studyAgentLookingShot => '正在看截图…';
+
+  @override
+  String get studyAgentCheckingQuotes => '正在核对引文…';
+
+  @override
+  String get studyShot => '选区截图';
 }

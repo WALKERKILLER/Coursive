@@ -11119,8 +11119,8 @@ abstract class AppLocalizations {
   /// No description provided for @studyLocalVideoError.
   ///
   /// In zh, this message translates to:
-  /// **'无法播放此视频：{error}'**
-  String studyLocalVideoError(String error);
+  /// **'无法播放此视频。请检查本地文件后重新打开画布。'**
+  String get studyLocalVideoError;
 
   /// No description provided for @localCourse.
   ///
@@ -13718,6 +13718,84 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'收起资料列表'**
   String get studySourcesHide;
+
+  /// No description provided for @studySnapshotDrag.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖入对话，附上选区截图'**
+  String get studySnapshotDrag;
+
+  /// No description provided for @studySnapshotVideoFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试'**
+  String get studySnapshotVideoFailed;
+
+  /// No description provided for @studySnapshotTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图超过 3 MiB，请缩小选区'**
+  String get studySnapshotTooLarge;
+
+  /// No description provided for @studySnapshotRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除截图'**
+  String get studySnapshotRemove;
+
+  /// No description provided for @studySnapshotRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试上传'**
+  String get studySnapshotRetry;
+
+  /// No description provided for @studyCitationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源已变更或不可用，保留当前阅读位置'**
+  String get studyCitationUnavailable;
+
+  /// No description provided for @studyCourseScopeChip.
+  ///
+  /// In zh, this message translates to:
+  /// **'全课程'**
+  String get studyCourseScopeChip;
+
+  /// No description provided for @studyCourseScopeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许助手检索并读取本课程的本地资料；关闭时只读你绑定的内容'**
+  String get studyCourseScopeHint;
+
+  /// No description provided for @studyAgentSearchingCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检索本课程资料…'**
+  String get studyAgentSearchingCourse;
+
+  /// No description provided for @studyAgentReadingCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读课程资料…'**
+  String get studyAgentReadingCourse;
+
+  /// No description provided for @studyAgentLookingShot.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在看截图…'**
+  String get studyAgentLookingShot;
+
+  /// No description provided for @studyAgentCheckingQuotes.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在核对引文…'**
+  String get studyAgentCheckingQuotes;
+
+  /// No description provided for @studyShot.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区截图'**
+  String get studyShot;
 }
 
 class _AppLocalizationsDelegate

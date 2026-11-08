@@ -3962,14 +3962,7 @@
   },
   "studyDefaultLayer": "学习笔记",
   "studyUnknownVersion": "画布版本不受支持",
-  "studyLocalVideoError": "无法播放此视频：{error}",
-  "@studyLocalVideoError": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "studyLocalVideoError": "无法播放此视频。请检查本地文件后重新打开画布。",
   "localCourse": "本地课程",
   "localCourseCreate": "新建课程",
   "localCourseName": "课程名称",
@@ -4885,5 +4878,18 @@
     }
   },
   "studySourcesShow": "展开资料列表",
-  "studySourcesHide": "收起资料列表"
+  "studySourcesHide": "收起资料列表",
+  "studySnapshotDrag": "拖入对话，附上选区截图",
+  "studySnapshotVideoFailed": "无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试",
+  "studySnapshotTooLarge": "截图超过 3 MiB，请缩小选区",
+  "studySnapshotRemove": "移除截图",
+  "studySnapshotRetry": "重试上传",
+  "studyCitationUnavailable": "来源已变更或不可用，保留当前阅读位置",
+  "studyCourseScopeChip": "全课程",
+  "studyCourseScopeHint": "允许助手检索并读取本课程的本地资料；关闭时只读你绑定的内容",
+  "studyAgentSearchingCourse": "正在检索本课程资料…",
+  "studyAgentReadingCourse": "正在读课程资料…",
+  "studyAgentLookingShot": "正在看截图…",
+  "studyAgentCheckingQuotes": "正在核对引文…",
+  "studyShot": "选区截图"
 }

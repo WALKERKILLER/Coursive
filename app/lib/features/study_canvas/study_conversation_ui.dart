@@ -49,16 +49,23 @@ extension _StudyModules on StudyCanvasState {
         (_selection.isNotEmpty ||
             _detail.objectId != null ||
             _regionSelection != null);
-    final state = _conversationKeys[_activeConversation]?.currentState;
+    var state = _conversationKeys[_activeConversation]?.currentState;
+    // With 「看图」 on the region joins as one immutable screenshot; a new
+    // conversation starts with it off, so nothing is captured.
+    final snapshot =
+        picked &&
+            _regionSelection != null &&
+            !newConversation &&
+            state?.data?['allow_images'] == true
+        ? await _prepareSelectionSnapshot()
+        : null;
+    if (!mounted) return;
+    state = _conversationKeys[_activeConversation]?.currentState;
     if (newConversation || (state == null && picked)) {
-      await _startConversation(bind: bind);
+      await _startConversation(bind: bind, snapshot: snapshot);
     } else if (state != null && picked) {
-      final visual =
-          _regionSelection != null && state.data?['allow_images'] == true
-          ? await _captureSelection()
-          : <Map<String, dynamic>>[];
-      if (!mounted) return;
-      await state.bind(_selectedQuery(), visual);
+      await state.bind(_selectedQuery(), []);
+      if (snapshot != null) await state.attachSnapshot(snapshot);
     }
     if (!mounted) return;
     _update(() {
@@ -74,6 +81,8 @@ extension _StudyModules on StudyCanvasState {
       ..clear()
       ..add(source.id);
     _detail.clear();
+    _regionSelection = null;
+    _selectionPolygon = [];
     await _openConversation();
   }
 
@@ -320,6 +329,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
   final input = TextEditingController();
   Map<String, dynamic>? data;
   Map? preview, live;
+  final pendingSnapshots = <StudySnapshot>[];
+  List get attachments => data!['draft_attachments'] as List;
   final visuals = <String, Map<String, dynamic>>{};
   final visualFingerprints = <String, String>{};
   String? error, runId, referenceNotice;
@@ -344,8 +355,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
       );
       if (!mounted) return;
       data = Map<String, dynamic>.from(value as Map);
+      data!['draft_attachments'] ??= <dynamic>[];
+      data!['context_scope'] ??= 'selected';
       input.text = '${data!['draft'] ?? ''}';
       for (final t in turns) {
+        studyUpgradeCitations(t as Map);
         if (t['state'] == 'running' || t['state'] == 'preparing') {
           t['state'] = 'interrupted';
           t['error'] = l10n.studyTurnReopened;
@@ -355,17 +369,20 @@ class _ConversationBodyState extends State<_ConversationBody> {
       _summarize();
       final initial = widget.initial;
       if (initial != null && (data!['revision'] as num) == 0) {
+        input.text = '${initial['draft'] ?? ''}';
         await bind(
           Map<String, dynamic>.from(initial['query'] as Map),
           (initial['visuals'] as List).cast<Map<String, dynamic>>(),
         );
+        if (initial['snapshot'] is StudySnapshot)
+          await attachSnapshot(initial['snapshot'] as StudySnapshot);
         // The first question typed on the idle stage, or 「选择参考资料」.
         owner._initialConversations.remove(widget.card.id);
         if (!mounted) return;
         if (initial['send'] is String) {
           data!['allow_images'] = initial['allow_images'] == true;
           input.text = initial['send'] as String;
-          await start(null, initial['task'] as String?);
+          await start(task: initial['task'] as String?);
         } else if (initial['pick'] == true) {
           await pickSources();
         }
@@ -391,10 +408,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
     if (data == null) return false;
     _summarize();
     bool ok = true;
-    final draft = input.text;
+    final snapshot = jsonDecode(jsonEncode(data!)) as Map;
+    snapshot['draft'] = input.text;
+    snapshot['version'] = 2;
     saving = saving.catchError((_) {}).then((_) async {
-      final snapshot = jsonDecode(jsonEncode(data!)) as Map;
-      snapshot['draft'] = draft;
+      snapshot['revision'] = data!['revision'];
       try {
         final out = await owner.widget.api.saveStudyConversation(
           owner.widget.ctl.lectureId,
@@ -402,6 +420,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
           snapshot,
         );
         data!['revision'] = out['revision'];
+        data!['version'] = 2;
       } catch (e) {
         ok = false;
         if (mounted)
@@ -410,6 +429,34 @@ class _ConversationBodyState extends State<_ConversationBody> {
     });
     await saving;
     return ok;
+  }
+
+  Future<void> attachSnapshot(StudySnapshot snapshot) async {
+    if (data == null) return;
+    if (!pendingSnapshots.contains(snapshot)) {
+      // The limit is said where the shots are, not thrown at the canvas.
+      if (attachments.length + pendingSnapshots.length >= 2) {
+        setState(() => error = l10n.studySelectionImageLimit);
+        return;
+      }
+      pendingSnapshots.add(snapshot);
+    }
+    setState(() {});
+    try {
+      final attachment = await snapshot.upload(
+        owner.widget.api,
+        owner.widget.ctl.lectureId,
+      );
+      if (!mounted) return;
+      pendingSnapshots.remove(snapshot);
+      if (!attachments.any((a) => a['id'] == attachment['id']))
+        attachments.add(attachment);
+      await save();
+    } catch (e) {
+      if (mounted) setState(() => error = '$e');
+    } finally {
+      if (mounted) setState(() {});
+    }
   }
 
   Future<void> bind(
@@ -543,8 +590,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
   ).contains(visualFingerprints[id]);
 
   /// 「看图」 was off when this selection was bound, so nothing was captured.
-  /// Opting in takes the crops now, while the canvas still shows exactly that
-  /// selection; otherwise the attachment is rebuilt or reported at send.
+  /// Opting in takes the screenshot now, while the canvas still shows exactly
+  /// that selection; otherwise crops are rebuilt or reported at send.
   Future<void> captureBound() async {
     final bound = query['selection'];
     if (owner._regionSelection == null ||
@@ -554,19 +601,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
       return;
     }
     try {
-      final images = await owner._captureSelection();
-      if (!mounted) return;
-      setState(() {
-        for (final image in images) {
-          final id = '${image['source_id']}';
-          visuals[id] = image;
-          final source = (preview?['sources'] as List? ?? [])
-              .whereType<Map>()
-              .where((s) => '${s['id']}' == id)
-              .firstOrNull;
-          if (source != null) visualFingerprints[id] = _fingerprint(source);
-        }
-      });
+      final snapshot = await owner._prepareSelectionSnapshot();
+      if (mounted) await attachSnapshot(snapshot);
     } catch (e) {
       if (mounted) setState(() => error = '$e');
     }
@@ -589,11 +625,16 @@ class _ConversationBodyState extends State<_ConversationBody> {
     await refreshContext();
   }
 
-  /// Asks [retry] or the composer's question; [task] `propose_outline`
-  /// drafts a review outline instead of an answer.
-  Future<void> start([String? retry, String? task]) async {
-    final question = (retry ?? input.text).trim();
+  /// Asks the composer's question, [question], or again a failed [retry]
+  /// turn; [task] `propose_outline` drafts a review outline instead.
+  Future<void> start({Map? retry, String? question, String? task}) async {
+    task ??= retry?['task'] as String?;
+    question = (retry?['question'] as String? ?? question ?? input.text).trim();
     if (question.isEmpty || busy || loading || data == null) return;
+    if (pendingSnapshots.isNotEmpty) return;
+    final sentAttachments =
+        jsonDecode(jsonEncode(retry?['attachments'] ?? attachments)) as List;
+    final sentScope = retry?['context_scope'] ?? data!['context_scope'];
     _stopRequested = false;
     runId = null;
     setState(() => busy = true);
@@ -602,7 +643,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (mounted) setState(() => busy = false);
       return;
     }
-    if (data!['allow_images'] == true) {
+    if (sentAttachments.isEmpty && data!['allow_images'] == true) {
       try {
         if (visuals.length > 2)
           throw FormatException(l10n.studySelectionImageLimit);
@@ -670,17 +711,27 @@ class _ConversationBodyState extends State<_ConversationBody> {
       });
       return;
     }
-    final turn = <String, dynamic>{
-      'id': studyId(),
-      'task': ?task,
-      'question': question,
-      'answer': '',
-      'context_key': '',
-      'state': 'preparing',
-    };
-    turns.add(turn);
+    final turn =
+        retry ??
+        <String, dynamic>{
+          'id': studyId(),
+          'task': ?task,
+          'question': question,
+          'answer': '',
+          'context_key': '',
+          'state': 'preparing',
+        };
+    turn['state'] = 'preparing';
+    turn['attachments'] = sentAttachments;
+    turn['context_scope'] = sentScope;
+    if (retry == null) {
+      turns.add(turn);
+      attachments.removeWhere(
+        (a) => sentAttachments.any((v) => v['id'] == a['id']),
+      );
+    }
     // Recovery can take time; keep a newer draft, including when retrying history.
-    if (input.text.trim() == question) input.clear();
+    if (retry == null && input.text.trim() == question) input.clear();
     setState(() {
       busy = true;
       error = null;
@@ -690,12 +741,13 @@ class _ConversationBodyState extends State<_ConversationBody> {
     final saved = await save();
     if (!mounted) return;
     if (!saved) {
-      // An unsent question remains a draft, not a permanently preparing turn.
-      if (input.text.isEmpty) {
+      if (retry == null && input.text.isEmpty) {
         turns.remove(turn);
         input.text = question;
+        for (final a in sentAttachments) {
+          if (!attachments.any((v) => v['id'] == a['id'])) attachments.add(a);
+        }
       } else {
-        // A newer draft typed during the save must not replace the failed question.
         turn['state'] = 'error';
         turn['error'] = error;
       }
@@ -714,13 +766,20 @@ class _ConversationBodyState extends State<_ConversationBody> {
         'lecture_id': owner.widget.ctl.lectureId,
         'conversation_id': widget.card.conversationId,
         'task': ?task,
+        'turn_id': turn['id'],
         'question': question,
         'selection': query,
-        'allow_images': data!['allow_images'] == true,
-        'visuals': data!['allow_images'] == true ? visuals.values.toList() : [],
+        'attachments': sentAttachments,
+        'context_scope': sentScope,
+        'allow_images':
+            sentAttachments.isEmpty && data!['allow_images'] == true,
+        'visuals': sentAttachments.isEmpty && data!['allow_images'] == true
+            ? visuals.values.toList()
+            : [],
       });
       runId = '${out['id']}';
-      turn['id'] = runId;
+      // The message ID is stable; the asynchronous job has its own runId.
+      // Replacing it here races the runner's saved-history cutoff read.
       turn['state'] = 'running';
       if (!mounted || _stopRequested) {
         turn['state'] = mounted ? 'cancelled' : 'interrupted';
@@ -836,7 +895,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       setState(() => data!['allow_images'] = images);
       if (images) await captureBound();
     }
-    await start(l10n.outlineAsk, 'propose_outline');
+    await start(question: l10n.outlineAsk, task: 'propose_outline');
   }
 
   Future<void> stop() async {
@@ -921,6 +980,25 @@ class _ConversationBodyState extends State<_ConversationBody> {
       active: widget.active,
       thread: widget.card,
       input: input,
+      attachments: ready ? attachments : const [],
+      pendingSnapshots: pendingSnapshots,
+      contextScope: ready ? '${data!['context_scope']}' : 'selected',
+      onContextScope: ready && !busy
+          ? (course) {
+              setState(
+                () => data!['context_scope'] = course ? 'course' : 'selected',
+              );
+              unawaited(save());
+            }
+          : null,
+      onSnapshotRetry: attachSnapshot,
+      onRemoveAttachment: (a) {
+        setState(() => attachments.remove(a));
+        unawaited(save());
+      },
+      onRemovePending: (a) {
+        if (!a.uploading) setState(() => pendingSnapshots.remove(a));
+      },
       turns: ready ? turns : const [],
       sources: preview?['sources'] as List? ?? const [],
       busy: busy,
@@ -930,13 +1008,15 @@ class _ConversationBodyState extends State<_ConversationBody> {
       onSend: (_) => start(),
       onOutline: ready && !busy ? outline : null,
       onStop: stop,
-      onRetry: start,
+      onRetry: (turn) => start(retry: turn),
       onRemoveSource: removeSource,
       onEditVideo: editVideo,
       onPickSources: ready ? pickSources : load,
       onInspectSources: preview == null ? null : inspectSources,
       allowImages:
           ready &&
+              attachments.isEmpty &&
+              pendingSnapshots.isEmpty &&
               (visuals.isNotEmpty ||
                   data!['allow_images'] == true ||
                   (preview?['sources'] as List? ?? []).any(
@@ -968,6 +1048,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
           ..clear()
           ..add(id);
         owner._detail.clear();
+        owner._regionSelection = null;
         bind(owner._selectedQuery(), []);
       },
     );

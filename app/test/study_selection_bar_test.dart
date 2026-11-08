@@ -12,20 +12,14 @@ Future<void> lasso(WidgetTester t, Rect rect, {bool tool = true}) async {
     await t.tap(find.byKey(const ValueKey('study-tool-region')));
     await t.pumpAndSettle();
   }
+  // The region tool draws a rectangle by default.
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(
     origin + rect.topLeft,
     kind: PointerDeviceKind.stylus,
   );
-  for (final p in [
-    rect.topRight,
-    rect.bottomRight,
-    rect.bottomLeft,
-    rect.topLeft,
-  ]) {
-    await g.moveTo(origin + p);
-    await t.pump();
-  }
+  await g.moveTo(origin + rect.bottomRight);
+  await t.pump();
   await g.up();
   await t.pumpAndSettle();
 }

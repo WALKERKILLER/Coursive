@@ -114,6 +114,15 @@ extension _StudyInteraction on StudyCanvasState {
     final polygon = _lassoRectangle
         ? [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft]
         : List<Offset>.of(_lasso);
+    _setRegionSelection(r, polygon);
+    _quickAsk = false;
+    _quickError = null;
+    _quickImages = false;
+    if (_captureLasso) unawaited(_captureRegionCard());
+  }
+
+  void _setRegionSelection(Rect r, List<Offset> polygon) {
+    final d = document!;
     _detail.clear();
     if (_selectionKinds.contains(StudySelectionKind.ink))
       _detail.strokeIds.addAll(d.strokesInPolygon(polygon));
@@ -137,34 +146,35 @@ extension _StudyInteraction on StudyCanvasState {
       );
       if (outside.getBounds().isEmpty) _selection.add(c.id);
     }
-    _regionSelection = r;
-    _selectionBounds = _boundsOfSelection() ?? r;
+    // Selection handles and the attachment crop must show the same area,
+    // including when the region contains only part of a card or some ink.
+    final region = r;
+    _selectionPolygon = List<Offset>.of(polygon);
+    _regionSelection = region;
+    _selectionBounds = region;
     final anchored = d.cards
         .where(
           (c) =>
               c.type != 'conversation' &&
               _selectionKinds.contains(studyCardSelectionKind(c)) &&
               d.visible(c.layer) &&
-              _sourceBounds(c).contains(r.center) &&
-              _sourceBounds(c).overlaps(r),
+              _sourceBounds(c).contains(region.center) &&
+              _sourceBounds(c).overlaps(region),
         )
         .lastOrNull;
     if (anchored != null && _selection.isEmpty) {
       _detail.objectId = anchored.id;
       _detail.region = _normalizeRegion(
-        r.intersect(_sourceBounds(anchored)),
+        region.intersect(_sourceBounds(anchored)),
         _sourceBounds(anchored),
       );
     } else {
-      _detail.region = r;
+      _detail.region = region;
     }
-    _quickAsk = false;
-    _quickError = null;
-    _quickImages = false;
-    _quickVisuals = [];
+    // A resized region is a different picture.
+    _quickSnapshot = null;
     _selectionReady = true;
     _cursor.value++;
-    if (_captureLasso) unawaited(_captureRegionCard());
   }
 
   Rect? _boundsOfSelection() {
@@ -201,6 +211,7 @@ extension _StudyInteraction on StudyCanvasState {
       width: width,
     );
     _selectionBounds = _boundsOfSelection() ?? to;
+    _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
     _detail.objectId = '';
@@ -278,9 +289,9 @@ extension _StudyInteraction on StudyCanvasState {
     }
     _tool = StudyTool.region;
     _selectionBounds = _boundsOfSelection();
+    _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
-    _quickAsk = false;
     _selectionReady = true;
     d.changed();
   }
@@ -404,33 +415,26 @@ extension _StudyInteraction on StudyCanvasState {
         ..region = _regionSelection;
     }
     _selection.remove(id);
-    // A crop belongs to the binding it was taken from.
-    _quickVisuals = [];
-    if (_quickImages) unawaited(_previewQuickVision());
   });
 
-  void _bindCard(String id) => _update(() {
-    _selection.add(id);
-    _quickVisuals = [];
-    if (_quickImages) unawaited(_previewQuickVision());
-  });
+  void _bindCard(String id) => _update(() => _selection.add(id));
 
   Future<void> _setQuickVision(bool on) async {
     _update(() {
       _quickImages = on;
-      _quickVisuals = [];
+      _quickSnapshot = null;
       _quickError = null;
     });
     if (on) await _previewQuickVision();
   }
 
-  /// Takes the crops 「看图」 will send, so the learner sees them first.
+  /// Takes the screenshot 「看图」 will send, so the learner sees it first.
   Future<void> _previewQuickVision() async {
     if (_quickCapturing) return;
     _update(() => _quickCapturing = true);
     try {
-      final images = await _captureSelection();
-      if (mounted && _quickImages) _update(() => _quickVisuals = images);
+      final shot = await _prepareSelectionSnapshot();
+      if (mounted && _quickImages) _update(() => _quickSnapshot = shot);
     } catch (e) {
       if (mounted && _quickImages) {
         _update(() => _quickError = l10n.studyQuickSendFailed('$e'));
@@ -440,7 +444,56 @@ extension _StudyInteraction on StudyCanvasState {
     }
   }
 
-  Widget _selectionToolbar() {
+  void _measureSelectionControls() {
+    if (_selectionMeasurePending || !_selectionReady) return;
+    _selectionMeasurePending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionMeasurePending = false;
+      if (!mounted || !_selectionReady) return;
+      final surface =
+          _inputSurface.currentContext?.findRenderObject() as RenderBox?;
+      if (surface == null || !surface.hasSize) return;
+      final obstacles = <Rect>[];
+      for (final key in [
+        _dockKey,
+        _aiDockKey,
+        _zoomKey,
+        _shelfKey,
+        ..._stageKeys,
+      ]) {
+        final box = key.currentContext?.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize && box.attached) {
+          obstacles.add(
+            surface.globalToLocal(box.localToGlobal(Offset.zero)) & box.size,
+          );
+        }
+      }
+      if (!listEquals(obstacles, _selectionObstacles)) {
+        _update(() => _selectionObstacles = obstacles);
+      }
+    });
+  }
+
+  Rect? _selectionMenuRect() {
+    final r = _selectionBounds;
+    if (r == null) return null;
+    final d = document!;
+    return studySelectionMenuRect(
+      Rect.fromPoints(
+        r.topLeft * d.zoom + d.camera,
+        r.bottomRight * d.zoom + d.camera,
+      ),
+      Rect.fromLTRB(
+        12,
+        _topBarsBottom + 8,
+        math.max(12, _viewport.width - 12),
+        math.max(_topBarsBottom + 8, _viewport.height - 12),
+      ),
+      _selectionObstacles,
+    );
+  }
+
+  Widget _selectionToolbar({bool docked = false}) {
     if (_tool != StudyTool.region ||
         !_selectionReady ||
         _selectionBounds == null ||
@@ -454,15 +507,20 @@ extension _StudyInteraction on StudyCanvasState {
           r.topLeft * d.zoom + d.camera,
           r.bottomRight * d.zoom + d.camera,
         );
+        final child = _Appear(
+          key: _selectionMenuKey,
+          child: _quickAsk ? _quickComposer(context) : _selectionBar(context),
+        );
+        // No room beside the selection: the bar waits below the canvas.
+        if (docked) return Center(child: child);
         return Positioned.fill(
           child: CustomSingleChildLayout(
-            delegate: _FloatingLayout(anchor, _topBarsBottom),
-            child: _Appear(
-              key: _selectionMenuKey,
-              child: _quickAsk
-                  ? _quickComposer(context)
-                  : _selectionBar(context),
+            delegate: _FloatingLayout(
+              anchor,
+              _topBarsBottom,
+              _selectionObstacles,
             ),
+            child: child,
           ),
         );
       },
@@ -508,6 +566,8 @@ extension _StudyInteraction on StudyCanvasState {
                 ? null
                 : () => _selectionJob(_linkSelection),
           ),
+          // Drag into the conversation, or tap, to attach the region's pixels.
+          _snapshotDragHandle(),
           if (ink) ...[
             PopupMenuButton<int>(
               tooltip: '选区改色',
@@ -700,30 +760,39 @@ extension _StudyInteraction on StudyCanvasState {
                       : (v) => unawaited(_setQuickVision(v)),
                 ),
                 const SizedBox(width: Space.sm),
-                if (_quickImages && _quickCapturing)
-                  Icon(Icons.crop_rounded, size: 18, color: cs.outline)
-                else
-                  for (final v in _quickVisuals)
-                    Padding(
-                      padding: const EdgeInsetsDirectional.only(end: Space.xs),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(Corners.xs),
-                        child: DecoratedBox(
-                          position: DecorationPosition.foreground,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: cs.outlineVariant),
-                            borderRadius: BorderRadius.circular(Corners.xs),
-                          ),
-                          child: Image.memory(
-                            base64Decode('${v['data']}'),
-                            key: ValueKey('study-quick-crop-${v['source_id']}'),
+                if (_quickImages && (_quickCapturing || _quickSnapshot != null))
+                  // The exact pixels that will be sent, lit while taken.
+                  ReadingGlow(
+                    active: _quickCapturing,
+                    radius: Corners.xs,
+                    child: _quickSnapshot == null
+                        ? SizedBox(
+                            width: 48,
                             height: 36,
-                            fit: BoxFit.contain,
-                            gaplessPlayback: true,
+                            child: Icon(
+                              Icons.crop_rounded,
+                              size: 18,
+                              color: cs.outline,
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(Corners.xs),
+                            child: DecoratedBox(
+                              position: DecorationPosition.foreground,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: cs.outlineVariant),
+                                borderRadius: BorderRadius.circular(Corners.xs),
+                              ),
+                              child: Image.memory(
+                                _quickSnapshot!.bytes,
+                                key: const ValueKey('study-quick-shot'),
+                                height: 36,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
+                  ),
                 const Spacer(),
                 Flexible(
                   child: Text(
@@ -903,9 +972,12 @@ class _BarAction extends StatelessWidget {
 /// After tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
 /// and the M3 floating toolbar guidance (https://m3.material.io/components/toolbars/guidelines).
 class _FloatingLayout extends SingleChildLayoutDelegate {
-  _FloatingLayout(this.anchor, this.topInset);
+  _FloatingLayout(this.anchor, this.topInset, this.obstacles);
   final Rect anchor;
   final double topInset;
+
+  /// Docks, the sidebar and other fixed controls it must not cover.
+  final List<Rect> obstacles;
   static const gap = 8.0, edge = 12.0;
 
   @override
@@ -919,6 +991,19 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size child) {
+    final free = studyFloatingPosition(
+      anchor,
+      Rect.fromLTRB(
+        edge,
+        topInset + edge,
+        size.width - edge,
+        size.height - edge,
+      ),
+      obstacles,
+      child,
+      gap: gap,
+    );
+    if (free != null) return free;
     final x = (anchor.right - child.width).clamp(
       edge,
       math.max(edge, size.width - child.width - edge),
@@ -938,7 +1023,9 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_FloatingLayout old) =>
-      old.anchor != anchor || old.topInset != topInset;
+      old.anchor != anchor ||
+      old.topInset != topInset ||
+      !listEquals(old.obstacles, obstacles);
 }
 
 /// A short scale-and-fade as a floating control appears or changes mode.
@@ -1004,12 +1091,10 @@ class _InteractionFeedback extends CustomPainter {
         final box = Rect.fromPoints(screen(r.topLeft), screen(r.bottomRight));
         dash(Path()..addRect(box));
         if (s._selectionReady) {
-          canvas.drawCircle(
-            box.bottomRight,
-            7,
-            Paint()..color = state.chrome.paper,
-          );
-          canvas.drawCircle(box.bottomRight, 7, line);
+          for (final point in studySelectionHandles(box).values) {
+            canvas.drawCircle(point, 5, Paint()..color = state.chrome.paper);
+            canvas.drawCircle(point, 5, line);
+          }
         }
       }
     }

@@ -335,8 +335,8 @@ void main() {
       await t.pumpAndSettle();
       await submit(t, api);
       expect(api.request?['visuals'], hasLength(1));
-      final target = t.widget<DragTarget<String>>(
-        find.byType(DragTarget<String>).last,
+      final target = t.widget<DragTarget<Object>>(
+        find.byType(DragTarget<Object>).last,
       );
       target.onAcceptWithDetails!(
         DragTargetDetails(data: 'page', offset: Offset.zero),

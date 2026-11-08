@@ -1,3 +1,6 @@
+import 'study_quick_question_test.dart' show SelectionApi;
+import 'study_selection_tools_test.dart' show settleAsync;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -35,6 +38,8 @@ Future<void> close(WidgetTester t) async {
 
 Future<void> selectInk(WidgetTester t) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
+  await t.pumpAndSettle();
+  await t.tap(find.byTooltip('自由套索'));
   await t.pumpAndSettle();
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(
@@ -452,7 +457,7 @@ void main() {
           ],
         ),
       );
-      final api = fixture.FixtureApi(d.json());
+      final api = SelectionApi(d.json());
       final key = await fixture.open(t, api);
       await selectInk(t);
       final before = key.currentState!.document!.cards.single.rect;

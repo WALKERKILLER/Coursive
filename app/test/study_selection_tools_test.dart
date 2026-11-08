@@ -103,6 +103,8 @@ StudyDocument doc() => StudyDocument()
 Future<void> select(WidgetTester t, Rect r) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
   await t.pumpAndSettle();
+  await t.tap(find.byTooltip('自由套索'));
+  await t.pumpAndSettle();
   final o = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(o + r.topLeft, kind: PointerDeviceKind.stylus);
   for (final p in [r.topRight, r.bottomRight, r.bottomLeft, r.topLeft]) {

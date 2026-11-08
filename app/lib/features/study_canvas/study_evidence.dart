@@ -22,6 +22,69 @@ String studyEvidenceMarkdown(String answer, List evidence) {
 String studyPlainAnswer(String answer) =>
     answer.replaceAll(RegExp(r'\[\[(?:e|next):[^\]\n]*\]\]'), '');
 
+final _legacyCitation = RegExp(r'\[[^\]\n]+\]\(coursive://citation/(e\d+)\)');
+
+/// Course answers from the first course-scope builds linked citations as
+/// `[n](coursive://citation/eN)` beside a `citations` table. They load as
+/// schema 2 evidence, so one renderer and one way back serve every answer.
+void studyUpgradeCitations(Map turn) {
+  final result = turn['result'];
+  if (result is! Map ||
+      result['schema_version'] == 2 ||
+      result['citations'] is! List) {
+    return;
+  }
+  final evidence = [
+    for (final c in (result['citations'] as List).whereType<Map>())
+      if (c['source'] is Map && '${c['id']}'.startsWith('e'))
+        _legacyEvidence(c),
+  ].take(24).toList();
+  final ids = {for (final e in evidence) e['id']};
+  turn['answer'] = '${turn['answer'] ?? ''}'.replaceAllMapped(
+    _legacyCitation,
+    (m) => ids.contains(m[1]) ? '[[e:${m[1]}]]' : '',
+  );
+  turn['result'] = {
+    'sources': result['sources'] ?? const [],
+    'schema_version': 2,
+    'evidence': evidence,
+    'suggestions': const [],
+  };
+}
+
+Map<String, dynamic> _legacyEvidence(Map c) {
+  final s = Map<String, dynamic>.from(c['source'] as Map)
+    ..remove('text')
+    ..remove('snippet');
+  final from = (s['time_start_ms'] as num? ?? 0).toInt();
+  final to = (s['time_end_ms'] as num? ?? 0).toInt();
+  final page = (s['page'] as num? ?? 0).toInt();
+  final label = '${c['label'] ?? ''}';
+  return {
+    'id': '${c['id']}',
+    'source_id': 'course-${s['id']}',
+    'kind': to > from ? 'timestamped_transcript' : 'exact_text',
+    'status': 'verified',
+    'label': label.substring(0, math.min(120, label.length)),
+    'anchor': {
+      'id': '${s['id']}',
+      'workspace_id': '',
+      'object_id': '',
+      'kind': to > from
+          ? 'video'
+          : page > 0
+          ? 'pdf'
+          : 'text',
+      'source_lecture_id': '${s['lecture_id'] ?? ''}',
+      'original_path': '${s['path'] ?? ''}',
+      if (page > 0) 'page': page,
+      if (to > from) ...{'time_start_ms': from, 'time_end_ms': to},
+      'fingerprint': '${s['fingerprint'] ?? ''}',
+    },
+    'course_source': s,
+  };
+}
+
 /// A pinned answer's identity: its conversation turn, hashed (FNV-1a) when
 /// the key would exceed the 100 characters a card generation may hold.
 String studyPinGeneration(String conversation, String turn) {
@@ -72,11 +135,27 @@ class _ViewMark {
     required this.selection,
     this.reviewPeek = false,
     this.focus,
+    this.thread,
+    this.scroll,
+    this.region,
   });
   final Offset camera;
   final double zoom;
   final bool stageOpen, reviewPeek;
   final Set<String> selection;
+
+  /// The conversation on stage and how far its messages were scrolled.
+  final String? thread;
+  final double? scroll;
+
+  /// A lassoed region, kept so the learner can ask about it again.
+  final ({
+    Rect region,
+    Rect? bounds,
+    List<Offset> polygon,
+    StudySelection detail,
+  })?
+  region;
 
   /// What had keyboard focus, such as the outline item being edited.
   final FocusNode? focus;
@@ -107,6 +186,8 @@ extension _StudyEvidence on StudyCanvasState {
     if ((evidence['status'] ?? 'verified') != 'verified') {
       return _EvidenceView.invalid(l10n.studyEvidenceStale);
     }
+    // A course passage is checked against its file when it is followed.
+    if (evidence['course_source'] is Map) return const _EvidenceView(null, []);
     if (a.workspaceId.isNotEmpty && a.workspaceId != widget.ctl.lectureId) {
       return _EvidenceView.invalid(l10n.studyEvidenceOtherLecture);
     }
@@ -126,10 +207,10 @@ extension _StudyEvidence on StudyCanvasState {
       return _EvidenceView.invalid(l10n.studyEvidenceMissing);
     }
     final upright = card.quarterTurns % 4 == 0;
+    if (card.type == 'pdfdoc' && a.page > 0 && card.page != a.page) {
+      return _EvidenceView(card, const [], page: a.page);
+    }
     if (evidence['kind'] == 'exact_text' && a.end > a.start) {
-      if (card.type == 'pdfdoc' && a.page > 0 && card.page != a.page) {
-        return _EvidenceView(card, const [], page: a.page);
-      }
       final text = card.type == 'pdfdoc' ? card.text : card.contentText;
       if (a.end > text.length ||
           (a.quote.isNotEmpty && text.substring(a.start, a.end) != a.quote)) {
@@ -206,6 +287,9 @@ extension _StudyEvidence on StudyCanvasState {
   Future<void> _followEvidence(Map evidence) async {
     final d = document;
     if (d == null) return;
+    if (evidence['course_source'] is Map) {
+      return _followCourseEvidence(evidence);
+    }
     var view = _evidenceView(evidence);
     if (view.problem != null) {
       _toast(view.problem!);
@@ -239,6 +323,25 @@ extension _StudyEvidence on StudyCanvasState {
       stageOpen: _stageOpen,
       selection: {..._selection},
       reviewPeek: _reviewPeek,
+      thread: _activeConversation,
+      scroll: switch (_messageScroll[_activeConversation]) {
+        final c? when c.hasClients => c.offset,
+        _ => null,
+      },
+      region: switch (_regionSelection) {
+        final r? when _selectionReady => (
+          region: r,
+          bounds: _selectionBounds,
+          polygon: List.of(_selectionPolygon),
+          detail: StudySelection()
+            ..objectId = _detail.objectId
+            ..start = _detail.start
+            ..end = _detail.end
+            ..region = _detail.region
+            ..strokeIds.addAll(_detail.strokeIds),
+        ),
+        _ => null,
+      },
       // A click on a citation in the review leaves no node focused; the
       // item it was clicked in is where the learner returns.
       focus: switch (FocusManager.instance.primaryFocus) {
@@ -282,9 +385,9 @@ extension _StudyEvidence on StudyCanvasState {
             _localVideoTimes[card.id] ??
             0;
         _localVideoTimes[card.id] = a.timeStartMs;
+        // A player still opening seeks once it is ready.
         if (local != null) {
-          unawaited(local.player.seek(Duration(milliseconds: a.timeStartMs)));
-          unawaited(local.player.pause());
+          unawaited(local.seekPaused(a.timeStartMs).catchError((_) {}));
         }
       }
     }
@@ -430,7 +533,39 @@ extension _StudyEvidence on StudyCanvasState {
       _selection
         ..clear()
         ..addAll(mark.selection.where((id) => d.cards.any((c) => c.id == id)));
+      if (d.cards.any((c) => c.id == mark.thread)) {
+        _activeConversation = mark.thread;
+      }
+      final r = mark.region;
+      if (r != null) {
+        final detail = r.detail;
+        _detail
+          ..objectId = d.cards.any((c) => c.id == detail.objectId)
+              ? detail.objectId
+              : null
+          ..start = detail.start
+          ..end = detail.end
+          ..region = detail.region;
+        _detail.strokeIds
+          ..clear()
+          ..addAll(
+            detail.strokeIds.where((id) => d.strokes.any((s) => s.id == id)),
+          );
+        _regionSelection = r.region;
+        _selectionBounds = r.bounds ?? r.region;
+        _selectionPolygon = r.polygon;
+        _selectionReady = true;
+      }
     });
+    // The messages scroll back to the answer the citation was in.
+    if (mark.scroll case final offset?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = _messageScroll[mark.thread];
+        if (c != null && c.hasClients) {
+          c.jumpTo(offset.clamp(0, c.position.maxScrollExtent));
+        }
+      });
+    }
     _scene.value++;
     _flyTo(mark.camera, mark.zoom);
     // Back where the learner was typing or reviewing, focus included.

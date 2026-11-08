@@ -95,9 +95,9 @@ extension _StudyStage on StudyCanvasState {
     bool bind = true,
     bool pick = false,
     bool allowImages = false,
-    List<Map<String, dynamic>>? visuals,
     Offset? at,
     String? task,
+    StudySnapshot? snapshot,
   }) async {
     final d = document;
     if (d == null || !d.editable(d.activeLayer)) return;
@@ -108,10 +108,12 @@ extension _StudyStage on StudyCanvasState {
             'selection': <String, dynamic>{},
             'include_video': false,
           };
-    // With 「看图」 off no screenshot is taken at all.
-    final visual = bind && allowImages && _regionSelection != null
-        ? visuals ?? await _captureSelection()
-        : <Map<String, dynamic>>[];
+    // With 「看图」 off no screenshot is taken at all; with it on the region
+    // is one immutable attachment, exactly as shown.
+    snapshot ??= bind && allowImages && _regionSelection != null
+        ? await _prepareSelectionSnapshot()
+        : null;
+    final draft = _idleInput.text;
     if (!mounted) return;
     final card = StudyCard(
       id: studyId(),
@@ -128,7 +130,9 @@ extension _StudyStage on StudyCanvasState {
     d.changed();
     _initialConversations[card.id] = {
       'query': query,
-      'visuals': visual,
+      'visuals': <Map<String, dynamic>>[],
+      'snapshot': snapshot,
+      'draft': draft,
       'allow_images': allowImages,
       if (send != null && send.trim().isNotEmpty) 'send': send.trim(),
       'task': ?task,
@@ -184,7 +188,10 @@ extension _StudyStage on StudyCanvasState {
       _toast('画布卡片已达上限');
       return;
     }
-    final evidence = studyTurnEvidence(turn);
+    // Course passages have no card here until followed; the pin keeps the
+    // canvas sources it can lead back to.
+    final evidence = studyTurnEvidence(turn)
+        ?.where((e) => e['course_source'] == null);
     final seen = <String>{};
     final anchors = [
       for (final a
@@ -449,6 +456,16 @@ String _stepLabel(Map? live, List sources) {
       .where((s) => '${s['id']}' == id)
       .firstOrNull;
   final label = '${source?['label'] ?? ''}';
+  switch ('${step['tool']}') {
+    case 'search_course_materials':
+      return l10n.studyAgentSearchingCourse;
+    case 'read_course_source':
+      return l10n.studyAgentReadingCourse;
+    case 'inspect_snapshot':
+      return l10n.studyAgentLookingShot;
+    case 'validate_citations':
+      return l10n.studyAgentCheckingQuotes;
+  }
   if (label.isEmpty) {
     return step['tool'] == 'get_canvas_context'
         ? l10n.studyAgentLookingAround
@@ -503,6 +520,13 @@ class _StageView extends StatefulWidget {
     this.onAllowImages,
     this.onDraft,
     this.onOutline,
+    this.attachments = const [],
+    this.pendingSnapshots = const [],
+    this.contextScope = 'selected',
+    this.onContextScope,
+    this.onRemoveAttachment,
+    this.onSnapshotRetry,
+    this.onRemovePending,
   });
 
   final StudyCanvasState owner;
@@ -518,7 +542,15 @@ class _StageView extends StatefulWidget {
   final Map? live;
   final String? error;
   final VoidCallback? onStop, onPickSources, onInspectSources;
-  final ValueChanged<String>? onRetry;
+  final List attachments;
+  final List<StudySnapshot> pendingSnapshots;
+  final String contextScope;
+
+  /// Turns 「全课程」 on or off; null while it cannot change.
+  final ValueChanged<bool>? onContextScope;
+  final ValueChanged<Map>? onRemoveAttachment;
+  final ValueChanged<StudySnapshot>? onSnapshotRetry, onRemovePending;
+  final ValueChanged<Map>? onRetry;
   final ValueChanged<Map>? onRemoveSource, onEditVideo;
 
   /// Null hides the vision switch (no visual selection is bound).
@@ -540,6 +572,7 @@ class _StageViewState extends State<_StageView>
     duration: const Duration(milliseconds: 1400),
   );
   final _composer = GlobalKey(), _panel = GlobalKey(), _stage = GlobalKey();
+  final _messages = ScrollController();
   bool _hover = false;
   String? _focusSource;
   bool _looping = false;
@@ -554,6 +587,7 @@ class _StageViewState extends State<_StageView>
   @override
   void initState() {
     super.initState();
+    owner._messageScroll[widget.thread?.id] = _messages;
     _claim();
     owner._composerFocus.addListener(_focusChanged);
   }
@@ -613,6 +647,9 @@ class _StageViewState extends State<_StageView>
     owner._stageKeys.removeAll(_keys);
     owner._composerFocus.removeListener(_focusChanged);
     _localFocus.dispose();
+    if (owner._messageScroll[widget.thread?.id] == _messages)
+      owner._messageScroll.remove(widget.thread?.id);
+    _messages.dispose();
     _flow.dispose();
     super.dispose();
   }
@@ -850,6 +887,7 @@ class _StageViewState extends State<_StageView>
       ).createShader(r),
       blendMode: BlendMode.dstIn,
       child: ListView.builder(
+        controller: _messages,
         reverse: true,
         shrinkWrap: true,
         padding: const EdgeInsets.only(top: Space.xl),
@@ -906,6 +944,22 @@ class _StageViewState extends State<_StageView>
               ),
             ),
           ),
+          if ((raw['attachments'] as List? ?? []).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.xs),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: Space.xs,
+                runSpacing: Space.xs,
+                children: [
+                  for (final a in (raw['attachments'] as List).cast<Map>())
+                    _Shot(
+                      key: ValueKey('study-turn-shot-${a['id']}'),
+                      image: NetworkImage(_shotUrl(a)),
+                    ),
+                ],
+              ),
+            ),
           const SizedBox(height: Space.sm),
           if (working)
             Align(
@@ -1071,7 +1125,7 @@ class _StageViewState extends State<_StageView>
                         ? null
                         : raw['task'] == 'propose_outline'
                         ? widget.onOutline
-                        : () => widget.onRetry?.call('${raw['question']}'),
+                        : () => widget.onRetry?.call(raw),
                     style: TextButton.styleFrom(
                       foregroundColor: cs.onErrorContainer,
                     ),
@@ -1085,20 +1139,30 @@ class _StageViewState extends State<_StageView>
     );
   }
 
+  String _shotUrl(Map attachment) => owner.widget.api.studyAttachmentUrl(
+    owner.widget.ctl.lectureId,
+    '${attachment['id']}',
+  );
+
   Widget _composerPane(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final sources = widget.sources.cast<Map>();
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (_) {
-        if (widget.busy || widget.loading) return false;
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data is! String && details.data is! StudySelectionDrop)
+          return false;
+        if (widget.loading) return false;
         setState(() => _hover = true);
         return true;
       },
       onLeave: (_) => setState(() => _hover = false),
       onAcceptWithDetails: (v) {
         setState(() => _hover = false);
-        widget.onDrop(v.data);
+        if (v.data is StudySelectionDrop)
+          owner._acceptSnapshot(v.data as StudySelectionDrop);
+        else
+          widget.onDrop(v.data as String);
       },
       builder: (context, _, _) => _Well(
         key: _composer,
@@ -1110,7 +1174,44 @@ class _StageViewState extends State<_StageView>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (sources.isNotEmpty || widget.loading)
+            if (widget.attachments.isNotEmpty ||
+                widget.pendingSnapshots.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.xs,
+                  Space.xs,
+                  Space.xs,
+                  Space.sm,
+                ),
+                child: Wrap(
+                  spacing: Space.sm,
+                  runSpacing: Space.sm,
+                  children: [
+                    for (final a in widget.attachments.cast<Map>())
+                      _Shot(
+                        key: ValueKey('study-shot-${a['id']}'),
+                        image: NetworkImage(_shotUrl(a)),
+                        onRemove: widget.busy
+                            ? null
+                            : () => widget.onRemoveAttachment?.call(a),
+                      ),
+                    for (final p in widget.pendingSnapshots)
+                      _Shot(
+                        key: ObjectKey(p),
+                        image: MemoryImage(p.bytes),
+                        uploading: p.uploading,
+                        failed: p.error != null,
+                        onRetry: () => widget.onSnapshotRetry?.call(p),
+                        onRemove: p.uploading
+                            ? null
+                            : () => widget.onRemovePending?.call(p),
+                      ),
+                  ],
+                ),
+              ),
+            if (sources.isNotEmpty ||
+                widget.loading ||
+                widget.onContextScope != null)
               _SourceTray(
                 sources: sources.toList(),
                 loading: widget.loading,
@@ -1158,6 +1259,26 @@ class _StageViewState extends State<_StageView>
                         );
                 },
                 trailing: [
+                  if (widget.onContextScope != null ||
+                      widget.contextScope == 'course')
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: Space.xs),
+                      child: Tooltip(
+                        message: l10n.studyCourseScopeHint,
+                        child: FilterChip(
+                          key: const ValueKey('study-course-scope'),
+                          avatar: const Icon(
+                            Icons.travel_explore_rounded,
+                            size: 16,
+                          ),
+                          label: Text(l10n.studyCourseScopeChip),
+                          selected: widget.contextScope == 'course',
+                          showCheckmark: false,
+                          visualDensity: VisualDensity.compact,
+                          onSelected: widget.onContextScope,
+                        ),
+                      ),
+                    ),
                   if (widget.allowImages != null)
                     Tooltip(
                       message: l10n.studyAllowImagesHint,
@@ -2221,3 +2342,142 @@ class _OutlineCard extends StatelessWidget {
     );
   }
 }
+
+/// A screenshot in a message or the composer: its exact pixels, opened full
+/// size on tap. In the composer it can be removed; an upload in flight glows
+/// like material being read, and a failed one retries on tap.
+class _Shot extends StatelessWidget {
+  const _Shot({
+    super.key,
+    required this.image,
+    this.uploading = false,
+    this.failed = false,
+    this.onRemove,
+    this.onRetry,
+  });
+  final ImageProvider image;
+  final bool uploading, failed;
+  final VoidCallback? onRemove, onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final shape = BorderRadius.circular(Corners.sm);
+    return SizedBox(
+      width: 68,
+      height: 50,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: ReadingGlow(
+              active: uploading,
+              radius: Corners.sm,
+              child: Material(
+                color: cs.surfaceContainerHighest,
+                borderRadius: shape,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: failed
+                      ? onRetry
+                      : uploading
+                      ? null
+                      : () => _viewShot(context, image),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedOpacity(
+                        opacity: uploading || failed ? .5 : 1,
+                        duration: Motion.short4,
+                        child: Image(
+                          image: image,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          semanticLabel: l10n.studyShot,
+                          errorBuilder: (_, _, _) => Icon(
+                            Icons.broken_image_outlined,
+                            size: 18,
+                            color: cs.outline,
+                          ),
+                        ),
+                      ),
+                      if (failed)
+                        Tooltip(
+                          message: l10n.studySnapshotRetry,
+                          child: Icon(
+                            Icons.refresh_rounded,
+                            size: 20,
+                            color: cs.error,
+                          ),
+                        ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: shape,
+                          border: Border.all(
+                            color: failed ? cs.error : cs.outlineVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (onRemove != null)
+            Positioned(
+              top: -Space.xs - 2,
+              right: -Space.xs - 2,
+              child: Tooltip(
+                message: l10n.studySnapshotRemove,
+                child: Material(
+                  color: cs.surfaceContainerHighest,
+                  shape: CircleBorder(
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onRemove,
+                    child: const Padding(
+                      padding: EdgeInsets.all(3),
+                      child: Icon(Icons.close_rounded, size: 12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+void _viewShot(BuildContext context, ImageProvider image) => showDialog<void>(
+  context: context,
+  useRootNavigator: true,
+  barrierColor: Colors.black87,
+  builder: (c) => Dialog.fullscreen(
+    backgroundColor: Colors.transparent,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(
+              child: Image(image: image, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+        Positioned(
+          top: Space.lg,
+          right: Space.lg,
+          child: IconButton.filledTonal(
+            tooltip: l10n.commonClose,
+            onPressed: () => Navigator.pop(c),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
