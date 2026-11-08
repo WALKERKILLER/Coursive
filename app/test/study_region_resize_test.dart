@@ -95,13 +95,15 @@ void main() {
       await fixture.open(t, api);
       await t.tap(find.byKey(const ValueKey('study-tool-region')));
       await t.pumpAndSettle();
-      await drag(t, const Offset(20, 120), const Offset(1580, 1080));
+      // Cover the top gap too: with narrower fonts a menu can legitimately
+      // fit there. Start below the fixed controls so the canvas owns the drag.
+      await drag(t, const Offset(20, 1080), const Offset(1580, 20));
       final input = t.getRect(find.byKey(const ValueKey('study-input')));
       final button = find.text('问小 c').last;
       expect(t.getRect(button).top, greaterThanOrEqualTo(input.bottom));
       await t.tap(button);
       await settleAsync(t);
-      expect(api.metadata.single['bounds'], [20.0, 120.0, 1560.0, 960.0]);
+      expect(api.metadata.single['bounds'], [20.0, 20.0, 1560.0, 1060.0]);
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
     },
