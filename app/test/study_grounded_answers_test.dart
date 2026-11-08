@@ -237,6 +237,22 @@ void main() {
     },
   );
 
+  testWidgets('on a phone the preview stays on screen', (t) async {
+    await openWith(t, [
+      turn('t1', '命中更快 [[e:e1]]。', [evidence('e1', 'text')]),
+    ]);
+    t.view.physicalSize = const Size(412, 900);
+    await t.pumpAndSettle();
+    // A touch pins the preview.
+    await t.tap(marks().first, kind: PointerDeviceKind.touch);
+    await t.pumpAndSettle();
+    final quote = t.getRect(find.text(passage));
+    expect(quote.left, greaterThanOrEqualTo(12));
+    expect(quote.right, lessThanOrEqualTo(412 - 12));
+    expect(t.takeException(), isNull);
+    await close(t);
+  });
+
   testWidgets('pointer input stops a flight where it is', (t) async {
     final key = await openWith(t, [
       turn('t1', '远处 [[e:e2]]', [evidence('e2', 'far', end: 4, quote: 'Far ')]),

@@ -340,6 +340,11 @@ class _AppShellState extends State<AppShell> {
                 MediaQuery(
                   data: mq.copyWith(
                     padding: mq.padding.copyWith(bottom: clear),
+                    // Scaffolds float their buttons and snack bars off the
+                    // view padding, so it clears the dock too.
+                    viewPadding: show
+                        ? mq.viewPadding.copyWith(bottom: clear)
+                        : mq.viewPadding,
                   ),
                   child: SafeArea(
                     bottom: false,
