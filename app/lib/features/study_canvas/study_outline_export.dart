@@ -4,6 +4,7 @@ extension _StudyOutlineExport on StudyCanvasState {
   /// Draws [child] offscreen at [scale] and returns it as PNG, sized in
   /// logical pixels (points in the PDF).
   Future<OutlineImage?> _rasterize(Widget child, {double scale = 4}) async {
+    double? baseline;
     final boundary = RenderRepaintBoundary();
     final view = RenderView(
       view: View.of(context),
@@ -23,7 +24,10 @@ extension _StudyOutlineExport on StudyCanvasState {
           textDirection: TextDirection.ltr,
           child: DefaultTextStyle(
             style: const TextStyle(color: Color(0xff1d2125), fontSize: 11),
-            child: child,
+            child: _BaselineProbe(
+              onBaseline: (b) => baseline = b,
+              child: child,
+            ),
           ),
         ),
       ),
@@ -44,6 +48,7 @@ extension _StudyOutlineExport on StudyCanvasState {
               png: data.buffer.asUint8List(),
               width: boundary.size.width,
               height: boundary.size.height,
+              baseline: baseline,
             );
     } finally {
       image.dispose();
@@ -59,7 +64,9 @@ extension _StudyOutlineExport on StudyCanvasState {
         Math.tex(
           f.display ? '\\displaystyle ${f.tex}' : f.tex,
           textStyle: TextStyle(
-            fontSize: f.display ? 12 : 11,
+            // The app sets inline math a tenth above text size; so does
+            // the 10.5 pt body.
+            fontSize: f.display ? 12 : 11.5,
             color: const Color(0xff1d2125),
           ),
           parseOptions: const ParseOptions(strict: Strict.ignore),
@@ -475,4 +482,28 @@ class _OutlinePdfDialogState extends State<_OutlinePdfDialog> {
 class _MissingGlyphs implements Exception {
   _MissingGlyphs(this.message);
   final String message;
+}
+
+/// Reports its child's alphabetic baseline once laid out, so a formula
+/// can sit on the line of text around it in the PDF.
+class _BaselineProbe extends SingleChildRenderObjectWidget {
+  const _BaselineProbe({required this.onBaseline, super.child});
+  final ValueChanged<double?> onBaseline;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderBaselineProbe(onBaseline);
+}
+
+class _RenderBaselineProbe extends RenderProxyBox {
+  _RenderBaselineProbe(this.onBaseline);
+  final ValueChanged<double?> onBaseline;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    onBaseline(
+      child?.getDistanceToBaseline(TextBaseline.alphabetic, onlyReal: true),
+    );
+  }
 }

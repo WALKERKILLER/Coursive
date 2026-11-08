@@ -207,11 +207,6 @@ List<OutlineTextBlock> outlineTextBlocks(String text) {
   return out;
 }
 
-/// Inline pieces of a paragraph: plain, bold, code or math.
-final _inline = RegExp(
-  r'\*\*(.+?)\*\*|`([^`\n]+)`|\$([^$\n]+?)\$|\\\((.+?)\\\)',
-);
-
 /// Every formula of [doc], so they can be drawn before layout.
 Set<({String tex, bool display})> outlineFormulas(OutlineExport doc) => {
   for (final b in doc.blocks)
@@ -220,9 +215,10 @@ Set<({String tex, bool display})> outlineFormulas(OutlineExport doc) => {
         ...switch (t) {
           OutlineMath(:final tex) => [(tex: tex, display: true)],
           OutlineParagraph(:final text) => [
-            for (final m in _inline.allMatches(text))
-              if ((m.group(3) ?? m.group(4)) case final tex?)
-                (tex: tex, display: false),
+            for (final r in outlineInline(text))
+              if (r.kind == OutlineRunKind.math ||
+                  r.kind == OutlineRunKind.displayMath)
+                (tex: r.text, display: r.kind == OutlineRunKind.displayMath),
           ],
           _ => const <({String tex, bool display})>[],
         },
@@ -246,13 +242,21 @@ Set<String> outlineMissingGlyphs(OutlineExport doc, Set<int> codepoints) {
         check(text);
       case OutlineEntry(:final text, :final tag):
         check(tag ?? '');
-        check(
-          text
-              .replaceAll(_inline, ' ')
-              .replaceAll(RegExp(r'\$\$[\s\S]*?\$\$'), ' '),
-        );
-        for (final m in _inline.allMatches(text)) {
-          check(m.group(1) ?? m.group(2) ?? '');
+        for (final t in outlineTextBlocks(text)) {
+          switch (t) {
+            case OutlineParagraph(:final text):
+              for (final r in outlineInline(text)) {
+                if (r.kind != OutlineRunKind.math &&
+                    r.kind != OutlineRunKind.displayMath) {
+                  check(r.text);
+                }
+              }
+            case OutlineCode(:final lines):
+              check(lines.join());
+            case OutlineTable(:final rows):
+              check(rows.expand((r) => r).join());
+            case OutlineMath():
+          }
         }
     }
   }
@@ -262,8 +266,14 @@ Set<String> outlineMissingGlyphs(OutlineExport doc, Set<int> codepoints) {
   return missing;
 }
 
-/// A formula or ink picture drawn ahead of layout, sized in points.
-typedef OutlineImage = ({Uint8List png, double width, double height});
+/// A formula or ink picture drawn ahead of layout, sized in points;
+/// [baseline] is a formula's alphabetic baseline from its top.
+typedef OutlineImage = ({
+  Uint8List png,
+  double width,
+  double height,
+  double? baseline,
+});
 
 String outlineMathKey(String tex, bool display) =>
     '${display ? 'D' : 'I'}:$tex';
@@ -321,47 +331,49 @@ Future<Uint8List> buildOutlinePdf(
 
   pw.InlineSpan inline(String text, pw.TextStyle style) {
     final spans = <pw.InlineSpan>[];
-    var at = 0;
-    for (final m in _inline.allMatches(text)) {
-      if (m.start > at) {
-        spans.add(pw.TextSpan(text: text.substring(at, m.start)));
-      }
-      if (m.group(1) != null) {
-        spans.add(
-          pw.TextSpan(
-            text: m.group(1),
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          ),
-        );
-      } else if (m.group(2) != null) {
-        spans.add(
-          pw.TextSpan(
-            text: m.group(2),
-            style: mono.copyWith(
-              fontSize: (style.fontSize ?? 10.5) - 1,
-              background: const pw.BoxDecoration(color: _paper),
+    for (final r in outlineInline(text)) {
+      switch (r.kind) {
+        case OutlineRunKind.text:
+          spans.add(pw.TextSpan(text: r.text));
+        case OutlineRunKind.bold:
+          spans.add(
+            pw.TextSpan(
+              text: r.text,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
             ),
-          ),
-        );
-      } else {
-        final tex = (m.group(3) ?? m.group(4))!;
-        final image = images[outlineMathKey(tex, false)];
-        spans.add(
-          image == null
-              ? pw.TextSpan(text: tex, style: mono)
-              : pw.WidgetSpan(
-                  baseline: -image.height * .22,
-                  child: pw.Image(
-                    pw.MemoryImage(image.png),
-                    width: image.width,
-                    height: image.height,
+          );
+        case OutlineRunKind.code:
+          spans.add(
+            pw.TextSpan(
+              text: r.text,
+              style: mono.copyWith(
+                fontSize: (style.fontSize ?? 10.5) - 1,
+                background: const pw.BoxDecoration(color: _paper),
+              ),
+            ),
+          );
+        case OutlineRunKind.math || OutlineRunKind.displayMath:
+          final display = r.kind == OutlineRunKind.displayMath;
+          final image = images[outlineMathKey(r.text, display)];
+          // A span's bottom sits on the text baseline and a positive
+          // baseline raises it, so the formula drops by its own descent.
+          spans.add(
+            image == null
+                ? pw.TextSpan(text: r.text, style: mono)
+                : pw.WidgetSpan(
+                    baseline: switch (image.baseline) {
+                      final b? => b - image.height,
+                      null => -image.height * .22,
+                    },
+                    child: pw.Image(
+                      pw.MemoryImage(image.png),
+                      width: image.width,
+                      height: image.height,
+                    ),
                   ),
-                ),
-        );
+          );
       }
-      at = m.end;
     }
-    if (at < text.length) spans.add(pw.TextSpan(text: text.substring(at)));
     return pw.TextSpan(style: style, children: spans);
   }
 

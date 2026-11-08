@@ -350,3 +350,45 @@ String _short(String quote) {
   final q = quote.replaceAll(RegExp(r'\s+'), ' ');
   return q.characters.length > 80 ? '${q.characters.take(80)}…' : q;
 }
+
+/// How a run of an item's text is set: the review panel and the PDF read
+/// the same runs, so a formula shown in one is a formula in the other.
+enum OutlineRunKind { text, bold, code, math, displayMath }
+
+typedef OutlineRun = ({OutlineRunKind kind, String text});
+
+// A single `$` opens only before a non-space and closes only after one, and
+// not before a digit, so prices such as "$5 and $6" stay text (Pandoc's rule).
+final _inlineMarks = RegExp(
+  r'\$\$(.+?)\$\$|\\\[(.+?)\\\]|\*\*(.+?)\*\*|`([^`\n]+)`'
+  r'|\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)|\\\((.+?)\\\)',
+);
+
+/// Splits one paragraph of an item into plain, bold, code and math runs.
+List<OutlineRun> outlineInline(String text) {
+  final out = <OutlineRun>[];
+  var at = 0;
+  for (final m in _inlineMarks.allMatches(text)) {
+    if (m.start > at) {
+      out.add((kind: OutlineRunKind.text, text: text.substring(at, m.start)));
+    }
+    final (kind, body) = switch (m) {
+      _ when m[1] != null => (OutlineRunKind.displayMath, m[1]!),
+      _ when m[2] != null => (OutlineRunKind.displayMath, m[2]!),
+      _ when m[3] != null => (OutlineRunKind.bold, m[3]!),
+      _ when m[4] != null => (OutlineRunKind.code, m[4]!),
+      _ => (OutlineRunKind.math, (m[5] ?? m[6])!),
+    };
+    out.add((
+      kind: kind,
+      text: kind == OutlineRunKind.math || kind == OutlineRunKind.displayMath
+          ? body.trim()
+          : body,
+    ));
+    at = m.end;
+  }
+  if (at < text.length) {
+    out.add((kind: OutlineRunKind.text, text: text.substring(at)));
+  }
+  return out;
+}

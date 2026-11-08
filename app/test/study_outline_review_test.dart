@@ -174,11 +174,12 @@ final _pixel = base64Decode(
 Future<(GlobalKey<StudyCanvasState>, NotesApi)> openReview(
   WidgetTester t, {
   NotesApi? api,
+  Map<String, dynamic>? turn,
 }) async {
   final a = api ?? NotesApi();
   // Saved conversations arrive as decoded JSON.
   final key = await grounded.openWith(t, [
-    jsonDecode(jsonEncode(outlineTurn())) as Map,
+    jsonDecode(jsonEncode(turn ?? outlineTurn())) as Map,
   ], api: a);
   await t.tap(find.byKey(const ValueKey('study-outline-review-run-1')));
   await t.pumpAndSettle();

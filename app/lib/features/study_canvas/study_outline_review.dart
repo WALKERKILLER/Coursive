@@ -968,7 +968,7 @@ class _OutlineReviewState extends State<_OutlineReview> {
             child: Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: '${item['text']}'),
+                  ..._outlineSpans('${item['text']}', tt.bodyMedium!, cs),
                   for (final e in ids)
                     WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
@@ -1392,7 +1392,7 @@ class _OutlineReviewState extends State<_OutlineReview> {
                   Text.rich(
                     TextSpan(
                       children: [
-                        TextSpan(text: '${c['text']}'),
+                        ..._outlineSpans('${c['text']}', tt.bodySmall!, cs),
                         for (final e in [
                           for (final id
                               in c['evidence_ids'] as List? ?? const [])
@@ -1417,7 +1417,13 @@ class _OutlineReviewState extends State<_OutlineReview> {
             ]),
           if (questions.isNotEmpty)
             group(l10n.outlineQuestions, [
-              for (final q in questions) line(Text(q, style: tt.bodySmall)),
+              for (final q in questions)
+                line(
+                  Text.rich(
+                    TextSpan(children: _outlineSpans(q, tt.bodySmall!, cs)),
+                    style: tt.bodySmall,
+                  ),
+                ),
             ]),
           if (missing.isNotEmpty)
             group(l10n.outlineUnread, [
@@ -1710,4 +1716,49 @@ class _TinyAction extends StatelessWidget {
       ),
     );
   }
+}
+
+/// An item's text set as the PDF sets it: bold, code and formulas, from
+/// the same runs ([outlineInline]); a formula that does not parse stays
+/// its TeX source.
+List<InlineSpan> _outlineSpans(String text, TextStyle style, ColorScheme cs) {
+  final size = style.fontSize ?? 14;
+  return [
+    for (final (i, line) in text.split('\n').indexed) ...[
+      if (i > 0) const TextSpan(text: '\n'),
+      for (final r in outlineInline(line))
+        switch (r.kind) {
+          OutlineRunKind.text => TextSpan(text: r.text),
+          OutlineRunKind.bold => TextSpan(
+            text: r.text,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          OutlineRunKind.code => TextSpan(
+            text: r.text,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: size * .92,
+              backgroundColor: cs.onSurface.withValues(alpha: .07),
+            ),
+          ),
+          OutlineRunKind.math || OutlineRunKind.displayMath => WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: Math.tex(
+              r.kind == OutlineRunKind.displayMath
+                  ? '\\displaystyle ${r.text}'
+                  : r.text,
+              // Inline math a tenth above text size, as in chat and notes.
+              textStyle: TextStyle(
+                fontSize: size * 1.1,
+                color: style.color ?? cs.onSurface,
+              ),
+              parseOptions: const ParseOptions(strict: Strict.ignore),
+              onError: (_, _) =>
+                  Text(r.text, style: style.copyWith(fontFamily: 'monospace')),
+            ),
+          ),
+        },
+    ],
+  ];
 }
