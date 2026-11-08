@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,6 +182,27 @@ func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
 	}
 	if context.Sources[0].Anchor.Kind != "pdf" {
 		t.Fatal("paged PDF anchor cannot be persisted", context.Sources[0].Anchor.Kind)
+	}
+	// Box a region around "page learning" on the second page from its real text geometry.
+	var words []StudyTextBox
+	for _, b := range second.Boxes {
+		if w, _ := studySlice(second.Text, b.Start, b.End); w == "page" || w == "learning" {
+			words = append(words, b)
+		}
+	}
+	if len(words) != 2 {
+		t.Fatal("fixture words not found", second.Boxes)
+	}
+	x0, y0 := math.Min(words[0].X, words[1].X), math.Min(words[0].Y, words[1].Y)
+	x1, y1 := math.Max(words[0].X+words[0].W, words[1].X+words[1].W), math.Max(words[0].Y+words[0].H, words[1].Y+words[1].H)
+	region := []float64{x0 - .002, y0 - .002, x1 - x0 + .004, y1 - y0 + .004}
+	boxed, e := l.StudyContext(ctx, "one", StudyContextRequest{Revision: d.Revision, Objects: []string{first.ID}, ObjectPages: map[string]int{first.ID: 2}, Selection: StudySelection{ObjectID: first.ID, Region: region}})
+	if e != nil || len(boxed.Sources) != 1 || boxed.Sources[0].Text != "page learning" || boxed.Sources[0].Availability != "text" || boxed.Sources[0].Anchor.Start != words[0].Start || boxed.Sources[0].Anchor.End != words[1].End {
+		t.Fatal("region did not read the words under it", e, boxed)
+	}
+	blank, e := l.StudyContext(ctx, "one", StudyContextRequest{Revision: d.Revision, Objects: []string{first.ID}, ObjectPages: map[string]int{first.ID: 2}, Selection: StudySelection{ObjectID: first.ID, Region: []float64{.05, .9, .1, .05}}})
+	if e != nil || len(blank.Sources) != 1 || blank.Sources[0].Text != "" || blank.Sources[0].Availability != "vision_required" {
+		t.Fatal("blank region invented text", e, blank)
 	}
 	note := StudyObject{ID: "excerpt", Type: "text", Layer: first.Layer, W: 300, H: 200, Text: "Selected page", Sources: []StudyAnchor{context.Sources[0].Anchor}}
 	d.Objects = append(d.Objects, note)

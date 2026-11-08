@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -39,6 +40,25 @@ class FixtureApi extends Api {
       return {'ok': true};
     }
     return super.post(path, body, timeout);
+  }
+
+  Uint8List? uploadedSnapshot;
+  @override
+  Future<dynamic> uploadStudyAttachment(
+    String lecture,
+    Uint8List bytes,
+    Map selection,
+  ) async {
+    uploadedSnapshot = bytes;
+    return {
+      'id': 'snapshot',
+      'sha256': 'fixture',
+      'resource': 'saved.png',
+      'mime_type': 'image/png',
+      'width': 100,
+      'height': 100,
+      'selection': selection,
+    };
   }
 
   Map? selection;
@@ -885,66 +905,75 @@ void main() {
     await t.pumpWidget(const SizedBox());
     await t.pumpAndSettle();
   });
-  testWidgets(
-    'drawn ink is sent as a bounded real PNG only after visual opt-in',
-    (t) async {
-      final api = FixtureApi(StudyDocument().json());
-      final key = await open(t, api);
-      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
-      await t.pumpAndSettle();
-      await t.dragFrom(
-        const Offset(400, 350),
-        const Offset(160, 90),
-        kind: ui.PointerDeviceKind.stylus,
-      );
-      await t.pumpAndSettle();
-      expect(key.currentState!.document!.strokes, isNotEmpty);
-      await t.runAsync(() async {
-        await t.tap(find.byKey(const ValueKey('study-ai-tab')));
-        for (var i = 0; i < 80 && api.selection == null; i++) {
-          await t.pump();
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
-      await t.pumpAndSettle();
-      await t.tap(find.byType(FilterChip));
-      await t.enterText(find.byType(TextField).last, '解释这条实际笔迹');
-      // Real raster readback must run outside the widget test's fake clock.
-      await t.runAsync(() async {
-        await t.tap(find.byTooltip('发送'));
-        for (var i = 0; i < 80 && api.request == null; i++) {
-          await t.pump();
-          await Future<void>.delayed(const Duration(milliseconds: 10));
-        }
-      });
-      await t.pumpAndSettle();
-      final attachment = (api.request!['visuals'] as List).single as Map;
-      expect(attachment['source_id'], 'selected-ink');
-      final bytes = base64Decode(attachment['data'] as String);
-      expect(bytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
-      final codec = (await t.runAsync(() => ui.instantiateImageCodec(bytes)))!;
-      final frame = (await t.runAsync(codec.getNextFrame))!;
-      expect(frame.image.width, lessThanOrEqualTo(1200));
-      expect(frame.image.height, lessThanOrEqualTo(1200));
-      expect(bytes.length, lessThanOrEqualTo(450000));
-      final pixels = (await t.runAsync(
-        () => frame.image.toByteData(format: ui.ImageByteFormat.rawRgba),
-      ))!;
-      var dark = 0;
-      for (var i = 0; i < pixels.lengthInBytes; i += 4) {
-        if (pixels.getUint8(i) < 120 &&
-            pixels.getUint8(i + 1) < 120 &&
-            pixels.getUint8(i + 2) < 120)
-          dark++;
+  testWidgets('drawn ink is attached as one bounded real PNG after 「看图」', (
+    t,
+  ) async {
+    final api = FixtureApi(StudyDocument().json());
+    final key = await open(t, api);
+    await t.tap(find.byKey(const ValueKey('study-tool-pen')));
+    await t.pumpAndSettle();
+    await t.dragFrom(
+      const Offset(400, 350),
+      const Offset(160, 90),
+      kind: ui.PointerDeviceKind.stylus,
+    );
+    await t.pumpAndSettle();
+    expect(key.currentState!.document!.strokes, isNotEmpty);
+    await t.runAsync(() async {
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+      for (var i = 0; i < 80 && api.selection == null; i++) {
+        await t.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
       }
-      expect(dark, greaterThan(10), reason: '选区附件必须包含实际画出的深色笔迹');
-      frame.image.dispose();
-      codec.dispose();
+    });
+    await t.pumpAndSettle();
+    // 「看图」 is off, so nothing was captured yet.
+    expect(api.uploadedSnapshot, isNull);
+    // Opting in takes the screenshot, outside the fake clock.
+    await t.runAsync(() async {
+      await t.tap(find.text('看图'));
+      for (var i = 0; i < 80 && api.uploadedSnapshot == null; i++) {
+        await t.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await t.pumpAndSettle();
+    await t.enterText(find.byType(TextField).last, '解释这条实际笔迹');
+    // Real raster readback must run outside the widget test's fake clock.
+    await t.runAsync(() async {
+      await t.tap(find.byTooltip('发送'));
+      for (var i = 0; i < 80; i++) {
+        await t.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await t.pumpAndSettle();
+    final attachment = (api.request!['attachments'] as List).single as Map;
+    expect(attachment['id'], 'snapshot');
+    final bytes = api.uploadedSnapshot!;
+    expect(bytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
+    final codec = (await t.runAsync(() => ui.instantiateImageCodec(bytes)))!;
+    final frame = (await t.runAsync(codec.getNextFrame))!;
+    expect(frame.image.width, lessThanOrEqualTo(1600));
+    expect(frame.image.height, lessThanOrEqualTo(1600));
+    expect(bytes.length, lessThanOrEqualTo(3 * 1024 * 1024));
+    final pixels = (await t.runAsync(
+      () => frame.image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    ))!;
+    var dark = 0;
+    for (var i = 0; i < pixels.lengthInBytes; i += 4) {
+      if (pixels.getUint8(i) < 120 &&
+          pixels.getUint8(i + 1) < 120 &&
+          pixels.getUint8(i + 2) < 120)
+        dark++;
+    }
+    expect(dark, greaterThan(10), reason: '选区附件必须包含实际画出的深色笔迹');
+    frame.image.dispose();
+    codec.dispose();
 
-      await t.pumpWidget(const SizedBox());
-      await t.pumpAndSettle();
-    },
-  );
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+  });
   testWidgets(
     'clicking a citation focuses the moved source and exposes its real excerpt',
     (t) async {
@@ -984,8 +1013,18 @@ void main() {
       await t.tap(find.textContaining('TEXT · 后选中'));
       await t.pumpAndSettle();
       expect(key.currentState!.document!.camera, isNot(before));
-      expect(find.text('来源原文：后选中'), findsOneWidget);
+      // It lands like a citation: the passage lit, and a way back.
+      expect(
+        key.currentState!.document!.cards
+            .singleWhere((c) => c.id == 'source')
+            .text,
+        '前😀后选中内容',
+      );
+      expect(find.byKey(const ValueKey('study-return')), findsOneWidget);
       expect(find.text('原资料'), findsOneWidget);
+      await t.tap(find.byKey(const ValueKey('study-return')));
+      await t.pumpAndSettle();
+      expect(key.currentState!.document!.camera, before);
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
     },

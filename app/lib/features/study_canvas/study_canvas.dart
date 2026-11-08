@@ -21,6 +21,7 @@ import '../../core/models.dart';
 import '../../theme/glass.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/coursive_markdown.dart';
+import '../../widgets/pickers.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
 import '../player/video_card_hold.dart';
@@ -28,12 +29,19 @@ import '../practice/quiz.dart';
 import 'study_document.dart';
 import 'study_query.dart';
 import 'study_visual.dart';
+import 'study_attachment.dart';
 import 'study_pdf_column.dart';
 import 'study_shape.dart';
+import 'outline_document.dart';
+import 'outline_pdf.dart';
+import 'reading_glow.dart';
+import 'study_selection_geometry.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 
 part 'study_agent_ui.dart';
+part 'study_snapshot_capture.dart';
+part 'study_source_navigation.dart';
 part 'study_agent_stage.dart';
 part 'study_shelf_ui.dart';
 part 'study_brush_ui.dart';
@@ -47,6 +55,9 @@ part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
 part 'study_selection_tools.dart';
+part 'study_evidence.dart';
+part 'study_outline_review.dart';
+part 'study_outline_export.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -116,10 +127,13 @@ class StudyCanvasState extends State<StudyCanvas>
   Offset? _eraserCursor, _pressureOrigin, _pressureStart;
   double _cursorRadius = 18, _pressureThreshold = .8;
   bool _pressureEraser = true, _temporaryEraser = false;
-  bool _selectionReady = false,
-      _selectionDragging = false,
-      _selectionResize = false;
-  bool _lassoRectangle = false, _captureLasso = false;
+  bool _selectionReady = false, _selectionDragging = false;
+  bool _selectionToolbarDocked = false, _selectionMeasurePending = false;
+  List<Rect> _selectionObstacles = [];
+  StudySelectionHandle? _selectionHandle;
+  Rect? _selectionResizeStart;
+  List<Offset> _selectionResizePolygon = [];
+  bool _lassoRectangle = true, _captureLasso = false;
   final _selectionKinds = StudySelectionKind.values.toSet();
   bool _selectionBusy = false;
   List<StudyAnchor>? _linkStart;
@@ -169,6 +183,39 @@ class StudyCanvasState extends State<StudyCanvas>
   bool _quickAsk = false, _quickSending = false, _quickImages = false;
   String? _quickError;
   final _quickInput = TextEditingController();
+  final _sourceNavigations = <String, Future<void>>{};
+  final _messageScroll = <String?, ScrollController>{};
+  bool _snapshotting = false, _snapshotPreparing = false;
+  final _snapshotFrames = <String, Uint8List>{};
+  List<Offset> _selectionPolygon = [];
+
+  /// The screenshot previewed in the quick composer once 「看图」 is on.
+  StudySnapshot? _quickSnapshot;
+  bool _quickCapturing = false;
+
+  /// Views left by following citations, newest last; see [_goBack].
+  final _bookmarks = <_ViewMark>[];
+  final _returnKey = GlobalKey();
+
+  /// The outline under review and, on a narrow window, whether the review
+  /// steps down to show the source.
+  _ReviewTarget? _review;
+  bool _reviewPeek = false;
+  final _reviewKey = GlobalKey();
+
+  /// The review item last pointed at or focused.
+  FocusNode? _reviewFocus;
+
+  /// The citation under the pointer or keyboard focus, or the one just followed.
+  final _evidenceFocus = ValueNotifier<Map?>(null);
+  late final _evidenceSweep = AnimationController(
+    vsync: this,
+    duration: Motion.medium2,
+  );
+  late final _evidenceLanding = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
 
   /// The open 课次素材 tab, or null when the shelf is away.
   _ShelfTab? _shelfTab, _shelfShown;
@@ -362,7 +409,7 @@ class StudyCanvasState extends State<StudyCanvas>
       final cards = document!.cards.map((c) => c.id).toSet();
       _detail.strokeIds.removeWhere((id) => !strokes.contains(id));
       _selection.removeWhere((id) => !cards.contains(id));
-      _selectionBounds = _boundsOfSelection();
+      _selectionBounds = _regionSelection ?? _boundsOfSelection();
       if (_selectionBounds == null && _detail.objectId == null)
         _selectionReady = false;
     }
@@ -447,6 +494,9 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  /// The system back action first returns from a followed citation.
+  bool returnFromSource() => document != null && _goBack();
+
   bool handleKey(KeyEvent e) {
     if (e is! KeyDownEvent || document == null) return false;
     // Typing in the composer or a card must not switch tools.
@@ -456,12 +506,34 @@ class StudyCanvasState extends State<StudyCanvas>
             focus.findAncestorWidgetOfExactType<EditableText>() != null))
       return false;
     final k = e.logicalKey;
-    if ((HardwareKeyboard.instance.isMetaPressed ||
-            HardwareKeyboard.instance.isControlPressed) &&
+    final keys = HardwareKeyboard.instance;
+    // Esc steps back one level: composer, selection, then a followed citation.
+    if (k == LogicalKeyboardKey.escape) {
+      if (_quickAsk) {
+        _update(() => _quickAsk = false);
+        return true;
+      }
+      if (_selectionReady) {
+        _clearSelection();
+        return true;
+      }
+      return _goBack();
+    }
+    if ((keys.isAltPressed && k == LogicalKeyboardKey.arrowLeft) ||
+        (keys.isMetaPressed && k == LogicalKeyboardKey.bracketLeft)) {
+      return _goBack();
+    }
+    if ((k == LogicalKeyboardKey.enter ||
+            k == LogicalKeyboardKey.numpadEnter) &&
+        _tool == StudyTool.region &&
+        _selectionReady &&
+        !_quickAsk) {
+      unawaited(_ask());
+      return true;
+    }
+    if ((keys.isMetaPressed || keys.isControlPressed) &&
         k == LogicalKeyboardKey.keyZ) {
-      HardwareKeyboard.instance.isShiftPressed
-          ? document!.redo()
-          : document!.undo();
+      keys.isShiftPressed ? document!.redo() : document!.undo();
       return true;
     }
     final tool = {
@@ -499,6 +571,9 @@ class StudyCanvasState extends State<StudyCanvas>
     _composerFocus.dispose();
     _idleInput.dispose();
     _quickInput.dispose();
+    _evidenceFocus.dispose();
+    _evidenceSweep.dispose();
+    _evidenceLanding.dispose();
     _gesturing.dispose();
     _dropHint.dispose();
     document?.removeListener(_changed);
@@ -535,6 +610,8 @@ class StudyCanvasState extends State<StudyCanvas>
       _aiDockKey,
       _zoomKey,
       _selectionMenuKey,
+      _returnKey,
+      _reviewKey,
       _moduleKey,
       _toolbarKey,
       _topBarKey,
@@ -702,7 +779,10 @@ class StudyCanvasState extends State<StudyCanvas>
         _selectionReady &&
         _selectionBounds != null &&
         _selectionBounds!.inflate(16 / d.zoom).contains(hitPoint) &&
-        (_selection.isNotEmpty || _detail.strokeIds.isNotEmpty);
+        (_selection.isNotEmpty ||
+            _detail.strokeIds.isNotEmpty ||
+            studySelectionHandleAt(_selectionBounds!, hitPoint, 16 / d.zoom) !=
+                null);
     final passiveVideoBody =
         hitCard != null &&
         const {'lecture', 'video'}.contains(hitCard.type) &&
@@ -775,14 +855,23 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     if (_tool == StudyTool.region &&
         (e.kind != PointerDeviceKind.touch || selectedRegion)) {
+      final handle = _selectionReady && _selectionBounds != null
+          ? studySelectionHandleAt(_selectionBounds!, p, 16 / d.zoom)
+          : null;
+      if (handle != null) {
+        _selectionHandle = handle;
+        _selectionResizeStart = _selectionBounds;
+        _selectionResizePolygon = List.of(_selectionPolygon);
+        _selectionDragging = true;
+        setState(() {});
+        return;
+      }
       if (_selectionReady &&
-          _selectionBounds != null &&
-          _selectionBounds!.inflate(16 / d.zoom).contains(p) &&
+          _selectionBounds?.contains(p) == true &&
           (_selection.isNotEmpty || _detail.strokeIds.isNotEmpty)) {
         d.checkpoint();
+        _selectionHandle = null;
         _selectionDragging = true;
-        _selectionResize =
-            (p - _selectionBounds!.bottomRight).distance < 22 / d.zoom;
         return;
       }
       _selectionReady = false;
@@ -1018,15 +1107,35 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_selectionDragging && _selectionBounds != null) {
       final from = _selectionBounds!;
       final delta = p - _last!;
-      final to = _selectionResize
-          ? Rect.fromLTWH(
-              from.left,
-              from.top,
-              math.max(12 / d.zoom, from.width + delta.dx),
-              math.max(12 / d.zoom, from.height + delta.dy),
-            )
-          : from.shift(delta);
-      _transformSelection(from, to);
+      if (_selectionHandle != null) {
+        final to = studyResizeSelection(
+          _selectionResizeStart!,
+          _selectionHandle!,
+          p - _start!,
+          24 / d.zoom,
+        );
+        final original = _selectionResizeStart!;
+        final polygon = _selectionResizePolygon.isEmpty
+            ? [to.topLeft, to.topRight, to.bottomRight, to.bottomLeft]
+            : _selectionResizePolygon
+                  .map(
+                    (point) => Offset(
+                      to.left +
+                          (point.dx - original.left) *
+                              to.width /
+                              original.width,
+                      to.top +
+                          (point.dy - original.top) *
+                              to.height /
+                              original.height,
+                    ),
+                  )
+                  .toList();
+        _setRegionSelection(to, polygon);
+        _update(() {});
+      } else {
+        _transformSelection(from, from.shift(delta));
+      }
       _last = p;
       return;
     }
@@ -1135,6 +1244,7 @@ class StudyCanvasState extends State<StudyCanvas>
           .map((s) => s.bounds)
           .reduce((a, b) => a.expandToInclude(b))
           .inflate(16);
+      _selectionPolygon = [];
       _regionSelection = region;
       _selection.clear();
       final anchored = d.cards.where((c) => c.id == _anchor).firstOrNull;
@@ -1169,6 +1279,18 @@ class StudyCanvasState extends State<StudyCanvas>
           e is! PointerCancelEvent) {
         _finishSelection();
       }
+      if (_selectionHandle != null &&
+          e is PointerCancelEvent &&
+          _selectionResizeStart != null) {
+        _setRegionSelection(_selectionResizeStart!, _selectionResizePolygon);
+      }
+      // The composer's screenshot follows the resized region.
+      if (_selectionHandle != null && _quickAsk && _quickImages) {
+        unawaited(_previewQuickVision());
+      }
+      _selectionHandle = null;
+      _selectionResizeStart = null;
+      _selectionResizePolygon = [];
       _selectionDragging = false;
       _temporaryEraser = false;
       _eraserCursor = null;
@@ -1448,9 +1570,11 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
-  Future<void> _sendQuickQuestion() async {
+  /// Sends the quick composer's question, or with [outline] drafts a review
+  /// outline of the bound material, the question becoming its brief.
+  Future<void> _sendQuickQuestion({bool outline = false}) async {
     final text = _quickInput.text.trim();
-    if (text.isEmpty || _quickSending) return;
+    if ((text.isEmpty && !outline) || _quickSending) return;
     _update(() {
       _quickSending = true;
       _quickError = null;
@@ -1461,11 +1585,22 @@ class StudyCanvasState extends State<StudyCanvas>
           _detail.strokeIds.isEmpty) {
         throw FormatException(l10n.studySelectionNeedsSource);
       }
-      await _startConversation(send: text, allowImages: _quickImages);
+      await _startConversation(
+        send: !outline
+            ? text
+            : text.isEmpty
+            ? l10n.outlineAsk
+            : '${l10n.outlineAsk}：$text',
+        task: outline ? 'propose_outline' : null,
+        allowImages: _quickImages,
+        snapshot: _quickImages ? _quickSnapshot : null,
+      );
       if (!mounted) return;
       _quickInput.clear();
       _update(() {
         _quickAsk = false;
+        _quickImages = false;
+        _quickSnapshot = null;
         _tool = StudyTool.select;
       });
     } catch (e) {
@@ -1599,7 +1734,24 @@ class StudyCanvasState extends State<StudyCanvas>
     return LayoutBuilder(
       builder: (_, size) {
         _viewport = Size(size.maxWidth, size.maxHeight);
-        return _canvas(d);
+        _measureSelectionControls();
+        _selectionToolbarDocked =
+            !_snapshotting &&
+            _selectionReady &&
+            !_quickAsk &&
+            _tool == StudyTool.region &&
+            _selectionBounds != null &&
+            _selectionMenuRect() == null;
+        if (_selectionToolbarDocked) {
+          _viewport = Size(size.maxWidth, math.max(0, size.maxHeight - 56));
+        }
+        return Column(
+          children: [
+            Expanded(child: _canvas(d)),
+            if (_selectionToolbarDocked)
+              SizedBox(height: 56, child: _selectionToolbar(docked: true)),
+          ],
+        );
       },
     );
   }
@@ -1855,6 +2007,16 @@ class StudyCanvasState extends State<StudyCanvas>
                     ),
                   ),
                 ),
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: RepaintBoundary(
+                      child: CustomPaint(
+                        key: const ValueKey('study-evidence'),
+                        painter: _EvidencePainter(this),
+                      ),
+                    ),
+                  ),
+                ),
                 if (Platform.isMacOS)
                   const Positioned(
                     top: 0,
@@ -1872,7 +2034,9 @@ class StudyCanvasState extends State<StudyCanvas>
                 ),
                 _fixedTopBars(),
                 _agentStage(),
-                _selectionToolbar(),
+                _reviewPanel(),
+                _returnPill(),
+                if (!_selectionToolbarDocked) _selectionToolbar(),
                 _shelf(),
                 if (_viewport.width >= 600)
                   Positioned(
@@ -1938,7 +2102,7 @@ class StudyCanvasState extends State<StudyCanvas>
 
   Widget _card(StudyCard c) {
     final d = document!,
-        selected = _selection.contains(c.id),
+        selected = !_snapshotting && _selection.contains(c.id),
         chrome = StudyChrome.of(context),
         cs = Theme.of(context).colorScheme;
     final shape = RoundedSuperellipseBorder(
@@ -2190,7 +2354,9 @@ class StudyCanvasState extends State<StudyCanvas>
                     'conversation' => _ThreadNode(owner: this, card: c),
                     'lecture' => Column(
                       children: [
-                        Expanded(child: _videoInput(widget.video)),
+                        Expanded(
+                          child: _snapshotVideo(c, _videoInput(widget.video)),
+                        ),
                         TextButton.icon(
                           key: const ValueKey('study-video-shelf'),
                           style: TextButton.styleFrom(
@@ -2221,20 +2387,24 @@ class StudyCanvasState extends State<StudyCanvas>
                       errorBuilder: (_, error, stack) =>
                           Center(child: Text(l10n.studyImageFailed)),
                     ),
-                    'video' => _videoInput(
-                      _LocalVideo(
-                        key: _localVideoKeys.putIfAbsent(
-                          c.id,
-                          () => GlobalKey<_LocalVideoState>(),
+                    'video' => _snapshotVideo(
+                      c,
+                      _videoInput(
+                        _LocalVideo(
+                          key: _localVideoKeys.putIfAbsent(
+                            c.id,
+                            () => GlobalKey<_LocalVideoState>(),
+                          ),
+                          url: c.path.isEmpty
+                              ? widget.api.studyMediaUrl(
+                                  widget.ctl.lectureId,
+                                  c.id,
+                                )
+                              : widget.api.fileUrl(c.path),
+                          prepare: flush,
+                          initialMs: _localVideoTimes[c.id] ?? 0,
+                          onPosition: (ms) => _localVideoTimes[c.id] = ms,
                         ),
-                        url: c.path.isEmpty
-                            ? widget.api.studyMediaUrl(
-                                widget.ctl.lectureId,
-                                c.id,
-                              )
-                            : widget.api.fileUrl(c.path),
-                        initialMs: _localVideoTimes[c.id] ?? 0,
-                        onPosition: (ms) => _localVideoTimes[c.id] = ms,
                       ),
                     ),
                     'note' ||
@@ -2311,10 +2481,12 @@ class _LocalVideo extends StatefulWidget {
     super.key,
     required this.url,
     required this.initialMs,
+    required this.prepare,
     required this.onPosition,
   });
   final String url;
   final int initialMs;
+  final Future<bool> Function() prepare;
   final ValueChanged<int> onPosition;
   @override
   State<_LocalVideo> createState() => _LocalVideoState();
@@ -2325,29 +2497,43 @@ class _LocalVideoState extends State<_LocalVideo> {
   late final controller = VideoController(player);
   StreamSubscription? _errors;
   StreamSubscription? _positions;
-  String? _error;
+  bool _failed = false;
+  late final Future<bool> ready;
   @override
   void initState() {
     super.initState();
     _errors = player.stream.error.listen((error) {
-      if (mounted) setState(() => _error = error);
+      if (mounted) setState(() => _failed = true);
     });
     _positions = player.stream.position.listen(
       (p) => widget.onPosition(p.inMilliseconds),
     );
-    unawaited(_open());
+    ready = _open();
   }
 
-  Future<void> _open() async {
+  Future<bool> _open() async {
     try {
+      // The media route resolves saved canvas objects. Publishing the reference
+      // must finish before the player requests its authenticated URL.
+      if (!await widget.prepare()) throw const FormatException('Save failed');
+      if (!mounted) return false;
       await controller.platform.future;
-      if (!mounted) return;
+      if (!mounted) return false;
       await player.open(Media(widget.url), play: false);
       if (mounted && widget.initialMs > 0)
         await player.seek(Duration(milliseconds: widget.initialMs));
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      return mounted && !_failed;
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+      return false;
     }
+  }
+
+  Future<void> seekPaused(int milliseconds) async {
+    if (!await ready || !mounted || _failed)
+      throw const FormatException('Video unavailable');
+    await player.seek(Duration(milliseconds: milliseconds));
+    await player.pause();
   }
 
   @override
@@ -2359,7 +2545,7 @@ class _LocalVideoState extends State<_LocalVideo> {
   }
 
   @override
-  Widget build(BuildContext context) => _error == null
+  Widget build(BuildContext context) => !_failed
       ? MaterialDesktopVideoControlsTheme(
           normal: const MaterialDesktopVideoControlsThemeData(
             modifyVolumeOnScroll: false,
@@ -2398,7 +2584,7 @@ class _LocalVideoState extends State<_LocalVideo> {
             ),
           ),
         )
-      : Center(child: Text(l10n.studyLocalVideoError(_error!)));
+      : Center(child: Text(l10n.studyLocalVideoError));
 }
 
 /// The paper colour as shown: in dark mode each paper keeps a trace of its

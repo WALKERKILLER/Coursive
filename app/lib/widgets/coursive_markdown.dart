@@ -68,6 +68,8 @@ class FileRef extends CoursiveRef {
   final String path;
 }
 
+const _evidenceScheme = 'coursive-evidence:';
+
 const _imageExts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'};
 
 /// Opens a library file: images in the viewer, anything else with the
@@ -175,6 +177,7 @@ class CoursiveMarkdown extends StatelessWidget {
     this.isStreaming = false,
     this.animation = GptMarkdownAnimation.none,
     this.codeBuilder,
+    this.evidenceBuilder,
   });
 
   final String data;
@@ -193,6 +196,9 @@ class CoursiveMarkdown extends StatelessWidget {
   final bool isStreaming;
   final GptMarkdownAnimation animation;
   final CodeBlockBuilder? codeBuilder;
+
+  /// Renders a `coursive-evidence:<id>` link (a host-issued citation) inline.
+  final Widget Function(String id, String label)? evidenceBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -216,10 +222,14 @@ class CoursiveMarkdown extends StatelessWidget {
         ),
       ),
       onLinkTap: (url, _) {
+        if (url.startsWith(_evidenceScheme)) return;
         final ref = CoursiveRef.parse(url);
         ref != null && onRef != null ? onRef!(ref) : openPlainLink(context, url);
       },
       inlineLinkBuilder: (d) {
+        if (evidenceBuilder != null && d.url.startsWith(_evidenceScheme)) {
+          return WidgetSpan(alignment: PlaceholderAlignment.middle, child: evidenceBuilder!(d.url.substring(_evidenceScheme.length), d.label));
+        }
         final ref = CoursiveRef.parse(d.url);
         if (ref == null || onRef == null) return d.defaultSpan();
         return WidgetSpan(

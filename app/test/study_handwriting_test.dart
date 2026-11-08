@@ -1,3 +1,5 @@
+import 'study_quick_question_test.dart' show SelectionApi;
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -35,6 +37,8 @@ Future<void> close(WidgetTester t) async {
 
 Future<void> selectInk(WidgetTester t) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
+  await t.pumpAndSettle();
+  await t.tap(find.byTooltip('自由套索'));
   await t.pumpAndSettle();
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(
@@ -265,7 +269,7 @@ void main() {
       final key = await fixture.open(t, api, capture: capture);
       await selectInk(t);
       await saveReviewImage(t, capture, 'lasso');
-      expect(find.text('复制'), findsOneWidget);
+      expect(find.byKey(const ValueKey('study-selection-bar')), findsOneWidget);
       final current = key.currentState!.document!;
       final before = current.strokes.single.points.first.p;
       final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
@@ -284,6 +288,8 @@ void main() {
       await t.tap(find.text('#e65365'));
       await t.pumpAndSettle();
       expect(current.strokes.single.color, 0xffe65365);
+      await t.tap(find.byKey(const ValueKey('study-selection-actions')));
+      await t.pumpAndSettle();
       await t.tap(find.text('副本'));
       await t.pumpAndSettle();
       expect(current.strokes.length, 2);
@@ -450,7 +456,7 @@ void main() {
           ],
         ),
       );
-      final api = fixture.FixtureApi(d.json());
+      final api = SelectionApi(d.json());
       final key = await fixture.open(t, api);
       await selectInk(t);
       final before = key.currentState!.document!.cards.single.rect;

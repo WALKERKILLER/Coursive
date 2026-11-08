@@ -6384,9 +6384,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyUnknownVersion => '画布版本不受支持';
 
   @override
-  String studyLocalVideoError(String error) {
-    return '无法播放此视频：$error';
-  }
+  String get studyLocalVideoError => '无法播放此视频。请检查本地文件后重新打开画布。';
 
   @override
   String get localCourse => '本地课程';
@@ -7401,4 +7399,511 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';
+
+  @override
+  String get studyEvidenceStale => '来源已失效：原文已修改或删除';
+
+  @override
+  String get studyEvidenceOtherLecture => '此来源属于其他课次，请先打开对应课次';
+
+  @override
+  String get studyEvidenceMissing => '无法定位：来源已移除或所在图层已隐藏';
+
+  @override
+  String get studyEvidenceSeen => '看过的图像';
+
+  @override
+  String get studyEvidenceSeenBody => '助手读过这块选区的图像，画面内容以原图为准';
+
+  @override
+  String get studyEvidenceInk => '手写';
+
+  @override
+  String get studyEvidenceLocate => '定位';
+
+  @override
+  String studyEvidenceSemantics(int number, String locator) {
+    return '引用 $number：$locator';
+  }
+
+  @override
+  String get studyReturn => '返回原处';
+
+  @override
+  String get studyReturnKeys => 'Esc 或 Alt+←';
+
+  @override
+  String get studyReturnKeysMac => 'Esc 或 ⌘[';
+
+  @override
+  String studyCoveragePassages(int count) {
+    return '$count 段原文';
+  }
+
+  @override
+  String studyCoverageTranscript(int count) {
+    return '$count 句讲解';
+  }
+
+  @override
+  String studyCoverageVisual(int count) {
+    return '$count 处看图';
+  }
+
+  @override
+  String studyCoverageStale(int count) {
+    return '$count 处已失效';
+  }
+
+  @override
+  String studyCoverageLead(String parts) {
+    return '依据 $parts';
+  }
+
+  @override
+  String get studyCoverageNone => '未引用资料原文，内容可能来自常识或推断';
+
+  @override
+  String studySuggestOpen(String locator) {
+    return '回看 $locator';
+  }
+
+  @override
+  String get studySuggestFollowupHint => '填入输入框，确认后再发送';
+
+  @override
+  String get studyBoundLecture => '课程视频';
+
+  @override
+  String get studyBoundCard => '未命名卡片';
+
+  @override
+  String get studyBoundRegion => '局部';
+
+  @override
+  String studyBoundInk(int count) {
+    return '$count 笔手写';
+  }
+
+  @override
+  String get studyBoundReadable => '含可读文字';
+
+  @override
+  String get studyBoundNeedsVision => '没有可读文字，需要「看图」';
+
+  @override
+  String get studyBoundRemove => '移除此资料';
+
+  @override
+  String get studyBindMore => '添加卡片';
+
+  @override
+  String get studyExcerpt => '摘录';
+
+  @override
+  String get studyExcerptHint => '把选区截成带来源的卡片';
+
+  @override
+  String get studyRelate => '关联';
+
+  @override
+  String get studyRelateHint => '设为关联起点，再圈选另一处连接';
+
+  @override
+  String get studyRelateHere => '连到这里';
+
+  @override
+  String get studyRelateHereHint => '从关联起点连到这处选区';
+
+  @override
+  String get studySelectionClear => '取消选择';
+
+  @override
+  String get studyQuickHint => '问问选中的内容…';
+
+  @override
+  String get studyQuickKeys => 'Enter 发送 · Esc 返回';
+
+  @override
+  String get studyQuickNeedsVision => '选中的内容没有可读文字。打开「看图」后，助手才能读懂它。';
+
+  @override
+  String get outlineChoiceMastered => '已掌握';
+
+  @override
+  String get outlineChoiceKey => '重点';
+
+  @override
+  String get outlineChoiceReview => '待复习';
+
+  @override
+  String get outlineChoiceCustom => '自定义';
+
+  @override
+  String get outlineChoiceKeep => '保持原样';
+
+  @override
+  String get outlineTagUnconfirmed => '未确认';
+
+  @override
+  String get outlineTagCheck => '待查';
+
+  @override
+  String get outlineTagQuestion => '问题';
+
+  @override
+  String get outlineTagUnverified => '未核实';
+
+  @override
+  String get outlineConflicts => '来源说法不一致';
+
+  @override
+  String get outlineMarks => '手写标记';
+
+  @override
+  String get outlineChecks => '待查';
+
+  @override
+  String get outlineQuestions => '未解决的问题';
+
+  @override
+  String get outlineUnread => '未读取的资料';
+
+  @override
+  String get outlineAppendix => '待核实';
+
+  @override
+  String get outlineAppendixNote => '以下内容还没有经过你的确认，暂不作为结论。';
+
+  @override
+  String get outlineUntitled => '复习提纲';
+
+  @override
+  String get outlineSources => '来源';
+
+  @override
+  String get outlineOpenSource => '在 Coursive 中打开';
+
+  @override
+  String outlinePdfMeta(String date, int sections, int items, int sources) {
+    return '$date · $sections 节 · $items 条 · $sources 处来源';
+  }
+
+  @override
+  String get outlineContents => '目录';
+
+  @override
+  String get outlineSourceStale => '依据已失效';
+
+  @override
+  String outlineReviewed(int done, int total) {
+    return '已审核 $done/$total';
+  }
+
+  @override
+  String outlineStaleCount(int n) {
+    return '依据失效 $n';
+  }
+
+  @override
+  String outlineMarksCount(int n) {
+    return '$n 个标记待解释';
+  }
+
+  @override
+  String outlineUnverifiedCount(int n) {
+    return '未核实 $n';
+  }
+
+  @override
+  String get outlineClose => '关闭审核，草稿会保留';
+
+  @override
+  String get outlineUndo => '撤销';
+
+  @override
+  String get outlineAccept => '采纳';
+
+  @override
+  String get outlineUnaccept => '取消采纳';
+
+  @override
+  String get outlineToCheck => '标为待查';
+
+  @override
+  String get outlineUncheck => '取消待查';
+
+  @override
+  String get outlineEdit => '改写';
+
+  @override
+  String get outlineEditHint => 'Enter 完成 · Shift+Enter 换行 · Esc 放弃';
+
+  @override
+  String get outlineSplit => '拆成两条';
+
+  @override
+  String get outlineMerge => '合并下一条';
+
+  @override
+  String get outlineMoveUp => '上移';
+
+  @override
+  String get outlineMoveDown => '下移';
+
+  @override
+  String get outlineDelete => '删除';
+
+  @override
+  String get outlineMore => '更多操作';
+
+  @override
+  String get outlineLevel => '切换标题层级';
+
+  @override
+  String get outlineAddItem => '添加条目';
+
+  @override
+  String get outlineDeleteSection => '删除章节，条目并入上一章';
+
+  @override
+  String get outlineKindSummary => '归纳';
+
+  @override
+  String get outlineEvidenceGone => '依据已失效';
+
+  @override
+  String get outlineKeepAsCheck => '保留为待查';
+
+  @override
+  String get outlineDropEvidence => '移除失效依据';
+
+  @override
+  String get outlineMarkHint => '这个标记是什么意思？只有你知道';
+
+  @override
+  String get outlineMarkUndo => '撤销选择';
+
+  @override
+  String get outlineCustomHint => '写下它的意思';
+
+  @override
+  String get outlineNoInk => '原来的笔迹已不在画布上';
+
+  @override
+  String get outlineShowInk => '在画布上查看这处笔迹';
+
+  @override
+  String get outlineSave => '保存为课程笔记';
+
+  @override
+  String get outlineUpdate => '更新课程笔记';
+
+  @override
+  String get outlineSaving => '正在保存…';
+
+  @override
+  String get outlineSaved => '已保存为本课笔记';
+
+  @override
+  String get outlineDirty => '有修改尚未更新到笔记';
+
+  @override
+  String outlineSaveFailed(String error) {
+    return '无法保存笔记：$error';
+  }
+
+  @override
+  String get outlineSaveConflict => '无法保存：这份笔记已在其他地方修改。本机的审核内容仍在，可以另存一份';
+
+  @override
+  String get outlineSaveCopy => '另存为新笔记';
+
+  @override
+  String get outlineRetry => '重试';
+
+  @override
+  String get outlineStateNotRecorded => '无法记录提纲状态：笔记已保存，重试不会重复创建';
+
+  @override
+  String get outlineTooManyItems => '每章最多 20 条';
+
+  @override
+  String get outlineExport => '导出';
+
+  @override
+  String get outlineExportMarkdown => '导出 Markdown';
+
+  @override
+  String get outlineExportPdf => '导出 PDF';
+
+  @override
+  String outlineExportSaved(String path) {
+    return '已导出到 $path';
+  }
+
+  @override
+  String outlineExportFailed(String error) {
+    return '无法导出：$error';
+  }
+
+  @override
+  String get outlineKeys => 'A 采纳 · F 待查 · Enter 改写 · Alt+↑↓ 移动 · Esc 关闭';
+
+  @override
+  String get outlinePeekOutline => '提纲';
+
+  @override
+  String get outlinePeekSource => '原文';
+
+  @override
+  String get outlineEmpty => '没有可审核的条目';
+
+  @override
+  String get outlineAsk => '整理为复习提纲';
+
+  @override
+  String get outlineAskHint => '确认资料后，助手把它们整理成草稿交给你审核';
+
+  @override
+  String get outlineQuick => '整理提纲';
+
+  @override
+  String get outlineConfirmTitle => '整理为复习提纲';
+
+  @override
+  String get outlineConfirmBody =>
+      '助手会读取下面这些资料，整理成草稿交给你逐条审核。保存为课程笔记之前，不会写入任何内容。';
+
+  @override
+  String get outlineConfirmStart => '开始整理';
+
+  @override
+  String get outlineImagesHint => '允许助手查看选区图像，用于读懂手写和扫描件';
+
+  @override
+  String get outlineNoSources => '这个对话还没有绑定资料';
+
+  @override
+  String outlineCardSummary(int sections, int items) {
+    return '$sections 节 · $items 条';
+  }
+
+  @override
+  String get outlineCardSaved => '已存为笔记';
+
+  @override
+  String get outlineCardDraft => '草稿';
+
+  @override
+  String get outlineOpenReview => '审核提纲';
+
+  @override
+  String get outlinePdfTitle => '导出 PDF';
+
+  @override
+  String get outlinePaper => '纸张';
+
+  @override
+  String get outlineOrientation => '方向';
+
+  @override
+  String get outlinePortrait => '竖版';
+
+  @override
+  String get outlineLandscape => '横版';
+
+  @override
+  String get outlineMargins => '页边距';
+
+  @override
+  String get outlineMarginStandard => '标准';
+
+  @override
+  String get outlineMarginCompact => '紧凑';
+
+  @override
+  String outlinePdfPage(int page, int count) {
+    return '$page / $count';
+  }
+
+  @override
+  String get outlinePdfTextLayer => '文字可选择复制';
+
+  @override
+  String get outlinePdfSave => '保存 PDF';
+
+  @override
+  String get outlinePdfMarkdown => '改存 Markdown';
+
+  @override
+  String outlinePdfMissing(String chars, int n) {
+    return '无法导出 PDF：内嵌字体缺少「$chars」等 $n 个字符，可以改存 Markdown';
+  }
+
+  @override
+  String outlinePdfPreviewFailed(String error) {
+    return '无法预览：$error。仍可保存同一份 PDF';
+  }
+
+  @override
+  String get outlinePrevPage => '上一页';
+
+  @override
+  String get outlineNextPage => '下一页';
+
+  @override
+  String studySourcesCount(int count) {
+    return '$count 份资料';
+  }
+
+  @override
+  String studySourcesReading(String label) {
+    return '正在读 · $label';
+  }
+
+  @override
+  String get studySourcesShow => '展开资料列表';
+
+  @override
+  String get studySourcesHide => '收起资料列表';
+
+  @override
+  String get studySnapshotDrag => '拖入对话，附上选区截图';
+
+  @override
+  String get studySnapshotVideoFailed => '无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试';
+
+  @override
+  String get studySnapshotTooLarge => '截图超过 3 MiB，请缩小选区';
+
+  @override
+  String get studySnapshotRemove => '移除截图';
+
+  @override
+  String get studySnapshotRetry => '重试上传';
+
+  @override
+  String get studyCitationUnavailable => '来源已变更或不可用，保留当前阅读位置';
+
+  @override
+  String get studyCourseScopeChip => '全课程';
+
+  @override
+  String get studyCourseScopeHint => '允许助手检索并读取本课程的本地资料；关闭时只读你绑定的内容';
+
+  @override
+  String get studyAgentSearchingCourse => '正在检索本课程资料…';
+
+  @override
+  String get studyAgentReadingCourse => '正在读课程资料…';
+
+  @override
+  String get studyAgentLookingShot => '正在看截图…';
+
+  @override
+  String get studyAgentCheckingQuotes => '正在核对引文…';
+
+  @override
+  String get studyShot => '选区截图';
 }

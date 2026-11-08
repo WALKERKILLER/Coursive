@@ -406,7 +406,10 @@ class _PlayerPageState extends State<PlayerPage> {
         return PopScope(
           canPop: !_canvasMode || _allowPop,
           onPopInvokedWithResult: (didPop, result) {
-            if (!didPop) _leave();
+            if (didPop) return;
+            // System back returns from a followed citation before leaving.
+            if (_canvas.currentState?.returnFromSource() ?? false) return;
+            _leave();
           },
           child: ReportScreen(
             value: {

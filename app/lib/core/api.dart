@@ -145,6 +145,58 @@ class Api {
     data,
     length,
   );
+  Future<dynamic> uploadStudyAttachment(
+    String lecture,
+    Uint8List bytes,
+    Map selection,
+  ) async {
+    final request =
+        http.MultipartRequest(
+            'POST',
+            uri(
+              '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/attachments',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..fields['selection'] = jsonEncode(selection)
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'image',
+              bytes,
+              filename: 'selection.png',
+            ),
+          );
+    final response = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 60));
+    final text = await response.stream.bytesToString();
+    final result = jsonDecode(text);
+    if (response.statusCode >= 400)
+      throw ApiError(response.statusCode, '${result['error']}');
+    return result;
+  }
+
+  String studyAttachmentUrl(String lecture, String id) => uri(
+    '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/attachments/${Uri.encodeComponent(id)}/image',
+    {'token': token},
+  ).toString();
+  Future<dynamic> searchStudySources(String lecture, String query) => post(
+    '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/sources/search',
+    {'query': query},
+  );
+  Future<dynamic> readStudySource(
+    String lecture,
+    Map source, {
+    int offset = 0,
+    int limit = 12000,
+  }) => post(
+    '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/sources/read',
+    {'source': source, 'offset': offset, 'limit': limit},
+  );
+  Future<dynamic> resolveStudySource(String lecture, Map source) => post(
+    '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/sources/resolve',
+    {'source': source},
+  );
   Future<dynamic> studyConversation(String lecture, String id) => get(
     '/api/lectures/${Uri.encodeComponent(lecture)}/study-canvas/conversations/${Uri.encodeComponent(id)}',
   );
@@ -207,6 +259,15 @@ class Api {
   );
   Future<dynamic> importStudyCourseware(String id, String path) => post(
     '/api/lectures/${Uri.encodeComponent(id)}/study-canvas/assets?path=${Uri.encodeComponent(path)}',
+  );
+
+  /// Renders [page] of PDF bytes the app built, so the preview shows the
+  /// file that will be saved.
+  Future<dynamic> previewExportPDF(Uint8List pdf, int page) => upload(
+    '/api/export/pdf-preview',
+    {'page': '$page'},
+    Stream.value(pdf),
+    pdf.length,
   );
   Future<dynamic> transcriptReview(String id) =>
       get('/agent/transcript-review/${Uri.encodeComponent(id)}');

@@ -96,6 +96,8 @@ extension _StudyStage on StudyCanvasState {
     bool pick = false,
     bool allowImages = false,
     Offset? at,
+    String? task,
+    StudySnapshot? snapshot,
   }) async {
     final d = document;
     if (d == null || !d.editable(d.activeLayer)) return;
@@ -106,10 +108,12 @@ extension _StudyStage on StudyCanvasState {
             'selection': <String, dynamic>{},
             'include_video': false,
           };
-    final visual =
-        bind && _regionSelection != null && (send == null || allowImages)
-        ? await _captureSelection()
-        : <Map<String, dynamic>>[];
+    // With 「看图」 off no screenshot is taken at all; with it on the region
+    // is one immutable attachment, exactly as shown.
+    snapshot ??= bind && allowImages && _regionSelection != null
+        ? await _prepareSelectionSnapshot()
+        : null;
+    final draft = _idleInput.text;
     if (!mounted) return;
     final card = StudyCard(
       id: studyId(),
@@ -126,9 +130,12 @@ extension _StudyStage on StudyCanvasState {
     d.changed();
     _initialConversations[card.id] = {
       'query': query,
-      'visuals': visual,
+      'visuals': <Map<String, dynamic>>[],
+      'snapshot': snapshot,
+      'draft': draft,
       'allow_images': allowImages,
       if (send != null && send.trim().isNotEmpty) 'send': send.trim(),
+      'task': ?task,
       if (pick) 'pick': true,
     };
     _idleInput.clear();
@@ -161,24 +168,41 @@ extension _StudyStage on StudyCanvasState {
     return rect;
   }
 
-  void _pinAnswer(Map turn) {
+  /// Keeps an answer, or a reviewed outline's [text], as an editable card
+  /// linked to its turn and its sources.
+  void _pinAnswer(
+    Map turn,
+    String conversation, {
+    String? text,
+    String? title,
+  }) {
     final d = document;
-    final answer = '${turn['answer'] ?? ''}'.trim();
+    final answer = (text ?? studyPlainAnswer('${turn['answer'] ?? ''}')).trim();
     if (d == null || answer.isEmpty || !d.editable(d.activeLayer)) return;
+    final pinned = _pinnedCard(turn, conversation, const []);
+    if (pinned != null) {
+      _revealCard(pinned);
+      return;
+    }
     if (d.cards.length >= 2000) {
       _toast('画布卡片已达上限');
       return;
     }
+    // Course passages have no card here until followed; the pin keeps the
+    // canvas sources it can lead back to.
+    final evidence = studyTurnEvidence(turn)
+        ?.where((e) => e['course_source'] == null);
+    final seen = <String>{};
     final anchors = [
-      for (final source in (turn['result'] as Map?)?['sources'] as List? ?? [])
-        StudyAnchor.fromJson(source as Map),
-    ];
+      for (final a
+          in evidence?.map((e) => e['anchor']) ??
+              ((turn['result'] as Map?)?['sources'] as List? ?? []))
+        if (a is Map && seen.add(jsonEncode(a))) StudyAnchor.fromJson(a),
+    ].take(24).toList();
     final source = d.cards
         .where((c) => anchors.any((a) => a.objectId == c.id))
         .firstOrNull;
-    final rect = source == null
-        ? _freeSpot(const Size(400, 300))
-        : Rect.fromLTWH(source.rect.right + 24, source.rect.top, 400, 300);
+    final rect = _placeNear(source?.rect, const Size(400, 300));
     d.checkpoint();
     d.cards.add(
       StudyCard(
@@ -186,8 +210,11 @@ extension _StudyStage on StudyCanvasState {
         type: 'text',
         layer: d.activeLayer,
         rect: rect,
-        title: '${turn['question'] ?? 'AI 解答'}'.characters.take(60).toString(),
+        title: (title ?? '${turn['question'] ?? 'AI 解答'}').characters
+            .take(60)
+            .toString(),
         text: answer,
+        generation: studyPinGeneration(conversation, '${turn['id']}'),
         sources: anchors,
       ),
     );
@@ -199,6 +226,42 @@ extension _StudyStage on StudyCanvasState {
     _toast('已留在画布，可移动、编辑或撤销');
   }
 
+  /// A free place beside [source] (right, below, then left), clear of cards
+  /// and ink; otherwise the next free spot in view.
+  Rect _placeNear(Rect? source, Size size) {
+    final d = document!;
+    if (source == null) return _freeSpot(size);
+    bool free(Rect r) =>
+        !d.cards.any(
+          (c) =>
+              c.type != 'conversation' &&
+              d.visible(c.layer) &&
+              c.rect.inflate(16).overlaps(r),
+        ) &&
+        !d.strokes.any((s) => d.visible(s.layer) && s.bounds.overlaps(r));
+    const gap = 24.0;
+    for (final start in [
+      Rect.fromLTWH(source.right + gap, source.top, size.width, size.height),
+      Rect.fromLTWH(source.left, source.bottom + gap, size.width, size.height),
+      Rect.fromLTWH(
+        source.left - gap - size.width,
+        source.top,
+        size.width,
+        size.height,
+      ),
+    ]) {
+      var r = start;
+      for (
+        var i = 0;
+        i < 8;
+        i++, r = r.shift(Offset(0, size.height / 2 + gap))
+      ) {
+        if (free(r)) return r;
+      }
+    }
+    return _freeSpot(size);
+  }
+
   /// Brings [rect] into view at the current zoom when it is not already.
   void _reveal(Rect rect) {
     final d = document!;
@@ -207,12 +270,30 @@ extension _StudyStage on StudyCanvasState {
     _flyTo(_viewport.center(Offset.zero) - rect.center * d.zoom, d.zoom);
   }
 
-  /// The card an answer was pinned as, while it still holds the answer.
-  StudyCard? _pinnedCard(Map turn) {
+  /// The card a turn was pinned as, found by its generation; edits keep the
+  /// link. Cards pinned before generations match by text only when that
+  /// answer occurs once in [turns].
+  StudyCard? _pinnedCard(Map turn, String conversation, List turns) {
+    final d = document;
+    if (d == null) return null;
+    final generation = studyPinGeneration(conversation, '${turn['id']}');
+    final linked = d.cards
+        .where((c) => c.type == 'text' && c.generation == generation)
+        .lastOrNull;
+    if (linked != null || turns.isEmpty) return linked;
     final answer = '${turn['answer'] ?? ''}'.trim();
-    if (answer.isEmpty) return null;
-    return document?.cards
-        .where((c) => c.type == 'text' && c.text == answer)
+    final same = turns.where(
+      (t) => '${(t as Map)['answer'] ?? ''}'.trim() == answer,
+    );
+    if (answer.isEmpty || same.length != 1) return null;
+    final plain = studyPlainAnswer(answer).trim();
+    return d.cards
+        .where(
+          (c) =>
+              c.type == 'text' &&
+              c.generation.isEmpty &&
+              (c.text == answer || c.text == plain),
+        )
         .lastOrNull;
   }
 
@@ -375,6 +456,16 @@ String _stepLabel(Map? live, List sources) {
       .where((s) => '${s['id']}' == id)
       .firstOrNull;
   final label = '${source?['label'] ?? ''}';
+  switch ('${step['tool']}') {
+    case 'search_course_materials':
+      return l10n.studyAgentSearchingCourse;
+    case 'read_course_source':
+      return l10n.studyAgentReadingCourse;
+    case 'inspect_snapshot':
+      return l10n.studyAgentLookingShot;
+    case 'validate_citations':
+      return l10n.studyAgentCheckingQuotes;
+  }
   if (label.isEmpty) {
     return step['tool'] == 'get_canvas_context'
         ? l10n.studyAgentLookingAround
@@ -428,6 +519,14 @@ class _StageView extends StatefulWidget {
     this.allowImages,
     this.onAllowImages,
     this.onDraft,
+    this.onOutline,
+    this.attachments = const [],
+    this.pendingSnapshots = const [],
+    this.contextScope = 'selected',
+    this.onContextScope,
+    this.onRemoveAttachment,
+    this.onSnapshotRetry,
+    this.onRemovePending,
   });
 
   final StudyCanvasState owner;
@@ -443,13 +542,24 @@ class _StageView extends StatefulWidget {
   final Map? live;
   final String? error;
   final VoidCallback? onStop, onPickSources, onInspectSources;
-  final ValueChanged<String>? onRetry;
+  final List attachments;
+  final List<StudySnapshot> pendingSnapshots;
+  final String contextScope;
+
+  /// Turns 「全课程」 on or off; null while it cannot change.
+  final ValueChanged<bool>? onContextScope;
+  final ValueChanged<Map>? onRemoveAttachment;
+  final ValueChanged<StudySnapshot>? onSnapshotRetry, onRemovePending;
+  final ValueChanged<Map>? onRetry;
   final ValueChanged<Map>? onRemoveSource, onEditVideo;
 
   /// Null hides the vision switch (no visual selection is bound).
   final bool? allowImages;
   final ValueChanged<bool>? onAllowImages;
   final VoidCallback? onDraft;
+
+  /// 「整理为复习提纲」 for this conversation's sources.
+  final VoidCallback? onOutline;
 
   @override
   State<_StageView> createState() => _StageViewState();
@@ -462,6 +572,7 @@ class _StageViewState extends State<_StageView>
     duration: const Duration(milliseconds: 1400),
   );
   final _composer = GlobalKey(), _panel = GlobalKey(), _stage = GlobalKey();
+  final _messages = ScrollController();
   bool _hover = false;
   String? _focusSource;
   bool _looping = false;
@@ -476,6 +587,7 @@ class _StageViewState extends State<_StageView>
   @override
   void initState() {
     super.initState();
+    owner._messageScroll[widget.thread?.id] = _messages;
     _claim();
     owner._composerFocus.addListener(_focusChanged);
   }
@@ -535,6 +647,9 @@ class _StageViewState extends State<_StageView>
     owner._stageKeys.removeAll(_keys);
     owner._composerFocus.removeListener(_focusChanged);
     _localFocus.dispose();
+    if (owner._messageScroll[widget.thread?.id] == _messages)
+      owner._messageScroll.remove(widget.thread?.id);
+    _messages.dispose();
     _flow.dispose();
     super.dispose();
   }
@@ -772,6 +887,7 @@ class _StageViewState extends State<_StageView>
       ).createShader(r),
       blendMode: BlendMode.dstIn,
       child: ListView.builder(
+        controller: _messages,
         reverse: true,
         shrinkWrap: true,
         padding: const EdgeInsets.only(top: Space.xl),
@@ -793,6 +909,16 @@ class _StageViewState extends State<_StageView>
         raw['state'] == 'cancelled';
     final working = newest && widget.busy && answer.isEmpty && !failed;
     final sources = ((raw['result'] as Map?)?['sources'] as List?) ?? const [];
+    final evidence = studyTurnEvidence(raw);
+    final conversation = widget.thread?.conversationId ?? '';
+    final pin = raw['state'] == 'done'
+        ? _PinButton(
+            key: ValueKey('study-pin-answer-${raw['id']}'),
+            pinned: owner._pinnedCard(raw, conversation, widget.turns),
+            onPin: () => owner._pinAnswer(raw, conversation),
+            onShow: (card) => owner._revealCard(card),
+          )
+        : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.md),
       child: Column(
@@ -818,6 +944,22 @@ class _StageViewState extends State<_StageView>
               ),
             ),
           ),
+          if ((raw['attachments'] as List? ?? []).isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: Space.xs),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: Space.xs,
+                runSpacing: Space.xs,
+                children: [
+                  for (final a in (raw['attachments'] as List).cast<Map>())
+                    _Shot(
+                      key: ValueKey('study-turn-shot-${a['id']}'),
+                      image: NetworkImage(_shotUrl(a)),
+                    ),
+                ],
+              ),
+            ),
           const SizedBox(height: Space.sm),
           if (working)
             Align(
@@ -832,22 +974,28 @@ class _StageViewState extends State<_StageView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _Pulse(color: cs.primary),
+                    const ReadingOrb(),
                     const SizedBox(width: Space.sm),
                     Flexible(
-                      child: Text(
-                        _stepLabel(widget.live, widget.sources),
-                        style: tt.labelLarge?.copyWith(
-                          color: cs.onSurfaceVariant,
+                      child: ReadingShimmer(
+                        active: true,
+                        color: cs.onSurfaceVariant,
+                        child: Text(
+                          _stepLabel(widget.live, widget.sources),
+                          style: tt.labelLarge?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
             )
+          else if (outlineProposal(raw) != null && raw['state'] == 'done')
+            _OutlineCard(owner: owner, turn: raw, thread: widget.thread)
           else if (answer.isNotEmpty)
             _Well(
               radius: _innerRadius,
@@ -861,18 +1009,51 @@ class _StageViewState extends State<_StageView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SelectionArea(child: CoursiveMarkdown(answer)),
-                  if (raw['state'] == 'done')
+                  SelectionArea(
+                    child: evidence == null
+                        ? CoursiveMarkdown(answer)
+                        : CoursiveMarkdown(
+                            studyEvidenceMarkdown(answer, evidence),
+                            evidenceBuilder: (id, _) {
+                              final i = evidence.indexWhere(
+                                (e) => '${e['id']}' == id,
+                              );
+                              return i < 0
+                                  ? const SizedBox.shrink()
+                                  : _CitationMark(
+                                      owner: owner,
+                                      evidence: evidence[i],
+                                      number: i + 1,
+                                    );
+                            },
+                          ),
+                  ),
+                  if (evidence != null && raw['state'] == 'done')
+                    Padding(
+                      padding: const EdgeInsets.only(top: Space.sm),
+                      child: _Provenance(
+                        owner: owner,
+                        evidence: evidence,
+                        suggestions:
+                            (raw['result'] as Map)['suggestions'] as List? ??
+                            const [],
+                        trailing: pin,
+                        onOutline: widget.onOutline,
+                        onFollowup: (text) {
+                          widget.input.text = text;
+                          widget.input.selection = TextSelection.collapsed(
+                            offset: text.length,
+                          );
+                          _focus.requestFocus();
+                        },
+                      ),
+                    )
+                  else if (pin != null)
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
-                      child: _PinButton(
-                        key: ValueKey('study-pin-answer-${raw['id']}'),
-                        pinned: owner._pinnedCard(raw),
-                        onPin: () => owner._pinAnswer(raw),
-                        onShow: (card) => owner._revealCard(card),
-                      ),
+                      child: pin,
                     ),
-                  if (sources.isNotEmpty) ...[
+                  if (evidence == null && sources.isNotEmpty) ...[
                     const SizedBox(height: Space.sm),
                     Wrap(
                       spacing: Space.xs,
@@ -942,7 +1123,9 @@ class _StageViewState extends State<_StageView>
                   TextButton(
                     onPressed: widget.busy
                         ? null
-                        : () => widget.onRetry?.call('${raw['question']}'),
+                        : raw['task'] == 'propose_outline'
+                        ? widget.onOutline
+                        : () => widget.onRetry?.call(raw),
                     style: TextButton.styleFrom(
                       foregroundColor: cs.onErrorContainer,
                     ),
@@ -956,20 +1139,30 @@ class _StageViewState extends State<_StageView>
     );
   }
 
+  String _shotUrl(Map attachment) => owner.widget.api.studyAttachmentUrl(
+    owner.widget.ctl.lectureId,
+    '${attachment['id']}',
+  );
+
   Widget _composerPane(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final sources = widget.sources.cast<Map>();
-    return DragTarget<String>(
-      onWillAcceptWithDetails: (_) {
-        if (widget.busy || widget.loading) return false;
+    return DragTarget<Object>(
+      onWillAcceptWithDetails: (details) {
+        if (details.data is! String && details.data is! StudySelectionDrop)
+          return false;
+        if (widget.loading) return false;
         setState(() => _hover = true);
         return true;
       },
       onLeave: (_) => setState(() => _hover = false),
       onAcceptWithDetails: (v) {
         setState(() => _hover = false);
-        widget.onDrop(v.data);
+        if (v.data is StudySelectionDrop)
+          owner._acceptSnapshot(v.data as StudySelectionDrop);
+        else
+          widget.onDrop(v.data as String);
       },
       builder: (context, _, _) => _Well(
         key: _composer,
@@ -981,91 +1174,131 @@ class _StageViewState extends State<_StageView>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (sources.isNotEmpty || widget.loading)
-              SizedBox(
-                height: 36,
-                child: Row(
+            if (widget.attachments.isNotEmpty ||
+                widget.pendingSnapshots.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.xs,
+                  Space.xs,
+                  Space.xs,
+                  Space.sm,
+                ),
+                child: Wrap(
+                  spacing: Space.sm,
+                  runSpacing: Space.sm,
                   children: [
-                    Expanded(
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: Space.xs,
-                        ),
-                        children: [
-                          for (final s in sources)
-                            Padding(
-                              padding: const EdgeInsetsDirectional.only(
-                                end: Space.xs,
-                              ),
-                              child: _SourcePill(
-                                source: s,
-                                reading:
-                                    _readingNow(
-                                      widget.live,
-                                      widget.sources,
-                                    ).contains(
-                                      '${(s['anchor'] as Map?)?['object_id']}',
-                                    ),
-                                onFocus: () => owner._focusSource(
-                                  StudyAnchor.fromJson(s['anchor'] as Map),
-                                ),
-                                onEditTime:
-                                    s['kind'] == 'video' &&
-                                        !widget.busy &&
-                                        !widget.loading &&
-                                        widget.onEditVideo != null
-                                    ? () => widget.onEditVideo!(s)
-                                    : null,
-                                onRemove:
-                                    widget.busy ||
-                                        widget.loading ||
-                                        widget.onRemoveSource == null
-                                    ? null
-                                    : () => widget.onRemoveSource!(s),
-                                onHover: (on) => setState(
-                                  () => _focusSource = on
-                                      ? '${(s['anchor'] as Map?)?['object_id']}'
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          if (widget.loading)
-                            const Center(
-                              child: SizedBox.square(
-                                dimension: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                        ],
+                    for (final a in widget.attachments.cast<Map>())
+                      _Shot(
+                        key: ValueKey('study-shot-${a['id']}'),
+                        image: NetworkImage(_shotUrl(a)),
+                        onRemove: widget.busy
+                            ? null
+                            : () => widget.onRemoveAttachment?.call(a),
                       ),
-                    ),
-                    if (widget.allowImages != null)
-                      Tooltip(
-                        message: l10n.studyAllowImagesHint,
-                        child: FilterChip(
-                          avatar: const Icon(
-                            Icons.visibility_outlined,
-                            size: 16,
-                          ),
-                          label: Text(l10n.studyAllowImages),
-                          selected: widget.allowImages!,
-                          showCheckmark: false,
-                          visualDensity: VisualDensity.compact,
-                          onSelected: widget.busy ? null : widget.onAllowImages,
-                        ),
-                      ),
-                    if (widget.onInspectSources != null)
-                      IconButton(
-                        tooltip: l10n.studyInspectSources,
-                        visualDensity: VisualDensity.compact,
-                        onPressed: widget.onInspectSources,
-                        icon: const Icon(Icons.manage_search_rounded, size: 20),
+                    for (final p in widget.pendingSnapshots)
+                      _Shot(
+                        key: ObjectKey(p),
+                        image: MemoryImage(p.bytes),
+                        uploading: p.uploading,
+                        failed: p.error != null,
+                        onRetry: () => widget.onSnapshotRetry?.call(p),
+                        onRemove: p.uploading
+                            ? null
+                            : () => widget.onRemovePending?.call(p),
                       ),
                   ],
                 ),
+              ),
+            if (sources.isNotEmpty ||
+                widget.loading ||
+                widget.onContextScope != null)
+              _SourceTray(
+                sources: sources.toList(),
+                loading: widget.loading,
+                reading: _readingNow(widget.live, widget.sources),
+                build: (s, {required bool row}) {
+                  final id = '${(s['anchor'] as Map?)?['object_id']}';
+                  final reading = _readingNow(
+                    widget.live,
+                    widget.sources,
+                  ).contains(id);
+                  void onHover(bool on) =>
+                      setState(() => _focusSource = on ? id : null);
+                  void onFocus() => owner._focusSource(
+                    StudyAnchor.fromJson(s['anchor'] as Map),
+                  );
+                  final onEditTime =
+                      s['kind'] == 'video' &&
+                          !widget.busy &&
+                          !widget.loading &&
+                          widget.onEditVideo != null
+                      ? () => widget.onEditVideo!(s)
+                      : null;
+                  final onRemove =
+                      widget.busy ||
+                          widget.loading ||
+                          widget.onRemoveSource == null
+                      ? null
+                      : () => widget.onRemoveSource!(s);
+                  return row
+                      ? _SourceRow(
+                          source: s,
+                          reading: reading,
+                          onFocus: onFocus,
+                          onHover: onHover,
+                          onEditTime: onEditTime,
+                          onRemove: onRemove,
+                        )
+                      : _SourcePill(
+                          source: s,
+                          reading: reading,
+                          onFocus: onFocus,
+                          onHover: onHover,
+                          onEditTime: onEditTime,
+                          onRemove: onRemove,
+                        );
+                },
+                trailing: [
+                  if (widget.onContextScope != null ||
+                      widget.contextScope == 'course')
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: Space.xs),
+                      child: Tooltip(
+                        message: l10n.studyCourseScopeHint,
+                        child: FilterChip(
+                          key: const ValueKey('study-course-scope'),
+                          avatar: const Icon(
+                            Icons.travel_explore_rounded,
+                            size: 16,
+                          ),
+                          label: Text(l10n.studyCourseScopeChip),
+                          selected: widget.contextScope == 'course',
+                          showCheckmark: false,
+                          visualDensity: VisualDensity.compact,
+                          onSelected: widget.onContextScope,
+                        ),
+                      ),
+                    ),
+                  if (widget.allowImages != null)
+                    Tooltip(
+                      message: l10n.studyAllowImagesHint,
+                      child: FilterChip(
+                        avatar: const Icon(Icons.visibility_outlined, size: 16),
+                        label: Text(l10n.studyAllowImages),
+                        selected: widget.allowImages!,
+                        showCheckmark: false,
+                        visualDensity: VisualDensity.compact,
+                        onSelected: widget.busy ? null : widget.onAllowImages,
+                      ),
+                    ),
+                  if (widget.onInspectSources != null)
+                    IconButton(
+                      tooltip: l10n.studyInspectSources,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: widget.onInspectSources,
+                      icon: const Icon(Icons.manage_search_rounded, size: 20),
+                    ),
+                ],
               ),
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1086,6 +1319,11 @@ class _StageViewState extends State<_StageView>
                     // composition keeps Enter for itself.
                     canRequestFocus: false,
                     onKeyEvent: (_, e) {
+                      if (e is KeyDownEvent &&
+                          e.logicalKey == LogicalKeyboardKey.escape &&
+                          owner._goBack()) {
+                        return KeyEventResult.handled;
+                      }
                       if (e is! KeyDownEvent ||
                           (e.logicalKey != LogicalKeyboardKey.enter &&
                               e.logicalKey != LogicalKeyboardKey.numpadEnter) ||
@@ -1170,6 +1408,357 @@ class _StageViewState extends State<_StageView>
   }
 }
 
+/// The materials bound to a conversation. They sit in one line beside
+/// 「看图」 while they fit; past that the line folds into a count that opens
+/// a list, where every item keeps its name, range and remove button.
+class _SourceTray extends StatefulWidget {
+  const _SourceTray({
+    required this.sources,
+    required this.loading,
+    required this.reading,
+    required this.build,
+    required this.trailing,
+  });
+
+  final List<Map> sources;
+  final bool loading;
+
+  /// Card ids being read now.
+  final Set<String> reading;
+  final Widget Function(Map source, {required bool row}) build;
+  final List<Widget> trailing;
+
+  @override
+  State<_SourceTray> createState() => _SourceTrayState();
+}
+
+class _SourceTrayState extends State<_SourceTray> {
+  bool _open = false;
+  bool _folded = false;
+
+  bool _isReading(Map s) =>
+      widget.reading.contains('${(s['anchor'] as Map?)?['object_id']}');
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sources = widget.sources;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 36,
+          child: Row(
+            children: [
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final scaler = MediaQuery.textScalerOf(context);
+                    final tt = Theme.of(context).textTheme;
+                    final needed = sources.fold<double>(
+                      0,
+                      (w, s) => w + _SourcePill.width(s, tt, scaler) + Space.xs,
+                    );
+                    // One material never folds; its name gives way instead.
+                    final folded =
+                        sources.length > 1 &&
+                        needed > box.maxWidth - Space.xs * 2;
+                    if (folded != _folded) {
+                      // Layout decides; the list follows on the next frame.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        setState(() {
+                          _folded = folded;
+                          if (!folded) _open = false;
+                        });
+                      });
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.xs),
+                      child: Row(
+                        children: [
+                          if (folded)
+                            Flexible(
+                              child: _TraySummary(
+                                sources: sources,
+                                reading: sources.where(_isReading).firstOrNull,
+                                open: _open,
+                                onTap: () => setState(() => _open = !_open),
+                              ),
+                            )
+                          else
+                            for (final s in sources)
+                              Flexible(
+                                child: Padding(
+                                  padding: const EdgeInsetsDirectional.only(
+                                    end: Space.xs,
+                                  ),
+                                  child: widget.build(s, row: false),
+                                ),
+                              ),
+                          if (widget.loading)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: Space.xs,
+                              ),
+                              child: SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              ...widget.trailing,
+            ],
+          ),
+        ),
+        AnimatedSize(
+          duration: Motion.medium2,
+          curve: Motion.emphasized,
+          alignment: Alignment.topCenter,
+          child: _open && _folded
+              ? Container(
+                  key: const ValueKey('study-source-list'),
+                  margin: const EdgeInsets.only(top: Space.xs),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: .04),
+                    borderRadius: BorderRadius.circular(Corners.md),
+                  ),
+                  constraints: const BoxConstraints(maxHeight: 4.5 * 40),
+                  child: Scrollbar(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: Space.xs),
+                      children: [
+                        for (final s in sources) widget.build(s, row: true),
+                      ],
+                    ),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+/// The folded tray: the first materials' icons, how many there are, or
+/// the one being read, and a chevron for the list.
+class _TraySummary extends StatelessWidget {
+  const _TraySummary({
+    required this.sources,
+    required this.reading,
+    required this.open,
+    required this.onTap,
+  });
+
+  final List<Map> sources;
+  final Map? reading;
+  final bool open;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final shown = sources.take(3).toList();
+    final label = reading == null
+        ? l10n.studySourcesCount(sources.length)
+        : l10n.studySourcesReading('${reading!['label']}');
+    return Tooltip(
+      message: open ? l10n.studySourcesHide : l10n.studySourcesShow,
+      child: ReadingGlow(
+        active: reading != null,
+        child: Material(
+          key: const ValueKey('study-source-summary'),
+          color: open
+              ? cs.secondaryContainer
+              : cs.onSurface.withValues(alpha: .06),
+          shape: const StadiumBorder(),
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                Space.xs,
+                Space.xs,
+                Space.sm,
+                Space.xs,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Overlapping discs, like a stack of cards seen edge on.
+                  SizedBox(
+                    width: 20.0 + 12 * (shown.length - 1),
+                    height: 22,
+                    child: Stack(
+                      children: [
+                        for (final (i, s) in shown.indexed)
+                          PositionedDirectional(
+                            start: 12.0 * i,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: cs.surfaceContainerHighest,
+                                border: Border.all(
+                                  color: cs.surface,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Icon(
+                                _sourceIcon(s),
+                                size: 12,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: Space.sm),
+                  Flexible(
+                    child: ReadingShimmer(
+                      active: reading != null,
+                      color: cs.onSurface,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelMedium?.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: Space.xxs),
+                  AnimatedRotation(
+                    turns: open ? .5 : 0,
+                    duration: Motion.short4,
+                    curve: Motion.standard,
+                    child: Icon(
+                      Icons.expand_more_rounded,
+                      size: 18,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A bound material in the opened list: the whole name, its range, whether
+/// it is being read, and a remove button that is always reachable.
+class _SourceRow extends StatelessWidget {
+  const _SourceRow({
+    required this.source,
+    required this.reading,
+    required this.onFocus,
+    required this.onHover,
+    this.onRemove,
+    this.onEditTime,
+  });
+
+  final Map source;
+  final bool reading;
+  final VoidCallback onFocus;
+  final ValueChanged<bool> onHover;
+  final VoidCallback? onRemove, onEditTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final detail = _SourcePill.detail(source);
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Space.xs,
+        vertical: Space.xxs,
+      ),
+      child: ReadingGlow(
+        active: reading,
+        radius: Corners.sm,
+        halo: 4,
+        child: MouseRegion(
+          onEnter: (_) => onHover(true),
+          onExit: (_) => onHover(false),
+          child: Material(
+            key: ValueKey('study-source-row-${source['id']}'),
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Corners.sm),
+              onTap: onFocus,
+              child: SizedBox(
+                height: 36,
+                child: Row(
+                  children: [
+                    const SizedBox(width: Space.sm),
+                    Icon(
+                      _sourceIcon(source),
+                      size: 16,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Space.sm),
+                    Expanded(
+                      child: Text(
+                        '${source['label']}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tt.labelLarge?.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                    if (detail != null)
+                      GestureDetector(
+                        onTap: onEditTime,
+                        child: Text(
+                          detail,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            decoration: onEditTime == null
+                                ? null
+                                : TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dotted,
+                          ),
+                        ),
+                      ),
+                    if (reading) ...[
+                      const SizedBox(width: Space.sm),
+                      const ReadingOrb(size: 8),
+                    ],
+                    if (onRemove != null)
+                      IconButton(
+                        tooltip: l10n.studyRemoveSource,
+                        iconSize: 16,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.close_rounded),
+                      )
+                    else
+                      const SizedBox(width: Space.sm),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A bound material in the composer: tap to find it on the canvas.
 class _SourcePill extends StatelessWidget {
   const _SourcePill({
@@ -1186,104 +1775,128 @@ class _SourcePill extends StatelessWidget {
   final ValueChanged<bool> onHover;
   final VoidCallback? onRemove, onEditTime;
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
+  /// The page or time range shown after a material's name.
+  static String? detail(Map source) {
     final a = source['anchor'] as Map? ?? const {};
     final page = a['page'];
-    final label = '${source['label']}';
-    final range = source['kind'] == 'video'
+    if (page != null) return l10n.studySourcePage(page);
+    return source['kind'] == 'video'
         ? l10n.studyVideoRange(
             ((a['time_start_ms'] as num? ?? 0) / 1000).round(),
             ((a['time_end_ms'] as num? ?? 0) / 1000).round(),
           )
         : null;
-    final detail = page != null ? l10n.studySourcePage(page) : range;
+  }
+
+  /// The width [build] lays a pill out at, with its remove button: the
+  /// tray folds when the pills would not fit beside 「看图」.
+  static double width(Map source, TextTheme tt, TextScaler scaler) {
+    double measure(String s, TextStyle? style) => (TextPainter(
+      text: TextSpan(text: s, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout()).width;
+    final d = detail(source);
+    return Space.sm +
+        2 +
+        16 +
+        Space.xs +
+        2 +
+        math.min(160.0, measure('${source['label']}', tt.labelMedium)) +
+        (d == null ? 0 : Space.xs + measure(d, tt.labelSmall)) +
+        28 +
+        2;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final label = '${source['label']}';
+    final detail = _SourcePill.detail(source);
     return MouseRegion(
       onEnter: (_) => onHover(true),
       onExit: (_) => onHover(false),
-      child: AnimatedContainer(
-        duration: Motion.short4,
-        decoration: ShapeDecoration(
-          shape: StadiumBorder(
-            side: BorderSide(
-              color: reading ? cs.primary : Colors.transparent,
-              width: 1.5,
-            ),
+      child: ReadingGlow(
+        active: reading,
+        child: AnimatedContainer(
+          duration: Motion.short4,
+          decoration: ShapeDecoration(
+            shape: const StadiumBorder(),
+            color: reading
+                ? cs.surfaceContainerHighest
+                : cs.onSurface.withValues(alpha: .06),
           ),
-          color: reading
-              ? cs.primaryContainer
-              : cs.onSurface.withValues(alpha: .06),
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: onFocus,
-            child: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                Space.sm + 2,
-                0,
-                onRemove == null ? Space.md : 0,
-                0,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _sourceIcon(source),
-                    size: 16,
-                    color: reading
-                        ? cs.onPrimaryContainer
-                        : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: Space.xs + 2),
-                  Tooltip(
-                    message: label,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 160),
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.labelMedium?.copyWith(
-                          color: reading ? cs.onPrimaryContainer : cs.onSurface,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: onFocus,
+              child: Padding(
+                padding: EdgeInsetsDirectional.fromSTEB(
+                  Space.sm + 2,
+                  0,
+                  onRemove == null ? Space.md : 0,
+                  0,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _sourceIcon(source),
+                      size: 16,
+                      color: reading ? cs.onSurface : cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: Space.xs + 2),
+                    Flexible(
+                      child: Tooltip(
+                        message: label,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 160),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: tt.labelMedium?.copyWith(
+                              color: cs.onSurface,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (detail != null) ...[
-                    const SizedBox(width: Space.xs),
-                    GestureDetector(
-                      onTap: onEditTime,
-                      child: Text(
-                        detail,
-                        style: tt.labelSmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          decoration: onEditTime == null
-                              ? null
-                              : TextDecoration.underline,
-                          decorationStyle: TextDecorationStyle.dotted,
+                    if (detail != null) ...[
+                      const SizedBox(width: Space.xs),
+                      GestureDetector(
+                        onTap: onEditTime,
+                        child: Text(
+                          detail,
+                          style: tt.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            decoration: onEditTime == null
+                                ? null
+                                : TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dotted,
+                          ),
                         ),
                       ),
-                    ),
+                    ],
+                    if (onRemove != null)
+                      IconButton(
+                        tooltip: l10n.studyRemoveSource,
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 14,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 28,
+                          height: 28,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: onRemove,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                   ],
-                  if (onRemove != null)
-                    IconButton(
-                      tooltip: l10n.studyRemoveSource,
-                      visualDensity: VisualDensity.compact,
-                      iconSize: 14,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
-                      ),
-                      padding: EdgeInsets.zero,
-                      onPressed: onRemove,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1291,53 +1904,6 @@ class _SourcePill extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A soft breathing dot for a step in progress (still under reduced motion).
-class _Pulse extends StatefulWidget {
-  const _Pulse({required this.color});
-  final Color color;
-  @override
-  State<_Pulse> createState() => _PulseState();
-}
-
-class _PulseState extends State<_Pulse> with SingleTickerProviderStateMixin {
-  late final _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    MediaQuery.disableAnimationsOf(context)
-        ? _c.value = 1
-        : _c.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: Tween(
-      begin: .35,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _c, curve: Motion.standard)),
-    child: ScaleTransition(
-      scale: Tween(
-        begin: .7,
-        end: 1.0,
-      ).animate(CurvedAnimation(parent: _c, curve: Motion.standard)),
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
-        child: const SizedBox.square(dimension: 8),
-      ),
-    ),
-  );
 }
 
 /// Threads from bound cards to the composer. A thread at rest is a faint
@@ -1417,12 +1983,21 @@ class _FlowPainter extends CustomPainter {
           end.dx,
           end.dy,
         );
-      final active = reading.contains(c.id) || c.id == focus;
+      final lit = busy && reading.contains(c.id);
+      final active = lit || reading.contains(c.id) || c.id == focus;
       final line = Paint()
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = active ? 2 : 1.25
         ..color = scheme.primary.withValues(alpha: active ? .85 : .32);
+      // The thread being read carries the reading light's hues.
+      if (lit) {
+        line.shader = LinearGradient(
+          colors: [
+            for (final h in readingHues.take(4)) h.withValues(alpha: .9),
+          ],
+        ).createShader(Rect.fromPoints(start, end));
+      }
       _dashed(
         canvas,
         path,
@@ -1436,7 +2011,19 @@ class _FlowPainter extends CustomPainter {
         active ? 4 : 3,
         Paint()..color = scheme.primary.withValues(alpha: active ? .9 : .5),
       );
-      if (active) {
+      if (lit) {
+        // What is being read wears the turning light (Apple Intelligence's
+        // edge light), breathing a little as it turns.
+        paintReadingLight(
+          canvas,
+          RRect.fromRectAndRadius(
+            r.inflate(3),
+            Radius.circular(Corners.md * d.zoom + 3),
+          ),
+          flow.value,
+          strength: .85 + .15 * math.sin(flow.value * math.pi * 2),
+        );
+      } else if (active) {
         final glow = .35 + .3 * math.sin(flow.value * math.pi * 2).abs();
         canvas.drawRRect(
           RRect.fromRectAndRadius(
@@ -1665,3 +2252,232 @@ class _PinButton extends StatelessWidget {
           ),
   );
 }
+
+/// An outline draft in the conversation: what it holds, how far its review
+/// went and the way into 「审核提纲」.
+class _OutlineCard extends StatelessWidget {
+  const _OutlineCard({required this.owner, required this.turn, this.thread});
+  final StudyCanvasState owner;
+  final Map turn;
+  final StudyCard? thread;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final p = outlineProposal(turn)!;
+    final stats = outlineStats(
+      p,
+      owner._staleEvidence(studyTurnEvidence(turn) ?? const []),
+    );
+    final sections = (p['sections'] as List? ?? const []).length;
+    final saved = p['state'] == 'accepted';
+    final open = owner._review?.turn == '${turn['id']}';
+    return _Well(
+      radius: _innerRadius,
+      color: _wellOf(cs),
+      outline: open ? cs.primary.withValues(alpha: .5) : null,
+      padding: const EdgeInsets.fromLTRB(
+        Space.lg,
+        Space.md,
+        Space.md,
+        Space.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.format_list_bulleted_rounded,
+                  size: 18,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Text(
+                  '${p['title']}',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: Space.sm),
+              Text(
+                saved ? l10n.outlineCardSaved : l10n.outlineCardDraft,
+                style: tt.labelSmall?.copyWith(
+                  color: saved ? cs.primary : cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Space.xs),
+          Text(
+            [
+              l10n.outlineCardSummary(sections, stats.total),
+              l10n.outlineReviewed(stats.reviewed, stats.total),
+              if (stats.marks > 0) l10n.outlineMarksCount(stats.marks),
+            ].join(' · '),
+            style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: Space.sm),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton.tonalIcon(
+              key: ValueKey('study-outline-review-${turn['id']}'),
+              onPressed: thread == null
+                  ? null
+                  : () => owner._openReview(thread!.id, '${turn['id']}'),
+              icon: const Icon(Icons.rate_review_outlined, size: 18),
+              label: Text(l10n.outlineOpenReview),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A screenshot in a message or the composer: its exact pixels, opened full
+/// size on tap. In the composer it can be removed; an upload in flight glows
+/// like material being read, and a failed one retries on tap.
+class _Shot extends StatelessWidget {
+  const _Shot({
+    super.key,
+    required this.image,
+    this.uploading = false,
+    this.failed = false,
+    this.onRemove,
+    this.onRetry,
+  });
+  final ImageProvider image;
+  final bool uploading, failed;
+  final VoidCallback? onRemove, onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final shape = BorderRadius.circular(Corners.sm);
+    return SizedBox(
+      width: 68,
+      height: 50,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: ReadingGlow(
+              active: uploading,
+              radius: Corners.sm,
+              child: Material(
+                color: cs.surfaceContainerHighest,
+                borderRadius: shape,
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: failed
+                      ? onRetry
+                      : uploading
+                      ? null
+                      : () => _viewShot(context, image),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AnimatedOpacity(
+                        opacity: uploading || failed ? .5 : 1,
+                        duration: Motion.short4,
+                        child: Image(
+                          image: image,
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                          semanticLabel: l10n.studyShot,
+                          errorBuilder: (_, _, _) => Icon(
+                            Icons.broken_image_outlined,
+                            size: 18,
+                            color: cs.outline,
+                          ),
+                        ),
+                      ),
+                      if (failed)
+                        Tooltip(
+                          message: l10n.studySnapshotRetry,
+                          child: Icon(
+                            Icons.refresh_rounded,
+                            size: 20,
+                            color: cs.error,
+                          ),
+                        ),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: shape,
+                          border: Border.all(
+                            color: failed ? cs.error : cs.outlineVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (onRemove != null)
+            Positioned(
+              top: -Space.xs - 2,
+              right: -Space.xs - 2,
+              child: Tooltip(
+                message: l10n.studySnapshotRemove,
+                child: Material(
+                  color: cs.surfaceContainerHighest,
+                  shape: CircleBorder(
+                    side: BorderSide(color: cs.outlineVariant),
+                  ),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onRemove,
+                    child: const Padding(
+                      padding: EdgeInsets.all(3),
+                      child: Icon(Icons.close_rounded, size: 12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+void _viewShot(BuildContext context, ImageProvider image) => showDialog<void>(
+  context: context,
+  useRootNavigator: true,
+  barrierColor: Colors.black87,
+  builder: (c) => Dialog.fullscreen(
+    backgroundColor: Colors.transparent,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(
+              child: Image(image: image, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+        Positioned(
+          top: Space.lg,
+          right: Space.lg,
+          child: IconButton.filledTonal(
+            tooltip: l10n.commonClose,
+            onPressed: () => Navigator.pop(c),
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ),
+      ],
+    ),
+  ),
+);

@@ -11119,8 +11119,8 @@ abstract class AppLocalizations {
   /// No description provided for @studyLocalVideoError.
   ///
   /// In zh, this message translates to:
-  /// **'无法播放此视频：{error}'**
-  String studyLocalVideoError(String error);
+  /// **'无法播放此视频。请检查本地文件后重新打开画布。'**
+  String get studyLocalVideoError;
 
   /// No description provided for @localCourse.
   ///
@@ -12872,6 +12872,930 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看'**
   String get setupPdfUnsupported;
+
+  /// No description provided for @studyEvidenceStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源已失效：原文已修改或删除'**
+  String get studyEvidenceStale;
+
+  /// No description provided for @studyEvidenceOtherLecture.
+  ///
+  /// In zh, this message translates to:
+  /// **'此来源属于其他课次，请先打开对应课次'**
+  String get studyEvidenceOtherLecture;
+
+  /// No description provided for @studyEvidenceMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法定位：来源已移除或所在图层已隐藏'**
+  String get studyEvidenceMissing;
+
+  /// No description provided for @studyEvidenceSeen.
+  ///
+  /// In zh, this message translates to:
+  /// **'看过的图像'**
+  String get studyEvidenceSeen;
+
+  /// No description provided for @studyEvidenceSeenBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手读过这块选区的图像，画面内容以原图为准'**
+  String get studyEvidenceSeenBody;
+
+  /// No description provided for @studyEvidenceInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'手写'**
+  String get studyEvidenceInk;
+
+  /// No description provided for @studyEvidenceLocate.
+  ///
+  /// In zh, this message translates to:
+  /// **'定位'**
+  String get studyEvidenceLocate;
+
+  /// No description provided for @studyEvidenceSemantics.
+  ///
+  /// In zh, this message translates to:
+  /// **'引用 {number}：{locator}'**
+  String studyEvidenceSemantics(int number, String locator);
+
+  /// No description provided for @studyReturn.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回原处'**
+  String get studyReturn;
+
+  /// No description provided for @studyReturnKeys.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esc 或 Alt+←'**
+  String get studyReturnKeys;
+
+  /// No description provided for @studyReturnKeysMac.
+  ///
+  /// In zh, this message translates to:
+  /// **'Esc 或 ⌘['**
+  String get studyReturnKeysMac;
+
+  /// No description provided for @studyCoveragePassages.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 段原文'**
+  String studyCoveragePassages(int count);
+
+  /// No description provided for @studyCoverageTranscript.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 句讲解'**
+  String studyCoverageTranscript(int count);
+
+  /// No description provided for @studyCoverageVisual.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 处看图'**
+  String studyCoverageVisual(int count);
+
+  /// No description provided for @studyCoverageStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 处已失效'**
+  String studyCoverageStale(int count);
+
+  /// No description provided for @studyCoverageLead.
+  ///
+  /// In zh, this message translates to:
+  /// **'依据 {parts}'**
+  String studyCoverageLead(String parts);
+
+  /// No description provided for @studyCoverageNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'未引用资料原文，内容可能来自常识或推断'**
+  String get studyCoverageNone;
+
+  /// No description provided for @studySuggestOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'回看 {locator}'**
+  String studySuggestOpen(String locator);
+
+  /// No description provided for @studySuggestFollowupHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'填入输入框，确认后再发送'**
+  String get studySuggestFollowupHint;
+
+  /// No description provided for @studyBoundLecture.
+  ///
+  /// In zh, this message translates to:
+  /// **'课程视频'**
+  String get studyBoundLecture;
+
+  /// No description provided for @studyBoundCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名卡片'**
+  String get studyBoundCard;
+
+  /// No description provided for @studyBoundRegion.
+  ///
+  /// In zh, this message translates to:
+  /// **'局部'**
+  String get studyBoundRegion;
+
+  /// No description provided for @studyBoundInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 笔手写'**
+  String studyBoundInk(int count);
+
+  /// No description provided for @studyBoundReadable.
+  ///
+  /// In zh, this message translates to:
+  /// **'含可读文字'**
+  String get studyBoundReadable;
+
+  /// No description provided for @studyBoundNeedsVision.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可读文字，需要「看图」'**
+  String get studyBoundNeedsVision;
+
+  /// No description provided for @studyBoundRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除此资料'**
+  String get studyBoundRemove;
+
+  /// No description provided for @studyBindMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加卡片'**
+  String get studyBindMore;
+
+  /// No description provided for @studyExcerpt.
+  ///
+  /// In zh, this message translates to:
+  /// **'摘录'**
+  String get studyExcerpt;
+
+  /// No description provided for @studyExcerptHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'把选区截成带来源的卡片'**
+  String get studyExcerptHint;
+
+  /// No description provided for @studyRelate.
+  ///
+  /// In zh, this message translates to:
+  /// **'关联'**
+  String get studyRelate;
+
+  /// No description provided for @studyRelateHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'设为关联起点，再圈选另一处连接'**
+  String get studyRelateHint;
+
+  /// No description provided for @studyRelateHere.
+  ///
+  /// In zh, this message translates to:
+  /// **'连到这里'**
+  String get studyRelateHere;
+
+  /// No description provided for @studyRelateHereHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'从关联起点连到这处选区'**
+  String get studyRelateHereHint;
+
+  /// No description provided for @studySelectionClear.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消选择'**
+  String get studySelectionClear;
+
+  /// No description provided for @studyQuickHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'问问选中的内容…'**
+  String get studyQuickHint;
+
+  /// No description provided for @studyQuickKeys.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 发送 · Esc 返回'**
+  String get studyQuickKeys;
+
+  /// No description provided for @studyQuickNeedsVision.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的内容没有可读文字。打开「看图」后，助手才能读懂它。'**
+  String get studyQuickNeedsVision;
+
+  /// No description provided for @outlineChoiceMastered.
+  ///
+  /// In zh, this message translates to:
+  /// **'已掌握'**
+  String get outlineChoiceMastered;
+
+  /// No description provided for @outlineChoiceKey.
+  ///
+  /// In zh, this message translates to:
+  /// **'重点'**
+  String get outlineChoiceKey;
+
+  /// No description provided for @outlineChoiceReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'待复习'**
+  String get outlineChoiceReview;
+
+  /// No description provided for @outlineChoiceCustom.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义'**
+  String get outlineChoiceCustom;
+
+  /// No description provided for @outlineChoiceKeep.
+  ///
+  /// In zh, this message translates to:
+  /// **'保持原样'**
+  String get outlineChoiceKeep;
+
+  /// No description provided for @outlineTagUnconfirmed.
+  ///
+  /// In zh, this message translates to:
+  /// **'未确认'**
+  String get outlineTagUnconfirmed;
+
+  /// No description provided for @outlineTagCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'待查'**
+  String get outlineTagCheck;
+
+  /// No description provided for @outlineTagQuestion.
+  ///
+  /// In zh, this message translates to:
+  /// **'问题'**
+  String get outlineTagQuestion;
+
+  /// No description provided for @outlineTagUnverified.
+  ///
+  /// In zh, this message translates to:
+  /// **'未核实'**
+  String get outlineTagUnverified;
+
+  /// No description provided for @outlineConflicts.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源说法不一致'**
+  String get outlineConflicts;
+
+  /// No description provided for @outlineMarks.
+  ///
+  /// In zh, this message translates to:
+  /// **'手写标记'**
+  String get outlineMarks;
+
+  /// No description provided for @outlineChecks.
+  ///
+  /// In zh, this message translates to:
+  /// **'待查'**
+  String get outlineChecks;
+
+  /// No description provided for @outlineQuestions.
+  ///
+  /// In zh, this message translates to:
+  /// **'未解决的问题'**
+  String get outlineQuestions;
+
+  /// No description provided for @outlineUnread.
+  ///
+  /// In zh, this message translates to:
+  /// **'未读取的资料'**
+  String get outlineUnread;
+
+  /// No description provided for @outlineAppendix.
+  ///
+  /// In zh, this message translates to:
+  /// **'待核实'**
+  String get outlineAppendix;
+
+  /// No description provided for @outlineAppendixNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'以下内容还没有经过你的确认，暂不作为结论。'**
+  String get outlineAppendixNote;
+
+  /// No description provided for @outlineUntitled.
+  ///
+  /// In zh, this message translates to:
+  /// **'复习提纲'**
+  String get outlineUntitled;
+
+  /// No description provided for @outlineSources.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源'**
+  String get outlineSources;
+
+  /// No description provided for @outlineOpenSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'在 Coursive 中打开'**
+  String get outlineOpenSource;
+
+  /// No description provided for @outlinePdfMeta.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} · {sections} 节 · {items} 条 · {sources} 处来源'**
+  String outlinePdfMeta(String date, int sections, int items, int sources);
+
+  /// No description provided for @outlineContents.
+  ///
+  /// In zh, this message translates to:
+  /// **'目录'**
+  String get outlineContents;
+
+  /// No description provided for @outlineSourceStale.
+  ///
+  /// In zh, this message translates to:
+  /// **'依据已失效'**
+  String get outlineSourceStale;
+
+  /// No description provided for @outlineReviewed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已审核 {done}/{total}'**
+  String outlineReviewed(int done, int total);
+
+  /// No description provided for @outlineStaleCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'依据失效 {n}'**
+  String outlineStaleCount(int n);
+
+  /// No description provided for @outlineMarksCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 个标记待解释'**
+  String outlineMarksCount(int n);
+
+  /// No description provided for @outlineUnverifiedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'未核实 {n}'**
+  String outlineUnverifiedCount(int n);
+
+  /// No description provided for @outlineClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭审核，草稿会保留'**
+  String get outlineClose;
+
+  /// No description provided for @outlineUndo.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销'**
+  String get outlineUndo;
+
+  /// No description provided for @outlineAccept.
+  ///
+  /// In zh, this message translates to:
+  /// **'采纳'**
+  String get outlineAccept;
+
+  /// No description provided for @outlineUnaccept.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消采纳'**
+  String get outlineUnaccept;
+
+  /// No description provided for @outlineToCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'标为待查'**
+  String get outlineToCheck;
+
+  /// No description provided for @outlineUncheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消待查'**
+  String get outlineUncheck;
+
+  /// No description provided for @outlineEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'改写'**
+  String get outlineEdit;
+
+  /// No description provided for @outlineEditHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Enter 完成 · Shift+Enter 换行 · Esc 放弃'**
+  String get outlineEditHint;
+
+  /// No description provided for @outlineSplit.
+  ///
+  /// In zh, this message translates to:
+  /// **'拆成两条'**
+  String get outlineSplit;
+
+  /// No description provided for @outlineMerge.
+  ///
+  /// In zh, this message translates to:
+  /// **'合并下一条'**
+  String get outlineMerge;
+
+  /// No description provided for @outlineMoveUp.
+  ///
+  /// In zh, this message translates to:
+  /// **'上移'**
+  String get outlineMoveUp;
+
+  /// No description provided for @outlineMoveDown.
+  ///
+  /// In zh, this message translates to:
+  /// **'下移'**
+  String get outlineMoveDown;
+
+  /// No description provided for @outlineDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get outlineDelete;
+
+  /// No description provided for @outlineMore.
+  ///
+  /// In zh, this message translates to:
+  /// **'更多操作'**
+  String get outlineMore;
+
+  /// No description provided for @outlineLevel.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换标题层级'**
+  String get outlineLevel;
+
+  /// No description provided for @outlineAddItem.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加条目'**
+  String get outlineAddItem;
+
+  /// No description provided for @outlineDeleteSection.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除章节，条目并入上一章'**
+  String get outlineDeleteSection;
+
+  /// No description provided for @outlineKindSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'归纳'**
+  String get outlineKindSummary;
+
+  /// No description provided for @outlineEvidenceGone.
+  ///
+  /// In zh, this message translates to:
+  /// **'依据已失效'**
+  String get outlineEvidenceGone;
+
+  /// No description provided for @outlineKeepAsCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'保留为待查'**
+  String get outlineKeepAsCheck;
+
+  /// No description provided for @outlineDropEvidence.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除失效依据'**
+  String get outlineDropEvidence;
+
+  /// No description provided for @outlineMarkHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个标记是什么意思？只有你知道'**
+  String get outlineMarkHint;
+
+  /// No description provided for @outlineMarkUndo.
+  ///
+  /// In zh, this message translates to:
+  /// **'撤销选择'**
+  String get outlineMarkUndo;
+
+  /// No description provided for @outlineCustomHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'写下它的意思'**
+  String get outlineCustomHint;
+
+  /// No description provided for @outlineNoInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'原来的笔迹已不在画布上'**
+  String get outlineNoInk;
+
+  /// No description provided for @outlineShowInk.
+  ///
+  /// In zh, this message translates to:
+  /// **'在画布上查看这处笔迹'**
+  String get outlineShowInk;
+
+  /// No description provided for @outlineSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存为课程笔记'**
+  String get outlineSave;
+
+  /// No description provided for @outlineUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新课程笔记'**
+  String get outlineUpdate;
+
+  /// No description provided for @outlineSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在保存…'**
+  String get outlineSaving;
+
+  /// No description provided for @outlineSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存为本课笔记'**
+  String get outlineSaved;
+
+  /// No description provided for @outlineDirty.
+  ///
+  /// In zh, this message translates to:
+  /// **'有修改尚未更新到笔记'**
+  String get outlineDirty;
+
+  /// No description provided for @outlineSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法保存笔记：{error}'**
+  String outlineSaveFailed(String error);
+
+  /// No description provided for @outlineSaveConflict.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法保存：这份笔记已在其他地方修改。本机的审核内容仍在，可以另存一份'**
+  String get outlineSaveConflict;
+
+  /// No description provided for @outlineSaveCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'另存为新笔记'**
+  String get outlineSaveCopy;
+
+  /// No description provided for @outlineRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试'**
+  String get outlineRetry;
+
+  /// No description provided for @outlineStateNotRecorded.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法记录提纲状态：笔记已保存，重试不会重复创建'**
+  String get outlineStateNotRecorded;
+
+  /// No description provided for @outlineTooManyItems.
+  ///
+  /// In zh, this message translates to:
+  /// **'每章最多 20 条'**
+  String get outlineTooManyItems;
+
+  /// No description provided for @outlineExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出'**
+  String get outlineExport;
+
+  /// No description provided for @outlineExportMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出 Markdown'**
+  String get outlineExportMarkdown;
+
+  /// No description provided for @outlineExportPdf.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出 PDF'**
+  String get outlineExportPdf;
+
+  /// No description provided for @outlineExportSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出到 {path}'**
+  String outlineExportSaved(String path);
+
+  /// No description provided for @outlineExportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法导出：{error}'**
+  String outlineExportFailed(String error);
+
+  /// No description provided for @outlineKeys.
+  ///
+  /// In zh, this message translates to:
+  /// **'A 采纳 · F 待查 · Enter 改写 · Alt+↑↓ 移动 · Esc 关闭'**
+  String get outlineKeys;
+
+  /// No description provided for @outlinePeekOutline.
+  ///
+  /// In zh, this message translates to:
+  /// **'提纲'**
+  String get outlinePeekOutline;
+
+  /// No description provided for @outlinePeekSource.
+  ///
+  /// In zh, this message translates to:
+  /// **'原文'**
+  String get outlinePeekSource;
+
+  /// No description provided for @outlineEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可审核的条目'**
+  String get outlineEmpty;
+
+  /// No description provided for @outlineAsk.
+  ///
+  /// In zh, this message translates to:
+  /// **'整理为复习提纲'**
+  String get outlineAsk;
+
+  /// No description provided for @outlineAskHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认资料后，助手把它们整理成草稿交给你审核'**
+  String get outlineAskHint;
+
+  /// No description provided for @outlineQuick.
+  ///
+  /// In zh, this message translates to:
+  /// **'整理提纲'**
+  String get outlineQuick;
+
+  /// No description provided for @outlineConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'整理为复习提纲'**
+  String get outlineConfirmTitle;
+
+  /// No description provided for @outlineConfirmBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手会读取下面这些资料，整理成草稿交给你逐条审核。保存为课程笔记之前，不会写入任何内容。'**
+  String get outlineConfirmBody;
+
+  /// No description provided for @outlineConfirmStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始整理'**
+  String get outlineConfirmStart;
+
+  /// No description provided for @outlineImagesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许助手查看选区图像，用于读懂手写和扫描件'**
+  String get outlineImagesHint;
+
+  /// No description provided for @outlineNoSources.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个对话还没有绑定资料'**
+  String get outlineNoSources;
+
+  /// No description provided for @outlineCardSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'{sections} 节 · {items} 条'**
+  String outlineCardSummary(int sections, int items);
+
+  /// No description provided for @outlineCardSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已存为笔记'**
+  String get outlineCardSaved;
+
+  /// No description provided for @outlineCardDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿'**
+  String get outlineCardDraft;
+
+  /// No description provided for @outlineOpenReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'审核提纲'**
+  String get outlineOpenReview;
+
+  /// No description provided for @outlinePdfTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出 PDF'**
+  String get outlinePdfTitle;
+
+  /// No description provided for @outlinePaper.
+  ///
+  /// In zh, this message translates to:
+  /// **'纸张'**
+  String get outlinePaper;
+
+  /// No description provided for @outlineOrientation.
+  ///
+  /// In zh, this message translates to:
+  /// **'方向'**
+  String get outlineOrientation;
+
+  /// No description provided for @outlinePortrait.
+  ///
+  /// In zh, this message translates to:
+  /// **'竖版'**
+  String get outlinePortrait;
+
+  /// No description provided for @outlineLandscape.
+  ///
+  /// In zh, this message translates to:
+  /// **'横版'**
+  String get outlineLandscape;
+
+  /// No description provided for @outlineMargins.
+  ///
+  /// In zh, this message translates to:
+  /// **'页边距'**
+  String get outlineMargins;
+
+  /// No description provided for @outlineMarginStandard.
+  ///
+  /// In zh, this message translates to:
+  /// **'标准'**
+  String get outlineMarginStandard;
+
+  /// No description provided for @outlineMarginCompact.
+  ///
+  /// In zh, this message translates to:
+  /// **'紧凑'**
+  String get outlineMarginCompact;
+
+  /// No description provided for @outlinePdfPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{page} / {count}'**
+  String outlinePdfPage(int page, int count);
+
+  /// No description provided for @outlinePdfTextLayer.
+  ///
+  /// In zh, this message translates to:
+  /// **'文字可选择复制'**
+  String get outlinePdfTextLayer;
+
+  /// No description provided for @outlinePdfSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存 PDF'**
+  String get outlinePdfSave;
+
+  /// No description provided for @outlinePdfMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'改存 Markdown'**
+  String get outlinePdfMarkdown;
+
+  /// No description provided for @outlinePdfMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法导出 PDF：内嵌字体缺少「{chars}」等 {n} 个字符，可以改存 Markdown'**
+  String outlinePdfMissing(String chars, int n);
+
+  /// No description provided for @outlinePdfPreviewFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法预览：{error}。仍可保存同一份 PDF'**
+  String outlinePdfPreviewFailed(String error);
+
+  /// No description provided for @outlinePrevPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'上一页'**
+  String get outlinePrevPage;
+
+  /// No description provided for @outlineNextPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一页'**
+  String get outlineNextPage;
+
+  /// No description provided for @studySourcesCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 份资料'**
+  String studySourcesCount(int count);
+
+  /// No description provided for @studySourcesReading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读 · {label}'**
+  String studySourcesReading(String label);
+
+  /// No description provided for @studySourcesShow.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开资料列表'**
+  String get studySourcesShow;
+
+  /// No description provided for @studySourcesHide.
+  ///
+  /// In zh, this message translates to:
+  /// **'收起资料列表'**
+  String get studySourcesHide;
+
+  /// No description provided for @studySnapshotDrag.
+  ///
+  /// In zh, this message translates to:
+  /// **'拖入对话，附上选区截图'**
+  String get studySnapshotDrag;
+
+  /// No description provided for @studySnapshotVideoFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法取得选区中的视频画面，请检查本地视频和 ffmpeg 后重试'**
+  String get studySnapshotVideoFailed;
+
+  /// No description provided for @studySnapshotTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'截图超过 3 MiB，请缩小选区'**
+  String get studySnapshotTooLarge;
+
+  /// No description provided for @studySnapshotRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除截图'**
+  String get studySnapshotRemove;
+
+  /// No description provided for @studySnapshotRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'重试上传'**
+  String get studySnapshotRetry;
+
+  /// No description provided for @studyCitationUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'来源已变更或不可用，保留当前阅读位置'**
+  String get studyCitationUnavailable;
+
+  /// No description provided for @studyCourseScopeChip.
+  ///
+  /// In zh, this message translates to:
+  /// **'全课程'**
+  String get studyCourseScopeChip;
+
+  /// No description provided for @studyCourseScopeHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许助手检索并读取本课程的本地资料；关闭时只读你绑定的内容'**
+  String get studyCourseScopeHint;
+
+  /// No description provided for @studyAgentSearchingCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在检索本课程资料…'**
+  String get studyAgentSearchingCourse;
+
+  /// No description provided for @studyAgentReadingCourse.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读课程资料…'**
+  String get studyAgentReadingCourse;
+
+  /// No description provided for @studyAgentLookingShot.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在看截图…'**
+  String get studyAgentLookingShot;
+
+  /// No description provided for @studyAgentCheckingQuotes.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在核对引文…'**
+  String get studyAgentCheckingQuotes;
+
+  /// No description provided for @studyShot.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区截图'**
+  String get studyShot;
 }
 
 class _AppLocalizationsDelegate
