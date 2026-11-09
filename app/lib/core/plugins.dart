@@ -12,7 +12,8 @@ import '../l10n/l10n.dart';
 /// note view, an exporter or a page (docs/specs/0004-plugin-platform.md).
 class PluginEntry {
   PluginEntry(this.plugin, this.kind, Map e)
-      : id = '${e['id']}',
+      : raw = e.cast<String, dynamic>(),
+        id = '${e['id']}',
         title = '${e['title']}',
         icon = '${e['icon'] ?? 'extension'}',
         action = '${e['action']}',
@@ -20,11 +21,24 @@ class PluginEntry {
         scope = '${e['scope'] ?? ''}';
   final Map<String, dynamic> plugin;
 
-  /// actions, noteViews, exporters or pages.
+  /// actions, noteViews, exporters, pages or slots.
   final String kind;
+  final Map<String, dynamic> raw;
   final String id, title, icon, action, surface, scope;
   String get pluginId => '${plugin['id']}';
   String get pluginTitle => '${plugin['title']}';
+  String get target => '${raw['target'] ?? ''}';
+  String get renderer => '${raw['renderer'] ?? 'declarative'}';
+  String get route => '${raw['route'] ?? 'plugin:$pluginId:$id'}';
+  int get order => raw['order'] is num ? (raw['order'] as num).toInt() : 100;
+  int get priority => raw['priority'] is num ? (raw['priority'] as num).toInt() : 0;
+  String get mode => '${raw['mode'] ?? 'list'}';
+  String get slotKey => '${raw['key'] ?? id}';
+  List<String> get requiredServices => [for (final x in jsonList(raw['required_services'])) '$x'];
+  List<String> get requiredPermissions => [for (final x in jsonList(raw['required_permissions'])) '$x'];
+  List<String> get availableOn => [for (final x in jsonList(raw['available_on'])) '$x'];
+  String get minHostVersion => '${raw['min_host_version'] ?? ''}';
+  String get fallbackRoute => '${raw['fallback_route'] ?? ''}';
 }
 
 /// Installed plugins and the plugin routes of the agent host.

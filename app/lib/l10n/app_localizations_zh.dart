@@ -5505,6 +5505,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginViewUnsupported => '当前版本的应用还不能显示这种视图，更新应用后即可查看';
 
   @override
+  String get pluginPages => '插件页面';
+
+  @override
   String get pluginViewAlternative => '换种方式看';
 
   @override

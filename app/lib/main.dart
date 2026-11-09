@@ -13,6 +13,9 @@ import 'core/deep_links.dart';
 import 'core/background_work.dart';
 import 'core/daemon_service.dart';
 import 'core/plugins.dart';
+import 'core/plugin_navigation.dart';
+import 'core/ui_slots.dart';
+import 'features/plugins/declarative_renderer.dart';
 import 'core/profile.dart';
 import 'features/assistant/assistant_controller.dart';
 import 'features/assistant/task_inbox.dart';
@@ -57,6 +60,13 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (_) => ScheduleStore(app)),
       ChangeNotifierProvider(create: (_) => TaskInbox(app)),
       ChangeNotifierProvider(create: (_) => PluginStore(app)),
+      ChangeNotifierProvider(create: (_) => PluginNavigationRegistry()),
+      ChangeNotifierProvider(create: (_) => UiSlotRegistry()),
+      Provider<PluginPageBuilderRegistry>(create: (_) {
+        final builders = PluginPageBuilderRegistry();
+        builders.register('declarative', declarativePageBuilder);
+        return builders;
+      }),
       ChangeNotifierProvider(create: (_) => ScheduleFocus()),
     ],
     child: const CoursiveApp(),
