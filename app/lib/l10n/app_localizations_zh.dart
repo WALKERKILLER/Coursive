@@ -5511,6 +5511,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginViewAlternative => '换种方式看';
 
   @override
+  String get pluginCanvasFallbackMissing => '插件已不可用，以下内容仍保留在本机';
+
+  @override
+  String get pluginCanvasFallbackUntitled => '未命名的插件对象';
+
+  @override
+  String get pluginCanvasFallbackEmpty => '这个对象没有可显示的文字';
+
+  @override
+  String get pluginCanvasFallbackUnreadable => '无法显示这个插件对象，内容可能已损坏';
+
+  @override
+  String get pluginCanvasFallbackExport => '导出数据';
+
+  @override
   String get pluginSlotNoteToolbar => '笔记工具栏';
 
   @override

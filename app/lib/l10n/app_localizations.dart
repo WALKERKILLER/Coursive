@@ -9623,6 +9623,36 @@ abstract class AppLocalizations {
   /// **'换种方式看'**
   String get pluginViewAlternative;
 
+  /// No description provided for @pluginCanvasFallbackMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件已不可用，以下内容仍保留在本机'**
+  String get pluginCanvasFallbackMissing;
+
+  /// No description provided for @pluginCanvasFallbackUntitled.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名的插件对象'**
+  String get pluginCanvasFallbackUntitled;
+
+  /// No description provided for @pluginCanvasFallbackEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个对象没有可显示的文字'**
+  String get pluginCanvasFallbackEmpty;
+
+  /// No description provided for @pluginCanvasFallbackUnreadable.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法显示这个插件对象，内容可能已损坏'**
+  String get pluginCanvasFallbackUnreadable;
+
+  /// No description provided for @pluginCanvasFallbackExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出数据'**
+  String get pluginCanvasFallbackExport;
+
   /// No description provided for @pluginSlotNoteToolbar.
   ///
   /// In zh, this message translates to:
