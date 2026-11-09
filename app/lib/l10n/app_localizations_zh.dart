@@ -5505,6 +5505,44 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginViewUnsupported => '当前版本的应用还不能显示这种视图，更新应用后即可查看';
 
   @override
+  String get pluginWebUnavailableTitle => '这个插件页面暂时用原生方式打开';
+
+  @override
+  String get pluginWebReasonPlatformUnsupported =>
+      '这个平台还不能运行插件的自定义 Web UI，插件页面改用原生渲染。';
+
+  @override
+  String get pluginWebReasonNeedsReview => '这个平台的自定义 Web UI 还在准入评审中，评审通过后才会开启。';
+
+  @override
+  String get pluginWebReasonRendererMissing =>
+      '当前版本的应用还没有内置 WebView 渲染器，Web UI 页面暂时无法显示。';
+
+  @override
+  String get pluginWebReasonPluginInactive => '插件当前没有启用，启用后可以再试一次。';
+
+  @override
+  String get pluginWebReasonResourcesMissing => '插件的页面资源缺失或校验失败，重新安装插件后可以再试一次。';
+
+  @override
+  String get pluginWebAdmissionSupported => '平台准入：支持';
+
+  @override
+  String get pluginWebAdmissionNeedsReview => '平台准入：评审中';
+
+  @override
+  String get pluginWebAdmissionUnsupported => '平台准入：不支持';
+
+  @override
+  String get pluginWebNativeKeptTitle => '仍然可用';
+
+  @override
+  String get pluginWebNativeKept => '插件的原生页面、UI 扩展和动作照常可用，本地课程库与笔记不受影响。';
+
+  @override
+  String get pluginWebOpenNative => '打开原生页面';
+
+  @override
   String get pluginPages => '插件页面';
 
   @override

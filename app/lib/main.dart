@@ -16,6 +16,7 @@ import 'core/plugins.dart';
 import 'core/plugin_navigation.dart';
 import 'core/ui_slots.dart';
 import 'features/plugins/declarative_renderer.dart';
+import 'features/plugins/plugin_web_fallback.dart';
 import 'core/profile.dart';
 import 'features/assistant/assistant_controller.dart';
 import 'features/assistant/task_inbox.dart';
@@ -65,6 +66,7 @@ Future<void> main() async {
       Provider<PluginPageBuilderRegistry>(create: (_) {
         final builders = PluginPageBuilderRegistry();
         builders.register('declarative', declarativePageBuilder);
+        builders.register('web-ui', pluginWebPageBuilder);
         return builders;
       }),
       ChangeNotifierProvider(create: (_) => ScheduleFocus()),
