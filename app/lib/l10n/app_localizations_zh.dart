@@ -5546,6 +5546,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginPages => '插件页面';
 
   @override
+  String pluginActionFailed(Object value, Object value2) {
+    return '无法完成「$value」：$value2';
+  }
+
+  @override
+  String pluginRouteMissing(Object value) {
+    return '无法打开「$value」，插件没有提供这个页面';
+  }
+
+  @override
+  String pluginProposalPending(Object value) {
+    return '「$value」已生成，等待你批准后才会写入';
+  }
+
+  @override
   String get pluginViewAlternative => '换种方式看';
 
   @override

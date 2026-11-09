@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/plugin_navigation.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
 
@@ -217,7 +216,7 @@ class _NodeRenderer {
   }
 
   Widget _text(BuildContext context, Map<String, dynamic> node) {
-    final value = '${_resolve(node['text'] ?? node['ref'] ?? '')}';
+    final value = _display(node['text'] ?? node['ref'] ?? '');
     if (value.length > maxText) {
       throw DeclarativeError('text is too long: ${value.length}');
     }
@@ -232,7 +231,7 @@ class _NodeRenderer {
   }
 
   Widget _button(BuildContext context, Map<String, dynamic> node) {
-    final label = '${_resolve(node['text'] ?? '')}';
+    final label = _display(node['text'] ?? '');
     final action = '${node['action'] ?? node['onPress']?['action'] ?? ''}';
     final rawArgs =
         node['args'] ?? node['onPress']?['args'] ?? const <String, dynamic>{};
@@ -258,15 +257,15 @@ class _NodeRenderer {
     final id = '${node['id'] ?? node['ref'] ?? 'input'}';
     final controller = controllers.putIfAbsent(
       id,
-      () => TextEditingController(text: '${_resolve(node['value'] ?? '')}'),
+      () => TextEditingController(text: _display(node['value'] ?? '')),
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: Space.xs),
       child: TextField(
         controller: controller,
         decoration: InputDecoration(
-          labelText: '${_resolve(node['label'] ?? '')}',
-          hintText: '${_resolve(node['hint'] ?? '')}',
+          labelText: _display(node['label'] ?? ''),
+          hintText: _display(node['hint'] ?? ''),
         ),
         onChanged: (value) {
           values[id] = value;
@@ -278,7 +277,7 @@ class _NodeRenderer {
 
   Widget _table(BuildContext context, Map<String, dynamic> node, int depth) {
     final columns = [
-      for (final c in (node['columns'] as List?) ?? const []) '${_resolve(c)}',
+      for (final c in (node['columns'] as List?) ?? const []) _display(c),
     ];
     final rows = (node['rows'] as List?) ?? const [];
     if (columns.isEmpty || rows.isEmpty) return const SizedBox.shrink();
@@ -303,7 +302,7 @@ class _NodeRenderer {
                 for (final cell in row)
                   Padding(
                     padding: const EdgeInsets.all(Space.sm),
-                    child: Text('${_resolve(cell)}'),
+                    child: Text(_display(cell)),
                   ),
               ],
             ),
@@ -327,11 +326,11 @@ class _NodeRenderer {
                   SizedBox(
                     width: 56,
                     child: Text(
-                      '${_resolve(item['time'] ?? '')}',
+                      _display(item['time'] ?? ''),
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                   ),
-                  Expanded(child: Text('${_resolve(item['text'] ?? '')}')),
+                  Expanded(child: Text(_display(item['text'] ?? ''))),
                 ],
               ),
             ),
@@ -344,7 +343,7 @@ class _NodeRenderer {
     if (tabs.isEmpty) return const SizedBox.shrink();
     final labels = [
       for (final tab in tabs)
-        if (tab is Map) '${_resolve(tab['label'] ?? '')}',
+        if (tab is Map) _display(tab['label'] ?? ''),
     ];
     final views = [
       for (final tab in tabs)
@@ -420,6 +419,9 @@ class _NodeRenderer {
     _ => TextAlign.start,
   };
 
+  /// A bound value as display text; a missing binding is empty, not "null".
+  String _display(Object? value) => '${_resolve(value) ?? ''}';
+
   Object? _resolve(Object? value) {
     if (value is String) {
       final match = RegExp(r'^\$\{([^}]+)\}$').firstMatch(value);
@@ -450,21 +452,4 @@ class _NodeRenderer {
     }
     return current;
   }
-}
-
-/// Registers the declarative renderer as a page builder for plugin pages.
-Widget declarativePageBuilder(
-  BuildContext context,
-  PluginPageContribution page,
-) {
-  final document = page.view['document'] is Map
-      ? (page.view['document'] as Map).cast<String, dynamic>()
-      : page.view;
-  return DeclarativeRenderer(
-    document: document,
-    onAction: (action, args) {
-      // The action bridge is wired by the page host; a page without a bridge
-      // still renders and its buttons stay inert instead of crashing.
-    },
-  );
 }

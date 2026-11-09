@@ -15,7 +15,7 @@ import 'core/daemon_service.dart';
 import 'core/plugins.dart';
 import 'core/plugin_navigation.dart';
 import 'core/ui_slots.dart';
-import 'features/plugins/declarative_renderer.dart';
+import 'features/plugins/plugin_contributions.dart';
 import 'features/plugins/plugin_web_fallback.dart';
 import 'core/profile.dart';
 import 'features/assistant/assistant_controller.dart';
@@ -48,6 +48,10 @@ Future<void> main() async {
   if (Platform.isAndroid) BackgroundWork(app);
   final screen = ScreenContext();
   final players = PlayerHub();
+  final plugins = PluginStore(app);
+  final pluginPages = PluginNavigationRegistry();
+  final pluginSlots = UiSlotRegistry();
+  PluginContributionBinder(store: plugins, pages: pluginPages, slots: pluginSlots);
 
   runApp(MultiProvider(
     providers: [
@@ -60,9 +64,9 @@ Future<void> main() async {
       ChangeNotifierProvider(create: (_) => AssistantController(app, screen, players)),
       ChangeNotifierProvider(create: (_) => ScheduleStore(app)),
       ChangeNotifierProvider(create: (_) => TaskInbox(app)),
-      ChangeNotifierProvider(create: (_) => PluginStore(app)),
-      ChangeNotifierProvider(create: (_) => PluginNavigationRegistry()),
-      ChangeNotifierProvider(create: (_) => UiSlotRegistry()),
+      ChangeNotifierProvider.value(value: plugins),
+      ChangeNotifierProvider.value(value: pluginPages),
+      ChangeNotifierProvider.value(value: pluginSlots),
       Provider<PluginPageBuilderRegistry>(create: (_) {
         final builders = PluginPageBuilderRegistry();
         builders.register('declarative', declarativePageBuilder);
