@@ -2,7 +2,7 @@
 	"name": "coursive-plugin-review-lab",
 	"version": "0.1.0",
 	"private": true,
-	"description": "Example v3 plugin: a review-card page, a course slot, an agent tool and an approved write",
+	"description": "Example v3 plugin: a review-card page, a course slot, a canvas tool, an agent tool and an approved write",
 	"license": "MIT",
 	"type": "module",
 	"files": ["index.mjs", "README.md"],
@@ -10,7 +10,7 @@
 		"id": "review-lab",
 		"title": "复习卡实验室",
 		"summary": "把课程要点做成复习卡，逐张翻看并存为笔记",
-		"description": "Plugin Fabric 的示例插件：一个复习卡页面、课程页上的入口卡片、一个让助手生成卡片的工具，以及需要你批准才会执行的「存为笔记」。",
+		"description": "Plugin Fabric 的示例插件：一个复习卡页面、课程页上的入口卡片、把复习卡钉到学习画布的工具、一个让助手生成卡片的工具，以及需要你批准才会执行的「存为笔记」。",
 		"icon": "style",
 		"categories": ["review"],
 		"api": "^3.0.0",
@@ -67,6 +67,45 @@
 							]
 						}
 					}
+				},
+				{
+					"id": "canvas-pin",
+					"target": "canvas.toolbar.tools",
+					"mode": "list",
+					"order": 10,
+					"document": {
+						"schemaVersion": 1,
+						"body": {
+							"type": "card",
+							"children": [
+								{ "type": "text", "variant": "title", "text": "复习卡" },
+								{ "type": "text", "text": "把这组复习卡钉到画布中央，来源记为这节课；卸载插件后卡片仍保留。" },
+								{
+									"type": "row",
+									"children": [
+										{
+											"type": "button",
+											"text": "钉到画布",
+											"action": "pin",
+											"args": {
+												"revision": { "ref": "context.canvas_revision" },
+												"lecture_id": { "ref": "context.lecture_id" },
+												"x": { "ref": "context.canvas_x" },
+												"y": { "ref": "context.canvas_y" }
+											}
+										},
+										{
+											"type": "button",
+											"text": "移除复习卡",
+											"action": "unpin",
+											"variant": "text",
+											"args": { "revision": { "ref": "context.canvas_revision" }, "objects": { "ref": "context.canvas_objects" } }
+										}
+									]
+								}
+							]
+						}
+					}
 				}
 			],
 			"actions": [
@@ -74,6 +113,18 @@
 				{ "id": "reveal", "title": "显示答案", "action": "reveal" },
 				{ "id": "next", "title": "下一张", "action": "next", "params": { "properties": { "step": "integer" } } },
 				{ "id": "open", "title": "打开复习卡", "action": "open" },
+				{
+					"id": "pin",
+					"title": "钉到画布",
+					"action": "pin",
+					"params": { "required": ["revision"], "properties": { "revision": "integer", "lecture_id": "string", "x": "number", "y": "number" } }
+				},
+				{
+					"id": "unpin",
+					"title": "移除复习卡",
+					"action": "unpin",
+					"params": { "required": ["revision"], "properties": { "revision": "integer", "objects": "array" } }
+				},
 				{ "id": "save", "title": "存为笔记", "action": "save", "permission": "library.write", "write": true }
 			]
 		}

@@ -345,4 +345,63 @@ void main() {
     );
     expect(find.text('已存为笔记'), findsOneWidget);
   });
+
+  testWidgets('a canvas tool binds to its slot and hands its view patch to '
+      'the canvas around it', (tester) async {
+    final daemon = _Daemon({
+      'open': {
+        'ok': true,
+        'result': {
+          'viewPatch': {
+            'viewId': 'course-review',
+            'patch': {
+              'canvas': {'revision': 4},
+            },
+          },
+        },
+      },
+    });
+    final store = _Store();
+    final slots = UiSlotRegistry();
+    final binder = PluginContributionBinder(
+      store: store,
+      pages: PluginNavigationRegistry(),
+      slots: slots,
+    );
+    addTearDown(binder.dispose);
+    store.set([_cards(slotTarget: 'canvas.toolbar.tools')]);
+    final slot = slots.contributions('canvas.toolbar.tools').single;
+    final patches = <String>[];
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [ChangeNotifierProvider<PluginStore>.value(value: store)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: PluginViewPatchScope(
+              onPatch: (pluginId, patch) async =>
+                  patches.add('$pluginId ${patch.patch['canvas']}'),
+              child: Builder(
+                builder: (context) {
+                  final v = slot.builder(context, {
+                    'course_id': 'c-1',
+                  }) as PluginDeclarativeView;
+                  return PluginDeclarativeView(
+                    pluginId: v.pluginId,
+                    viewId: v.viewId,
+                    document: v.document,
+                    hostContext: v.hostContext,
+                    call: daemon.call,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始复习'));
+    await tester.pumpAndSettle();
+    expect(patches, ['cards {revision: 4}']);
+  });
 }

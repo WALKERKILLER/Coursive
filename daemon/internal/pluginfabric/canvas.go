@@ -406,8 +406,9 @@ type CanvasCommit struct {
 
 // Canvas is the transaction and undo boundary a plugin writes through. It holds
 // the document revision, the objects and one undo entry per committed batch, and
-// nothing else: no file, database or runtime handle. The study canvas document
-// implements the same boundary when PF-10 wires it in.
+// nothing else: no file, database or runtime handle. The study canvas stores
+// these objects as plugin_objects (internal/library), and the app's
+// StudyDocument applies the same batch rules under its snapshot undo stack.
 type Canvas struct {
 	mu       sync.Mutex
 	revision int64

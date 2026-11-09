@@ -14,7 +14,30 @@ import 'plugin_actions.dart';
 /// The slot targets this host renders and how contributions combine there. It
 /// matches `SLOT_TARGETS` in agent/src/plugins.mjs, which refuses any other
 /// target at install (docs/specs/0032-ui-extension-protocol.md).
-const uiSlotCatalog = {'course.detail.sections': UiSlotMode.list};
+const uiSlotCatalog = {
+  'course.detail.sections': UiSlotMode.list,
+  'canvas.toolbar.tools': UiSlotMode.list,
+};
+
+/// A host surface that takes view patches from the plugin views inside it, such
+/// as the study canvas committing a `canvas` batch. A view outside one ignores
+/// its view patches.
+class PluginViewPatchScope extends InheritedWidget {
+  const PluginViewPatchScope({
+    super.key,
+    required this.onPatch,
+    required super.child,
+  });
+
+  final Future<void> Function(String pluginId, PluginViewPatch patch) onPatch;
+
+  static PluginViewPatchScope? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PluginViewPatchScope>();
+
+  @override
+  bool updateShouldNotify(PluginViewPatchScope oldWidget) =>
+      onPatch != oldWidget.onPatch;
+}
 
 /// Feeds the pages and slots of active plugins from [store] into the host
 /// registries on every change of the plugin list, so disabling or removing a
@@ -133,8 +156,9 @@ Widget declarativePageBuilder(
 /// A plugin's declarative document bound to its view state in the daemon. It
 /// reads the state and revision when it mounts, sends each button through the
 /// action bridge, applies a state patch, opens a page of the same plugin for a
-/// navigation result and shows a notification or a refusal as a snackbar. The
-/// host context of a slot (such as `course_id`) is readable as `context.*`.
+/// navigation result, hands a view patch to the enclosing [PluginViewPatchScope]
+/// and shows a notification or a refusal as a snackbar. The host context of a
+/// slot (such as `course_id`) is readable as `context.*`.
 class PluginDeclarativeView extends StatefulWidget {
   const PluginDeclarativeView({
     super.key,
@@ -169,6 +193,12 @@ class _PluginDeclarativeViewState extends State<PluginDeclarativeView> {
         if (mounted) setState(() => _state = patch.state);
       },
       onNavigation: _open,
+      onViewPatch: (patch) {
+        if (mounted) {
+          PluginViewPatchScope.maybeOf(context)
+              ?.onPatch(widget.pluginId, patch);
+        }
+      },
       onNotification: (n) => _say(n.text),
       onProposal: _confirm,
     );

@@ -64,7 +64,8 @@ A page is a declarative document the app renders natively; the plugin ships no U
 - Node types are the DSL v1 whitelist of spec 0032 (`column`, `row`, `card`, `text`, `button`, `input`, `list`, `table`, `tabs`, `timeline`, …). Limits: depth 24, 2000 nodes, 20 000 characters per text, 256 KB per document.
 - `"${path}"` binds a value of the view state (and, in a slot, `context.*`); a binding with no value renders empty.
 - Every `button.action` must name a declared action; the installer refuses one that does not.
-- A slot puts a document on a host surface. The host catalog is `course.detail.sections` (mode `list`), with `context.course_id`. Other targets are refused at install until the app ships their outlet.
+- A slot puts a document on a host surface. The host catalog is `course.detail.sections` (mode `list`), with `context.course_id`, and `canvas.toolbar.tools` (mode `list`), shown in the study canvas's 插件 sheet with `context.lecture_id`, `context.canvas_revision`, `context.canvas_x`/`canvas_y` (the view centre in canvas units) and `context.canvas_objects` (`[{id, revision}]` of this plugin's objects only). Other targets are refused at install until the app ships their outlet.
+- A button binds a context value as an argument with `{"ref": "context.canvas_revision"}`.
 
 Disabling or uninstalling the plugin removes its pages, navigation and slots, and an open page closes itself.
 
@@ -82,7 +83,7 @@ Disabling or uninstalling the plugin removes its pages, navigation and slots, an
 - `{statePatch: {viewId, patch}}`: top-level keys of the view state; `null` removes a key. The daemon keeps the state and its revision; a stale button is refused and the page reloads.
 - `{navigation: {route, title?}}`: a page id of the same plugin, or a registered route.
 - `{notification: {text, level?}}`: `info`, `warning` or `error`.
-- `{viewPatch: {viewId, patch}}`.
+- `{viewPatch: {viewId, patch}}`. On the canvas, `patch.canvas` is a canvas batch `{revision, objects?, delete?, label?}`: `revision` is the `context.canvas_revision` the tool read, each object is a `coursive/canvas-object@1` created by this plugin (a create at `revision` 1, an update exactly one above the stored object), and `delete` names this plugin's objects. The canvas checks the batch whole, shows an overwrite or delete to the user first, and commits it as one undo entry; a stale revision, an invalid object or a foreign id commits nothing. Review Lab's 钉到画布 and 移除复习卡 are the example.
 
 A `write` action never runs when the button is pressed. The bridge stores a pending proposal with the assistant's approval mode; the app asks 允许「…」吗？, and only 批准写入 runs the handler, with `approved` set to the proposal id. 放弃 runs nothing. A proposal is applied at most once.
 
