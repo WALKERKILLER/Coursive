@@ -199,11 +199,17 @@ func (s *Server) lmsItems(ctx context.Context, q store.ScheduleQuery) []store.Sc
 		if title == "" {
 			title = it.CourseName
 		}
-		out = append(out, store.ScheduleItem{ID: it.ID, Kind: "homework", Title: it.Title, Detail: it.Detail, DueDate: it.DueDate,
-			DueTime: it.DueTime, CourseID: it.CourseID, TMs: -1, Source: "lms", Done: it.Done, CreatedAt: it.UpdatedAt,
-			UpdatedAt: it.UpdatedAt, CourseTitle: title, URL: it.URL})
+		out = append(out, lmsScheduleEntry(it, title))
 	}
 	return out
+}
+
+// lmsScheduleEntry maps a learning-platform item onto the schedule shape the
+// clients already read.
+func lmsScheduleEntry(it lms.Item, courseTitle string) store.ScheduleItem {
+	return store.ScheduleItem{ID: it.ID, Kind: "homework", Title: it.Title, Detail: it.Detail, DueDate: it.DueDate,
+		DueTime: it.DueTime, CourseID: it.CourseID, TMs: -1, Source: "lms", Done: it.Done, CreatedAt: it.UpdatedAt,
+		UpdatedAt: it.UpdatedAt, CourseTitle: courseTitle, URL: it.URL}
 }
 
 func mergeSchedule(a, b []store.ScheduleItem) []store.ScheduleItem {
@@ -233,7 +239,28 @@ func (s *Server) lmsScheduleItem(ctx context.Context, id string) (store.Schedule
 			return it, nil
 		}
 	}
-	return store.ScheduleItem{}, lmsErr(lms.ErrNotFound)
+	// An assignment outside the due-dated schedule view (for example one
+	// without a due date) still needs an acknowledgement after a local change.
+	if s.LMS == nil {
+		return store.ScheduleItem{}, lmsErr(lms.ErrNotFound)
+	}
+	it, err := s.LMS.Item(id)
+	if err != nil {
+		return store.ScheduleItem{}, lmsErr(err)
+	}
+	title := it.CourseName
+	if cs, err := s.St.Courses(ctx); err == nil {
+		for _, c := range cs {
+			if c.ID == it.CourseID {
+				title = c.Title
+				if c.Alias != "" {
+					title = c.Alias
+				}
+				break
+			}
+		}
+	}
+	return lmsScheduleEntry(it, title), nil
 }
 
 // patchLMSItem changes only local state of an assignment: done, or

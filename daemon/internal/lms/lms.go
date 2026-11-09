@@ -393,6 +393,22 @@ type Item struct {
 	UpdatedAt  int64
 }
 
+// itemLocked builds one assignment's schedule entry. DueDate and DueTime are
+// empty when the platform gives no deadline.
+func itemLocked(source string, ps *platformState, co sources.LMSCourse, a sources.Assignment) Item {
+	detail := co.Title
+	if a.Points != nil && *a.Points > 0 {
+		detail += fmt.Sprintf(" · %g 分", *a.Points)
+	}
+	it := Item{ID: itemID(source, a.ID), Title: a.Title, Detail: detail, CourseID: ps.Links[co.ID].Course,
+		CourseName: co.Title, Done: doneLocked(ps, source, a), URL: a.URL, UpdatedAt: ps.SyncedAt}
+	if a.DueAt != nil {
+		d := a.DueAt.In(time.Local)
+		it.DueDate, it.DueTime = d.Format("2006-01-02"), d.Format("15:04")
+	}
+	return it
+}
+
 // Items lists assignments with a due date, without hidden ones.
 func (s *Service) Items() []Item {
 	s.mu.Lock()
@@ -402,17 +418,10 @@ func (s *Service) Items() []Item {
 	for source, ps := range s.st.Sources {
 		for _, co := range ps.Courses {
 			for _, a := range ps.Assignments[co.ID] {
-				id := itemID(source, a.ID)
-				if a.DueAt == nil || ps.Hidden[id] {
+				if a.DueAt == nil || ps.Hidden[itemID(source, a.ID)] {
 					continue
 				}
-				d := a.DueAt.In(time.Local)
-				detail := co.Title
-				if a.Points != nil && *a.Points > 0 {
-					detail += fmt.Sprintf(" · %g 分", *a.Points)
-				}
-				out = append(out, Item{ID: id, Title: a.Title, Detail: detail, DueDate: d.Format("2006-01-02"), DueTime: d.Format("15:04"),
-					CourseID: ps.Links[co.ID].Course, CourseName: co.Title, Done: doneLocked(ps, source, a), URL: a.URL, UpdatedAt: ps.SyncedAt})
+				out = append(out, itemLocked(source, ps, co, a))
 			}
 		}
 	}
@@ -420,27 +429,42 @@ func (s *Service) Items() []Item {
 	return out
 }
 
+// Item returns one assignment's schedule entry even when it has no due date.
+// Hidden assignments are not part of the schedule and are reported as missing.
+func (s *Service) Item(id string) (Item, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loadLocked()
+	source, ps, course, a, ok := s.findLocked(id)
+	if !ok || ps.Hidden[id] {
+		return Item{}, ErrNotFound
+	}
+	co := sources.LMSCourse{ID: course, Title: course}
+	for _, c := range ps.Courses {
+		if c.ID == course {
+			co = c
+			break
+		}
+	}
+	return itemLocked(source, ps, co, a), nil
+}
+
 // IsItem reports whether a schedule id belongs to a learning platform.
 func IsItem(id string) bool { return strings.HasPrefix(id, "lms:") }
 
-func (s *Service) findLocked(id string) (*platformState, sources.Assignment, bool) {
-	rest := strings.TrimPrefix(id, "lms:")
-	source, aid, ok := strings.Cut(rest, ":")
-	if !ok {
-		return nil, sources.Assignment{}, false
-	}
-	ps := s.st.Sources[source]
-	if ps == nil {
-		return nil, sources.Assignment{}, false
-	}
-	for _, as := range ps.Assignments {
-		for _, a := range as {
-			if a.ID == aid {
-				return ps, a, true
+// findLocked locates an assignment by its full namespaced id. Comparing the
+// complete id keeps source and assignment ids opaque.
+func (s *Service) findLocked(id string) (string, *platformState, string, sources.Assignment, bool) {
+	for source, ps := range s.st.Sources {
+		for course, as := range ps.Assignments {
+			for _, a := range as {
+				if itemID(source, a.ID) == id {
+					return source, ps, course, a, true
+				}
 			}
 		}
 	}
-	return nil, sources.Assignment{}, false
+	return "", nil, "", sources.Assignment{}, false
 }
 
 // SetDone overrides an assignment's done state locally; the platform is not changed.
@@ -448,7 +472,7 @@ func (s *Service) SetDone(id string, done bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
-	ps, a, ok := s.findLocked(id)
+	_, ps, _, a, ok := s.findLocked(id)
 	if !ok {
 		return ErrNotFound
 	}
@@ -473,7 +497,7 @@ func (s *Service) setHidden(id string, hidden bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
-	ps, _, ok := s.findLocked(id)
+	_, ps, _, _, ok := s.findLocked(id)
 	if !ok {
 		return ErrNotFound
 	}
