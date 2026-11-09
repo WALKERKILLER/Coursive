@@ -1,0 +1,24 @@
+{
+  "name": "@example/duplicate",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "duplicate",
+    "title": "重复贡献",
+    "summary": "同一组内贡献 id 重复",
+    "api": "^3.0.0",
+    "contributes": {
+      "actions": [
+        {
+          "id": "open",
+          "title": "打开",
+          "action": "open"
+        },
+        {
+          "id": "open",
+          "title": "再打开",
+          "action": "open"
+        }
+      ]
+    }
+  }
+}

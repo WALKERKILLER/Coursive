@@ -1,0 +1,16 @@
+{
+  "name": "@example/bad-kind",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "bad-kind",
+    "title": "坏运行时",
+    "summary": "声明了不存在的运行时",
+    "api": "^3.0.0",
+    "runtime": [
+      {
+        "kind": "wasm",
+        "entry": "logic/index.wasm"
+      }
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@example/minimal",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "minimal",
+    "title": "最小插件",
+    "summary": "只声明身份和接口范围",
+    "api": "^3.0.0"
+  }
+}

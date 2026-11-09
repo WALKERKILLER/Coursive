@@ -1,0 +1,16 @@
+{
+  "name": "@example/escaping",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "escaping",
+    "title": "越界路径",
+    "summary": "运行时入口越出插件目录",
+    "api": "^3.0.0",
+    "runtime": [
+      {
+        "kind": "moejs",
+        "entry": "../shared/index.js"
+      }
+    ]
+  }
+}

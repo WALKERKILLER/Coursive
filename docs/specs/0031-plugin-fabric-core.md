@@ -65,4 +65,6 @@ Non-goals: injecting arbitrary Dart or Flutter source into a release app; lettin
 
 ## Evidence
 
-Pending until implementation. Link the PF-01 audit, schema fixtures, service-resolver tests, agent permission tests and MoeJS benchmark report here when they exist.
+- Contract audit, gap list and migration map: [plugin-fabric-audit.md](../plugin-fabric-audit.md).
+- Canonical manifest shape and the fixtures all three languages validate: [plugin-manifest.v3.schema.json](../schemas/plugin-manifest.v3.schema.json), [manifest_test.go](../../daemon/internal/pluginfabric/manifest_test.go), [plugin-schema.test.mjs](../../agent/src/plugin-schema.test.mjs), [plugin_fabric_fixtures_test.dart](../../app/test/plugin_fabric_fixtures_test.dart).
+- Pending: service-resolver tests, agent permission tests and the MoeJS benchmark report.

@@ -1,0 +1,14 @@
+{
+  "name": "@example/bad-permission",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "bad-permission",
+    "title": "坏权限",
+    "summary": "声明了不存在的权限",
+    "api": "^3.0.0",
+    "permissions": [
+      "library.read",
+      "teleport"
+    ]
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "name": "@example/virtual-lab",
+  "version": "1.2.3",
+  "coursive": {
+    "id": "virtual-lab",
+    "title": "虚拟实验室",
+    "summary": "在画布上放置声线仿真卡片",
+    "description": "把课程里的公式变成可以拖动参数的仿真卡片。",
+    "icon": "science",
+    "categories": [
+      "visualize",
+      "review"
+    ],
+    "api": "^3.0.0",
+    "runtime": [
+      {
+        "kind": "pi",
+        "entry": "./agent/index.mjs",
+        "skills": [
+          "skills"
+        ]
+      },
+      {
+        "kind": "moejs",
+        "entry": "logic/index.js"
+      },
+      {
+        "kind": "web-ui",
+        "entry": "ui/index.html",
+        "optional": true
+      }
+    ],
+    "requires": [
+      {
+        "service": "transcript.read",
+        "version": "^1"
+      },
+      {
+        "service": "llm.generate",
+        "version": ">=1.2.0",
+        "optional": true
+      }
+    ],
+    "provides": [
+      {
+        "service": "acoustics.raytrace",
+        "version": "1.0.0"
+      }
+    ],
+    "permissions": [
+      "library.read",
+      "library.write",
+      "views",
+      "network",
+      "exec",
+      "workspace",
+      "folder"
+    ],
+    "exec": [
+      "/usr/bin/ffmpeg"
+    ],
+    "hosts": [
+      "example.org"
+    ],
+    "settings": {
+      "type": "object",
+      "properties": {
+        "speed": {
+          "type": "number",
+          "title": "播放速度",
+          "default": 1
+        }
+      }
+    },
+    "examples": [
+      "画出这节课的声线折射"
+    ],
+    "contributes": {
+      "navigation": [
+        {
+          "id": "virtual-lab",
+          "title": "虚拟实验室",
+          "page": "virtual-lab.main"
+        }
+      ],
+      "pages": [
+        {
+          "id": "virtual-lab.main",
+          "renderer": "webview",
+          "entry": "ui/index.html",
+          "fallback": "virtual-lab.help"
+        }
+      ],
+      "slots": [
+        {
+          "id": "raytrace",
+          "target": "canvas.toolbar.tools",
+          "action": "raytrace.open"
+        }
+      ],
+      "tools": [
+        "acoustics.raytrace"
+      ],
+      "views": [
+        {
+          "id": "lab.summary"
+        }
+      ],
+      "actions": [
+        {
+          "id": "raytrace.open",
+          "title": "声线模拟",
+          "icon": "science",
+          "action": "raytrace.open",
+          "surface": "canvas.toolbar.tools"
+        }
+      ],
+      "settings": [
+        {
+          "id": "lab.section",
+          "title": "虚拟实验室"
+        }
+      ]
+    }
+  }
+}

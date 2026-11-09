@@ -1,0 +1,17 @@
+{
+  "name": "@example/unknown-group",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "unknown-group",
+    "title": "未知贡献组",
+    "summary": "使用了 v1 的贡献组名",
+    "api": "^3.0.0",
+    "contributes": {
+      "noteViews": [
+        {
+          "id": "mindmap"
+        }
+      ]
+    }
+  }
+}
