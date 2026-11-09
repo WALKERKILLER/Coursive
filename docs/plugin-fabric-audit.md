@@ -68,15 +68,16 @@ Risk shapes follow [testing.md](testing.md): pure rules in unit tests, the store
 
 | Risk | Primary evidence |
 |---|---|
-| A manifest the daemon accepts and the agent rejects (or the reverse) | Shared fixtures [cases.json](../daemon/internal/pluginfabric/testdata/cases.json), validated by [manifest_test.go](../daemon/internal/pluginfabric/manifest_test.go), [plugin-schema.test.mjs](../agent/src/plugin-schema.test.mjs) and [plugin_fabric_fixtures_test.dart](../app/test/plugin_fabric_fixtures_test.dart) |
+| A manifest the daemon accepts and the agent rejects (or the reverse) | Shared fixtures [cases.json](../daemon/internal/pluginfabric/testdata/cases.json), validated by [manifest_test.go](../daemon/internal/pluginfabric/manifest_test.go), [plugin-manifest.mjs](../agent/src/plugin-manifest.mjs) with [plugin-schema.test.mjs](../agent/src/plugin-schema.test.mjs) and [plugin_fabric_fixtures_test.dart](../app/test/plugin_fabric_fixtures_test.dart); plugin authors run the same rules through [validate-plugin.mjs](../agent/scripts/validate-plugin.mjs), covered by [validate-plugin.test.mjs](../agent/scripts/validate-plugin.test.mjs) |
 | A rule lands in the validator but not in the schema | `TestSchemaAgreesWithValidator` and the schema-agreement test in the agent compare the closed sets |
 | An unmigrated v1 package is silently accepted or rejected without an instruction | `invalid-v1-manifest.json` expects `api-missing`; the `field-unknown` rule names the v3 home |
 | A path escapes the package | `runtime-path` and `source-path` cases, plus the existing escape tests in [sources_test.go](../daemon/internal/sources/sources_test.go) and [market_test.go](../daemon/internal/sources/market_test.go) |
 | The shipped plugin path regresses while the fabric is added | [plugins.test.mjs](../agent/src/plugins.test.mjs) unchanged: install, consent, tool prefixing, deferred exposure, effects on disable |
 
-Scenario coverage PF-01 and PF-02 cannot prove yet, owned by the issue that lands each mechanism: one authoritative store (PF-03), a v1 manifest migrating with a readable diagnostic (PF-12), two `transcript.read` providers switching deterministically and a dependency cycle naming its path (PF-07), disable revoking every contribution (PF-04), an MoeJS loop cancelled (PF-09).
+Scenario coverage PF-01 and PF-02 cannot prove yet, owned by the issue that lands each mechanism: one authoritative store (PF-03), two `transcript.read` providers switching deterministically and a dependency cycle naming its path (PF-07), disable revoking every contribution (PF-04), an MoeJS loop cancelled (PF-09).
 
 ## Remaining work
 
 - PF-01: this audit and the field map. Still open: the ADR revision that records the store cutover, and the decision that the v3 reader, not the v1 readers, decides installability.
-- PF-02: the schema, the shared fixtures and the three validators. Still open: a validator call in the install pipeline, the migration writer that rewrites a v1 package to v3, and the compatibility check PF-12 publishes with the SDK.
+- PF-02: the schema, the shared fixtures and the three validators. Still open: a validator call in the install pipeline and the migration writer that rewrites a v1 package to v3.
+- PF-12: the validation CLI, the copyable template and the compatibility note ([agent/plugins/_template](../agent/plugins/_template/README.md)). Still open: the store cutover that makes a v3 manifest installable, and the matching `coursive-plugins` templates, which still write v2 `engine`.
