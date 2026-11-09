@@ -1,0 +1,25 @@
+{
+  "name": "@example/bad-source",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "bad-source",
+    "title": "越界来源",
+    "summary": "来源程序路径越出插件目录",
+    "api": "^3.0.0",
+    "permissions": [
+      "source"
+    ],
+    "contributes": {
+      "sources": [
+        {
+          "id": "example",
+          "title": "示例平台",
+          "protocol": "1",
+          "executable": {
+            "linux-x64": "../bin/provider-linux-x64"
+          }
+        }
+      ]
+    }
+  }
+}

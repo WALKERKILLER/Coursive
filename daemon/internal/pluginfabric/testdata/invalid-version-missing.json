@@ -1,0 +1,9 @@
+{
+  "name": "@example/no-version",
+  "coursive": {
+    "id": "no-version",
+    "title": "无版本",
+    "summary": "缺少顶层 version",
+    "api": "^3.0.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@example/bad-id",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "Bad_ID",
+    "title": "坏 id",
+    "summary": "id 不是小写 kebab-case",
+    "api": "^3.0.0"
+  }
+}

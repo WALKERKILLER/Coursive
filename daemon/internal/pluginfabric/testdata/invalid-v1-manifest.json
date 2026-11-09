@@ -1,0 +1,28 @@
+{
+  "name": "@example/socratic-v1",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "socratic-v1",
+    "title": "引导式提问",
+    "summary": "v1 清单，用 engine 声明接口范围",
+    "engine": "^1.0.0",
+    "agent": "index.mjs",
+    "skills": [
+      "skills"
+    ],
+    "views": [
+      "checklist"
+    ],
+    "permissions": [],
+    "contributes": {
+      "actions": [
+        {
+          "id": "toggle",
+          "title": "引导式提问",
+          "action": "toggle",
+          "surface": "composer.plus"
+        }
+      ]
+    }
+  }
+}

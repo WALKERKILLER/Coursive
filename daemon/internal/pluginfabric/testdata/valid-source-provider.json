@@ -1,0 +1,44 @@
+{
+  "name": "@example/source",
+  "version": "2.0.0",
+  "coursive": {
+    "id": "example-source",
+    "title": "示例来源",
+    "summary": "从示例平台列出课程与讲次",
+    "api": "^3.0.0",
+    "runtime": [
+      {
+        "kind": "process",
+        "entry": {
+          "linux-x64": "bin/provider-linux-x64",
+          "linux-arm64": "bin/provider-linux-arm64",
+          "windows-x64": "bin/provider-windows-x64.exe",
+          "macos-x64": "bin/provider-macos-x64",
+          "macos-arm64": "bin/provider-macos-arm64"
+        }
+      }
+    ],
+    "permissions": [
+      "source"
+    ],
+    "hosts": [
+      "lectures.example.org"
+    ],
+    "contributes": {
+      "sources": [
+        {
+          "id": "example",
+          "title": "示例平台",
+          "protocol": "1",
+          "executable": {
+            "linux-x64": "bin/provider-linux-x64",
+            "macos-arm64": "bin/provider-macos-arm64"
+          },
+          "hosts": [
+            "lectures.example.org"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,344 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coursive.app/schemas/plugin-manifest.v3.schema.json",
+  "title": "Coursive plugin manifest, version 3",
+  "description": "Accepted shape of a Coursive plugin manifest: the package.json document of a plugin package, whose \"coursive\" key declares the plugin. This file is the authority for the fields it names; contribution entries keep the group-specific fields that spec 0032 defines, and the plugin's settings form keeps the subset that spec 0004 defines.",
+  "type": "object",
+  "required": ["version", "coursive"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Package name, for display and provenance only."
+    },
+    "version": {
+      "$ref": "#/$defs/version"
+    },
+    "coursive": {
+      "$ref": "#/$defs/plugin"
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the plugin itself.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "api": {
+      "type": "string",
+      "description": "Plugin API range the plugin needs: ^x.y.z, >=x.y.z or an exact version. The host rejects a range it does not satisfy.",
+      "pattern": "^(?:\\^|>=)?\\d+\\.\\d+\\.\\d+$"
+    },
+    "serviceId": {
+      "type": "string",
+      "description": "Service identity as domain.verb, for example transcript.read.",
+      "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9]*)+$"
+    },
+    "serviceRange": {
+      "type": "string",
+      "description": "Required service version range: ^1, ^1.2.3, >=1.0.0 or an exact version.",
+      "pattern": "^(?:\\^|>=)?\\d+(?:\\.\\d+){0,2}$"
+    },
+    "contributionId": {
+      "type": "string",
+      "description": "Identity of one contribution within its group; unique per group and stable across versions.",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "description": "Path inside the plugin package: no absolute path, no drive letter, no backslash, no empty, dot or dot-dot segment, no trailing slash. A leading ./ is allowed and normalized away.",
+      "minLength": 1,
+      "pattern": "^(?:\\./)*(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*//)(?!.*/$)(?!\\.{1,2}(?:/|$))(?!.*/\\.{1,2}(?:/|$)).+$"
+    },
+    "entry": {
+      "description": "One package-relative entry path, or one path per platform key (linux-x64, linux-arm64, windows-x64, macos-x64, macos-arm64) for a process runtime.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/relativePath"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/relativePath"
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "description": "One runtime component of the plugin. A plugin may declare several, in different engines.",
+      "required": ["kind", "entry"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["pi", "moejs", "process", "web-ui", "go"],
+          "description": "pi: the Node assistant host; moejs: the optional Go script executor; process: a supervised native or JSON-RPC program; web-ui: static assets rendered in an isolated WebView; go: a daemon built-in module."
+        },
+        "entry": {
+          "$ref": "#/$defs/entry"
+        },
+        "skills": {
+          "type": "array",
+          "description": "Pi runtime only: package-relative SKILL.md directories or files the assistant host offers as a playbook.",
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "When true, the plugin keeps its other components if this one cannot run here.",
+          "default": false
+        }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "description": "A service the plugin needs before its contributions can activate.",
+      "required": ["service", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "$ref": "#/$defs/serviceId"
+        },
+        "version": {
+          "$ref": "#/$defs/serviceRange"
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "When true, a missing provider selects the plugin's documented degraded mode instead of blocking it.",
+          "default": false
+        }
+      }
+    },
+    "provision": {
+      "type": "object",
+      "description": "A service the plugin provides to other plugins and to the agent.",
+      "required": ["service", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "service": {
+          "$ref": "#/$defs/serviceId"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      }
+    },
+    "contribution": {
+      "type": "object",
+      "description": "One entry of a contribution group. Group-specific fields (surface, target, route, renderer, order, scope and so on) belong to spec 0032; this schema fixes the shared identity rule that duplicate detection depends on.",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/contributionId"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "title", "protocol", "executable"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/contributionId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "protocol": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source-provider protocol version the executable speaks."
+        },
+        "executable": {
+          "type": "object",
+          "description": "One program per platform key: linux-x64, linux-arm64, windows-x64, macos-x64 or macos-arm64.",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      }
+    },
+    "contributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "navigation": {
+          "type": "array",
+          "description": "Navigation entries; each names the page it opens.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "pages": {
+          "type": "array",
+          "description": "Complete pages with a renderer and a fallback.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "slots": {
+          "type": "array",
+          "description": "Entries for a typed UI slot; the target names the slot.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "tools": {
+          "type": "array",
+          "description": "Agent tools, each identified by the service it exposes.",
+          "items": {
+            "$ref": "#/$defs/serviceId"
+          }
+        },
+        "views": {
+          "type": "array",
+          "description": "Interactive views the plugin's results and blocks may carry.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Actions the app can invoke for this plugin.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "settings": {
+          "type": "array",
+          "description": "Sections this plugin adds to the settings surface.",
+          "items": {
+            "$ref": "#/$defs/contribution"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "description": "Content sources: the sign-in, course and media surface a source-provider executable offers (spec 0024).",
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        }
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "required": ["id", "title", "summary", "api"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable plugin identity, also the install directory name and the tool-name prefix.",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "icon": {
+          "type": "string",
+          "description": "A Material Symbols name, or a package-relative PNG, WebP or SVG path of at most 256 KiB."
+        },
+        "categories": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["notes", "visualize", "review", "programming", "connector", "tutor", "assignment"]
+          }
+        },
+        "api": {
+          "$ref": "#/$defs/api"
+        },
+        "runtime": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/runtime"
+          }
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirement"
+          }
+        },
+        "provides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provision"
+          }
+        },
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["library.read", "library.write", "views", "localhost", "exec", "workspace", "network", "folder", "source"]
+          }
+        },
+        "exec": {
+          "type": "array",
+          "description": "Commands the exec permission allows, each an absolute path or a name on PATH.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "description": "Host names the network permission allows.",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "settings": {
+          "type": "object",
+          "description": "The plugin's settings form, in the JSON Schema subset spec 0004 defines.",
+          "required": ["type", "properties"],
+          "properties": {
+            "type": {
+              "const": "object"
+            },
+            "properties": {
+              "type": "object"
+            }
+          }
+        },
+        "examples": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          }
+        },
+        "contributes": {
+          "$ref": "#/$defs/contributes"
+        }
+      }
+    }
+  }
+}
