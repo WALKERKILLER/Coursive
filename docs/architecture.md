@@ -36,6 +36,7 @@ The app finds the daemon through `COURSIVE_DAEMON`, `COURSIVE_AGENT` and `COURSI
 | `daemon/cmd/coursive-daemon` | Daemon entry point |
 | `daemon/internal/server` | HTTP API for the app and the agent — the main seam; the lecture watcher (`watch.go`, [spec 0010](specs/0010-live-refresh.md)); source and plugin-market routes (`sources.go`) and learning-platform routes (`lms.go`); the media relay for streams only the daemon reaches (`relay.go`) |
 | `daemon/internal/sources` | Source-provider supervision and JSON-RPC transport, the plugin registry, and market installs verified against the index ([spec 0024](specs/0024-source-provider-plugins.md), [spec 0025](specs/0025-plugin-marketplace.md)) |
+| `daemon/internal/pluginbridge` | The Plugin Fabric action bridge: plugin state, declared permission, argument shape, view revision, deadline, idempotency and approval mode for a declarative UI action, answered with one result form or a typed error ([spec 0032](specs/0032-ui-extension-protocol.md)) |
 | `daemon/internal/vault` | Sealed secrets under a per-install key, with one namespace per source plugin |
 | `daemon/internal/lms` | Learning-platform data from sources with the `lms` capability: cache, notifications, schedule due dates, course links and file downloads |
 | `daemon/internal/jobs` | Download, transcription and parse jobs with per-kind concurrency and persistence |
@@ -71,6 +72,7 @@ The app finds the daemon through `COURSIVE_DAEMON`, `COURSIVE_AGENT` and `COURSI
 | `agent/src/plugins.mjs` | Plugin host: manifests, install state (`plugins.json`), catalogs, loading plugins as Pi extensions, the permission-gated Coursive API, actions |
 | `agent/plugins/` | Official plugins and their catalog; the [plugin author guide](../agent/plugins/README.md) |
 | `app/lib/core` | daemon client (`api.dart`), daemon discovery and startup, the Android workspace and platform bridge (`workspace.dart`, `android_bridge.dart`, `background_work.dart`), app state, models, study-time tracker (`activity_tracker.dart`), installed plugins and their contributions (`plugins.dart`) |
+| `app/lib/features/plugins` | The plugin tab, the native view catalog, and the typed action-bridge client (`plugin_actions.dart`) |
 | `app/lib/features/study_canvas` | Canvas rendering, materials, local ink, docked controls, source selection and scoped conversation UI ([controls](drawing-controls.md)) |
 | `app/lib/features/<area>` | Screens: activity, assistant, courses, courseware, downloads, home, library, lms, notifications, player, plugins, practice, profile, schedule, settings, setup (Android workspace), sources, usage |
 | `app/android/workspace/prepare.py` | Fetches the pinned Termux proot build and builds `libcoursive_daemon.so` and the agent's sources for the APK; [NOTICE](../app/android/workspace/NOTICE) for the shipped programs |

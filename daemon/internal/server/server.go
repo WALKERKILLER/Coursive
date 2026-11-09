@@ -35,6 +35,7 @@ import (
 	"github.com/walkerkiller/coursive/daemon/internal/mineru"
 	"github.com/walkerkiller/coursive/daemon/internal/notify"
 	"github.com/walkerkiller/coursive/daemon/internal/notion"
+	"github.com/walkerkiller/coursive/daemon/internal/pluginbridge"
 	"github.com/walkerkiller/coursive/daemon/internal/sources"
 	"github.com/walkerkiller/coursive/daemon/internal/store"
 )
@@ -70,6 +71,9 @@ type Server struct {
 	Notion *notion.Service
 	// Data makes backups and syncs the library over WebDAV.
 	Data *datasync.Service
+	// PluginActions answers declarative UI actions. A nil bridge answers
+	// "unavailable" (docs/specs/0032-ui-extension-protocol.md).
+	PluginActions *pluginbridge.Bridge
 
 	syncMu        sync.Mutex
 	lastCourse    time.Time
@@ -103,6 +107,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 	h("GET /api/health", s.health)
+	mux.HandleFunc("POST /api/plugin-actions", s.pluginAction)
 	s.sourceRoutes(h)
 	s.lmsRoutes(h)
 
