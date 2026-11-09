@@ -115,7 +115,7 @@ void main() {
     },
   );
 
-  testWidgets('launcher lists active plugin pages and opens one', (
+  testWidgets('launcher opens a page with a document in the host outlet', (
     tester,
   ) async {
     final store = PluginStore(AppState(DaemonService()))
@@ -126,7 +126,15 @@ void main() {
           'state': 'enabled',
           'contributes': {
             'pages': [
-              {'id': 'main', 'title': '记忆复习', 'icon': 'style'},
+              {
+                'id': 'main',
+                'title': '记忆复习',
+                'icon': 'style',
+                'document': {
+                  'schemaVersion': 1,
+                  'body': {'type': 'text', 'text': 'cards'},
+                },
+              },
             ],
           },
         },
@@ -147,6 +155,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('opened:记忆复习'), findsOneWidget);
   });
+
+  testWidgets('launcher runs a v1 page action instead of an empty document', (
+    tester,
+  ) async {
+    final runs = <String>[];
+    final store = _RecordingStore(runs)
+      ..installed = [
+        {
+          'id': 'review',
+          'title': 'Review',
+          'state': 'enabled',
+          'contributes': {
+            'pages': [
+              {
+                'id': 'main',
+                'title': '记忆复习',
+                'icon': 'style',
+                'action': 'open',
+              },
+            ],
+          },
+        },
+      ];
+    final builders = PluginPageBuilderRegistry({
+      'declarative': (context, page) => Text('opened:${page.title}'),
+    });
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          Provider<PluginPageBuilderRegistry>.value(value: builders),
+          ChangeNotifierProvider<PluginStore>.value(value: store),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: PluginPageLauncher(store: store)),
+        ),
+      ),
+    );
+    await tester.tap(find.text('记忆复习'));
+    await tester.pumpAndSettle();
+    expect(runs, ['review/open']);
+    expect(find.text('opened:记忆复习'), findsNothing);
+  });
+}
+
+class _RecordingStore extends PluginStore {
+  _RecordingStore(this.runs) : super(AppState(DaemonService()));
+  final List<String> runs;
+
+  @override
+  Future<Map<String, dynamic>> run(
+    PluginEntry e,
+    Map<String, dynamic> ctx,
+  ) async {
+    runs.add('${e.pluginId}/${e.action}');
+    return const {};
+  }
 }
 
 extension on PluginPageContribution {

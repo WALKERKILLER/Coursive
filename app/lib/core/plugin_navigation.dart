@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../features/plugins/plugin_views.dart' show PluginView;
+import '../features/plugins/plugin_views.dart' show runPluginEntry;
 import '../l10n/l10n.dart';
 import '../widgets/states.dart';
 import '../theme/tokens.dart';
@@ -55,6 +55,10 @@ class PluginPageContribution {
   /// The contribution payload a renderer may use, for example a declarative
   /// page document.
   final Map<String, dynamic> view;
+
+  /// Whether the host renders this page itself. A v1 page carries no
+  /// document: it is an action whose result the plugin shows (spec 0004).
+  bool get hostRendered => view['document'] is Map;
 
   String get routeId => route ?? 'plugin:$pluginId:$id';
   String get key => '$pluginId/$id';
@@ -238,7 +242,7 @@ class PluginPageLauncher extends StatelessWidget {
   Widget build(BuildContext context) {
     final pages = [
       for (final entry in store.entries('pages'))
-        PluginPageContribution.fromEntry(entry),
+        (entry, PluginPageContribution.fromEntry(entry)),
     ];
     if (pages.isEmpty) return const SizedBox.shrink();
     final tt = Theme.of(context).textTheme;
@@ -253,7 +257,7 @@ class PluginPageLauncher extends StatelessWidget {
             style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
-        for (final page in pages)
+        for (final (entry, page) in pages)
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: Space.md),
             leading: Icon(pluginIcon(page.icon), color: cs.primary),
@@ -264,26 +268,15 @@ class PluginPageLauncher extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => Navigator.of(context, rootNavigator: true).push(
-              MaterialPageRoute(builder: (_) => PluginPageOutlet(page: page)),
-            ),
+            onTap: () => page.hostRendered
+                ? Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(
+                      builder: (_) => PluginPageOutlet(page: page),
+                    ),
+                  )
+                : runPluginEntry(context, entry, const {}),
           ),
       ],
     );
   }
-}
-
-/// A declarative page renderer that maps a contribution's `view` payload to
-/// the existing native view catalog. It is the first page renderer; richer
-/// documents use [DeclarativeRenderer] in the plugin features layer.
-Widget declarativePluginPage(
-  BuildContext context,
-  PluginPageContribution page,
-) {
-  return PluginView(
-    view: {
-      'kind': '${page.view['view'] ?? page.view['kind'] ?? 'page'}',
-      'data': page.view['data'] ?? page.view,
-    },
-  );
 }
