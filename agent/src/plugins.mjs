@@ -1025,23 +1025,35 @@ export class PluginHost {
 	 * Coursive API API calls it makes afterwards are refused.
 	 */
 	async runAction(id, name, context = {}) {
+		const rec = this.enabled(id);
+		const handler = rec.actions.get(name);
+		if (!handler) throw bad(`插件没有动作 ${name}`, 404);
+		return checkActionResult(rec.manifest, await invoke(handler, context, {}, this.actionTimeoutMs));
+	}
+
+	/**
+	 * Runs a v3 action for the daemon's action bridge, which has already checked
+	 * the plugin state, the permission, the arguments and the view revision. The
+	 * handler gets the arguments and `{signal, state, viewId, instanceId}`, and
+	 * answers with one bridge result form. A write action never runs here: the
+	 * bridge turns it into a pending proposal.
+	 */
+	async bridgeAction(id, actionId, { args = {}, state = {}, viewId = "", instanceId = "", deadlineMs = 0 } = {}) {
+		const rec = this.enabled(id);
+		const action = rec.manifest.schema === 3 ? rec.manifest.contributes.actions.find((a) => a.id === actionId) : undefined;
+		if (!action) throw bad(`插件没有动作 ${actionId}`, 404);
+		if (action.write) throw bad(`写入动作 ${actionId} 只能生成待审批的提议`, 409);
+		const handler = rec.actions.get(action.action);
+		if (!handler) throw bad(`插件没有注册动作 ${action.action}`, 404);
+		const timeoutMs = deadlineMs > 0 ? Math.min(deadlineMs, this.actionTimeoutMs) : this.actionTimeoutMs;
+		return bridgeResult(await invoke(handler, args, { state, viewId, instanceId }, timeoutMs));
+	}
+
+	enabled(id) {
 		const rec = this.loaded.get(id);
 		if (!rec || !this.state.plugins[id]?.enabled) throw bad("插件未启用", 404);
 		if (rec.error) throw bad(rec.error, 409);
-		const handler = rec.actions.get(name);
-		if (!handler) throw bad(`插件没有动作 ${name}`, 404);
-		const ac = new AbortController();
-		let timer;
-		const r = await Promise.race([
-			actionScope.run(ac.signal, async () => handler(context, { signal: ac.signal })),
-			new Promise((_, rej) => {
-				timer = setTimeout(() => {
-					ac.abort(bad("插件动作超时", 504));
-					rej(ac.signal.reason);
-				}, this.actionTimeoutMs);
-			}),
-		]).finally(() => clearTimeout(timer));
-		return checkActionResult(rec.manifest, r);
+		return rec;
 	}
 
 	/** Runs every loaded plugin's cleanup (on reload and when the agent exits). */
@@ -1102,6 +1114,33 @@ async function readSkills(dir, paths) {
 		}
 	}
 	return out;
+}
+
+/** Runs an action handler under its own abort signal and timeout. */
+async function invoke(handler, input, extra, timeoutMs) {
+	const ac = new AbortController();
+	let timer;
+	return Promise.race([
+		actionScope.run(ac.signal, async () => handler(input, { ...extra, signal: ac.signal })),
+		new Promise((_, rej) => {
+			timer = setTimeout(() => {
+				ac.abort(bad("插件动作超时", 504));
+				rej(ac.signal.reason);
+			}, timeoutMs);
+		}),
+	]).finally(() => clearTimeout(timer));
+}
+
+const BRIDGE_FORMS = ["statePatch", "navigation", "viewPatch", "notification"];
+
+/** The daemon checks each form's fields; this host checks the shape and the size. */
+function bridgeResult(r) {
+	const keys = r && typeof r === "object" && !Array.isArray(r) ? Object.keys(r) : [];
+	if (keys.length !== 1 || !BRIDGE_FORMS.includes(keys[0]) || !r[keys[0]] || typeof r[keys[0]] !== "object") {
+		throw bad(`插件动作应返回 ${BRIDGE_FORMS.join("、")} 之一`, 502);
+	}
+	if (Buffer.byteLength(JSON.stringify(r)) > MAX_VIEW_BYTES) throw bad("动作结果过大", 502);
+	return r;
 }
 
 function checkActionResult(m, r) {

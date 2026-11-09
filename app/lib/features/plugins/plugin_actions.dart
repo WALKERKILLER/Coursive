@@ -210,6 +210,18 @@ class PluginStatePatch {
   final Map<String, dynamic> state;
 }
 
+/// A view's plugin state at its current revision.
+class PluginViewState {
+  PluginViewState({
+    required this.viewId,
+    required this.revision,
+    required this.state,
+  });
+  final String viewId;
+  final int revision;
+  final Map<String, dynamic> state;
+}
+
 /// A request to open a route the host already knows.
 class PluginNavigation {
   PluginNavigation({
@@ -302,6 +314,24 @@ class PluginActionClient {
   /// next request's `contextRevision`.
   int revisionOf(String pluginId, String viewId) =>
       _revisions['$pluginId/$viewId'] ?? 0;
+
+  /// Reads a view's state and revision from the daemon and remembers the
+  /// revision, so a view that mounts again is not refused as stale.
+  Future<PluginViewState> readState(String pluginId, String viewId) async {
+    final raw = await call(
+      'GET',
+      '/api/plugin-actions/state?pluginId=${Uri.encodeQueryComponent(pluginId)}'
+          '&viewId=${Uri.encodeQueryComponent(viewId)}',
+    );
+    final m = _map(raw) ?? const {};
+    final view = PluginViewState(
+      viewId: '${m['viewId'] ?? viewId}',
+      revision: _int(m['revision']),
+      state: _map(m['state']) ?? const {},
+    );
+    _revisions['$pluginId/${view.viewId}'] = view.revision;
+    return view;
+  }
 
   /// Sends [request] once. The answer is dispatched to the callbacks, and a
   /// transport failure (no answer at all) is thrown, not remembered, so a

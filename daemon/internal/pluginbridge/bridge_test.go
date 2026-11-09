@@ -11,7 +11,10 @@ import (
 
 type fakeRegistry map[string]Plugin
 
-func (r fakeRegistry) Plugin(id string) (Plugin, bool) { p, ok := r[id]; return p, ok }
+func (r fakeRegistry) Plugin(_ context.Context, id string) (Plugin, bool, error) {
+	p, ok := r[id]
+	return p, ok, nil
+}
 
 type fakeExecutor struct {
 	mu    sync.Mutex

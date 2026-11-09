@@ -90,7 +90,7 @@ func (b *Bridge) Handle(ctx context.Context, req Request) Response {
 // then runs a read action or turns a write into a pending proposal.
 func (b *Bridge) run(ctx context.Context, req Request) Response {
 	resp := Response{RequestID: req.RequestID, TraceID: req.TraceID}
-	plugin, action, err := b.resolve(req)
+	plugin, action, err := b.resolve(ctx, req)
 	if err != nil {
 		return fail(resp, err)
 	}
@@ -106,6 +106,9 @@ func (b *Bridge) run(ctx context.Context, req Request) Response {
 	defer cancel()
 	call := Call{Plugin: plugin, Action: action, Request: req, Deadline: deadline,
 		IdempotencyKey: req.PluginID + ":" + req.RequestID}
+	if req.ViewID != "" {
+		call.State = b.State(req.PluginID, req.ViewID)
+	}
 
 	if action.Write {
 		proposal, err := b.propose(ctx, call)
@@ -135,12 +138,16 @@ func (b *Bridge) run(ctx context.Context, req Request) Response {
 
 // resolve finds the plugin and action, refusing a plugin that is not usable
 // and an action whose declared permission the user did not grant.
-func (b *Bridge) resolve(req Request) (Plugin, Action, *Error) {
+func (b *Bridge) resolve(ctx context.Context, req Request) (Plugin, Action, *Error) {
 	if b.Registry == nil {
 		return Plugin{}, Action{}, &Error{Code: CodeUnavailable,
 			Message: "插件动作桥未配置：守护进程还没有插件状态来源"}
 	}
-	plugin, ok := b.Registry.Plugin(req.PluginID)
+	plugin, ok, err := b.Registry.Plugin(ctx, req.PluginID)
+	if err != nil {
+		return Plugin{}, Action{}, &Error{Code: CodeUnavailable, Recoverable: true,
+			Message: "无法读取插件状态：" + err.Error(), Details: map[string]any{"pluginId": req.PluginID}}
+	}
 	if !ok {
 		return Plugin{}, Action{}, &Error{Code: CodeUnknownPlugin, Message: "没有安装插件 " + req.PluginID,
 			Details: map[string]any{"pluginId": req.PluginID}}
@@ -311,21 +318,35 @@ func (b *Bridge) applyPatch(req Request, viewID string, patch map[string]any) (S
 
 // Revision is the current revision of a plugin view's state.
 func (b *Bridge) Revision(pluginID, viewID string) int64 {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.views[viewKey(pluginID, viewID)].revision
+	return b.snapshot(pluginID, viewID).Revision
 }
 
 // State is the current state of a plugin view.
 func (b *Bridge) State(pluginID, viewID string) map[string]any {
+	return b.snapshot(pluginID, viewID).State
+}
+
+// View is a view's state and revision read together, so a view that mounts
+// again names the revision its next action must carry.
+func (b *Bridge) View(pluginID, viewID string) (ViewSnapshot, *Error) {
+	switch {
+	case !pluginIDRE.MatchString(pluginID):
+		return ViewSnapshot{}, invalid("pluginId 无效：%q", pluginID)
+	case !viewIDRE.MatchString(viewID):
+		return ViewSnapshot{}, invalid("viewId 无效：%q", viewID)
+	}
+	return b.snapshot(pluginID, viewID), nil
+}
+
+func (b *Bridge) snapshot(pluginID, viewID string) ViewSnapshot {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	cur := b.views[viewKey(pluginID, viewID)].state
-	out := make(map[string]any, len(cur))
-	for k, v := range cur {
+	cur := b.views[viewKey(pluginID, viewID)]
+	out := make(map[string]any, len(cur.state))
+	for k, v := range cur.state {
 		out[k] = v
 	}
-	return out
+	return ViewSnapshot{ViewID: viewID, Revision: cur.revision, State: out}
 }
 
 // Proposal returns a stored proposal. This is the seam the existing approval

@@ -682,6 +682,8 @@ route("PUT", "/plugins/third-party", async (req) => {
 route("POST", "/plugins/catalogs", async (req) => ({ catalogs: await plugins.addCatalog((await body(req)).url) }));
 route("POST", "/plugins/catalogs/remove", async (req) => ({ catalogs: await plugins.removeCatalog((await body(req)).url) }));
 route("POST", "/plugins/([a-z][a-z0-9-]+)/actions/([a-z][a-z0-9_]*)", async (req, [id, name]) => plugins.runAction(id, name, (await body(req)).context ?? {}));
+// The daemon's action bridge (POST /api/plugin-actions) calls this after its own checks.
+route("POST", "/plugins/([a-z][a-z0-9-]+)/bridge/([a-z0-9][a-z0-9._-]*)", async (req, [id, action]) => plugins.bridgeAction(id, action, await body(req)));
 route("PUT", "/plugins/([a-z][a-z0-9-]+)", async (req, [id]) => changed(await plugins.update(id, await body(req))));
 route("DELETE", "/plugins/([a-z][a-z0-9-]+)", async (_req, [id]) => {
 	await plugins.uninstall(id);
