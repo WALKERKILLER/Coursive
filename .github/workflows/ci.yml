@@ -96,6 +96,10 @@ jobs:
       - run: go vet ./...
       - run: go test -count=1 -race ./...
       - run: go build -trimpath -ldflags='-s -w' -o bin/coursive-daemon ./cmd/coursive-daemon
+      # MoeJS is an optional experiment (decision 0036); the shipped daemon never links it.
+      - name: The daemon does not link MoeJS
+        run: |
+          if go list -deps ./cmd/coursive-daemon | grep -q MoeForge; then echo "coursive-daemon links MoeJS"; exit 1; fi
       # Release packages also ship the daemon for Windows and macOS.
       - name: Cross-compile for Windows and macOS
         run: |

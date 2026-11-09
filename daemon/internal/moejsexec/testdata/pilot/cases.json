@@ -1,0 +1,23 @@
+{
+	"cases": [
+		{ "name": "subtitles", "action": "normalizeSubtitles", "inputFile": "subtitles.json" },
+		{ "name": "subtitles with a short gap", "action": "normalizeSubtitles", "inputFile": "subtitles.json", "merge": { "gapMs": 300, "maxChars": 60 } },
+		{
+			"name": "notes",
+			"action": "groupNotes",
+			"input": {
+				"notes": [
+					{ "id": "n3", "title": "哈希　冲突", "tags": ["DS", "考点"], "updated": 30 },
+					{ "id": "n1", "title": "ＨａｓｈＭａｐ 源码", "tags": ["ds", "java "], "updated": 50 },
+					{ "id": "n2", "title": "布隆过滤器", "tags": [], "updated": 50 },
+					{ "id": "n4", "title": "红黑树", "tags": ["ＤＳ", "考点", "考点"], "updated": 10 },
+					{ "id": "n5", "title": "复习计划", "updated": 5 }
+				]
+			}
+		},
+		{ "name": "watched", "action": "onEvent", "input": { "type": "lecture.progress", "lectureId": "l1", "payload": { "percent": 93.6 } } },
+		{ "name": "rewound", "action": "onEvent", "input": { "type": "lecture.progress", "lectureId": "l1", "payload": { "percent": 61, "rewinds": 4 } } },
+		{ "name": "todos", "action": "onEvent", "input": { "type": "note.saved", "payload": { "text": "TODO: 看墓碑标记\n普通一行\n待办：做练习" } } },
+		{ "name": "unknown event", "action": "onEvent", "input": { "type": "app.opened" } }
+	]
+}
