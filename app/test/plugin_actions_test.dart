@@ -15,7 +15,9 @@ class _FakeApi {
   Future<dynamic> call(String method, String path, [Object? body]) {
     methods.add(method);
     paths.add(path);
-    final sent = (body as Map).cast<String, dynamic>();
+    final sent = body is Map
+        ? body.cast<String, dynamic>()
+        : <String, dynamic>{};
     bodies.add(sent);
     return answer(sent);
   }
@@ -104,6 +106,26 @@ void main() {
     expect(applied.single.idempotencyKey, 'review:req-1');
     expect(applied.single.state['page'], 2);
     expect(client.revisionOf('review', 'review.main'), 4);
+  });
+
+  test('a mounted view reads its state and revision first', () async {
+    final api = _FakeApi(
+      (_) async => {
+        'viewId': 'review.main',
+        'revision': 3,
+        'state': {'page': 2},
+      },
+    );
+    final client = PluginActionClient(call: api.call);
+    final view = await client.readState('review', 'review.main');
+    expect(api.methods.single, 'GET');
+    expect(
+      api.paths.single,
+      '/api/plugin-actions/state?pluginId=review&viewId=review.main',
+    );
+    expect(view.revision, 3);
+    expect(view.state['page'], 2);
+    expect(client.revisionOf('review', 'review.main'), 3);
   });
 
   test('navigation, a view patch, a notification and a proposal each reach '

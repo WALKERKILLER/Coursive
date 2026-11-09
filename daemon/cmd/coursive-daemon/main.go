@@ -33,6 +33,7 @@ import (
 	"github.com/walkerkiller/coursive/daemon/internal/mineru"
 	"github.com/walkerkiller/coursive/daemon/internal/notify"
 	"github.com/walkerkiller/coursive/daemon/internal/notion"
+	"github.com/walkerkiller/coursive/daemon/internal/pluginbridge"
 	"github.com/walkerkiller/coursive/daemon/internal/rootfs"
 	"github.com/walkerkiller/coursive/daemon/internal/server"
 	"github.com/walkerkiller/coursive/daemon/internal/sources"
@@ -211,8 +212,8 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 		rt.AgentDir = filepath.Dir(filepath.Dir(agentScript)) // agent/src/host.mjs → agent
 	}
 	node, _ = rt.Node() // -node, else the Node.js an in-app install left
-	sup := &agent.Supervisor{Node: node, Script: agentScript, Env: []string{
-		"COURSIVE_URL=" + base, "COURSIVE_TOKEN=" + token,
+	sup := &agent.Supervisor{Node: node, Script: agentScript, Token: token, Env: []string{
+		"COURSIVE_URL=" + base,
 		"AGENT_DATA_DIR=" + filepath.Join(dataDir, "agent"), "LIBRARY_ROOT=" + cfg.LibraryRoot,
 	}}
 	mgr.MinerU = mineru.NewService(filepath.Join(dataDir, "mineru.json"), vault.Seal, vault.Unseal)
@@ -220,6 +221,10 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 	local := &localasr.Manager{Dir: filepath.Join(dataDir, "asr")}
 	srv := &server.Server{Token: token, Sources: reg, Market: market, St: st, Lib: lib, Jobs: mgr, Eng: eng, Bus: bus, Agent: sup, Runtime: rt, Ctx: ctx, MinerU: mgr.MinerU, Local: local}
 	local.Publish = srv.OnLocalASR
+	// The assistant host is the plugin registry and executor until the Plugin
+	// Fabric store lands; no approval source is wired, so a write is refused.
+	hostPlugins := &agent.Plugins{Agent: sup}
+	srv.PluginActions = &pluginbridge.Bridge{Registry: hostPlugins, Executor: hostPlugins}
 	srv.Notes = notify.Open(filepath.Join(dataDir, "notifications.json"), func(it notify.Item) { bus.Publish("notification", it) })
 	srv.ApplySettings(ctx)
 	mgr.Source = srv.Source

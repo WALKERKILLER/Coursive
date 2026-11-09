@@ -55,7 +55,7 @@ A page declares `id`, `title`, `renderer` and a `document`. The renderer is the 
 
 A slot entry adds `target` (a host slot such as `course.detail.sections` or `canvas.toolbar.tools`), `mode` (`list`, `single`, `keyed`, `chain`) and `order`, plus the same document. Keyed slots reject duplicate keys instead of overwriting; the slot catalog is [spec 0032](../../../docs/specs/0032-ui-extension-protocol.md).
 
-An action is the runtime function the page, slot or composer calls. `activate(coursive)` registers it with `coursive.action("hello", handler)`; the manifest lists it under `contributes.actions` so the app can offer it. Disabling the plugin disposes the registration.
+An action is the runtime function the page, slot or composer calls. `activate(coursive)` registers it with `coursive.action("hello", handler)`; the manifest lists it under `contributes.actions` so the app can offer it. The daemon's action bridge calls it as `handler(args, {state, viewId, instanceId, signal})` after checking the plugin state, the permission, `params` and the view revision, and it answers with exactly one of `notification`, `statePatch`, `navigation` or `viewPatch` ([spec 0032](../../../docs/specs/0032-ui-extension-protocol.md)); a `write` action never runs and becomes a pending proposal. Disabling the plugin disposes the registration.
 
 ## Migrating a v1 manifest
 

@@ -332,7 +332,42 @@ test("a v3 package installs and publishes its page, slot and action", async (t) 
 	assert.deepEqual(v.contributes.navigation.map((n) => n.page), ["home"]);
 	// A v3 action has no v1 surface, so the v1 readers in the app skip it.
 	assert.deepEqual(v.contributes.actions.map((a) => [a.id, a.surface ?? null]), [["hello", null]]);
-	assert.deepEqual(await host.runAction("template", "hello", { from: "page" }), { toast: "Hello from the template (page)" });
+	assert.deepEqual(await host.bridgeAction("template", "hello", { args: { from: "page" } }), { notification: { text: "Hello from the template (page)" } });
+});
+
+test("the action bridge runs v3 read actions with their view state and nothing else", async (t) => {
+	const { host, root, write } = await fixture(t);
+	await host.setAllowThirdParty(true);
+	const src = join(root, "cards");
+	const contributes = {
+		actions: [
+			{ id: "next", title: "下一张", action: "next", params: { properties: { step: "integer" } } },
+			{ id: "save", title: "保存", action: "save", permission: "library.write", write: true },
+			{ id: "bad", title: "坏结果", action: "bad" },
+			{ id: "slow", title: "慢", action: "slow" },
+		],
+	};
+	await write(src, {
+		"package.json": { name: "p-cards", version: "1.0.0", coursive: { id: "cards", title: "卡片", summary: "测试插件", api: "^3.0.0", runtime: [{ kind: "pi", entry: "index.mjs" }], permissions: ["library.read", "library.write"], contributes } },
+		"index.mjs": `export function activate(coursive) {
+	coursive.action("next", async (args, { state, viewId }) => ({ statePatch: { viewId, patch: { index: (state.index ?? 0) + (args.step ?? 1) } } }));
+	coursive.action("save", async () => { globalThis.__cardsSaved = true; return { notification: { text: "saved" } }; });
+	coursive.action("bad", async () => ({ toast: "v1 shape" }));
+	coursive.action("slow", (_args, { signal }) => new Promise((_r, rej) => signal.addEventListener("abort", () => rej(signal.reason))));
+}`,
+	});
+	await install(host, `path:${src}`);
+	assert.deepEqual(await host.bridgeAction("cards", "next", { args: { step: 2 }, state: { index: 3 }, viewId: "deck" }), { statePatch: { viewId: "deck", patch: { index: 5 } } });
+	await assert.rejects(host.bridgeAction("cards", "save"), { status: 409 });
+	assert.equal(globalThis.__cardsSaved, undefined);
+	await assert.rejects(host.bridgeAction("cards", "bad"), { status: 502 });
+	await assert.rejects(host.bridgeAction("cards", "slow", { deadlineMs: 30 }), { status: 504 });
+	await assert.rejects(host.bridgeAction("cards", "missing"), { status: 404 });
+	// A v1 plugin's actions keep their own route.
+	await install(host, "bundled:demo");
+	await assert.rejects(host.bridgeAction("demo", "hello"), { status: 404 });
+	await host.update("cards", { enabled: false });
+	await assert.rejects(host.bridgeAction("cards", "next"), /未启用/);
 });
 
 test("a v3 manifest is checked by the shared rules and then by this host", () => {

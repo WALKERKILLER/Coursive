@@ -15,16 +15,16 @@ import (
 // and whose write action becomes a proposal.
 type actionRegistry struct{}
 
-func (actionRegistry) Plugin(id string) (pluginbridge.Plugin, bool) {
+func (actionRegistry) Plugin(_ context.Context, id string) (pluginbridge.Plugin, bool, error) {
 	if id != "review" {
-		return pluginbridge.Plugin{}, false
+		return pluginbridge.Plugin{}, false, nil
 	}
 	return pluginbridge.Plugin{ID: "review", State: pluginbridge.StateEnabled,
 		Permissions: []string{"views", "library.write"},
 		Actions: []pluginbridge.Action{
 			{ID: "refresh", Permission: "views"},
 			{ID: "save", Title: "保存复习卡", Permission: "library.write", Write: true},
-		}}, true
+		}}, true, nil
 }
 
 type actionExecutor struct {
@@ -107,6 +107,26 @@ func TestPluginActionRoute(t *testing.T) {
 	}
 	if _, ok := s.PluginActions.Proposal(written.Result.Proposal.ID); !ok {
 		t.Fatalf("the proposal was not stored")
+	}
+
+	// A view that mounts again reads the revision its next action must name.
+	req := httptest.NewRequest("GET", "/api/plugin-actions/state?pluginId=review&viewId=review.main", nil)
+	req.Header.Set("Authorization", "Bearer test")
+	got := httptest.NewRecorder()
+	s.Handler().ServeHTTP(got, req)
+	var view pluginbridge.ViewSnapshot
+	if err := json.Unmarshal(got.Body.Bytes(), &view); err != nil || got.Code != http.StatusOK {
+		t.Fatalf("state = %d %s", got.Code, got.Body.String())
+	}
+	if view.ViewID != "review.main" || view.Revision != 1 || view.State["page"] != 2.0 {
+		t.Fatalf("view = %+v", view)
+	}
+	req = httptest.NewRequest("GET", "/api/plugin-actions/state?pluginId=review&viewId=", nil)
+	req.Header.Set("Authorization", "Bearer test")
+	got = httptest.NewRecorder()
+	s.Handler().ServeHTTP(got, req)
+	if got.Code != http.StatusBadRequest {
+		t.Fatalf("a missing viewId = %d, want 400", got.Code)
 	}
 }
 

@@ -137,6 +137,13 @@ type StatePatch struct {
 	State          map[string]any `json:"state"`
 }
 
+// ViewSnapshot is a view's plugin state at its current revision.
+type ViewSnapshot struct {
+	ViewID   string         `json:"viewId"`
+	Revision int64          `json:"revision"`
+	State    map[string]any `json:"state"`
+}
+
 // Navigation asks the host to open a route it already knows.
 type Navigation struct {
 	Route   string `json:"route"`
@@ -206,12 +213,12 @@ type Schema struct {
 	Additional bool              `json:"additional,omitempty"`
 }
 
-// Registry is the daemon-owned plugin state. The Plugin Fabric registry lands
-// in PF-02/PF-07; the bridge takes it as an interface so it runs against a
-// fake until then, and a nil Registry answers "unavailable" instead of
-// trusting the request.
+// Registry is the plugin state the bridge trusts. Until the Plugin Fabric
+// store lands it is the assistant host's (agent.Plugins, decision 0034); a nil
+// Registry answers "unavailable" instead of trusting the request. An error
+// means the state could not be read and is reported as recoverable.
 type Registry interface {
-	Plugin(id string) (Plugin, bool)
+	Plugin(ctx context.Context, id string) (Plugin, bool, error)
 }
 
 // Executor runs a read action.
@@ -227,9 +234,12 @@ type Approvals interface {
 
 // Call is a validated action handed to the Executor.
 type Call struct {
-	Plugin         Plugin
-	Action         Action
-	Request        Request
+	Plugin  Plugin
+	Action  Action
+	Request Request
+	// State is the view state at the revision the caller read, so an action
+	// can compute its patch; empty when the request names no view.
+	State          map[string]any
 	Deadline       time.Time
 	IdempotencyKey string
 }

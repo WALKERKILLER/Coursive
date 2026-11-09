@@ -108,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	h("GET /api/health", s.health)
 	mux.HandleFunc("POST /api/plugin-actions", s.pluginAction)
+	mux.HandleFunc("GET /api/plugin-actions/state", s.pluginViewState)
 	s.sourceRoutes(h)
 	s.lmsRoutes(h)
 

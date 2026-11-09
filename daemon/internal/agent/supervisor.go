@@ -27,6 +27,9 @@ type Supervisor struct {
 	Node   string // node binary; change it with Restart once running
 	Script string // agent host entry (host.mjs)
 	Env    []string
+	// Token is the bearer token the host expects (COURSIVE_TOKEN); the
+	// daemon's own calls to the host send it.
+	Token string
 
 	mu      sync.Mutex
 	status  Status
@@ -171,7 +174,7 @@ func (s *Supervisor) Run(ctx context.Context) {
 func (s *Supervisor) once(ctx context.Context, node, script string) error {
 	s.set(Status{State: "starting"})
 	cmd := exec.CommandContext(ctx, node, script)
-	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Env = append(append(os.Environ(), s.Env...), "COURSIVE_TOKEN="+s.Token)
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = 5 * time.Second
 	stdout, err := cmd.StdoutPipe()
