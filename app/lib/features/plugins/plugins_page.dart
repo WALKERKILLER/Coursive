@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
 import '../../core/plugins.dart';
+import '../../core/plugin_navigation.dart';
 import '../../shell.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/horizontal_scroller.dart';
@@ -453,6 +454,7 @@ class _PluginsPageState extends State<PluginsPage> {
     }
 
     List<Widget> rows({required bool cards}) => [
+          PluginPageLauncher(store: store),
           for (final (title, items) in groups)
             if (items.isNotEmpty) ...[
               Padding(

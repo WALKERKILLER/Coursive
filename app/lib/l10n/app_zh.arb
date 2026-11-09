@@ -3367,6 +3367,7 @@
     }
   },
   "pluginViewUnsupported": "当前版本的应用还不能显示这种视图，更新应用后即可查看",
+  "pluginPages": "插件页面",
   "pluginViewAlternative": "换种方式看",
   "pluginSlotNoteToolbar": "笔记工具栏",
   "pluginSlotLectureMenu": "课次菜单",

@@ -7,6 +7,7 @@ import '../../core/api.dart';
 import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
+import '../../core/ui_slots.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/course_visuals.dart';
@@ -289,6 +290,17 @@ class _CoursePageState extends State<CoursePage> {
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(pad, 0, pad, 0),
                     child: LmsCourseSection(courseId: widget.courseId),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: ContentWidth(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(pad, 0, pad, 0),
+                    child: UiSlotOutlet(
+                      target: 'course.detail.sections',
+                      context_: {'course_id': widget.courseId},
+                    ),
                   ),
                 ),
               ),

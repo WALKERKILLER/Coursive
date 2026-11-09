@@ -9611,6 +9611,12 @@ abstract class AppLocalizations {
   /// **'当前版本的应用还不能显示这种视图，更新应用后即可查看'**
   String get pluginViewUnsupported;
 
+  /// No description provided for @pluginPages.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件页面'**
+  String get pluginPages;
+
   /// No description provided for @pluginViewAlternative.
   ///
   /// In zh, this message translates to:
