@@ -1,0 +1,16 @@
+{
+  "name": "@example/bad-require",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "bad-require",
+    "title": "坏依赖",
+    "summary": "依赖的服务名不是 domain.verb",
+    "api": "^3.0.0",
+    "requires": [
+      {
+        "service": "Transcript.Read",
+        "version": "^1"
+      }
+    ]
+  }
+}

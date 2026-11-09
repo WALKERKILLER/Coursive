@@ -1,0 +1,74 @@
+{
+  "schema": "coursive/plugin-manifest@3",
+  "cases": [
+    {
+      "file": "valid-minimal.json"
+    },
+    {
+      "file": "valid-full.json"
+    },
+    {
+      "file": "valid-source-provider.json"
+    },
+    {
+      "file": "invalid-manifest-missing.json",
+      "code": "manifest-missing",
+      "path": "coursive"
+    },
+    {
+      "file": "invalid-version-missing.json",
+      "code": "version-missing",
+      "path": "version"
+    },
+    {
+      "file": "invalid-id-invalid.json",
+      "code": "id-invalid",
+      "path": "coursive.id"
+    },
+    {
+      "file": "invalid-api-missing.json",
+      "code": "api-missing",
+      "path": "coursive.api"
+    },
+    {
+      "file": "invalid-runtime-kind.json",
+      "code": "runtime-kind",
+      "path": "coursive.runtime[0].kind"
+    },
+    {
+      "file": "invalid-runtime-path.json",
+      "code": "runtime-path",
+      "path": "coursive.runtime[0].entry"
+    },
+    {
+      "file": "invalid-requires-invalid.json",
+      "code": "requires-invalid",
+      "path": "coursive.requires[0].service"
+    },
+    {
+      "file": "invalid-permission-unknown.json",
+      "code": "permission-unknown",
+      "path": "coursive.permissions[1]"
+    },
+    {
+      "file": "invalid-contribution-duplicate.json",
+      "code": "contribution-duplicate",
+      "path": "coursive.contributes.actions[1].id"
+    },
+    {
+      "file": "invalid-contribution-unknown.json",
+      "code": "contribution-unknown",
+      "path": "coursive.contributes.noteViews"
+    },
+    {
+      "file": "invalid-source-path.json",
+      "code": "source-path",
+      "path": "coursive.contributes.sources[0].executable"
+    },
+    {
+      "file": "invalid-v1-manifest.json",
+      "code": "api-missing",
+      "path": "coursive.api"
+    }
+  ]
+}

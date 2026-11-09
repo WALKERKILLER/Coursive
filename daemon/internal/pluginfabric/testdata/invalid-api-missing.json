@@ -1,0 +1,15 @@
+{
+  "name": "@example/no-api",
+  "version": "1.0.0",
+  "coursive": {
+    "id": "no-api",
+    "title": "无接口范围",
+    "summary": "缺少 coursive.api",
+    "runtime": [
+      {
+        "kind": "pi",
+        "entry": "index.mjs"
+      }
+    ]
+  }
+}
