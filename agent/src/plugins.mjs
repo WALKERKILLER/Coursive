@@ -10,8 +10,12 @@ import { chmod, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { problems, satisfiesApi, trimDotSlash } from "./plugin-manifest.mjs";
 
 export const PLUGIN_API_VERSION = "1.0.0";
+// The manifest API a v3 package (`coursive.api`, docs/specs/0031-plugin-fabric-core.md)
+// is checked against. A v1 package keeps `engine` against PLUGIN_API_VERSION.
+export const HOST_API_VERSION = "3.0.0";
 
 export const PERMISSIONS = {
 	"library.read": "读取课程资料",
@@ -26,6 +30,10 @@ export const PERMISSIONS = {
 export const CATEGORIES = { notes: "笔记", visualize: "可视化", review: "复习", programming: "编程", connector: "连接器", tutor: "学习方式", assignment: "作业" };
 export const SURFACES = ["note.toolbar", "lecture.menu", "course.menu", "schedule.item", "assignment.actions", "composer.plus"];
 const SCOPES = ["note", "course", "library", "schedule"];
+// Slot targets the app has an outlet for, with the mode the host gives each
+// (docs/specs/0032-ui-extension-protocol.md, uiSlotCatalog in
+// app/lib/core/ui_slots.dart). An entry for any other target would never show.
+export const SLOT_TARGETS = { "course.detail.sections": "list" };
 
 const bad = (message, status = 400) => Object.assign(new Error(message), { status });
 const PRIVATE = 0o600;
@@ -211,14 +219,27 @@ export function applySettings(schema, input = {}, old = {}) {
 	return out;
 }
 
-/** Validates a plugin's package.json; returns the normalized manifest. */
+/**
+ * Validates a plugin's package.json; returns the normalized manifest. A
+ * manifest that declares `api` is v3 (docs/specs/0031-plugin-fabric-core.md);
+ * one without is v1 (docs/specs/0004-plugin-platform.md). Both normalize to
+ * the same record, so loading, consent and actions do not care which it was.
+ */
 export function validateManifest(pkg) {
 	const m = pkg?.coursive;
 	if (!m || typeof m !== "object") throw bad("package.json 缺少 coursive 字段");
+	return "api" in m ? manifestV3(pkg) : manifestV1(pkg);
+}
+
+/** The fields both manifest versions share, checked by the host's own rules. */
+function basics(pkg, m) {
 	if (!ID.test(m.id ?? "") || RESERVED.has(m.id)) throw bad("id 应为 2–32 位小写字母、数字或 -，以字母开头，且不能是保留名");
 	if (!SEMVER.test(pkg.version ?? "")) throw bad("version 应为 semver，例如 1.0.0");
 	const permissions = list(m.permissions, "permissions");
-	for (const p of permissions) if (!(p in PERMISSIONS)) throw bad(`未知权限 ${p}`);
+	for (const p of permissions) {
+		if (p === "source") throw bad("source 权限属于来源插件，由守护进程的插件市场安装");
+		if (!(p in PERMISSIONS)) throw bad(`未知权限 ${p}`);
+	}
 	const categories = list(m.categories, "categories");
 	for (const c of categories) if (!(c in CATEGORIES)) throw bad(`未知分类 ${c}`);
 	const exec = list(m.exec, "exec").map((c) => str(c, 200, "exec 命令"));
@@ -226,10 +247,41 @@ export function validateManifest(pkg) {
 	if (permissions.includes("exec") && !exec.length) throw bad("exec 权限需要在 exec 中列出命令");
 	const hosts = list(m.hosts, "hosts").map((h) => str(h, 200, "hosts"));
 	if (permissions.includes("network") && !hosts.length) throw bad("network 权限需要在 hosts 中列出域名");
-	const views = list(m.views, "views").map((v) => {
-		if (!/^[a-z][a-z-]{1,23}$/.test(v)) throw bad(`视图名 ${v} 无效`);
-		return v;
-	});
+	return {
+		id: m.id,
+		name: String(pkg.name ?? m.id),
+		version: pkg.version,
+		title: str(m.title, 24, "title"),
+		summary: str(m.summary, 80, "summary"),
+		description: typeof m.description === "string" ? m.description.slice(0, 2000) : "",
+		icon: iconName(m.icon),
+		author: typeof pkg.author === "string" ? pkg.author : (pkg.author?.name ?? ""),
+		license: typeof pkg.license === "string" ? pkg.license : "",
+		homepage: typeof pkg.homepage === "string" ? pkg.homepage : "",
+		categories,
+		permissions,
+		exec,
+		hosts,
+		settings: validateSettingsSchema(m.settings),
+		examples: list(m.examples, "examples")
+			.slice(0, 6)
+			.map((e) => str(e, 60, "examples")),
+	};
+}
+
+const iconName = (v) => (/^[a-z_0-9]{1,40}$/.test(v ?? "") ? v : "extension");
+
+function viewName(v) {
+	if (!/^[a-z][a-z-]{1,23}$/.test(v ?? "")) throw bad(`视图名 ${v} 无效`);
+	return v;
+}
+
+/** A v1 manifest: `engine`, `agent`, `skills`, `views` and the v1 contribution groups. */
+function manifestV1(pkg) {
+	const m = pkg.coursive;
+	const base = basics(pkg, m);
+	const { permissions } = base;
+	const views = list(m.views, "views").map(viewName);
 	if (views.length && !permissions.includes("views")) throw bad("声明视图需要 views 权限");
 	const c = m.contributes ?? {};
 	const entry = (e, what, extra) => {
@@ -254,39 +306,145 @@ export function validateManifest(pkg) {
 		pages: list(c.pages, "contributes.pages").map((e) => entry(e, "pages", () => ({}))),
 		blocks: list(c.blocks, "contributes.blocks").filter((v) => views.includes(v)),
 	};
+	if (!engineSatisfied(m.engine)) throw Object.assign(bad(`需要插件接口 ${m.engine}，当前为 ${PLUGIN_API_VERSION}`), { incompatible: true });
 	return {
-		id: m.id,
-		name: String(pkg.name ?? m.id),
-		version: pkg.version,
-		title: str(m.title, 24, "title"),
-		summary: str(m.summary, 80, "summary"),
-		description: typeof m.description === "string" ? m.description.slice(0, 2000) : "",
-		icon: /^[a-z_0-9]{1,40}$/.test(m.icon ?? "") ? m.icon : "extension",
-		author: typeof pkg.author === "string" ? pkg.author : (pkg.author?.name ?? ""),
-		license: typeof pkg.license === "string" ? pkg.license : "",
-		homepage: typeof pkg.homepage === "string" ? pkg.homepage : "",
-		categories,
-		engine: (() => {
-			if (!engineSatisfied(m.engine)) throw Object.assign(bad(`需要插件接口 ${m.engine}，当前为 ${PLUGIN_API_VERSION}`), { incompatible: true });
-			return m.engine;
-		})(),
+		...base,
+		schema: 1,
+		engine: m.engine,
 		agent: m.agent === undefined ? null : relPath(m.agent, "agent"),
 		skills: list(m.skills, "skills").map((p) => relPath(p, "skills")),
 		views,
-		permissions,
-		exec,
-		hosts,
-		settings: validateSettingsSchema(m.settings),
-		examples: list(m.examples, "examples")
-			.slice(0, 6)
-			.map((e) => str(e, 60, "examples")),
+		requires: [],
+		provides: [],
 		contributes,
 	};
+}
+
+// Fields each v3 contribution may carry in this host (spec 0032). An unknown
+// field is refused, so a typo does not silently drop a setting.
+const V3_FIELDS = {
+	navigation: ["id", "title", "icon", "page", "order"],
+	pages: ["id", "title", "icon", "renderer", "document", "order"],
+	slots: ["id", "target", "mode", "order", "priority", "document"],
+	actions: ["id", "title", "icon", "action", "surface", "permission", "write", "params"],
+};
+const PARAM_TYPES = ["string", "number", "integer", "boolean", "object", "array"];
+
+/**
+ * A v3 manifest. The shared rules (plugin-manifest.mjs, the ones the validation
+ * CLI and the daemon parser apply) run first; then the host checks what spec
+ * 0032 leaves to each group: page and slot documents, the slot targets this
+ * app has, action permissions and parameters, and links between entries. Only
+ * the `pi` runtime runs here; a runtime of another kind must be optional.
+ */
+function manifestV3(pkg) {
+	const first = problems(pkg)[0];
+	if (first) throw bad(`${first.path}：${first.message}${first.hint ? `。${first.hint}` : ""}`);
+	const m = pkg.coursive;
+	if (!satisfiesApi(m.api, HOST_API_VERSION)) throw Object.assign(bad(`需要插件接口 ${m.api}，当前为 ${HOST_API_VERSION}`), { incompatible: true });
+	const base = basics(pkg, m);
+	const runtime = list(m.runtime, "runtime");
+	for (const r of runtime) if (r.kind !== "pi" && !r.optional) throw bad(`此版本不能运行 ${r.kind} 运行时；去掉它，或标为 optional`);
+	const pis = runtime.filter((r) => r.kind === "pi");
+	if (pis.length > 1) throw bad("只能声明一个 pi 运行时");
+	const pi = pis[0];
+	if (pi && typeof pi.entry !== "string") throw bad("pi 运行时的 entry 应为一个路径");
+
+	const c = m.contributes ?? {};
+	if (list(c.sources, "contributes.sources").length) throw bad("来源由守护进程的来源插件提供，不能声明在助手插件里");
+	const group = (name) =>
+		list(c[name], `contributes.${name}`).map((e) => {
+			for (const k of Object.keys(e)) if (!V3_FIELDS[name].includes(k)) throw bad(`${name}「${e.id}」不支持字段 ${k}`);
+			if (e.order !== undefined && !Number.isInteger(e.order)) throw bad(`${name}「${e.id}」的 order 应为整数`);
+			return e;
+		});
+	const views = list(c.views, "contributes.views").map((v) => viewName(v?.id));
+	if (views.length && !base.permissions.includes("views")) throw bad("声明视图需要 views 权限");
+
+	const actions = group("actions").map((e) => {
+		const action = e.action ?? e.id;
+		if (!NAME.test(action)) throw bad(`actions「${e.id}」的 action 应为小写字母、数字或 _`);
+		if (e.surface !== undefined && !SURFACES.includes(e.surface)) throw bad(`actions「${e.id}」的 surface 应为 ${SURFACES.join("、")} 之一`);
+		if (e.permission !== undefined && !base.permissions.includes(e.permission)) throw bad(`actions「${e.id}」需要的权限 ${e.permission} 没有在 permissions 中声明`);
+		if (e.write !== undefined && typeof e.write !== "boolean") throw bad(`actions「${e.id}」的 write 应为 true 或 false`);
+		if (e.write && e.permission !== "library.write") throw bad(`写入动作「${e.id}」需要声明 permission: library.write`);
+		return {
+			id: e.id,
+			title: str(e.title, 16, `actions「${e.id}」的 title`),
+			icon: iconName(e.icon),
+			action,
+			...(e.surface ? { surface: e.surface } : {}),
+			...(e.permission ? { permission: e.permission } : {}),
+			write: e.write === true,
+			...(e.params !== undefined ? { params: actionParams(e.params, e.id) } : {}),
+		};
+	});
+	const actionIds = new Set(actions.map((a) => a.id));
+	const document = (d, what) => {
+		if (!d || typeof d !== "object" || Array.isArray(d) || d.schemaVersion !== 1 || !d.body || typeof d.body !== "object") {
+			throw bad(`${what} 需要 document：{schemaVersion: 1, body: {…}}`);
+		}
+		if (Buffer.byteLength(JSON.stringify(d)) > MAX_VIEW_BYTES) throw bad(`${what} 的 document 过大`);
+		for (const a of documentActions(d.body)) if (!actionIds.has(a)) throw bad(`${what} 的按钮指向未声明的动作 ${a}`);
+		return d;
+	};
+	const pages = group("pages").map((e) => {
+		const renderer = e.renderer ?? "declarative";
+		if (renderer !== "declarative") throw bad(`pages「${e.id}」的 renderer ${renderer} 在此版本中不可用`);
+		return { id: e.id, title: str(e.title, 16, `pages「${e.id}」的 title`), icon: iconName(e.icon), renderer, order: e.order ?? 100, document: document(e.document, `pages「${e.id}」`) };
+	});
+	const slots = group("slots").map((e) => {
+		const mode = SLOT_TARGETS[e.target];
+		if (!mode) throw bad(`slots「${e.id}」的 target 应为 ${Object.keys(SLOT_TARGETS).join("、")} 之一`);
+		if (e.mode !== undefined && e.mode !== mode) throw bad(`插槽 ${e.target} 的模式是 ${mode}，slots「${e.id}」写的是 ${e.mode}`);
+		if (e.priority !== undefined && !Number.isInteger(e.priority)) throw bad(`slots「${e.id}」的 priority 应为整数`);
+		return { id: e.id, target: e.target, mode, order: e.order ?? 100, priority: e.priority ?? 0, document: document(e.document, `slots「${e.id}」`) };
+	});
+	const pageIds = new Set(pages.map((p) => p.id));
+	const navigation = group("navigation").map((e) => {
+		if (!pageIds.has(e.page)) throw bad(`navigation「${e.id}」指向不存在的页面 ${e.page}`);
+		return { id: e.id, title: str(e.title, 16, `navigation「${e.id}」的 title`), icon: iconName(e.icon), page: e.page, order: e.order ?? 100 };
+	});
+	return {
+		...base,
+		schema: 3,
+		api: m.api,
+		agent: pi ? relPath(trimDotSlash(pi.entry), "runtime.entry") : null,
+		skills: list(pi?.skills, "runtime.skills").map((p) => relPath(trimDotSlash(p), "runtime.skills")),
+		views,
+		requires: list(m.requires, "requires").map((x) => ({ service: x.service, version: x.version, optional: x.optional === true })),
+		provides: list(m.provides, "provides").map((x) => ({ service: x.service, version: x.version })),
+		// The v1 groups stay present and empty, so the app's v1 readers keep working.
+		contributes: { noteViews: [], actions, exporters: [], pages, blocks: [], slots, navigation },
+	};
+}
+
+/** An action's parameter shape: the one the daemon's action bridge checks. */
+function actionParams(p, id) {
+	if (!p || typeof p !== "object" || Array.isArray(p)) throw bad(`actions「${id}」的 params 应为 {required, properties, additional}`);
+	const properties = p.properties ?? {};
+	for (const [k, t] of Object.entries(properties)) {
+		if (!NAME.test(k) || !PARAM_TYPES.includes(t)) throw bad(`actions「${id}」的参数 ${k} 的类型应为 ${PARAM_TYPES.join("、")} 之一`);
+	}
+	const required = list(p.required, `actions「${id}」的 params.required`);
+	for (const k of required) if (!(k in properties)) throw bad(`actions「${id}」的必填参数 ${k} 没有在 properties 中声明`);
+	return { required, properties, additional: p.additional === true };
+}
+
+/** The action ids the nodes of a document name. */
+function documentActions(node, out = new Set()) {
+	if (Array.isArray(node)) for (const n of node) documentActions(n, out);
+	else if (node && typeof node === "object") {
+		if (typeof node.action === "string") out.add(node.action);
+		for (const v of Object.values(node)) if (v && typeof v === "object") documentActions(v, out);
+	}
+	return out;
 }
 
 /** Public shape of a manifest for the app. */
 const publicManifest = (m) => ({
 	id: m.id,
+	schema: m.schema,
 	version: m.version,
 	title: m.title,
 	summary: m.summary,
@@ -300,6 +458,8 @@ const publicManifest = (m) => ({
 	permissions: m.permissions.map((p) => ({ id: p, label: PERMISSIONS[p], ...(p === "exec" ? { detail: m.exec.join("、") } : p === "network" ? { detail: m.hosts.join("、") } : {}) })),
 	settings: m.settings,
 	examples: m.examples,
+	requires: m.requires,
+	provides: m.provides,
 	contributes: m.contributes,
 });
 

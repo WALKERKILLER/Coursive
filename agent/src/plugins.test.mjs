@@ -318,6 +318,50 @@ test("third-party sources need the opt-in, and new permissions need consent", as
 	await assert.rejects(host.preview(`path:${join(root, "official")}`), /官方插件/);
 });
 
+test("a v3 package installs and publishes its page, slot and action", async (t) => {
+	const { host } = await fixture(t);
+	await host.setAllowThirdParty(true);
+	const v = await install(host, `path:${join(bundledPluginsDir, "_template")}`);
+	assert.equal(v.state, "enabled");
+	assert.equal(v.schema, 3);
+	assert.deepEqual(v.requires, [{ service: "transcript.read", version: "^1", optional: true }]);
+	const [page] = v.contributes.pages;
+	assert.equal(page.renderer, "declarative");
+	assert.equal(page.document.body.type, "column");
+	assert.deepEqual(v.contributes.slots.map((s) => [s.id, s.target, s.mode]), [["course-summary", "course.detail.sections", "list"]]);
+	assert.deepEqual(v.contributes.navigation.map((n) => n.page), ["home"]);
+	// A v3 action has no v1 surface, so the v1 readers in the app skip it.
+	assert.deepEqual(v.contributes.actions.map((a) => [a.id, a.surface ?? null]), [["hello", null]]);
+	assert.deepEqual(await host.runAction("template", "hello", { from: "page" }), { toast: "Hello from the template (page)" });
+});
+
+test("a v3 manifest is checked by the shared rules and then by this host", () => {
+	const v3 = (coursive, contributes) => ({
+		name: "p-v3",
+		version: "1.0.0",
+		coursive: { id: "v3", title: "测试", summary: "测试插件", api: "^3.0.0", runtime: [{ kind: "pi", entry: "index.mjs" }], ...coursive, ...(contributes ? { contributes } : {}) },
+	});
+	const doc = (body = { type: "text", text: "x" }) => ({ schemaVersion: 1, body });
+	assert.equal(validateManifest(v3({})).agent, "index.mjs");
+	const bad = (pkg, re) => assert.throws(() => validateManifest(pkg), re);
+	bad(v3({ engine: "^1.0.0" }), /coursive\.engine.*coursive\.api/);
+	bad(v3({ api: "^4.0.0" }), /插件接口/);
+	bad(v3({ runtime: [{ kind: "moejs", entry: "x.js" }] }), /moejs/);
+	assert.equal(validateManifest(v3({ runtime: [{ kind: "pi", entry: "index.mjs" }, { kind: "web-ui", entry: "ui/index.html", optional: true }] })).agent, "index.mjs");
+	bad(v3({ permissions: ["source"] }), /来源插件/);
+	bad(v3({}, { pages: [{ id: "p", title: "P" }] }), /document/);
+	bad(v3({}, { pages: [{ id: "p", title: "P", renderer: "web-ui", document: doc() }] }), /web-ui/);
+	bad(v3({}, { pages: [{ id: "p", title: "P", route: "/x", document: doc() }] }), /不支持字段 route/);
+	bad(v3({}, { pages: [{ id: "p", title: "P", document: doc({ type: "button", text: "go", action: "missing" }) }] }), /未声明的动作 missing/);
+	bad(v3({}, { slots: [{ id: "s", target: "player.controls.trailing", document: doc() }] }), /target/);
+	bad(v3({}, { slots: [{ id: "s", target: "course.detail.sections", mode: "single", document: doc() }] }), /模式是 list/);
+	bad(v3({}, { navigation: [{ id: "n", title: "N", page: "nowhere" }] }), /不存在的页面/);
+	bad(v3({}, { actions: [{ id: "a", title: "A", permission: "library.write" }] }), /没有在 permissions 中声明/);
+	bad(v3({ permissions: ["library.write"] }, { actions: [{ id: "a", title: "A", write: true }] }), /library\.write/);
+	bad(v3({}, { actions: [{ id: "a", title: "A", params: { properties: { n: "date" } } }] }), /类型/);
+	bad(v3({}, { sources: [{ id: "s", title: "S", protocol: "1", executable: { "linux-x64": "bin/s" } }] }), /来源/);
+});
+
 test("the bundled catalog's plugins are valid", async () => {
 	const c = JSON.parse(await readFile(join(bundledPluginsDir, "catalog.json"), "utf8"));
 	for (const e of c.plugins) {

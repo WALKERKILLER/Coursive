@@ -78,6 +78,6 @@ Scenario coverage PF-01 and PF-02 cannot prove yet, owned by the issue that land
 
 ## Remaining work
 
-- PF-01: this audit and the field map. Still open: the ADR revision that records the store cutover, and the decision that the v3 reader, not the v1 readers, decides installability.
-- PF-02: the schema, the shared fixtures and the three validators. Still open: a validator call in the install pipeline and the migration writer that rewrites a v1 package to v3.
-- PF-12: the validation CLI, the copyable template and the compatibility note ([agent/plugins/_template](../agent/plugins/_template/README.md)). Still open: the store cutover that makes a v3 manifest installable, and the matching `coursive-plugins` templates, which still write v2 `engine`.
+- PF-01: this audit and the field map. [Decision 0034](decisions/0034-v3-manifests-install-in-the-assistant-host.md) makes the v3 reader decide installability in the assistant host. Still open: the ADR revision that records the daemon store cutover.
+- PF-02: the schema, the shared fixtures and the three validators. The assistant host's install pipeline now runs the shared rules on every v3 manifest. Still open: the migration writer that rewrites a v1 package to v3.
+- PF-12: the validation CLI, the copyable template and the compatibility note ([agent/plugins/_template](../agent/plugins/_template/README.md)). The template installs from `path:`. Still open: the matching `coursive-plugins` templates, which still write v2 `engine`.

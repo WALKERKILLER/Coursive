@@ -75,7 +75,7 @@ The full field map and the reasons are in [plugin-fabric-audit.md](../../../docs
 ## Compatibility and QA
 
 - **API Version 3.0.0**: the manifest shape `coursive/plugin-manifest@3`, which this template declares as `"api": "^3.0.0"`. A v3 reader accepts exactly this shape.
-- **Minimum Host Version**: the first host release that reads v3 manifests. The shipped host still evaluates v1 `engine` (`1.0.0`, assistant plugins) and v2 `engine` (`2.0.0`, source plugins), so a v3 package is a template for the store cutover, not yet installable. `--host <version>` in the validator answers "would this host accept this range" ahead of time.
+- **Minimum Host Version**: the first host release that reads v3 manifests. The assistant host reads them with API 3.0.0 ([decision 0034](../../../docs/decisions/0034-v3-manifests-install-in-the-assistant-host.md)): it runs the shared rules, then its own — one required `pi` runtime, declarative pages, slot targets from its catalog, button actions that name a declared action, and no `contributes.sources`. Source plugins still declare v2 `engine` (`2.0.0`). `--host <version>` in the validator answers "would this host accept this range" ahead of time.
 - **coursive-plugins counterpart**: that repository owns the published templates and the index. Its `templates/agent-plugin` and `templates/source-plugin` still write v2 `engine`, and `scripts/validate.mjs` validates `index.json` and `mirrors.json`. When the v3 store lands, its templates move to `api`/`runtime`, and both validators run the shared fixtures ([cases.json](../../../daemon/internal/pluginfabric/testdata/cases.json)) so an index entry and a core install cannot disagree.
 
 ## Validation CLI
