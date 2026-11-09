@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/walkerkiller/coursive/daemon/internal/pluginbridge"
@@ -41,8 +43,16 @@ func fakeHost(t *testing.T) (*Supervisor, *[]map[string]any) {
 			bodies = append(bodies, in)
 			state, _ := in["state"].(map[string]any)
 			index, _ := state["index"].(float64)
-			step, _ := in["args"].(map[string]any)["step"].(float64)
+			args, _ := in["args"].(map[string]any)
+			step, _ := args["step"].(float64)
 			json.NewEncoder(w).Encode(map[string]any{"statePatch": map[string]any{"viewId": in["viewId"], "patch": map[string]any{"index": index + step}}})
+		case "GET /prefs":
+			w.Write([]byte(`{"approval":"ask","model":"m"}`))
+		case "POST /plugins/cards/bridge/save":
+			var in map[string]any
+			json.NewDecoder(r.Body).Decode(&in)
+			bodies = append(bodies, in)
+			json.NewEncoder(w).Encode(map[string]any{"notification": map[string]any{"text": "已保存 " + in["approved"].(string)}})
 		case "POST /plugins/cards/bridge/slow":
 			w.WriteHeader(http.StatusGatewayTimeout)
 			w.Write([]byte(`{"error":"插件动作超时"}`))
@@ -61,7 +71,55 @@ func fakeHost(t *testing.T) (*Supervisor, *[]map[string]any) {
 
 func bridgeFor(s *Supervisor) *pluginbridge.Bridge {
 	p := &Plugins{Agent: s}
-	return &pluginbridge.Bridge{Registry: p, Executor: p}
+	return &pluginbridge.Bridge{Registry: p, Executor: p, Approvals: p}
+}
+
+// A write becomes a proposal with the assistant's approval mode, and only the
+// approval runs it in the host, with the proposal named.
+func TestPluginsBridgeWritesRunOnlyWhenApproved(t *testing.T) {
+	sup, bodies := fakeHost(t)
+	b := bridgeFor(sup)
+	ctx := context.Background()
+	resp := b.Handle(ctx, pluginbridge.Request{PluginID: "cards", ActionID: "save", RequestID: "w1",
+		Args: map[string]any{"title": "复习"}})
+	if !resp.OK || resp.Result.Proposal == nil || resp.Result.Proposal.ApprovalMode != pluginbridge.ApprovalAsk {
+		t.Fatalf("propose = %+v %+v", resp.Result, resp.Error)
+	}
+	if len(*bodies) != 0 {
+		t.Fatalf("the write ran before approval")
+	}
+	id := resp.Result.Proposal.ID
+	applied := b.Apply(ctx, id)
+	if !applied.OK || applied.Result.Notification.Text != "已保存 "+id {
+		t.Fatalf("apply = %+v %+v", applied.Result, applied.Error)
+	}
+	if got := (*bodies)[0]; got["approved"] != id || got["args"].(map[string]any)["title"] != "复习" {
+		t.Fatalf("host saw %v", got)
+	}
+}
+
+// The app cannot reach the host's bridge route through the /agent proxy.
+func TestProxyRefusesTheBridgeRoute(t *testing.T) {
+	sup, _ := fakeHost(t)
+	sup.mu.Lock()
+	sup.proxy = httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: "127.0.0.1:" + strconv.Itoa(sup.status.Port)})
+	sup.mu.Unlock()
+	for _, path := range []string{"/agent/plugins/cards/bridge/save", "/agent//plugins/cards/bridge/next", "/agent/plugins/cards/bridge"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", path, strings.NewReader(`{"approved":"forged"}`))
+		req.Header.Set("Authorization", "Bearer secret")
+		sup.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s = %d", path, rec.Code)
+		}
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/agent/plugins", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	sup.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("plugin list through the proxy = %d", rec.Code)
+	}
 }
 
 func TestPluginsBridgeRunsHostActionsWithViewState(t *testing.T) {
@@ -97,6 +155,11 @@ func TestPluginsBridgeRunsHostActionsWithViewState(t *testing.T) {
 	if len(*bodies) != 2 {
 		t.Fatalf("host ran %d times, want 2", len(*bodies))
 	}
+	// No arguments reach the host as an empty object, not null.
+	b.Handle(ctx, pluginbridge.Request{PluginID: "cards", ActionID: "next", ViewID: "deck", ContextRevision: 2, RequestID: "r5"})
+	if args, ok := (*bodies)[2]["args"].(map[string]any); !ok || len(args) != 0 {
+		t.Fatalf("args = %#v", (*bodies)[2]["args"])
+	}
 }
 
 func TestPluginsBridgeRefusals(t *testing.T) {
@@ -107,8 +170,6 @@ func TestPluginsBridgeRefusals(t *testing.T) {
 		return b.Handle(ctx, pluginbridge.Request{PluginID: plugin, ActionID: action, RequestID: plugin + "-" + action}).Error
 	}
 	for _, c := range []struct{ plugin, action, code string }{
-		// No approval source is wired, so a write never runs.
-		{"cards", "save", pluginbridge.CodeApprovalUnavailable},
 		{"cards", "slow", pluginbridge.CodeDeadlineExceeded},
 		{"cards", "nope", pluginbridge.CodeUnknownAction},
 		// A v1 plugin declares no bridge actions.

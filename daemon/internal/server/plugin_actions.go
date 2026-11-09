@@ -38,6 +38,27 @@ func (s *Server) pluginViewState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+// pluginProposal answers one stored write proposal.
+func (s *Server) pluginProposal(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.pluginBridge().Proposal(r.PathValue("id"))
+	if !ok {
+		writeErr(w, apiError{http.StatusNotFound, "没有这个待审批的修改"})
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// pluginProposalApply runs a pending write the user approved in the app; the
+// answer is the typed envelope, like an action's.
+func (s *Server) pluginProposalApply(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.pluginBridge().Apply(r.Context(), r.PathValue("id")))
+}
+
+// pluginProposalReject settles a pending write without running it.
+func (s *Server) pluginProposalReject(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.pluginBridge().Reject(r.PathValue("id")))
+}
+
 // pluginBridge is the configured bridge; without one (tests, or a daemon
 // built without the assistant host) the zero bridge refuses every action
 // instead of trusting the request.

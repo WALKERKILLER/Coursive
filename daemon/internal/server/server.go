@@ -109,6 +109,9 @@ func (s *Server) Handler() http.Handler {
 	h("GET /api/health", s.health)
 	mux.HandleFunc("POST /api/plugin-actions", s.pluginAction)
 	mux.HandleFunc("GET /api/plugin-actions/state", s.pluginViewState)
+	mux.HandleFunc("GET /api/plugin-actions/proposals/{id}", s.pluginProposal)
+	mux.HandleFunc("POST /api/plugin-actions/proposals/{id}/apply", s.pluginProposalApply)
+	mux.HandleFunc("POST /api/plugin-actions/proposals/{id}/reject", s.pluginProposalReject)
 	s.sourceRoutes(h)
 	s.lmsRoutes(h)
 

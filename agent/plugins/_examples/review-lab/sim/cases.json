@@ -1,0 +1,14 @@
+{
+	"daemon": { "PUT /api/notes": { "id": "n-1", "title": "复习卡" } },
+	"cases": [
+		{ "name": "next before start asks to start", "action": "next", "view": "deck", "expect": { "notification": { "level": "warning" } } },
+		{ "name": "start shows the first sample card", "action": "start", "view": "deck", "expect": { "statePatch": { "patch": { "index": 0, "revealed": false, "progress": "1 / 3" } } } },
+		{ "name": "reveal shows the answer", "action": "reveal", "view": "deck", "expect": { "statePatch": { "patch": { "revealed": true } } } },
+		{ "name": "next moves on", "action": "next", "view": "deck", "args": { "step": 1 }, "expect": { "statePatch": { "patch": { "index": 1, "revealed": false } } } },
+		{ "name": "the slot opens the page", "action": "open", "expect": { "navigation": { "route": "deck" } } },
+		{ "name": "the agent tool fills the deck", "tool": "make_cards", "params": { "cards": [{ "front": "Q1", "back": "A1" }, { "front": "Q2", "back": "A2" }] }, "expect": { "details": { "cards": 2 } } },
+		{ "name": "start uses the agent's deck", "action": "start", "view": "deck", "expect": { "statePatch": { "patch": { "front": "Q1", "progress": "1 / 2" } } } },
+		{ "name": "save is a proposal until approved", "action": "save", "view": "deck", "expect": { "proposal": { "actionId": "save" } }, "calls": [] },
+		{ "name": "an approved save writes one note", "action": "save", "view": "deck", "approve": true, "expect": { "notification": { "text": "已存为笔记「复习卡」" } }, "calls": ["PUT /api/notes"] }
+	]
+}

@@ -5556,9 +5556,20 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String pluginProposalPending(Object value) {
-    return '「$value」已生成，等待你批准后才会写入';
+  String pluginProposalTitle(Object value) {
+    return '允许「$value」吗？';
   }
+
+  @override
+  String pluginProposalBody(Object value) {
+    return '插件「$value」要写入你本机的资料库。批准后才会写入，放弃则不做任何修改。';
+  }
+
+  @override
+  String get pluginProposalApply => '批准写入';
+
+  @override
+  String get pluginProposalReject => '放弃';
 
   @override
   String get pluginViewAlternative => '换种方式看';

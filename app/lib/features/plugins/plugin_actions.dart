@@ -333,6 +333,41 @@ class PluginActionClient {
     return view;
   }
 
+  /// Runs a pending write the user approved. The daemon checks the plugin and
+  /// its permission again and answers like an action, so the result form is
+  /// dispatched the same way.
+  Future<PluginActionOutcome> apply(PluginProposal proposal) =>
+      _settle(proposal, 'apply');
+
+  /// Discards a pending write without running it.
+  Future<PluginActionOutcome> reject(PluginProposal proposal) =>
+      _settle(proposal, 'reject');
+
+  Future<PluginActionOutcome> _settle(
+    PluginProposal proposal,
+    String verb,
+  ) async {
+    final raw = await call(
+      'POST',
+      '/api/plugin-actions/proposals/${Uri.encodeComponent(proposal.id)}/$verb',
+    );
+    final outcome = PluginActionOutcome.fromJson(
+      raw is Map ? raw.cast<String, dynamic>() : const {},
+    );
+    if (outcome.ok && verb == 'apply') {
+      _dispatch(
+        PluginActionRequest(
+          pluginId: proposal.pluginId,
+          actionId: proposal.actionId,
+          viewId: proposal.viewId,
+          requestId: outcome.requestId,
+        ),
+        outcome,
+      );
+    }
+    return outcome;
+  }
+
   /// Sends [request] once. The answer is dispatched to the callbacks, and a
   /// transport failure (no answer at all) is thrown, not remembered, so a
   /// retry can still reach the daemon.

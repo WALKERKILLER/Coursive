@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,9 @@ type Status struct {
 	Error string `json:"error,omitempty"`
 	Port  int    `json:"port,omitempty"`
 }
+
+// bridgeRoute is the host route the daemon's action bridge calls directly.
+var bridgeRoute = regexp.MustCompile(`^/+plugins/[^/]+/bridge(/|$)`)
 
 type Supervisor struct {
 	Node   string // node binary; change it with Restart once running
@@ -236,5 +240,13 @@ func (s *Supervisor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.URL.Path = strings.TrimPrefix(r.URL.Path, "/agent")
+	if bridgeRoute.MatchString(r.URL.Path) {
+		// Only the daemon's action bridge calls this, after its own checks and,
+		// for a write, the user's approval; the app goes through /api/plugin-actions.
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":"not found"}`)
+		return
+	}
 	p.ServeHTTP(w, r)
 }

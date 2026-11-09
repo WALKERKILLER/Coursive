@@ -50,8 +50,7 @@ class PluginContributionBinder {
           if (e.raw['document'] is Map) PluginPageContribution.fromEntry(e),
       ];
       final ownSlots = [
-        for (final e in _entries(plugin, 'slots'))
-          if (slotContribution(e) case final slot?) slot,
+        for (final e in _entries(plugin, 'slots')) ?slotContribution(e),
       ];
       final ownRoutes = {for (final p in ownPages) p.routeId};
       final ownKeys = {
@@ -171,7 +170,7 @@ class _PluginDeclarativeViewState extends State<PluginDeclarativeView> {
       },
       onNavigation: _open,
       onNotification: (n) => _say(n.text),
-      onProposal: (p) => _say(l10n.pluginProposalPending(p.summary)),
+      onProposal: _confirm,
     );
     _reload();
   }
@@ -202,6 +201,41 @@ class _PluginDeclarativeViewState extends State<PluginDeclarativeView> {
       _say(l10n.pluginActionFailed(_title(action), failure.message));
     } catch (e) {
       _say(l10n.pluginActionFailed(_title(action), '$e'));
+    }
+  }
+
+  /// Asks before a plugin writes to the library; nothing is written unless
+  /// the user approves.
+  Future<void> _confirm(PluginProposal proposal) async {
+    final plugin = context.read<PluginStore>().byId(widget.pluginId);
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.pluginProposalTitle(proposal.summary)),
+        content: Text(
+          l10n.pluginProposalBody('${plugin?['title'] ?? widget.pluginId}'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.pluginProposalReject),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.pluginProposalApply),
+          ),
+        ],
+      ),
+    );
+    try {
+      final outcome = approved == true
+          ? await _client.apply(proposal)
+          : await _client.reject(proposal);
+      if (outcome.failure case final failure?) {
+        _say(l10n.pluginActionFailed(proposal.summary, failure.message));
+      }
+    } catch (e) {
+      _say(l10n.pluginActionFailed(proposal.summary, '$e'));
     }
   }
 

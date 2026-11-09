@@ -122,6 +122,35 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      # Every v3 package in the repository validates, runs its scripted cases
+      # in the simulated host and packs with its runtime entry.
+      - name: Example plugins
+        run: for dir in plugins/_template plugins/_examples/*/; do node scripts/plugin-sim.mjs "$dir" --pack "$RUNNER_TEMP/plugin-packs"; done
+
+  # The Review Lab example against a real coursive-daemon and assistant host:
+  # install, grant, page, slot, tool, actions, an approved save, disable and restore.
+  plugins-e2e:
+    name: plugins (end to end)
+    needs: changes
+    # Fail safe: if change detection itself fails, run the job anyway.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.daemon == 'true' || needs.changes.outputs.agent == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: daemon/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci
+        working-directory: agent
+      - run: go build -o "$RUNNER_TEMP/coursive-daemon" ./cmd/coursive-daemon
+        working-directory: daemon
+      - run: node agent/scripts/review-lab-e2e.mjs --daemon "$RUNNER_TEMP/coursive-daemon"
 
   app:
     name: app (Flutter)

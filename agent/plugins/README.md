@@ -1,6 +1,6 @@
 # Writing a Coursive plugin
 
-This guide walks through a plugin from an empty folder to an installed, working plugin. The full contract (manifest fields, permissions, the `look` API, routes) is [spec 0004](../../docs/specs/0004-plugin-platform.md); this folder holds the official plugins and their [catalog](catalog.json). The copyable manifest-v3 package is [_template](_template/README.md); it is not in the catalog, so it never loads as an installed plugin.
+This guide walks through a plugin from an empty folder to an installed, working plugin. The full contract (manifest fields, permissions, the `look` API, routes) is [spec 0004](../../docs/specs/0004-plugin-platform.md); this folder holds the official plugins and their [catalog](catalog.json). The copyable manifest-v3 package is [_template](_template/README.md) and the v3 author guide is [plugin-v3-guide.md](../../docs/plugin-v3-guide.md), with [Review Lab](_examples/review-lab/README.md) as a worked example; neither is in the catalog, so they never load as installed plugins.
 
 ## 1. The manifest
 

@@ -1034,19 +1034,23 @@ export class PluginHost {
 	/**
 	 * Runs a v3 action for the daemon's action bridge, which has already checked
 	 * the plugin state, the permission, the arguments and the view revision. The
-	 * handler gets the arguments and `{signal, state, viewId, instanceId}`, and
-	 * answers with one bridge result form. A write action never runs here: the
-	 * bridge turns it into a pending proposal.
+	 * handler gets the arguments and `{signal, state, viewId, instanceId,
+	 * approved}`, and answers with one bridge result form. A write action runs
+	 * only with `approved`, the proposal the user approved in the app; without
+	 * it the bridge has turned the write into a pending proposal.
 	 */
-	async bridgeAction(id, actionId, { args = {}, state = {}, viewId = "", instanceId = "", deadlineMs = 0 } = {}) {
+	async bridgeAction(id, actionId, { args = {}, state = {}, viewId = "", instanceId = "", deadlineMs = 0, approved = "" } = {}) {
 		const rec = this.enabled(id);
 		const action = rec.manifest.schema === 3 ? rec.manifest.contributes.actions.find((a) => a.id === actionId) : undefined;
 		if (!action) throw bad(`插件没有动作 ${actionId}`, 404);
-		if (action.write) throw bad(`写入动作 ${actionId} 只能生成待审批的提议`, 409);
+		if (action.write !== Boolean(approved)) throw bad(action.write ? `写入动作 ${actionId} 需要你先批准` : `动作 ${actionId} 不是写入动作`, 409);
 		const handler = rec.actions.get(action.action);
 		if (!handler) throw bad(`插件没有注册动作 ${action.action}`, 404);
 		const timeoutMs = deadlineMs > 0 ? Math.min(deadlineMs, this.actionTimeoutMs) : this.actionTimeoutMs;
-		return bridgeResult(await invoke(handler, args, { state, viewId, instanceId }, timeoutMs));
+		// The daemon encodes an empty map as null; a handler always gets objects.
+		const object = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+		const extra = { state: object(state), viewId, instanceId, ...(approved ? { approved: String(approved) } : {}) };
+		return bridgeResult(await invoke(handler, object(args), extra, timeoutMs));
 	}
 
 	enabled(id) {

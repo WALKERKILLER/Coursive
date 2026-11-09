@@ -121,7 +121,8 @@ Actions run without a model call unless they return `{prompt}`. That keeps visua
 - `PUT /plugins/{id} {enabled?, settings?, grant?}`. `DELETE /plugins/{id}`.
 - `PUT /plugins/third-party {allow}`. `POST /plugins/catalogs {url}`. `POST /plugins/catalogs/remove {url}`.
 - `POST /plugins/{id}/actions/{name} {context}`.
-- `POST /plugins/{id}/bridge/{actionId} {args, state, viewId, instanceId, deadlineMs}` → one of `statePatch`, `navigation`, `viewPatch`, `notification`: a v3 read action, called only by the daemon's action bridge ([spec 0032](0032-ui-extension-protocol.md)).
+- `POST /plugins/{id}/bridge/{actionId} {args, state, viewId, instanceId, deadlineMs, approved?}` → one of `statePatch`, `navigation`, `viewPatch`, `notification`: a v3 action, called only by the daemon's action bridge (the daemon's `/agent` proxy refuses it); a `write` action runs only with `approved`, the proposal the user approved ([spec 0032](0032-ui-extension-protocol.md)).
+- `GET /prefs` → the assistant prefs, including `approval`.
 - Errors → 400/403/404/409/410/502/504 with a Chinese message.
 
 coursive-daemon relays `plugin_event` (`{plugin, kind: notify | status | update, …}`, ≤ 64 KB) from the agent host through `POST /api/agent/event` to `/api/events`.
