@@ -73,7 +73,8 @@ func (s *Supervisor) Call(ctx context.Context, method, path string, in, out any)
 
 // Plugins backs the plugin action bridge with the assistant host until the
 // Plugin Fabric store owns plugin state (docs/decisions/0034): the host's
-// plugin list is the registry, and its bridge route runs read actions. Only
+// plugin list is the registry, its bridge route runs read actions and approved
+// writes, and its prefs give the approval mode. Only
 // v3 plugins declare bridge actions; a v1 plugin keeps its own action route.
 // Contract: docs/specs/0032-ui-extension-protocol.md (Action bridge and UI state).
 type Plugins struct{ Agent *Supervisor }
@@ -148,12 +149,19 @@ func (p *Plugins) Plugin(ctx context.Context, id string) (pluginbridge.Plugin, b
 // Execute runs a read action in the host with the arguments, the view state
 // and what is left of the deadline.
 func (p *Plugins) Execute(ctx context.Context, call pluginbridge.Call) (pluginbridge.Result, error) {
-	state := call.State
+	state, args := call.State, call.Request.Args
 	if state == nil {
 		state = map[string]any{}
 	}
-	in := map[string]any{"args": call.Request.Args, "state": state, "viewId": call.Request.ViewID,
+	if args == nil {
+		args = map[string]any{}
+	}
+	in := map[string]any{"args": args, "state": state, "viewId": call.Request.ViewID,
 		"instanceId": call.Request.InstanceID, "deadlineMs": max(time.Until(call.Deadline).Milliseconds(), 1)}
+	if call.Approved != "" {
+		// Only the bridge sets this, after the user approved the proposal.
+		in["approved"] = call.Approved
+	}
 	var result pluginbridge.Result
 	path := "/plugins/" + url.PathEscape(call.Plugin.ID) + "/bridge/" + url.PathEscape(call.Action.ID)
 	err := p.Agent.Call(ctx, http.MethodPost, path, in, &result)
@@ -167,6 +175,18 @@ func (p *Plugins) Execute(ctx context.Context, call pluginbridge.Call) (pluginbr
 		return result, hostActionErr(call, he)
 	}
 	return result, err
+}
+
+// ApprovalMode is the assistant's approval mode (docs/specs/0016-agent-acts.md),
+// recorded on every write proposal.
+func (p *Plugins) ApprovalMode(ctx context.Context) (string, error) {
+	var prefs struct {
+		Approval string `json:"approval"`
+	}
+	if err := p.Agent.Call(ctx, http.MethodGet, "/prefs", nil, &prefs); err != nil {
+		return "", err
+	}
+	return prefs.Approval, nil
 }
 
 // hostActionErr names a host refusal with the bridge's codes.

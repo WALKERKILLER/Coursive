@@ -1,5 +1,7 @@
 # Plugin template (manifest v3)
 
+The full author guide, including slots, the action bridge, services, the simulator and migration from v1, is [plugin-v3-guide.md](../../../docs/plugin-v3-guide.md); [Review Lab](../_examples/review-lab/README.md) is a complete example.
+
 A copyable starting point for a Coursive plugin package: one declarative page, one course-detail slot, one action and one Pi runtime module, declaring only the permission it uses.
 
 It is not an installed plugin. The host installs official plugins listed in [catalog.json](../catalog.json) and third-party packages from a folder, an npm package or a Git tag, so this directory is inert until you copy it out and install the copy. Keep the `_` prefix if you add other examples here: the catalog, not the directory listing, decides what exists.

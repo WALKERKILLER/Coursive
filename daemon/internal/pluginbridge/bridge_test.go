@@ -19,12 +19,14 @@ func (r fakeRegistry) Plugin(_ context.Context, id string) (Plugin, bool, error)
 type fakeExecutor struct {
 	mu    sync.Mutex
 	calls int
+	last  Call
 	run   func(context.Context) (Result, error)
 }
 
-func (e *fakeExecutor) Execute(ctx context.Context, _ Call) (Result, error) {
+func (e *fakeExecutor) Execute(ctx context.Context, c Call) (Result, error) {
 	e.mu.Lock()
 	e.calls++
+	e.last = c
 	run := e.run
 	e.mu.Unlock()
 	if run == nil {

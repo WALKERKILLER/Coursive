@@ -9701,11 +9701,29 @@ abstract class AppLocalizations {
   /// **'无法打开「{value}」，插件没有提供这个页面'**
   String pluginRouteMissing(Object value);
 
-  /// No description provided for @pluginProposalPending.
+  /// No description provided for @pluginProposalTitle.
   ///
   /// In zh, this message translates to:
-  /// **'「{value}」已生成，等待你批准后才会写入'**
-  String pluginProposalPending(Object value);
+  /// **'允许「{value}」吗？'**
+  String pluginProposalTitle(Object value);
+
+  /// No description provided for @pluginProposalBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件「{value}」要写入你本机的资料库。批准后才会写入，放弃则不做任何修改。'**
+  String pluginProposalBody(Object value);
+
+  /// No description provided for @pluginProposalApply.
+  ///
+  /// In zh, this message translates to:
+  /// **'批准写入'**
+  String get pluginProposalApply;
+
+  /// No description provided for @pluginProposalReject.
+  ///
+  /// In zh, this message translates to:
+  /// **'放弃'**
+  String get pluginProposalReject;
 
   /// No description provided for @pluginViewAlternative.
   ///

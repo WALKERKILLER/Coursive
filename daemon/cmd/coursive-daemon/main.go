@@ -221,10 +221,10 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 	local := &localasr.Manager{Dir: filepath.Join(dataDir, "asr")}
 	srv := &server.Server{Token: token, Sources: reg, Market: market, St: st, Lib: lib, Jobs: mgr, Eng: eng, Bus: bus, Agent: sup, Runtime: rt, Ctx: ctx, MinerU: mgr.MinerU, Local: local}
 	local.Publish = srv.OnLocalASR
-	// The assistant host is the plugin registry and executor until the Plugin
-	// Fabric store lands; no approval source is wired, so a write is refused.
+	// The assistant host is the plugin registry, the executor and the source
+	// of the approval mode until the Plugin Fabric store lands.
 	hostPlugins := &agent.Plugins{Agent: sup}
-	srv.PluginActions = &pluginbridge.Bridge{Registry: hostPlugins, Executor: hostPlugins}
+	srv.PluginActions = &pluginbridge.Bridge{Registry: hostPlugins, Executor: hostPlugins, Approvals: hostPlugins}
 	srv.Notes = notify.Open(filepath.Join(dataDir, "notifications.json"), func(it notify.Item) { bus.Publish("notification", it) })
 	srv.ApplySettings(ctx)
 	mgr.Source = srv.Source

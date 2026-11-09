@@ -43,9 +43,14 @@ const (
 	ApprovalAsk  = "ask"
 )
 
-// Proposal status; the bridge only ever stores pending proposals, because a
-// write commits through the existing approval path, never here.
-const ProposalPending = "pending"
+// Proposal status. A write is stored pending; only the user's approval
+// (Bridge.Apply) runs it, and a rejected or failed proposal never runs.
+const (
+	ProposalPending  = "pending"
+	ProposalApplied  = "applied"
+	ProposalRejected = "rejected"
+	ProposalFailed   = "failed"
+)
 
 // Error codes a response may carry.
 const (
@@ -61,6 +66,8 @@ const (
 	CodeCanceled            = "canceled"
 	CodeApprovalUnavailable = "approval_unavailable"
 	CodeInvalidResult       = "invalid_result"
+	CodeUnknownProposal     = "unknown_proposal"
+	CodeProposalSettled     = "proposal_settled"
 	CodeInternal            = "internal"
 )
 
@@ -179,6 +186,9 @@ type Proposal struct {
 	RequestID    string         `json:"requestId"`
 	TraceID      string         `json:"traceId"`
 	CreatedAt    int64          `json:"createdAt"`
+	SettledAt    int64          `json:"settledAt,omitempty"`
+	// Error is why an approved write failed.
+	Error string `json:"error,omitempty"`
 }
 
 // Plugin is the daemon-owned state of one plugin: its registry state, the
@@ -239,7 +249,10 @@ type Call struct {
 	Request Request
 	// State is the view state at the revision the caller read, so an action
 	// can compute its patch; empty when the request names no view.
-	State          map[string]any
+	State map[string]any
+	// Approved is the proposal the user approved; only a write the user
+	// approved through Bridge.Apply reaches the Executor, and always with it.
+	Approved       string
 	Deadline       time.Time
 	IdempotencyKey string
 }

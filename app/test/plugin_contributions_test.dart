@@ -72,6 +72,7 @@ class _Daemon {
   _Daemon(this.answers);
   final Map<String, Map<String, dynamic>> answers;
   final sent = <Map<String, dynamic>>[];
+  final settled = <String>[];
   var reads = 0;
 
   Future<dynamic> call(String method, String path, [Object? body]) async {
@@ -82,6 +83,10 @@ class _Daemon {
         'revision': 2,
         'state': {'front': 'Q2'},
       };
+    }
+    if (path.startsWith('/api/plugin-actions/proposals/')) {
+      settled.add(path);
+      return answers[path.split('/').last];
     }
     final request = (body as Map).cast<String, dynamic>();
     sent.add(request);
@@ -269,5 +274,75 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('page:复习卡'), findsNothing);
     expect(find.text('c-42'), findsOneWidget);
+  });
+
+  testWidgets('a write asks first, and only an approval applies it', (
+    tester,
+  ) async {
+    final daemon = _Daemon({
+      'save': {
+        'ok': true,
+        'result': {
+          'proposal': {
+            'id': 'proposal-1',
+            'pluginId': 'cards',
+            'actionId': 'save',
+            'viewId': 'deck',
+            'summary': '保存',
+            'status': 'pending',
+          },
+        },
+      },
+      'apply': {
+        'ok': true,
+        'result': {
+          'notification': {'text': '已存为笔记'},
+        },
+      },
+      'reject': {
+        'ok': true,
+        'result': {
+          'proposal': {'id': 'proposal-1', 'status': 'rejected'},
+        },
+      },
+    });
+    final store = _Store()..installed = [_cards()];
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<PluginStore>.value(value: store),
+          ChangeNotifierProvider.value(value: PluginNavigationRegistry()),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: PluginDeclarativeView(
+              pluginId: 'cards',
+              viewId: 'deck',
+              document: (_cards()['contributes']['pages'][0]['document'] as Map)
+                  .cast<String, dynamic>(),
+              call: daemon.call,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('允许「保存」吗？'), findsOneWidget);
+    await tester.tap(find.text('放弃'));
+    await tester.pumpAndSettle();
+    expect(daemon.settled, ['/api/plugin-actions/proposals/proposal-1/reject']);
+
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('批准写入'));
+    await tester.pumpAndSettle();
+    expect(
+      daemon.settled.last,
+      '/api/plugin-actions/proposals/proposal-1/apply',
+    );
+    expect(find.text('已存为笔记'), findsOneWidget);
   });
 }

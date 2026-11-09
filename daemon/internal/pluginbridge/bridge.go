@@ -29,7 +29,7 @@ type Bridge struct {
 	views     map[string]viewState
 	responses map[string]Response
 	order     []string
-	proposals map[string]Proposal
+	proposals map[string]*proposalRec
 	inflight  map[string]*pending
 }
 
@@ -216,9 +216,14 @@ func (b *Bridge) propose(ctx context.Context, call Call) (Proposal, *Error) {
 		TraceID: call.Request.TraceID, CreatedAt: b.now().Unix()}
 	b.mu.Lock()
 	if b.proposals == nil {
-		b.proposals = map[string]Proposal{}
+		b.proposals = map[string]*proposalRec{}
 	}
-	b.proposals[proposal.ID] = proposal
+	if prev, ok := b.proposals[proposal.ID]; ok {
+		// A replay after the answer was forgotten names the same proposal.
+		b.mu.Unlock()
+		return prev.p, nil
+	}
+	b.proposals[proposal.ID] = &proposalRec{p: proposal, req: call.Request}
 	b.mu.Unlock()
 	return proposal, nil
 }
@@ -349,13 +354,14 @@ func (b *Bridge) snapshot(pluginID, viewID string) ViewSnapshot {
 	return ViewSnapshot{ViewID: viewID, Revision: cur.revision, State: out}
 }
 
-// Proposal returns a stored proposal. This is the seam the existing approval
-// path uses; the bridge itself never applies one.
+// Proposal returns a stored proposal.
 func (b *Bridge) Proposal(id string) (Proposal, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	p, ok := b.proposals[id]
-	return p, ok
+	if rec, ok := b.proposals[id]; ok {
+		return rec.p, true
+	}
+	return Proposal{}, false
 }
 
 // rememberLocked keeps the answer for a requestId, dropping the oldest entry

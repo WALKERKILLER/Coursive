@@ -171,3 +171,43 @@ func TestPluginActionRouteNeedsToken(t *testing.T) {
 		t.Fatalf("status = %d, want 401", rec.Code)
 	}
 }
+
+// An approved proposal runs once through the route; a rejected one never runs.
+func TestPluginProposalRoutes(t *testing.T) {
+	exec := &actionExecutor{result: pluginbridge.Result{Notification: &pluginbridge.Notification{Text: "已保存"}}}
+	s := &Server{Token: "test", PluginActions: &pluginbridge.Bridge{
+		Registry: actionRegistry{}, Executor: exec, Approvals: actionApprovals{}}}
+	send := func(method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Authorization", "Bearer test")
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	_, first := postAction(t, s, `{"pluginId":"review","actionId":"save","requestId":"req-1","args":{"cardId":"c-1"}}`)
+	_, second := postAction(t, s, `{"pluginId":"review","actionId":"save","requestId":"req-2"}`)
+	applyID, rejectID := first.Result.Proposal.ID, second.Result.Proposal.ID
+
+	var applied pluginbridge.Response
+	if rec := send("POST", "/api/plugin-actions/proposals/"+applyID+"/apply"); json.Unmarshal(rec.Body.Bytes(), &applied) != nil || !applied.OK {
+		t.Fatalf("apply = %d %s", rec.Code, rec.Body.String())
+	}
+	if applied.Result.Notification.Text != "已保存" || exec.calls != 1 {
+		t.Fatalf("apply result = %+v, calls %d", applied.Result, exec.calls)
+	}
+	var rejected pluginbridge.Response
+	send("POST", "/api/plugin-actions/proposals/"+rejectID+"/reject")
+	if rec := send("POST", "/api/plugin-actions/proposals/"+rejectID+"/apply"); json.Unmarshal(rec.Body.Bytes(), &rejected) != nil || rejected.Error.Code != pluginbridge.CodeProposalSettled {
+		t.Fatalf("apply after reject = %s", rec.Body.String())
+	}
+	if exec.calls != 1 {
+		t.Fatalf("a rejected write ran")
+	}
+	var p pluginbridge.Proposal
+	if rec := send("GET", "/api/plugin-actions/proposals/"+applyID); json.Unmarshal(rec.Body.Bytes(), &p) != nil || p.Status != pluginbridge.ProposalApplied {
+		t.Fatalf("proposal = %s", rec.Body.String())
+	}
+	if rec := send("GET", "/api/plugin-actions/proposals/proposal-none"); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown proposal = %d", rec.Code)
+	}
+}

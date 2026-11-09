@@ -351,15 +351,21 @@ test("the action bridge runs v3 read actions with their view state and nothing e
 		"package.json": { name: "p-cards", version: "1.0.0", coursive: { id: "cards", title: "卡片", summary: "测试插件", api: "^3.0.0", runtime: [{ kind: "pi", entry: "index.mjs" }], permissions: ["library.read", "library.write"], contributes } },
 		"index.mjs": `export function activate(coursive) {
 	coursive.action("next", async (args, { state, viewId }) => ({ statePatch: { viewId, patch: { index: (state.index ?? 0) + (args.step ?? 1) } } }));
-	coursive.action("save", async () => { globalThis.__cardsSaved = true; return { notification: { text: "saved" } }; });
+	coursive.action("save", async (_args, { approved }) => { globalThis.__cardsSaved = approved; return { notification: { text: "saved" } }; });
 	coursive.action("bad", async () => ({ toast: "v1 shape" }));
 	coursive.action("slow", (_args, { signal }) => new Promise((_r, rej) => signal.addEventListener("abort", () => rej(signal.reason))));
 }`,
 	});
 	await install(host, `path:${src}`);
 	assert.deepEqual(await host.bridgeAction("cards", "next", { args: { step: 2 }, state: { index: 3 }, viewId: "deck" }), { statePatch: { viewId: "deck", patch: { index: 5 } } });
+	// A Go nil map arrives as null.
+	assert.deepEqual(await host.bridgeAction("cards", "next", { args: null, state: null, viewId: "deck" }), { statePatch: { viewId: "deck", patch: { index: 1 } } });
 	await assert.rejects(host.bridgeAction("cards", "save"), { status: 409 });
 	assert.equal(globalThis.__cardsSaved, undefined);
+	// The daemon passes the proposal the user approved; only then does a write run.
+	assert.deepEqual(await host.bridgeAction("cards", "save", { approved: "proposal-1" }), { notification: { text: "saved" } });
+	assert.equal(globalThis.__cardsSaved, "proposal-1");
+	await assert.rejects(host.bridgeAction("cards", "next", { approved: "proposal-1" }), { status: 409 });
 	await assert.rejects(host.bridgeAction("cards", "bad"), { status: 502 });
 	await assert.rejects(host.bridgeAction("cards", "slow", { deadlineMs: 30 }), { status: 504 });
 	await assert.rejects(host.bridgeAction("cards", "missing"), { status: 404 });
