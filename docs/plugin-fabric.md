@@ -423,7 +423,7 @@ MoeJS Adapter 采用“一次 Compile，多 Runtime 复用”的策略；池上�
     "api": "^3.0.0",
     "runtime": [
       {"kind": "moejs", "entry": "logic/index.js"},
-      {"kind": "web-ui", "entry": "ui/index.html", "optional": true}
+      {"kind": "web-ui", "entry": "ui", "optional": true}
     ],
     "requires": [
       {"service": "transcript.read", "version": "^1", "optional": false},

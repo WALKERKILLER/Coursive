@@ -3,6 +3,8 @@ package pluginfabric
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -170,13 +172,15 @@ func TestCheckWebUIURL(t *testing.T) {
 }
 
 func TestWebUICSPDeniesExternalResources(t *testing.T) {
-	csp := WebUICSP()
+	csp := WebUICSP("n0nce")
 	for _, want := range []string{
 		"default-src 'none'",
-		"script-src 'self'",
+		"script-src 'nonce-n0nce'",
+		"style-src 'nonce-n0nce'",
+		"img-src data:",
 		"connect-src 'none'",
 		"frame-src 'none'",
-		"frame-ancestors 'none'",
+		"worker-src 'none'",
 		"object-src 'none'",
 		"base-uri 'none'",
 		"form-action 'none'",
@@ -185,7 +189,7 @@ func TestWebUICSPDeniesExternalResources(t *testing.T) {
 			t.Fatalf("CSP is missing %q: %s", want, csp)
 		}
 	}
-	for _, unwanted := range []string{"*", "unsafe-inline", "unsafe-eval", "http:", "https:"} {
+	for _, unwanted := range []string{"*", "unsafe-inline", "unsafe-eval", "http:", "https:", "'self'", "blob:"} {
 		if strings.Contains(csp, unwanted) {
 			t.Fatalf("CSP contains %q: %s", unwanted, csp)
 		}
@@ -502,7 +506,7 @@ func TestWebUIAdmissionMatrix(t *testing.T) {
 	for _, a := range WebUIAdmissions() {
 		byPlatform[a.Platform] = a
 		if a.Available() {
-			t.Fatalf("%s claims a Web UI renderer this build does not ship", a.Platform)
+			t.Fatalf("%s is available before its security review passed", a.Platform)
 		}
 		if a.Reason == "" {
 			t.Fatalf("%s has no admission reason", a.Platform)
@@ -511,19 +515,17 @@ func TestWebUIAdmissionMatrix(t *testing.T) {
 	if len(byPlatform) != 4 {
 		t.Fatalf("admission matrix has %d platforms", len(byPlatform))
 	}
-	if got := byPlatform["android"]; got.Status != AdmissionSupported || got.FallbackReason() != FallbackRendererMissing {
-		t.Fatalf("android = %+v", got)
+	for _, p := range []string{"android", "macos"} {
+		if got := byPlatform[p]; got.Status != AdmissionSupported || !got.Renderer || !got.Previewable() ||
+			got.FallbackReason() != FallbackReviewPending {
+			t.Fatalf("%s = %+v", p, got)
+		}
 	}
-	if got := byPlatform["macos"]; got.Status != AdmissionSupported || got.FallbackReason() != FallbackRendererMissing {
-		t.Fatalf("macos = %+v", got)
-	}
-	if got := byPlatform["windows"]; got.Status != AdmissionNeedsReview ||
-		got.FallbackReason() != FallbackPlatformNeedsReview {
-		t.Fatalf("windows = %+v", got)
-	}
-	if got := byPlatform["linux"]; got.Status != AdmissionNeedsReview ||
-		got.FallbackReason() != FallbackPlatformNeedsReview {
-		t.Fatalf("linux = %+v", got)
+	for _, p := range []string{"windows", "linux"} {
+		if got := byPlatform[p]; got.Status != AdmissionNeedsReview || got.Renderer || got.Previewable() ||
+			got.FallbackReason() != FallbackPlatformNeedsReview {
+			t.Fatalf("%s = %+v", p, got)
+		}
 	}
 	if got := WebUIAdmissionFor("plan9"); got.Status != AdmissionUnsupported ||
 		got.FallbackReason() != FallbackPlatformUnsupported || got.Available() {
@@ -533,9 +535,58 @@ func TestWebUIAdmissionMatrix(t *testing.T) {
 		t.Fatalf("platform lookup did not normalize: %+v", got)
 	}
 
-	// An admitted platform with a renderer is the only available combination.
-	supported := WebUIAdmission{Platform: "android", Status: AdmissionSupported, Renderer: true}
+	// An admitted platform with a renderer that passed its review is the only
+	// available combination; without a renderer there is nothing to preview.
+	supported := WebUIAdmission{Platform: "android", Status: AdmissionSupported, Renderer: true, Review: ReviewPassed}
 	if !supported.Available() || supported.FallbackReason() != "" {
-		t.Fatalf("an admitted platform with a renderer is not available: %+v", supported)
+		t.Fatalf("an admitted, reviewed platform with a renderer is not available: %+v", supported)
+	}
+	bare := WebUIAdmission{Platform: "android", Status: AdmissionSupported, Review: ReviewPassed}
+	if bare.Available() || bare.Previewable() || bare.FallbackReason() != FallbackRendererMissing {
+		t.Fatalf("a platform without a renderer = %+v", bare)
+	}
+}
+
+// TestWebUIReleaseGate keeps the admission matrix and the security review
+// record of spec 0032 (Web UI release gate) in step: every platform has one
+// row, the row's review state is the matrix's, and a passed review names its
+// record. A platform therefore becomes available to users only by a reviewed
+// change to both.
+func TestWebUIReleaseGate(t *testing.T) {
+	spec, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "specs", "0032-ui-extension-protocol.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, gate, ok := strings.Cut(string(spec), "### Web UI release gate")
+	if !ok {
+		t.Fatal("spec 0032 has no Web UI release gate section")
+	}
+	if next := strings.Index(gate, "\n## "); next >= 0 {
+		gate = gate[:next]
+	}
+	rows := map[string][]string{}
+	for _, line := range strings.Split(gate, "\n") {
+		cells := strings.Split(strings.Trim(strings.TrimSpace(line), "|"), "|")
+		if len(cells) < 4 || !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			continue
+		}
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		if _, known := webUIAdmissions[cells[0]]; known {
+			rows[cells[0]] = cells
+		}
+	}
+	for _, a := range WebUIAdmissions() {
+		row, ok := rows[a.Platform]
+		if !ok {
+			t.Fatalf("the release gate has no row for %s", a.Platform)
+		}
+		if row[1] != a.Review {
+			t.Fatalf("%s: the release gate records %q, the admission matrix %q", a.Platform, row[1], a.Review)
+		}
+		if a.Review == ReviewPassed && (row[3] == "" || row[3] == "—") {
+			t.Fatalf("%s passed its review without a review record", a.Platform)
+		}
 	}
 }

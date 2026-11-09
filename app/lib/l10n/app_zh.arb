@@ -3379,6 +3379,34 @@
   "pluginWebNativeKeptTitle": "仍然可用",
   "pluginWebNativeKept": "插件的原生页面、UI 扩展和动作照常可用，本地课程库与笔记不受影响。",
   "pluginWebOpenNative": "打开原生页面",
+  "pluginWebReasonReviewPending": "这个平台的 Web UI 渲染器还没有通过单独的安全评审，评审通过前插件页面改用原生方式打开。",
+  "pluginWebLoading": "正在打开插件页面…",
+  "pluginWebPreview": "实验预览：这个 Web UI 渲染器还没有通过安全评审，只用于开发验证。",
+  "pluginWebOpenFailed": "无法打开插件页面：{value}",
+  "@pluginWebOpenFailed": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "pluginWebExternalTitle": "在浏览器中打开「{value}」吗？",
+  "@pluginWebExternalTitle": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "pluginWebExternalBody": "插件页面要打开 {value}。链接会在系统浏览器中打开，插件看不到之后的内容。",
+  "@pluginWebExternalBody": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "pluginWebExternalOpen": "打开链接",
+  "pluginWebNavigationBlocked": "已阻止插件页面打开 {value}",
+  "@pluginWebNavigationBlocked": {
+    "placeholders": {
+      "value": {}
+    }
+  },
   "pluginPages": "插件页面",
   "pluginActionFailed": "无法完成「{value}」：{value2}",
   "@pluginActionFailed": {

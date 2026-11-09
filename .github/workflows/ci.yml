@@ -155,6 +155,8 @@ jobs:
       - run: go build -o "$RUNNER_TEMP/coursive-daemon" ./cmd/coursive-daemon
         working-directory: daemon
       - run: node agent/scripts/review-lab-e2e.mjs --daemon "$RUNNER_TEMP/coursive-daemon"
+      # A hostile Web UI page in the runner's Chrome (WEB-01/02).
+      - run: node agent/scripts/web-ui-e2e.mjs --daemon "$RUNNER_TEMP/coursive-daemon" --browser "$(command -v google-chrome)"
 
   app:
     name: app (Flutter)

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -376,6 +376,65 @@ test("the action bridge runs v3 read actions with their view state and nothing e
 	await assert.rejects(host.bridgeAction("cards", "next"), /未启用/);
 });
 
+test("web-ui resources are indexed at install and re-verified before they are served", async (t) => {
+	const { host, root, write } = await fixture(t);
+	await host.setAllowThirdParty(true);
+	const src = join(root, "board");
+	const manifest = (extra = {}) => ({
+		name: "p-board",
+		version: "1.0.0",
+		coursive: {
+			id: "board",
+			title: "面板",
+			summary: "测试插件",
+			api: "^3.0.0",
+			runtime: [{ kind: "pi", entry: "index.mjs" }, { kind: "web-ui", entry: "web", optional: true }],
+			hosts: ["example.org"],
+			contributes: { pages: [{ id: "board", title: "面板", renderer: "web-ui", entry: "web/app.js", styles: ["web/app.css"] }] },
+			...extra,
+		},
+	});
+	await write(src, { "package.json": manifest(), "index.mjs": "export function activate() {}", "web/app.js": "document.title = 'board';", "web/app.css": "body { margin: 0 }", "web/img/dot.svg": "<svg/>" });
+	await install(host, `path:${src}`);
+	const page = await host.webPage("board", "board");
+	assert.equal(page.entry, "web/app.js");
+	assert.deepEqual(page.styles, ["web/app.css"]);
+	assert.deepEqual(page.hosts, ["example.org"]);
+	assert.deepEqual(page.files.map((f) => [f.path, f.type]), [["web/app.css", "text/css"], ["web/app.js", "text/javascript"], ["web/img/dot.svg", "image/svg+xml"]]);
+	assert.equal(Buffer.from(page.files[1].data, "base64").toString(), "document.title = 'board';");
+	await assert.rejects(host.webPage("board", "missing"), { status: 404 });
+
+	// The installed package changes on disk: a changed, an added and a removed file are all refused.
+	const pkgs = join(root, "data", "plugins", "pkgs", "board");
+	await writeFile(join(pkgs, "web", "app.js"), "fetch('http://127.0.0.1')");
+	await assert.rejects(host.webPage("board", "board"), { status: 409, message: /web\/app\.js 与安装时不一致/ });
+	await writeFile(join(pkgs, "web", "app.js"), "document.title = 'board';");
+	await writeFile(join(pkgs, "web", "extra.js"), "1");
+	await assert.rejects(host.webPage("board", "board"), /web\/extra\.js 与安装时不一致/);
+	await rm(join(pkgs, "web", "extra.js"));
+	await rm(join(pkgs, "web", "img", "dot.svg"));
+	await assert.rejects(host.webPage("board", "board"), /dot\.svg 与安装时不一致/);
+	// Re-consent indexes the package again.
+	await host.update("board", { grant: true });
+	assert.equal((await host.webPage("board", "board")).files.length, 2);
+
+	// Install refuses a symlink, an unknown type, an oversized file and a missing directory.
+	const refuse = async (files, re) => {
+		const dir = await mkdtemp(join(root, "bad-"));
+		await write(dir, { "package.json": manifest(), "index.mjs": "export function activate() {}", "web/app.js": "1", ...files });
+		await assert.rejects(host.preview(`path:${dir}`), re);
+	};
+	const dir = await mkdtemp(join(root, "link-"));
+	await write(dir, { "package.json": manifest(), "index.mjs": "export function activate() {}", "web/app.js": "1" });
+	await symlink(join(root, "data", "plugins.json"), join(dir, "web", "leak.json"));
+	await assert.rejects(host.preview(`path:${dir}`), /符号链接/);
+	await refuse({ "web/page.html": "<script></script>" }, /类型不受支持/);
+	await refuse({ "web/big.js": "x".repeat(256 * 1024 + 1) }, /超过 256 KB/);
+	const none = await mkdtemp(join(root, "none-"));
+	await write(none, { "package.json": manifest(), "index.mjs": "export function activate() {}" });
+	await assert.rejects(host.preview(`path:${none}`), /找不到网页资源目录 web/);
+});
+
 test("a v3 manifest is checked by the shared rules and then by this host", () => {
 	const v3 = (coursive, contributes) => ({
 		name: "p-v3",
@@ -388,7 +447,21 @@ test("a v3 manifest is checked by the shared rules and then by this host", () =>
 	bad(v3({ engine: "^1.0.0" }), /coursive\.engine.*coursive\.api/);
 	bad(v3({ api: "^4.0.0" }), /插件接口/);
 	bad(v3({ runtime: [{ kind: "moejs", entry: "x.js" }] }), /moejs/);
-	assert.equal(validateManifest(v3({ runtime: [{ kind: "pi", entry: "index.mjs" }, { kind: "web-ui", entry: "ui/index.html", optional: true }] })).agent, "index.mjs");
+	const webRuntime = { runtime: [{ kind: "pi", entry: "index.mjs" }, { kind: "web-ui", entry: "./ui", optional: true }] };
+	const webPage = (extra) => ({ pages: [{ id: "p", title: "P", renderer: "web-ui", entry: "ui/app.js", ...extra }] });
+	assert.equal(validateManifest(v3(webRuntime)).agent, "index.mjs");
+	assert.equal(validateManifest(v3(webRuntime)).web, "ui");
+	assert.deepEqual(validateManifest(v3(webRuntime, webPage({ styles: ["./ui/app.css"] }))).contributes.pages[0], {
+		id: "p", title: "P", icon: "extension", renderer: "web-ui", order: 100, entry: "ui/app.js", styles: ["ui/app.css"],
+	});
+	assert.ok(validateManifest(v3(webRuntime, webPage({ document: doc() }))).contributes.pages[0].document);
+	bad(v3(webRuntime, webPage({ entry: "app.js" })), /ui\/ 目录内的 \.js/);
+	bad(v3(webRuntime, webPage({ entry: "ui/../../index.mjs" })), /相对路径/);
+	bad(v3(webRuntime, webPage({ entry: "ui/../index.js" })), /ui\/ 目录内/);
+	bad(v3(webRuntime, webPage({ entry: "ui/app.html" })), /\.js 文件/);
+	bad(v3(webRuntime, webPage({ styles: ["ui/app.js"] })), /\.css 文件/);
+	bad(v3({ runtime: [{ kind: "pi", entry: "index.mjs" }, { kind: "web-ui", entry: "a", optional: true }, { kind: "web-ui", entry: "b", optional: true }] }), /一个 web-ui/);
+	bad(v3({}, { pages: [{ id: "p", title: "P", entry: "ui/app.js", document: doc() }] }), /只属于 web-ui/);
 	bad(v3({ permissions: ["source"] }), /来源插件/);
 	bad(v3({}, { pages: [{ id: "p", title: "P" }] }), /document/);
 	bad(v3({}, { pages: [{ id: "p", title: "P", renderer: "web-ui", document: doc() }] }), /web-ui/);

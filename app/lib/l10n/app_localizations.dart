@@ -9683,6 +9683,54 @@ abstract class AppLocalizations {
   /// **'打开原生页面'**
   String get pluginWebOpenNative;
 
+  /// No description provided for @pluginWebReasonReviewPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个平台的 Web UI 渲染器还没有通过单独的安全评审，评审通过前插件页面改用原生方式打开。'**
+  String get pluginWebReasonReviewPending;
+
+  /// No description provided for @pluginWebLoading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在打开插件页面…'**
+  String get pluginWebLoading;
+
+  /// No description provided for @pluginWebPreview.
+  ///
+  /// In zh, this message translates to:
+  /// **'实验预览：这个 Web UI 渲染器还没有通过安全评审，只用于开发验证。'**
+  String get pluginWebPreview;
+
+  /// No description provided for @pluginWebOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开插件页面：{value}'**
+  String pluginWebOpenFailed(Object value);
+
+  /// No description provided for @pluginWebExternalTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'在浏览器中打开「{value}」吗？'**
+  String pluginWebExternalTitle(Object value);
+
+  /// No description provided for @pluginWebExternalBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件页面要打开 {value}。链接会在系统浏览器中打开，插件看不到之后的内容。'**
+  String pluginWebExternalBody(Object value);
+
+  /// No description provided for @pluginWebExternalOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开链接'**
+  String get pluginWebExternalOpen;
+
+  /// No description provided for @pluginWebNavigationBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'已阻止插件页面打开 {value}'**
+  String pluginWebNavigationBlocked(Object value);
+
   /// No description provided for @pluginPages.
   ///
   /// In zh, this message translates to:

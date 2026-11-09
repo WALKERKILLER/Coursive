@@ -687,6 +687,8 @@ route("POST", "/plugins/([a-z][a-z0-9-]+)/actions/([a-z][a-z0-9_]*)", async (req
 // The daemon's action bridge (POST /api/plugin-actions) calls this after its own
 // checks; the daemon does not proxy it from the app.
 route("POST", "/plugins/([a-z][a-z0-9-]+)/bridge/([a-z0-9][a-z0-9._-]*)", async (req, [id, action]) => plugins.bridgeAction(id, action, await body(req)));
+// The daemon builds a Web UI page from these resources (POST /api/plugin-web/sessions).
+route("GET", "/plugins/([a-z][a-z0-9-]+)/web/([a-z0-9][a-z0-9._-]*)", async (_req, [id, page]) => plugins.webPage(id, page));
 route("PUT", "/plugins/([a-z][a-z0-9-]+)", async (req, [id]) => changed(await plugins.update(id, await body(req))));
 route("DELETE", "/plugins/([a-z][a-z0-9-]+)", async (_req, [id]) => {
 	await plugins.uninstall(id);

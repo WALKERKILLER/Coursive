@@ -53,6 +53,13 @@ func fakeHost(t *testing.T) (*Supervisor, *[]map[string]any) {
 			json.NewDecoder(r.Body).Decode(&in)
 			bodies = append(bodies, in)
 			json.NewEncoder(w).Encode(map[string]any{"notification": map[string]any{"text": "已保存 " + in["approved"].(string)}})
+		case "GET /plugins/cards/web/board":
+			// "ZG9jdW1lbnQ=" is base64 for "document".
+			w.Write([]byte(`{"pluginId":"cards","pageId":"board","title":"面板","entry":"web/app.js","styles":[],"hosts":[],
+				"files":[{"path":"web/app.js","type":"text/javascript","sha256":"x","data":"ZG9jdW1lbnQ="}]}`))
+		case "GET /plugins/cards/web/changed":
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte(`{"error":"网页资源 web/app.js 与安装时不一致，请重新安装插件"}`))
 		case "POST /plugins/cards/bridge/slow":
 			w.WriteHeader(http.StatusGatewayTimeout)
 			w.Write([]byte(`{"error":"插件动作超时"}`))
@@ -187,5 +194,19 @@ func TestPluginsBridgeRefusals(t *testing.T) {
 	sup.set(Status{State: "crashed"})
 	if err := call("cards", "next"); err == nil || err.Code != pluginbridge.CodeUnavailable || !err.Recoverable {
 		t.Fatalf("host down = %+v", err)
+	}
+}
+
+// A web-ui page's resources come from the host as served, and a host refusal
+// keeps its message for the app's fallback page.
+func TestPluginsWebPage(t *testing.T) {
+	sup, _ := fakeHost(t)
+	p := &Plugins{Agent: sup}
+	bundle, err := p.WebPage(context.Background(), "cards", "board")
+	if err != nil || bundle.Entry != "web/app.js" || len(bundle.Files) != 1 || string(bundle.Files[0].Data) != "document" {
+		t.Fatalf("WebPage = %+v, %v", bundle, err)
+	}
+	if _, err := p.WebPage(context.Background(), "cards", "changed"); err == nil || !strings.Contains(err.Error(), "与安装时不一致") {
+		t.Fatalf("a host refusal = %v", err)
 	}
 }
