@@ -4,14 +4,15 @@
 // page may render at all.
 //
 // Contract: docs/specs/0032-ui-extension-protocol.md (Isolated Web UI). This
-// file is policy only: it starts no browser engine, loads no page and holds no
-// credential. A platform renderer (a real WebView) is a later admission step;
-// until one passes, every platform reports a fallback reason and the app keeps
-// the native L1/L2 surfaces usable.
+// file is policy only: it starts no browser engine and holds no credential.
+// webui_page.go builds the page a renderer loads; the renderer itself is the
+// app's WebView, and a platform opens it only once the admission record says
+// so — until then the app keeps the native L1/L2 surfaces usable.
 package pluginfabric
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -75,22 +76,24 @@ func NormalizeWebUIOrigin(raw string) (string, bool) {
 	return scheme + "://" + host, true
 }
 
-// WebUICSP is the Content-Security-Policy of a plugin page. External resources
-// are denied: the plugin's own read-only package is the only source, and an
-// approved network request goes through the daemon broker instead of
-// connect-src. Windows may not open, frames and workers do not exist, forms and
-// plugins are off, and the page may not be framed by anything.
-func WebUICSP() string {
+// WebUICSP is the Content-Security-Policy of one plugin page. The host inlines
+// the plugin's own script and styles under the page nonce, so nothing else
+// runs: no other inline script, no eval, no external source. Images and fonts
+// are the package's own, inlined as data URLs; an approved network request goes
+// through the daemon broker instead of connect-src. Frames, workers, objects,
+// forms and a base change do not exist. The policy is delivered in a meta
+// element, which cannot carry frame-ancestors; the page is the WebView's top
+// document, so nothing frames it.
+func WebUICSP(nonce string) string {
 	return strings.Join([]string{
 		"default-src 'none'",
-		"script-src 'self'",
-		"style-src 'self'",
-		"img-src 'self'",
-		"font-src 'self'",
-		"media-src 'self'",
+		"script-src 'nonce-" + nonce + "'",
+		"style-src 'nonce-" + nonce + "'",
+		"img-src data:",
+		"font-src data:",
+		"media-src 'none'",
 		"connect-src 'none'",
 		"frame-src 'none'",
-		"frame-ancestors 'none'",
 		"worker-src 'none'",
 		"child-src 'none'",
 		"object-src 'none'",
@@ -130,8 +133,8 @@ const (
 // WebUIURLDecision is the policy answer for one target, with the reason code
 // that explains it.
 type WebUIURLDecision struct {
-	Decision string
-	Reason   string
+	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
 }
 
 // Allowed reports whether the page may open the target at all.
@@ -396,28 +399,8 @@ type WebUIBridge struct {
 // replayed message cannot act a second time; a retry uses a new request id.
 func (b *WebUIBridge) Handle(ctx context.Context, session WebUISession, plugin WebUIPlugin, msg WebUIBridgeMessage) WebUIOutcome {
 	out := WebUIOutcome{RequestID: msg.RequestID, TraceID: msg.TraceID}
-	if err := checkSession(session, plugin); err != nil {
-		return refuse(out, err)
-	}
-	if err := checkEnvelope(msg); err != nil {
-		return refuse(out, err)
-	}
-	if err := checkIdentity(session, plugin, msg); err != nil {
-		return refuse(out, err)
-	}
-	if err := checkNoSecrets(msg.Args); err != nil {
-		return refuse(out, err)
-	}
-	action, err := findWebUIAction(plugin, msg.Action)
+	action, err := b.Verify(session, plugin, msg)
 	if err != nil {
-		return refuse(out, err)
-	}
-	if action.Permission != "" && !hasPermission(plugin.Permissions, action.Permission) {
-		return refuse(out, &WebUIError{Code: WebUICodePermissionDenied,
-			Message: fmt.Sprintf("插件 %s 没有获得 %s 权限", plugin.ID, action.Permission),
-			Details: map[string]any{"pluginId": plugin.ID, "permission": action.Permission, "action": action.ID}})
-	}
-	if err := b.claimRequest(session, msg); err != nil {
 		return refuse(out, err)
 	}
 	deadlineMs := msg.DeadlineMs
@@ -455,6 +438,66 @@ func (b *WebUIBridge) Handle(ctx context.Context, session WebUISession, plugin W
 	}
 	out.OK, out.Result = true, &WebUIResult{Payload: payload}
 	return out
+}
+
+// Verify runs every check that comes before an action: the session, the
+// envelope, the identity fields against the session, credentials in the
+// arguments, the declared action and its own permission. It then claims the
+// request id, so a replayed message is refused. The daemon's page route
+// forwards a verified message to the action bridge, which runs a read or turns
+// a write into a pending proposal.
+func (b *WebUIBridge) Verify(session WebUISession, plugin WebUIPlugin, msg WebUIBridgeMessage) (WebUIAction, *WebUIError) {
+	if err := checkSession(session, plugin); err != nil {
+		return WebUIAction{}, err
+	}
+	if err := checkEnvelope(msg); err != nil {
+		return WebUIAction{}, err
+	}
+	if err := checkIdentity(session, plugin, msg); err != nil {
+		return WebUIAction{}, err
+	}
+	if err := checkNoSecrets(msg.Args); err != nil {
+		return WebUIAction{}, err
+	}
+	action, err := findWebUIAction(plugin, msg.Action)
+	if err != nil {
+		return WebUIAction{}, err
+	}
+	if action.Permission != "" && !hasPermission(plugin.Permissions, action.Permission) {
+		return WebUIAction{}, &WebUIError{Code: WebUICodePermissionDenied,
+			Message: fmt.Sprintf("插件 %s 没有获得 %s 权限", plugin.ID, action.Permission),
+			Details: map[string]any{"pluginId": plugin.ID, "permission": action.Permission, "action": action.ID}}
+	}
+	if err := b.claimRequest(session, msg); err != nil {
+		return WebUIAction{}, err
+	}
+	return action, nil
+}
+
+// NewWebUISession opens a page session for one plugin: its controlled origin
+// and a fresh instance id and nonce the page carries in every message.
+func NewWebUISession(pluginID string) (WebUISession, error) {
+	origin, err := WebUIOrigin(pluginID)
+	if err != nil {
+		return WebUISession{}, err
+	}
+	return WebUISession{PluginID: pluginID, InstanceID: "web-" + randomHex(16), Origin: origin, Nonce: randomHex(16)}, nil
+}
+
+// WebUIFrameOrigin is the controlled origin of the URL a renderer reports for
+// the frame a message came from; any other URL has none.
+func WebUIFrameOrigin(raw string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.User != nil || u.Port() != "" || u.Opaque != "" {
+		return "", false
+	}
+	return NormalizeWebUIOrigin(u.Scheme + "://" + u.Host)
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // Proposal returns a stored proposal. This is the seam the existing approval
@@ -690,25 +733,41 @@ const (
 	FallbackPlatformUnsupported = "platform-unsupported"
 	FallbackPlatformNeedsReview = "platform-needs-review"
 	FallbackRendererMissing     = "renderer-missing"
+	FallbackReviewPending       = "review-pending"
 	FallbackPluginInactive      = "plugin-inactive"
 	FallbackResourcesMissing    = "resources-missing"
 )
 
+// Security review states of a platform renderer.
+const (
+	ReviewPending = "pending"
+	ReviewPassed  = "passed"
+)
+
 // WebUIAdmission is one platform's admission record: what the platform policy
-// allows, and whether this build can actually render a page there. No platform
-// ships a renderer yet, so Renderer is false everywhere and the app shows the
-// native fallback while L1/L2 stay usable.
+// allows, whether the app has a renderer there, and whether that renderer
+// passed its separate security review. A page renders for users only after the
+// review passed; before that it opens only in the daemon's experimental preview,
+// and the app shows the native fallback while L1/L2 stay usable.
 type WebUIAdmission struct {
 	Platform string `json:"platform"`
 	Status   string `json:"status"`
 	Engine   string `json:"engine,omitempty"`
 	Renderer bool   `json:"renderer"`
+	Review   string `json:"review"`
 	Reason   string `json:"reason"`
 }
 
 // Available reports whether a plugin Web UI page may render on this platform
-// with this build.
+// for users.
 func (a WebUIAdmission) Available() bool {
+	return a.Previewable() && a.Review == ReviewPassed
+}
+
+// Previewable reports whether the experimental preview (COURSIVE_WEBUI_PREVIEW)
+// may open a page here before the review passed: the platform is admitted and
+// the app has a renderer for it.
+func (a WebUIAdmission) Previewable() bool {
 	return a.Status == AdmissionSupported && a.Renderer
 }
 
@@ -721,6 +780,8 @@ func (a WebUIAdmission) FallbackReason() string {
 		return FallbackPlatformNeedsReview
 	case !a.Renderer:
 		return FallbackRendererMissing
+	case a.Review != ReviewPassed:
+		return FallbackReviewPending
 	}
 	return ""
 }
@@ -742,22 +803,24 @@ func WebUIAdmissionFor(platform string) WebUIAdmission {
 	if a, ok := webUIAdmissions[key]; ok {
 		return a
 	}
-	return WebUIAdmission{Platform: key, Status: AdmissionUnsupported,
+	return WebUIAdmission{Platform: key, Status: AdmissionUnsupported, Review: ReviewPending,
 		Reason: "这个平台不在 Web UI 准入矩阵中，插件页面改用原生渲染"}
 }
 
 // webUIAdmissions is the matrix spec 0032 requires: Android and macOS are the
-// platforms validated first, Windows and Linux need their engine, packaging,
-// hardware-acceleration, input-method, stylus and window-layer review, and no
-// platform has a renderer in this build.
+// platforms validated first and the app renders pages there with the system
+// WebView; Windows and Linux need their engine, packaging,
+// hardware-acceleration, input-method, stylus and window-layer review and have
+// no renderer. Review is the security review recorded in the spec's Web UI
+// release gate; TestWebUIReleaseGate keeps the two in step.
 var webUIAdmissions = map[string]WebUIAdmission{
-	"android": {Platform: "android", Status: AdmissionSupported, Engine: "system-webview",
-		Reason: "Android 自带可更新的系统 WebView，是优先验证的平台；本版本还没有内置渲染器"},
-	"macos": {Platform: "macos", Status: AdmissionSupported, Engine: "wkwebview",
-		Reason: "macOS 的 WKWebView 是优先验证的平台；本版本还没有内置渲染器"},
-	"windows": {Platform: "windows", Status: AdmissionNeedsReview, Engine: "webview2",
+	"android": {Platform: "android", Status: AdmissionSupported, Engine: "system-webview", Renderer: true, Review: ReviewPending,
+		Reason: "Android 系统 WebView 渲染器等待单独的安全评审；评审通过前只在实验预览中打开"},
+	"macos": {Platform: "macos", Status: AdmissionSupported, Engine: "wkwebview", Renderer: true, Review: ReviewPending,
+		Reason: "macOS WKWebView 渲染器等待单独的安全评审；评审通过前只在实验预览中打开"},
+	"windows": {Platform: "windows", Status: AdmissionNeedsReview, Engine: "webview2", Review: ReviewPending,
 		Reason: "需要测评 WebView2 引擎、安装器、硬件加速、输入法与窗口层级"},
-	"linux": {Platform: "linux", Status: AdmissionNeedsReview, Engine: "webkitgtk",
+	"linux": {Platform: "linux", Status: AdmissionNeedsReview, Engine: "webkitgtk", Review: ReviewPending,
 		Reason: "需要测评 WebKitGTK 动态库分发、Wayland/X11 输入法、触控笔与窗口层级"},
 }
 

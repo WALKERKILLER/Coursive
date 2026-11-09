@@ -16,7 +16,7 @@ import 'core/plugins.dart';
 import 'core/plugin_navigation.dart';
 import 'core/ui_slots.dart';
 import 'features/plugins/plugin_contributions.dart';
-import 'features/plugins/plugin_web_fallback.dart';
+import 'features/plugins/plugin_web_page.dart';
 import 'core/profile.dart';
 import 'features/assistant/assistant_controller.dart';
 import 'features/assistant/task_inbox.dart';

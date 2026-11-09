@@ -225,6 +225,8 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 	// of the approval mode until the Plugin Fabric store lands.
 	hostPlugins := &agent.Plugins{Agent: sup}
 	srv.PluginActions = &pluginbridge.Bridge{Registry: hostPlugins, Executor: hostPlugins, Approvals: hostPlugins}
+	srv.PluginWebPages = hostPlugins
+	srv.PluginWebPreview = os.Getenv("COURSIVE_WEBUI_PREVIEW") == "1"
 	srv.Notes = notify.Open(filepath.Join(dataDir, "notifications.json"), func(it notify.Item) { bus.Publish("notification", it) })
 	srv.ApplySettings(ctx)
 	mgr.Source = srv.Source

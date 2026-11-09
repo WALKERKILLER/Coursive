@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/walkerkiller/coursive/daemon/internal/pluginbridge"
+	"github.com/walkerkiller/coursive/daemon/internal/pluginfabric"
 )
 
 // maxHostBody bounds an answer the daemon reads from the host.
@@ -175,6 +176,21 @@ func (p *Plugins) Execute(ctx context.Context, call pluginbridge.Call) (pluginbr
 		return result, hostActionErr(call, he)
 	}
 	return result, err
+}
+
+// WebPage reads a web-ui page's resources from the host, which checks them
+// against the index it recorded at install (`GET /plugins/{id}/web/{pageId}`).
+func (p *Plugins) WebPage(ctx context.Context, pluginID, pageID string) (pluginfabric.WebUIBundle, error) {
+	var bundle pluginfabric.WebUIBundle
+	path := "/plugins/" + url.PathEscape(pluginID) + "/web/" + url.PathEscape(pageID)
+	if err := p.Agent.Call(ctx, http.MethodGet, path, nil, &bundle); err != nil {
+		var he *HostError
+		if errors.As(err, &he) {
+			return bundle, errors.New(he.Message)
+		}
+		return bundle, err
+	}
+	return bundle, nil
 }
 
 // ApprovalMode is the assistant's approval mode (docs/specs/0016-agent-acts.md),

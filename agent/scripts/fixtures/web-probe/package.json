@@ -1,0 +1,27 @@
+{
+	"name": "coursive-plugin-web-probe",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "A hostile Web UI page for web-ui-e2e.mjs: it attacks the daemon from inside the page and reports what got through.",
+	"coursive": {
+		"id": "web-probe",
+		"title": "网页探针",
+		"summary": "测试 Web UI 隔离的恶意页面",
+		"api": "^3.0.0",
+		"permissions": ["library.read", "library.write"],
+		"hosts": ["example.org"],
+		"runtime": [
+			{ "kind": "pi", "entry": "index.mjs" },
+			{ "kind": "web-ui", "entry": "web", "optional": true }
+		],
+		"contributes": {
+			"actions": [
+				{ "id": "cards", "title": "读取卡片", "action": "cards", "permission": "library.read" },
+				{ "id": "report", "title": "报告结果", "action": "report" },
+				{ "id": "save", "title": "保存复习卡", "action": "save", "permission": "library.write", "write": true }
+			],
+			"pages": [{ "id": "probe", "title": "探针", "renderer": "web-ui", "entry": "web/probe.js", "styles": ["web/probe.css"] }]
+		}
+	}
+}

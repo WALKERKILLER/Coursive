@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/plugin_navigation.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
 
@@ -32,6 +31,7 @@ enum PluginWebFallbackReason {
   platformUnsupported('platform-unsupported'),
   platformNeedsReview('platform-needs-review'),
   rendererMissing('renderer-missing'),
+  reviewPending('review-pending'),
   pluginInactive('plugin-inactive'),
   resourcesMissing('resources-missing');
 
@@ -39,11 +39,12 @@ enum PluginWebFallbackReason {
 
   final String code;
 
-  /// No reason means this build has no WebView renderer, which is the state of
-  /// every platform today.
+  /// An unknown or missing reason is read as a missing renderer, never as a
+  /// page that may render.
   static PluginWebFallbackReason fromCode(Object? code) => switch ('$code') {
     'platform-unsupported' => PluginWebFallbackReason.platformUnsupported,
     'platform-needs-review' => PluginWebFallbackReason.platformNeedsReview,
+    'review-pending' => PluginWebFallbackReason.reviewPending,
     'plugin-inactive' => PluginWebFallbackReason.pluginInactive,
     'resources-missing' => PluginWebFallbackReason.resourcesMissing,
     _ => PluginWebFallbackReason.rendererMissing,
@@ -56,6 +57,7 @@ enum PluginWebFallbackReason {
       l10n.pluginWebReasonNeedsReview,
     PluginWebFallbackReason.rendererMissing =>
       l10n.pluginWebReasonRendererMissing,
+    PluginWebFallbackReason.reviewPending => l10n.pluginWebReasonReviewPending,
     PluginWebFallbackReason.pluginInactive =>
       l10n.pluginWebReasonPluginInactive,
     PluginWebFallbackReason.resourcesMissing =>
@@ -218,20 +220,4 @@ class PluginWebFallbackPage extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The page builder for a `web-ui` contribution. No WebView is shipped in this
-/// build, so every such page explains itself through [PluginWebFallbackPage]
-/// instead of rendering blank; a page that publishes its admission and fallback
-/// reason gets the exact wording. The host passes `onOpenNative` when it knows
-/// which native page of the same plugin to offer.
-Widget pluginWebPageBuilder(BuildContext context, PluginPageContribution page) {
-  return PluginWebFallbackPage(
-    pluginTitle: page.title,
-    admission: PluginWebAdmission.fromCode(page.view['admission']),
-    reason: PluginWebFallbackReason.fromCode(page.view['fallbackReason']),
-    detail: page.view['fallbackDetail'] is String
-        ? '${page.view['fallbackDetail']}'
-        : null,
-  );
 }

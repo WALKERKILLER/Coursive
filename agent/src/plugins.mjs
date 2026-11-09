@@ -4,10 +4,10 @@
 // docs/decisions/0005-plugins-as-pi-extensions-with-declarative-views.md
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn as spawnProcess, execFile } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
-import { chmod, cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { chmod, cp, lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { problems, satisfiesApi, trimDotSlash } from "./plugin-manifest.mjs";
@@ -43,6 +43,25 @@ const RESERVED = new Set(["catalog", "catalogs", "install", "third-party"]);
 const NAME = /^[a-z][a-z0-9_]{0,39}$/;
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/;
 const MAX_VIEW_BYTES = 256 * 1024;
+// The static resources of a `web-ui` runtime (docs/specs/0032-ui-extension-protocol.md,
+// Isolated Web UI): the file types a page may ship and the size the daemon
+// inlines into one page.
+const WEB_TYPES = {
+	".js": "text/javascript",
+	".css": "text/css",
+	".json": "application/json",
+	".txt": "text/plain",
+	".svg": "image/svg+xml",
+	".png": "image/png",
+	".jpg": "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif": "image/gif",
+	".webp": "image/webp",
+	".woff2": "font/woff2",
+};
+const MAX_WEB_FILES = 64;
+const MAX_WEB_FILE = 256 * 1024;
+const MAX_WEB_BYTES = 512 * 1024;
 const ACTION_TIMEOUT_MS = 60_000;
 
 // The abort signal of the action whose code is running (it follows awaits),
@@ -324,7 +343,7 @@ function manifestV1(pkg) {
 // field is refused, so a typo does not silently drop a setting.
 const V3_FIELDS = {
 	navigation: ["id", "title", "icon", "page", "order"],
-	pages: ["id", "title", "icon", "renderer", "document", "order"],
+	pages: ["id", "title", "icon", "renderer", "document", "entry", "styles", "order"],
 	slots: ["id", "target", "mode", "order", "priority", "document"],
 	actions: ["id", "title", "icon", "action", "surface", "permission", "write", "params"],
 };
@@ -349,6 +368,10 @@ function manifestV3(pkg) {
 	if (pis.length > 1) throw bad("只能声明一个 pi 运行时");
 	const pi = pis[0];
 	if (pi && typeof pi.entry !== "string") throw bad("pi 运行时的 entry 应为一个路径");
+	const webs = runtime.filter((r) => r.kind === "web-ui");
+	if (webs.length > 1) throw bad("只能声明一个 web-ui 运行时");
+	if (webs[0] && typeof webs[0].entry !== "string") throw bad("web-ui 运行时的 entry 应为资源目录的路径");
+	const web = webs[0] ? relPath(trimDotSlash(webs[0].entry), "web-ui 运行时的 entry") : null;
 
 	const c = m.contributes ?? {};
 	if (list(c.sources, "contributes.sources").length) throw bad("来源由守护进程的来源插件提供，不能声明在助手插件里");
@@ -388,10 +411,29 @@ function manifestV3(pkg) {
 		for (const a of documentActions(d.body)) if (!actionIds.has(a)) throw bad(`${what} 的按钮指向未声明的动作 ${a}`);
 		return d;
 	};
+	// A web-ui page names its script and styles inside the web-ui resource
+	// directory; its optional document is the native page shown where Web UI
+	// cannot render.
+	const webFile = (p, ext, what) => {
+		const path = relPath(typeof p === "string" ? trimDotSlash(p) : p, what);
+		if (!path.startsWith(`${web}${sep}`) || extname(path) !== ext) throw bad(`${what} 应为 ${web}/ 目录内的 ${ext} 文件`);
+		return path.split(sep).join("/");
+	};
 	const pages = group("pages").map((e) => {
 		const renderer = e.renderer ?? "declarative";
+		const head = { id: e.id, title: str(e.title, 16, `pages「${e.id}」的 title`), icon: iconName(e.icon), renderer, order: e.order ?? 100 };
+		if (renderer === "web-ui") {
+			if (!web) throw bad(`pages「${e.id}」使用 web-ui，需要声明 web-ui 运行时：{kind: "web-ui", entry: "<资源目录>", optional: true}`);
+			return {
+				...head,
+				entry: webFile(e.entry, ".js", `pages「${e.id}」的 entry`),
+				styles: list(e.styles, `pages「${e.id}」的 styles`).map((p) => webFile(p, ".css", `pages「${e.id}」的 styles`)),
+				...(e.document !== undefined ? { document: document(e.document, `pages「${e.id}」`) } : {}),
+			};
+		}
 		if (renderer !== "declarative") throw bad(`pages「${e.id}」的 renderer ${renderer} 在此版本中不可用`);
-		return { id: e.id, title: str(e.title, 16, `pages「${e.id}」的 title`), icon: iconName(e.icon), renderer, order: e.order ?? 100, document: document(e.document, `pages「${e.id}」`) };
+		if (e.entry !== undefined || e.styles !== undefined) throw bad(`pages「${e.id}」的 entry 和 styles 只属于 web-ui 页面`);
+		return { ...head, document: document(e.document, `pages「${e.id}」`) };
 	});
 	const slots = group("slots").map((e) => {
 		const mode = SLOT_TARGETS[e.target];
@@ -411,6 +453,7 @@ function manifestV3(pkg) {
 		api: m.api,
 		agent: pi ? relPath(trimDotSlash(pi.entry), "runtime.entry") : null,
 		skills: list(pi?.skills, "runtime.skills").map((p) => relPath(trimDotSlash(p), "runtime.skills")),
+		web: web && web.split(sep).join("/"),
 		views,
 		requires: list(m.requires, "requires").map((x) => ({ service: x.service, version: x.version, optional: x.optional === true })),
 		provides: list(m.provides, "provides").map((x) => ({ service: x.service, version: x.version })),
@@ -654,8 +697,9 @@ export class PluginHost {
 			}
 			const manifest = await this.readManifest(dir);
 			if (!official && (await this.isOfficialId(manifest.id))) throw bad(`id ${manifest.id} 属于官方插件`);
+			const web = await webIndex(dir, manifest.web);
 			const old = this.state.plugins[manifest.id];
-			this.staged.set(token, { dir, manifest, source, official, at: Date.now() });
+			this.staged.set(token, { dir, manifest, source, official, web, at: Date.now() });
 			setTimeout(() => this.dropStaged(token), 10 * 60_000).unref?.();
 			return {
 				token,
@@ -685,7 +729,7 @@ export class PluginHost {
 		const s = this.staged.get(token);
 		if (!s) throw bad("安装预览已过期，请重新安装", 410);
 		this.staged.delete(token);
-		const { manifest, dir, source, official } = s;
+		const { manifest, dir, source, official, web } = s;
 		try {
 			if (!official) {
 				const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
@@ -708,6 +752,7 @@ export class PluginHost {
 				enabled: true,
 				granted: manifest.permissions,
 				settings: applySettings(manifest.settings, {}, old?.settings ?? {}),
+				...(web ? { web } : {}),
 				installed_at: old?.installed_at ?? Date.now(),
 				updated_at: Date.now(),
 			};
@@ -725,9 +770,13 @@ export class PluginHost {
 		if (!s) throw bad("插件未安装", 404);
 		const m = await this.readManifest(this.dirOf(id));
 		if (grant === true) {
-			// Re-consent after an update on disk asked for more.
+			// Re-consent after an update on disk asked for more; the Web UI
+			// resources are indexed again with it.
 			s.granted = m.permissions;
 			s.version = m.version;
+			const web = await webIndex(this.dirOf(id), m.web);
+			if (web) s.web = web;
+			else delete s.web;
 		}
 		if (settings !== undefined) s.settings = applySettings(m.settings, settings, s.settings);
 		if (enabled !== undefined) s.enabled = enabled === true;
@@ -1053,6 +1102,34 @@ export class PluginHost {
 		return bridgeResult(await invoke(handler, object(args), extra, timeoutMs));
 	}
 
+	/**
+	 * The resources of one web-ui page for the daemon, which builds the page
+	 * (`POST /api/plugin-web/sessions`). Every file is read and hashed again and
+	 * must match the index recorded at install, so a package changed on disk
+	 * since then is refused rather than served.
+	 */
+	async webPage(id, pageId) {
+		const rec = this.enabled(id);
+		const page = rec.manifest.schema === 3 ? rec.manifest.contributes.pages.find((p) => p.id === pageId && p.renderer === "web-ui") : undefined;
+		if (!page) throw bad(`插件没有网页页面 ${pageId}`, 404);
+		const recorded = this.state.plugins[id].web;
+		if (!recorded) throw bad("网页资源没有安装记录，请重新安装插件", 409);
+		const files = await readWeb(rec.dir, rec.manifest.web);
+		const paths = new Set([...Object.keys(recorded), ...files.map((f) => f.path)]);
+		for (const p of paths) {
+			if (recorded[p] !== files.find((f) => f.path === p)?.sha256) throw bad(`网页资源 ${p} 与安装时不一致，请重新安装插件`, 409);
+		}
+		return {
+			pluginId: id,
+			pageId,
+			title: page.title,
+			entry: page.entry,
+			styles: page.styles,
+			hosts: rec.manifest.hosts,
+			files: files.map((f) => ({ path: f.path, type: f.type, sha256: f.sha256, data: f.bytes.toString("base64") })),
+		};
+	}
+
 	enabled(id) {
 		const rec = this.loaded.get(id);
 		if (!rec || !this.state.plugins[id]?.enabled) throw bad("插件未启用", 404);
@@ -1097,6 +1174,48 @@ export class PluginHost {
 }
 
 /** Reads SKILL.md files: `paths` are directories holding SKILL.md, or .md files. */
+/**
+ * Reads a web-ui resource directory: regular files of a known type only, no
+ * symlink and nothing outside the package, within the size caps. A path is
+ * package-relative with "/" separators.
+ */
+async function readWeb(dir, root) {
+	const base = join(dir, root);
+	const st = await lstat(base).catch(() => null);
+	if (!st?.isDirectory()) throw bad(`找不到网页资源目录 ${root}`);
+	if (!(await realpath(base)).startsWith((await realpath(dir)) + sep)) throw bad(`网页资源目录 ${root} 在插件目录之外`);
+	const out = [];
+	let total = 0;
+	const walk = async (rel) => {
+		for (const d of await readdir(join(base, rel), { withFileTypes: true })) {
+			const at = rel ? `${rel}/${d.name}` : d.name;
+			const path = `${root}/${at}`;
+			if (d.isSymbolicLink()) throw bad(`网页资源 ${path} 是符号链接`);
+			if (d.isDirectory()) {
+				await walk(at);
+				continue;
+			}
+			if (!d.isFile()) throw bad(`网页资源 ${path} 不是普通文件`);
+			const type = WEB_TYPES[extname(d.name).toLowerCase()];
+			if (!type) throw bad(`网页资源 ${path} 的类型不受支持`);
+			if (out.length >= MAX_WEB_FILES) throw bad(`网页资源超过 ${MAX_WEB_FILES} 个文件`);
+			const bytes = await readFile(join(base, at));
+			if (bytes.length > MAX_WEB_FILE) throw bad(`网页资源 ${path} 超过 ${MAX_WEB_FILE / 1024} KB`);
+			total += bytes.length;
+			if (total > MAX_WEB_BYTES) throw bad(`网页资源合计超过 ${MAX_WEB_BYTES / 1024} KB`);
+			out.push({ path, type, bytes, sha256: createHash("sha256").update(bytes).digest("hex") });
+		}
+	};
+	await walk("");
+	return out.sort((a, b) => (a.path < b.path ? -1 : 1));
+}
+
+/** The install index of a web-ui resource directory: path → sha256, or null without one. */
+export async function webIndex(dir, root) {
+	if (!root) return null;
+	return Object.fromEntries((await readWeb(dir, root)).map((f) => [f.path, f.sha256]));
+}
+
 async function readSkills(dir, paths) {
 	const out = [];
 	for (const p of paths) {

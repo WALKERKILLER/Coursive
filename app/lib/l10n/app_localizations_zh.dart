@@ -5543,6 +5543,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginWebOpenNative => '打开原生页面';
 
   @override
+  String get pluginWebReasonReviewPending =>
+      '这个平台的 Web UI 渲染器还没有通过单独的安全评审，评审通过前插件页面改用原生方式打开。';
+
+  @override
+  String get pluginWebLoading => '正在打开插件页面…';
+
+  @override
+  String get pluginWebPreview => '实验预览：这个 Web UI 渲染器还没有通过安全评审，只用于开发验证。';
+
+  @override
+  String pluginWebOpenFailed(Object value) {
+    return '无法打开插件页面：$value';
+  }
+
+  @override
+  String pluginWebExternalTitle(Object value) {
+    return '在浏览器中打开「$value」吗？';
+  }
+
+  @override
+  String pluginWebExternalBody(Object value) {
+    return '插件页面要打开 $value。链接会在系统浏览器中打开，插件看不到之后的内容。';
+  }
+
+  @override
+  String get pluginWebExternalOpen => '打开链接';
+
+  @override
+  String pluginWebNavigationBlocked(Object value) {
+    return '已阻止插件页面打开 $value';
+  }
+
+  @override
   String get pluginPages => '插件页面';
 
   @override

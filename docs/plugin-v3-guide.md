@@ -27,7 +27,7 @@ A plugin is an npm-style folder whose `package.json` carries a `coursive` key:
 
 - `id`: 2–32 lowercase letters, digits or `-`, starting with a letter. It prefixes the plugin's tools (`review-lab__make_cards`) and namespaces its storage; it never changes across versions.
 - `api`: the manifest API range the package is built against (see [Compatibility](#7-compatibility-and-deprecation)).
-- `runtime`: exactly one required `pi` component with its `entry` module and optional `skills` folders. Other kinds (`moejs`, `web-ui`, `process`, `go`) must be marked `"optional": true`; this host does not run them.
+- `runtime`: exactly one required `pi` component with its `entry` module and optional `skills` folders. Other kinds (`moejs`, `web-ui`, `process`, `go`) must be marked `"optional": true`; this host does not run them. A `web-ui` component's `entry` names the resource directory of Web UI pages ([§3](#3-pages-navigation-and-slots)).
 - `files`: what `npm pack` ships. The runtime entry must be in it; the simulator's `--pack` refuses a tarball without it.
 - `requires` / `provides`: services the plugin needs or offers, each `{service, version}` (`optional` on `requires`). The capability inspector shows them to the assistant; the daemon resolver picks providers.
 
@@ -68,6 +68,20 @@ A page is a declarative document the app renders natively; the plugin ships no U
 - A button binds a context value as an argument with `{"ref": "context.canvas_revision"}`.
 
 Disabling or uninstalling the plugin removes its pages, navigation and slots, and an open page closes itself.
+
+A Web UI page is experimental: it renders only on a platform whose renderer passed the security review of spec 0032's [Web UI release gate](specs/0032-ui-extension-protocol.md#web-ui-release-gate), and everywhere else the app shows its native fallback. Declare the resource directory as an optional runtime and the page by its script, styles and native document:
+
+```json
+"runtime": [{ "kind": "pi", "entry": "index.mjs" }, { "kind": "web-ui", "entry": "web", "optional": true }],
+"pages": [{ "id": "board", "title": "面板", "renderer": "web-ui", "entry": "web/board.js", "styles": ["web/board.css"],
+  "document": { "schemaVersion": 1, "body": { "type": "text", "text": "面板需要 Web UI；这里是原生版本。" } } }]
+```
+
+- The page is one document the daemon builds: your styles, then your script, under a CSP that allows nothing else — no network, no other script, no eval, no frame, worker or form. Bundle everything into the one script; ship images, fonts and text as package files and read them with `coursive.asset("web/logo.png")` (a data URL).
+- `await coursive.call("next", { step: 1 })` runs a declared action through the bridge and resolves with its result form (`statePatch`, `notification`, …); a `write` action resolves after the user approves or declines its proposal. A refusal rejects with an error whose `code` is the bridge's.
+- Links leave the page only to hosts listed in `hosts`, and only in the system browser after the user confirms; every other navigation is refused and the page stays.
+- Resources: `.js .css .json .txt .svg .png .jpg .jpeg .gif .webp .woff2`, no symlinks, at most 64 files, 256 KB each and 512 KB in all. Write `<\/script` inside a string rather than `</script`, and no `<!--`. Files are hashed at install; a package changed on disk afterwards falls back until it is reinstalled.
+- To try a page during development, start the daemon with `COURSIVE_WEBUI_PREVIEW=1`; the page then opens on Android and macOS with a notice. [web-probe](../agent/scripts/fixtures/web-probe/web/probe.js) is the hostile page CI runs through [web-ui-e2e.mjs](../agent/scripts/web-ui-e2e.mjs).
 
 ## 4. Actions and the bridge
 

@@ -74,11 +74,18 @@ type Server struct {
 	// PluginActions answers declarative UI actions. A nil bridge answers
 	// "unavailable" (docs/specs/0032-ui-extension-protocol.md).
 	PluginActions *pluginbridge.Bridge
+	// PluginWebPages serves the resources of plugin Web UI pages; without it
+	// every page falls back to its native surface.
+	PluginWebPages WebUIPages
+	// PluginWebPreview opens Web UI pages on a platform whose renderer has not
+	// passed its security review yet (COURSIVE_WEBUI_PREVIEW=1, development only).
+	PluginWebPreview bool
 
 	syncMu        sync.Mutex
 	lastCourse    time.Time
 	relayed       relayCache
 	slideHeaders  sync.Map // lecture id -> map[slide url]headers
+	web           webSessions
 	watchOnceInit sync.Once
 	w             *watchState
 
@@ -112,6 +119,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/plugin-actions/proposals/{id}", s.pluginProposal)
 	mux.HandleFunc("POST /api/plugin-actions/proposals/{id}/apply", s.pluginProposalApply)
 	mux.HandleFunc("POST /api/plugin-actions/proposals/{id}/reject", s.pluginProposalReject)
+	mux.HandleFunc("GET /api/plugin-web/admission", s.pluginWebAdmission)
+	mux.HandleFunc("POST /api/plugin-web/sessions", s.pluginWebOpen)
+	mux.HandleFunc("POST /api/plugin-web/sessions/{id}/navigate", s.pluginWebNavigate)
+	mux.HandleFunc("POST /api/plugin-web/sessions/{id}/messages", s.pluginWebMessage)
+	mux.HandleFunc("DELETE /api/plugin-web/sessions/{id}", s.pluginWebClose)
 	s.sourceRoutes(h)
 	s.lmsRoutes(h)
 

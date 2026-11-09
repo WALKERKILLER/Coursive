@@ -1,20 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:coursive/core/plugin_navigation.dart';
 import 'package:coursive/features/plugins/plugin_web_fallback.dart';
 import 'package:coursive/l10n/l10n.dart';
-
-PluginPageContribution _page({
-  String title = '虚拟实验室',
-  String renderer = 'web-ui',
-  Map<String, dynamic> view = const {},
-}) => PluginPageContribution(
-  id: 'lab',
-  pluginId: 'virtual-lab',
-  title: title,
-  renderer: renderer,
-  view: view,
-);
 
 void main() {
   test('admission and reason codes match the daemon vocabulary', () {
@@ -48,6 +35,10 @@ void main() {
     expect(
       PluginWebFallbackReason.fromCode('resources-missing'),
       PluginWebFallbackReason.resourcesMissing,
+    );
+    expect(
+      PluginWebFallbackReason.fromCode('review-pending'),
+      PluginWebFallbackReason.reviewPending,
     );
     // No published reason means this build has no WebView renderer.
     expect(
@@ -124,43 +115,6 @@ void main() {
       expect(find.text(l10n.pluginWebAdmissionSupported), findsOneWidget);
       expect(find.text(l10n.pluginWebReasonRendererMissing), findsOneWidget);
       expect(find.text('ui/index.html 缺失'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the web-ui page builder shows the fallback instead of a blank page',
-    (tester) async {
-      final builders = PluginPageBuilderRegistry({
-        'web-ui': pluginWebPageBuilder,
-      });
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PluginPageOutlet(page: _page(), builders: builders),
-        ),
-      );
-      expect(find.byKey(const ValueKey('plugin-web-fallback')), findsOneWidget);
-      expect(find.text(l10n.pluginWebReasonRendererMissing), findsOneWidget);
-
-      // A contribution that publishes its own admission and reason is explained
-      // with those instead of the default.
-      await tester.pumpWidget(
-        MaterialApp(
-          home: PluginPageOutlet(
-            page: _page(
-              view: const {
-                'admission': 'unsupported',
-                'fallbackReason': 'platform-unsupported',
-              },
-            ),
-            builders: builders,
-          ),
-        ),
-      );
-      expect(
-        find.text(l10n.pluginWebReasonPlatformUnsupported),
-        findsOneWidget,
-      );
-      expect(find.text(l10n.pluginWebAdmissionUnsupported), findsOneWidget);
     },
   );
 
