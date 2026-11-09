@@ -74,14 +74,22 @@ type Problem struct {
 	Message string
 }
 
-// Error reports every problem found in one manifest.
+// Error reports every problem found in one manifest or one canvas object.
 type Error struct {
+	// Subject names what failed and the version it was checked against, such as
+	// "画布对象不符合 coursive/canvas-object@1". Empty reads as a manifest
+	// error, so the original callers keep their message.
+	Subject  string
 	Problems []Problem
 }
 
 func (e *Error) Error() string {
+	subject := e.Subject
+	if subject == "" {
+		subject = "插件清单不符合 " + SchemaVersion
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "插件清单不符合 %s：%d 处问题", SchemaVersion, len(e.Problems))
+	fmt.Fprintf(&b, "%s：%d 处问题", subject, len(e.Problems))
 	for _, p := range e.Problems {
 		b.WriteString("\n")
 		if p.Path != "" {
