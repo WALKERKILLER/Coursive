@@ -9611,6 +9611,78 @@ abstract class AppLocalizations {
   /// **'当前版本的应用还不能显示这种视图，更新应用后即可查看'**
   String get pluginViewUnsupported;
 
+  /// No description provided for @pluginWebUnavailableTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个插件页面暂时用原生方式打开'**
+  String get pluginWebUnavailableTitle;
+
+  /// No description provided for @pluginWebReasonPlatformUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个平台还不能运行插件的自定义 Web UI，插件页面改用原生渲染。'**
+  String get pluginWebReasonPlatformUnsupported;
+
+  /// No description provided for @pluginWebReasonNeedsReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个平台的自定义 Web UI 还在准入评审中，评审通过后才会开启。'**
+  String get pluginWebReasonNeedsReview;
+
+  /// No description provided for @pluginWebReasonRendererMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前版本的应用还没有内置 WebView 渲染器，Web UI 页面暂时无法显示。'**
+  String get pluginWebReasonRendererMissing;
+
+  /// No description provided for @pluginWebReasonPluginInactive.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件当前没有启用，启用后可以再试一次。'**
+  String get pluginWebReasonPluginInactive;
+
+  /// No description provided for @pluginWebReasonResourcesMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件的页面资源缺失或校验失败，重新安装插件后可以再试一次。'**
+  String get pluginWebReasonResourcesMissing;
+
+  /// No description provided for @pluginWebAdmissionSupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台准入：支持'**
+  String get pluginWebAdmissionSupported;
+
+  /// No description provided for @pluginWebAdmissionNeedsReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台准入：评审中'**
+  String get pluginWebAdmissionNeedsReview;
+
+  /// No description provided for @pluginWebAdmissionUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'平台准入：不支持'**
+  String get pluginWebAdmissionUnsupported;
+
+  /// No description provided for @pluginWebNativeKeptTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'仍然可用'**
+  String get pluginWebNativeKeptTitle;
+
+  /// No description provided for @pluginWebNativeKept.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件的原生页面、UI 扩展和动作照常可用，本地课程库与笔记不受影响。'**
+  String get pluginWebNativeKept;
+
+  /// No description provided for @pluginWebOpenNative.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开原生页面'**
+  String get pluginWebOpenNative;
+
   /// No description provided for @pluginPages.
   ///
   /// In zh, this message translates to:
@@ -9622,6 +9694,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'换种方式看'**
   String get pluginViewAlternative;
+
+  /// No description provided for @pluginCanvasFallbackMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件已不可用，以下内容仍保留在本机'**
+  String get pluginCanvasFallbackMissing;
+
+  /// No description provided for @pluginCanvasFallbackUntitled.
+  ///
+  /// In zh, this message translates to:
+  /// **'未命名的插件对象'**
+  String get pluginCanvasFallbackUntitled;
+
+  /// No description provided for @pluginCanvasFallbackEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个对象没有可显示的文字'**
+  String get pluginCanvasFallbackEmpty;
+
+  /// No description provided for @pluginCanvasFallbackUnreadable.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法显示这个插件对象，内容可能已损坏'**
+  String get pluginCanvasFallbackUnreadable;
+
+  /// No description provided for @pluginCanvasFallbackExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出数据'**
+  String get pluginCanvasFallbackExport;
 
   /// No description provided for @pluginSlotNoteToolbar.
   ///
