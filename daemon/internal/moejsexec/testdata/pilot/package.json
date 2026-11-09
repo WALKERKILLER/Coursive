@@ -1,0 +1,6 @@
+{
+	"name": "moejs-pilot",
+	"private": true,
+	"type": "module",
+	"description": "Pilot tasks of the MoeJS executor; the Go tests and the Node parity check run the same module"
+}

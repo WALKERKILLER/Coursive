@@ -3,12 +3,14 @@ module github.com/walkerkiller/coursive/daemon
 go 1.27.0
 
 require (
+	github.com/MoeForge/moejs v0.1.0
 	golang.org/x/net v0.61.0
 	golang.org/x/time v0.16.0
 	modernc.org/sqlite v1.60.1
 )
 
 require (
+	github.com/MoeForge/moego v0.1.0-alpha.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
