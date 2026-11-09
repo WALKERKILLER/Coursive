@@ -38,12 +38,12 @@ var ContributionGroups = []string{"navigation", "pages", "slots", "tools", "view
 var Categories = []string{"notes", "visualize", "review", "programming", "connector", "tutor", "assignment"}
 
 var (
-	idRE           = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
-	versionRE      = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
-	apiRE          = regexp.MustCompile(`^(?:\^|>=)?\d+\.\d+\.\d+$`)
-	serviceRE      = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$`)
-	serviceRangeRE = regexp.MustCompile(`^(?:\^|>=)?\d+(?:\.\d+){0,2}$`)
-	contributionRE = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
+	idRE              = regexp.MustCompile(`^[a-z][a-z0-9-]{1,31}$`)
+	manifestVersionRE = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
+	apiRE             = regexp.MustCompile(`^(?:\^|>=)?\d+\.\d+\.\d+$`)
+	serviceRE         = regexp.MustCompile(`^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$`)
+	serviceRangeRE    = regexp.MustCompile(`^(?:\^|>=)?\d+(?:\.\d+){0,2}$`)
+	contributionRE    = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
 
 	runtimeKindSet = setOf(RuntimeKinds)
 	permissionSet  = setOf(Permissions)
@@ -114,17 +114,17 @@ type Manifest struct {
 
 // Coursive is the plugin declaration under a package.json "coursive" key.
 type Coursive struct {
-	ID          string        `json:"id"`
-	Title       string        `json:"title"`
-	Summary     string        `json:"summary"`
-	Description string        `json:"description"`
-	Icon        string        `json:"icon"`
-	Categories  []string      `json:"categories"`
-	API         string        `json:"api"`
-	Runtime     []Runtime     `json:"runtime"`
-	Requires    []Requirement `json:"requires"`
-	Provides    []Provision   `json:"provides"`
-	Permissions []string      `json:"permissions"`
+	ID          string                `json:"id"`
+	Title       string                `json:"title"`
+	Summary     string                `json:"summary"`
+	Description string                `json:"description"`
+	Icon        string                `json:"icon"`
+	Categories  []string              `json:"categories"`
+	API         string                `json:"api"`
+	Runtime     []Runtime             `json:"runtime"`
+	Requires    []ManifestRequirement `json:"requires"`
+	Provides    []Provision           `json:"provides"`
+	Permissions []string              `json:"permissions"`
 	// Exec and Hosts carry the detail the exec and network permissions allow.
 	Exec        []string    `json:"exec"`
 	Hosts       []string    `json:"hosts"`
@@ -185,8 +185,8 @@ func (e Entry) Paths() []string {
 	return out
 }
 
-// Requirement is a service the plugin needs before its contributions activate.
-type Requirement struct {
+// ManifestRequirement is a service the plugin needs before its contributions activate.
+type ManifestRequirement struct {
 	Service  string `json:"service"`
 	Version  string `json:"version"`
 	Optional bool   `json:"optional"`
@@ -198,21 +198,21 @@ type Provision struct {
 	Version string `json:"version"`
 }
 
-// Contribution is one entry of a contribution group. Only the identity is
+// ManifestContribution is one entry of a contribution group. Only the identity is
 // decoded: the group-specific fields belong to docs/specs/0032-ui-extension-protocol.md.
-type Contribution struct {
+type ManifestContribution struct {
 	ID string `json:"id"`
 }
 
 // Contributes holds the contribution groups a manifest declares.
 type Contributes struct {
-	Navigation []Contribution
-	Pages      []Contribution
-	Slots      []Contribution
+	Navigation []ManifestContribution
+	Pages      []ManifestContribution
+	Slots      []ManifestContribution
 	Tools      []string
-	Views      []Contribution
-	Actions    []Contribution
-	Settings   []Contribution
+	Views      []ManifestContribution
+	Actions    []ManifestContribution
+	Settings   []ManifestContribution
 	Sources    []Source
 
 	unknown []string
@@ -295,7 +295,7 @@ func (m *Manifest) Validate() error {
 	p := &problems{}
 	if m.Version == "" {
 		p.add("version-missing", "version", "缺少 version")
-	} else if !versionRE.MatchString(m.Version) {
+	} else if !manifestVersionRE.MatchString(m.Version) {
 		p.add("version-invalid", "version", "version 应为 semver，例如 1.0.0")
 	}
 
@@ -362,7 +362,7 @@ func (m *Manifest) Validate() error {
 		if !serviceRE.MatchString(r.Service) {
 			p.add("provides-invalid", at+".service", "服务 id 应为 domain.verb，例如 transcript.read")
 		}
-		if !versionRE.MatchString(r.Version) {
+		if !manifestVersionRE.MatchString(r.Version) {
 			p.add("provides-invalid", at+".version", "提供的服务版本应为精确的 semver，例如 1.0.0")
 		}
 	}
@@ -465,7 +465,7 @@ func fail(p Problem) error { return &Error{Problems: []Problem{p}} }
 
 type entryGroup struct {
 	name    string
-	entries []Contribution
+	entries []ManifestContribution
 }
 
 func (c *Contributes) entryGroups() []entryGroup {
