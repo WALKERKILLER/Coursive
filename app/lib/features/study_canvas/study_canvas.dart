@@ -12,18 +12,24 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/api.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
+import '../../core/plugins.dart';
+import '../../core/ui_slots.dart';
 import '../../theme/glass.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/coursive_markdown.dart';
 import '../../widgets/pickers.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
+import '../plugins/canvas_fallback.dart';
+import '../plugins/plugin_actions.dart' show PluginViewPatch;
+import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
 import '../player/video_card_hold.dart';
 import '../practice/quiz.dart';
 import 'study_document.dart';
@@ -58,6 +64,7 @@ part 'study_selection_tools.dart';
 part 'study_evidence.dart';
 part 'study_outline_review.dart';
 part 'study_outline_export.dart';
+part 'study_plugin_ui.dart';
 
 enum StudyTool { select, hand, pen, highlighter, eraser, region }
 
@@ -92,6 +99,10 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
   StudyDocument? document;
   Object? _loadError, _saveError;
+
+  /// Enabled plugins and whether one offers a canvas tool, read in [build].
+  Set<String> _enabledPlugins = const {};
+  bool _hasCanvasTools = false;
   StudyTool _tool = StudyTool.select;
   int _color = 0xff25344a;
   double _penWidth = 3;
@@ -467,7 +478,7 @@ class StudyCanvasState extends State<StudyCanvas>
             remote,
           );
           final remoteVersion = (remote['version'] as num).toInt();
-          if (remoteVersion > 4)
+          if (remoteVersion > 5)
             throw FormatException(l10n.studyUnknownVersion);
           d.formatVersion = math.max(d.formatVersion, remoteVersion);
           d.revision = (remote['revision'] as num).toInt();
@@ -1731,6 +1742,8 @@ class StudyCanvasState extends State<StudyCanvas>
       );
     final d = document;
     if (d == null) return const Center(child: CircularProgressIndicator());
+    _enabledPlugins = _activePlugins();
+    _hasCanvasTools = _canvasToolContributions(context).isNotEmpty;
     return LayoutBuilder(
       builder: (_, size) {
         _viewport = Size(size.maxWidth, size.maxHeight);
@@ -1926,6 +1939,14 @@ class StudyCanvasState extends State<StudyCanvas>
                                         ],
                                       ),
                                     ),
+                                  ),
+                                for (final o in d.pluginObjects.where(
+                                  (o) => o.rect.overlaps(stage),
+                                ))
+                                  _pluginObject(
+                                    o,
+                                    stage,
+                                    _enabledPlugins.contains(o.pluginId),
                                   ),
                                 Positioned.fill(
                                   child: IgnorePointer(

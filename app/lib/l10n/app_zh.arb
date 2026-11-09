@@ -3413,6 +3413,49 @@
   "pluginCanvasFallbackEmpty": "这个对象没有可显示的文字",
   "pluginCanvasFallbackUnreadable": "无法显示这个插件对象，内容可能已损坏",
   "pluginCanvasFallbackExport": "导出数据",
+  "studyPlugins": "插件",
+  "studyPluginsNoTools": "已启用的插件没有画布工具",
+  "studyPluginObjects": "画布上的插件对象",
+  "studyPluginObjectExport": "导出对象",
+  "studyPluginObjectRemove": "移除对象",
+  "studyPluginBatchUndo": "应用后可以撤销。",
+  "studyPluginBatchApply": "应用改动",
+  "studyPluginObjectExported": "已导出「{value}」",
+  "@studyPluginObjectExported": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "studyPluginBatchTitle": "允许「{value}」修改画布吗？",
+  "@studyPluginBatchTitle": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "studyPluginBatchCreate": "新增「{value}」",
+  "@studyPluginBatchCreate": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "studyPluginBatchUpdate": "覆盖「{value}」",
+  "@studyPluginBatchUpdate": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "studyPluginBatchDelete": "删除「{value}」",
+  "@studyPluginBatchDelete": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "studyPluginBatchFailed": "无法修改画布：{value}",
+  "@studyPluginBatchFailed": {
+    "placeholders": {
+      "value": {}
+    }
+  },
   "pluginSlotNoteToolbar": "笔记工具栏",
   "pluginSlotLectureMenu": "课次菜单",
   "pluginSlotCourseMenu": "课程菜单",

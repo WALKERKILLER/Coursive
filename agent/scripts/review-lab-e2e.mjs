@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // review-lab-e2e.mjs — the Review Lab example end to end against a real
 // coursive-daemon and its assistant host: install and grant, page and slot,
-// the agent tool, bridge actions with daemon-held state, a save that needs the
-// user's approval and writes one note, disable, and restore.
+// the agent tool, bridge actions with daemon-held state, the canvas tool's
+// batch, a save that needs the user's approval and writes one note, disable,
+// and restore.
 //
 //   go build -o /tmp/coursive-daemon ./cmd/coursive-daemon   (in daemon/)
 //   node agent/scripts/review-lab-e2e.mjs --daemon /tmp/coursive-daemon
@@ -93,10 +94,16 @@ async function run(base, token) {
 
 	const listed = (await ok("GET", "/agent/plugins")).plugins.find((p) => p.id === "review-lab");
 	step("the page and the course slot are published", listed.contributes.pages[0]?.document?.schemaVersion === 1 && listed.contributes.slots[0]?.target === "course.detail.sections", listed.contributes);
+	step("the canvas tool is published", listed.contributes.slots[1]?.target === "canvas.toolbar.tools", listed.contributes);
 	step("the agent sees its tool", listed.tools.some((t) => t.name === "review-lab__make_cards"), listed.tools);
 
 	const opened = await action("open");
 	step("the slot button opens the page", opened.result?.navigation?.route === "deck", opened);
+	const pinned = await action("pin", { viewId: "canvas-pin", args: { revision: 0, lecture_id: "lecture-1", x: 0, y: 0 } });
+	const batch = pinned.result?.viewPatch?.patch?.canvas;
+	step("the canvas tool answers one canvas batch", batch?.revision === 0 && batch.objects?.length === 1 && batch.objects[0].createdBy?.pluginId === "review-lab", pinned);
+	const unread = await action("pin", { viewId: "canvas-pin", args: {} });
+	step("a canvas tool needs the revision it read", unread.error?.code === "invalid_args", unread);
 	const started = await action("start", { viewId: "deck" });
 	step("start fills the page state", started.result?.statePatch?.revision === 1 && started.result.statePatch.state.progress === "1 / 3", started);
 	const revealed = await action("reveal", { viewId: "deck", contextRevision: 1 });

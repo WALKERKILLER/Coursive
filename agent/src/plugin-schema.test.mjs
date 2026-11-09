@@ -40,8 +40,8 @@ test("shared fixtures validate the same way as the daemon", async () => {
 		assert.ok(first.hint, `${c.file}: ${first.code} has no recovery hint`);
 	}
 	const listed = new Set(index.cases.map((c) => c.file));
-	for (const name of await readdir(FIXTURES)) {
-		if (name !== "cases.json") assert.ok(listed.has(name), `testdata/${name} is not listed in cases.json`);
+	for (const e of await readdir(FIXTURES, { withFileTypes: true })) {
+		if (e.isFile() && e.name !== "cases.json") assert.ok(listed.has(e.name), `testdata/${e.name} is not listed in cases.json`);
 	}
 });
 

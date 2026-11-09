@@ -77,7 +77,7 @@ func TestFixtures(t *testing.T) {
 		t.Fatalf("read testdata: %v", err)
 	}
 	for _, e := range entries {
-		if name := e.Name(); name != "cases.json" && !listed[name] {
+		if name := e.Name(); !e.IsDir() && name != "cases.json" && !listed[name] {
 			t.Errorf("testdata/%s is not listed in cases.json", name)
 		}
 	}

@@ -6,6 +6,8 @@ const SAMPLE = [
 	{ front: "B+ 树为何适合数据库索引？", back: "内部节点只存键、扇出大，叶子有序链接，范围查询和磁盘读取都友好。" },
 ];
 const MAX_CARDS = 50;
+// A canvas object, lecture or stroke id (pluginfabric canvasIDRE).
+const CANVAS_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/;
 
 const deckOf = async (coursive) => {
 	const deck = await coursive.storage.get("deck");
@@ -38,6 +40,34 @@ export function activate(coursive) {
 		return { statePatch: { viewId, patch: card(deck, index, false) } };
 	});
 	coursive.action("open", async () => ({ navigation: { route: "deck", title: "复习卡" } }));
+	// Canvas tools answer with a canvas batch; the canvas checks it against the
+	// revision the tool read and commits it as one undo entry.
+	coursive.action("pin", async (args, { viewId }) => {
+		const deck = await deckOf(coursive);
+		const at = (v) => (Number.isFinite(v) ? Math.max(-1e8, Math.min(1e8, v)) : 0);
+		const object = {
+			id: `review-lab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+			type: "review-lab.deck",
+			schemaVersion: 1,
+			geometry: { x: at(args.x) - 180, y: at(args.y) - 140, w: 360, h: 280 },
+			content: {
+				title: `复习卡（${deck.length} 张）`,
+				text: deck.map((c, i) => `${i + 1}. ${c.front}\n${c.back}`).join("\n\n"),
+				data: { cards: deck },
+			},
+			sourceAnchors: CANVAS_ID.test(args.lecture_id ?? "") ? [{ kind: "lecture", lectureId: args.lecture_id }] : [],
+			createdBy: { pluginId: "review-lab" },
+			revision: 1,
+			interactionPolicy: { mode: "select" },
+		};
+		return { viewPatch: { viewId, patch: { canvas: { revision: args.revision, objects: [object], label: "钉上复习卡" } } } };
+	});
+	// Deleting is shown to the user before it commits.
+	coursive.action("unpin", async (args, { viewId }) => {
+		const ids = (Array.isArray(args.objects) ? args.objects : []).map((o) => o?.id).filter((id) => typeof id === "string");
+		if (!ids.length) return { notification: { text: "画布上没有复习卡" } };
+		return { viewPatch: { viewId, patch: { canvas: { revision: args.revision, delete: ids, label: "移除复习卡" } } } };
+	});
 	// A write: the bridge makes it a proposal, and this runs only after the user approves it.
 	coursive.action("save", async (_args, { approved }) => {
 		if (!approved) throw new Error("存为笔记需要你先批准");

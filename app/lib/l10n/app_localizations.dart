@@ -9761,6 +9761,84 @@ abstract class AppLocalizations {
   /// **'导出数据'**
   String get pluginCanvasFallbackExport;
 
+  /// No description provided for @studyPlugins.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件'**
+  String get studyPlugins;
+
+  /// No description provided for @studyPluginsNoTools.
+  ///
+  /// In zh, this message translates to:
+  /// **'已启用的插件没有画布工具'**
+  String get studyPluginsNoTools;
+
+  /// No description provided for @studyPluginObjects.
+  ///
+  /// In zh, this message translates to:
+  /// **'画布上的插件对象'**
+  String get studyPluginObjects;
+
+  /// No description provided for @studyPluginObjectExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出对象'**
+  String get studyPluginObjectExport;
+
+  /// No description provided for @studyPluginObjectRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移除对象'**
+  String get studyPluginObjectRemove;
+
+  /// No description provided for @studyPluginBatchUndo.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用后可以撤销。'**
+  String get studyPluginBatchUndo;
+
+  /// No description provided for @studyPluginBatchApply.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用改动'**
+  String get studyPluginBatchApply;
+
+  /// No description provided for @studyPluginObjectExported.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出「{value}」'**
+  String studyPluginObjectExported(Object value);
+
+  /// No description provided for @studyPluginBatchTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'允许「{value}」修改画布吗？'**
+  String studyPluginBatchTitle(Object value);
+
+  /// No description provided for @studyPluginBatchCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新增「{value}」'**
+  String studyPluginBatchCreate(Object value);
+
+  /// No description provided for @studyPluginBatchUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'覆盖「{value}」'**
+  String studyPluginBatchUpdate(Object value);
+
+  /// No description provided for @studyPluginBatchDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除「{value}」'**
+  String studyPluginBatchDelete(Object value);
+
+  /// No description provided for @studyPluginBatchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法修改画布：{value}'**
+  String studyPluginBatchFailed(Object value);
+
   /// No description provided for @pluginSlotNoteToolbar.
   ///
   /// In zh, this message translates to:

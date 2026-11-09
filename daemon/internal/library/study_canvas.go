@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/walkerkiller/coursive/daemon/internal/pluginfabric"
 )
 
 const StudyDocumentLimit = 32 << 20
@@ -88,6 +90,11 @@ type StudyDocument struct {
 	Strokes     []StudyStroke     `json:"strokes"`
 	Connections []StudyConnection `json:"connections,omitempty"`
 	AppliedRuns []string          `json:"applied_runs,omitempty"`
+	// PluginObjects are what plugins put on the canvas, in the shared
+	// CanvasObject contract (docs/specs/0032-ui-extension-protocol.md). They
+	// need version 5, so an app that cannot show them refuses the document
+	// instead of dropping them on save.
+	PluginObjects []pluginfabric.CanvasObject `json:"plugin_objects,omitempty"`
 }
 
 func emptyStudy() StudyDocument {
@@ -266,7 +273,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 			return ErrStudyInvalid
 		}
 	}
-	if (d.Version != 1 && d.Version != 2 && d.Version != 3 && d.Version != 4) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
+	if (d.Version < 1 || d.Version > 5) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
 		return invalid("版本或视图")
 	}
 	if len(d.Layers) < 1 || len(d.Layers) > 32 || len(d.Objects) > 2000 || len(d.Strokes) > 30000 {
@@ -372,6 +379,21 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 				return invalid("笔迹坐标")
 			}
 		}
+	}
+	if len(d.PluginObjects) > 0 && d.Version < 5 {
+		return invalid("插件对象需要画布版本 5")
+	}
+	if len(d.Objects)+len(d.PluginObjects) > 2000 {
+		return ErrStudyLimit
+	}
+	for _, o := range d.PluginObjects {
+		if err := o.Validate(); err != nil {
+			return fmt.Errorf("%w：%v", ErrStudyInvalid, err)
+		}
+		if ids[o.ID] || objects[o.ID] {
+			return invalid("插件对象标识重复")
+		}
+		ids[o.ID], objects[o.ID] = true, true
 	}
 	if len(d.Connections) > 4000 {
 		return ErrStudyLimit

@@ -264,7 +264,12 @@ class _ConnectionPainter extends CustomPainter {
   final StudyChrome chrome;
   @override
   void paint(Canvas canvas, Size size) {
-    final d = document, objects = {for (final c in document.cards) c.id: c};
+    final d = document,
+        rects = {
+          for (final c in document.cards)
+            if (d.visible(c.layer)) c.id: c.rect,
+          for (final o in document.pluginObjects) o.id: o.rect,
+        };
     canvas.save();
     canvas.translate(-stage.left, -stage.top);
     final viewport = stage;
@@ -278,16 +283,12 @@ class _ConnectionPainter extends CustomPainter {
     }
 
     for (final link in d.connections) {
-      final a = objects[link.from], b = objects[link.to];
-      if (a == null || b == null || !d.visible(a.layer) || !d.visible(b.layer))
+      final a = rects[link.from], b = rects[link.to];
+      if (a == null || b == null) continue;
+      if (!Rect.fromPoints(a.center, b.center).inflate(60).overlaps(viewport))
         continue;
-      if (!Rect.fromPoints(
-        a.rect.center,
-        b.rect.center,
-      ).inflate(60).overlaps(viewport))
-        continue;
-      final start = edge(a.rect, b.rect.center),
-          end = edge(b.rect, a.rect.center),
+      final start = edge(a, b.center),
+          end = edge(b, a.center),
           mid = (start + end) / 2;
       final path = Path()
         ..moveTo(start.dx, start.dy)

@@ -8,8 +8,10 @@ import 'package:flutter/painting.dart' show HSLColor;
 import '../../l10n/l10n.dart';
 import 'study_content.dart';
 import 'study_brush.dart';
+import 'study_plugin_objects.dart';
 export 'study_content.dart';
 export 'study_brush.dart';
+export 'study_plugin_objects.dart';
 
 String studyId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${_nextId++}';
@@ -322,16 +324,22 @@ class _StudySnapshot {
       connections = d.connections
           .map((a) => StudyConnection.fromJson(a.json()))
           .toList(),
-      strokes = List.of(d.strokes);
+      strokes = List.of(d.strokes),
+      pluginObjects = List.of(d.pluginObjects);
   final Set<String> appliedRuns;
   final List<StudyLayer> layers;
   final List<StudyCard> cards;
   final List<StudyStroke> strokes;
   final List<StudyConnection> connections;
+  final List<StudyPluginObject> pluginObjects;
 }
 
 class StudyDocument extends ChangeNotifier {
   int revision = 0, edit = 0, formatVersion = 3;
+
+  /// The plugin-object revision a plugin batch is checked against. It moves on
+  /// every change to [pluginObjects], undo and redo included, and is not saved.
+  int pluginRevision = 0;
   String baseHash = "";
   Set<String> appliedRuns = {};
   Offset camera = const Offset(40, 70);
@@ -341,6 +349,11 @@ class StudyDocument extends ChangeNotifier {
   List<StudyCard> cards = [];
   List<StudyStroke> strokes = [];
   List<StudyConnection> connections = [];
+
+  /// Persistent plugin output (`pluginfabric.CanvasObject`), saved as
+  /// `plugin_objects` in format 5. The canvas draws them and never hit-tests
+  /// them, so they cannot take a stroke or a selection.
+  List<StudyPluginObject> pluginObjects = [];
   final _undo = <_StudySnapshot>[], _redo = <_StudySnapshot>[];
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
@@ -365,7 +378,8 @@ class StudyDocument extends ChangeNotifier {
     if (m['version'] != 1 &&
         m['version'] != 2 &&
         m['version'] != 3 &&
-        m['version'] != 4)
+        m['version'] != 4 &&
+        m['version'] != 5)
       throw FormatException(l10n.studyUnknownVersion);
     final d = StudyDocument();
     d.formatVersion = math.max(3, (m['version'] as num).toInt());
@@ -397,13 +411,19 @@ class StudyDocument extends ChangeNotifier {
       for (final a in m['strokes'] as List)
         ...chunks(StudyStroke.fromJson(a as Map)),
     ];
+    d.pluginObjects = [
+      for (final a in m['plugin_objects'] as List? ?? [])
+        StudyPluginObject.fromJson(a),
+    ];
     return d;
   }
   StudyDocument();
   Map<String, dynamic> json() => {
     'version': math.max(
       formatVersion,
-      cards.any((c) => c.quarterTurns != 0) ? 4 : 3,
+      pluginObjects.isNotEmpty
+          ? 5
+          : (cards.any((c) => c.quarterTurns != 0) ? 4 : 3),
     ),
     'revision': revision,
     if (baseHash.isNotEmpty) 'base_hash': baseHash,
@@ -413,6 +433,8 @@ class StudyDocument extends ChangeNotifier {
     'objects': cards.map((a) => a.json()).toList(),
     'strokes': strokes.map((a) => a.json()).toList(),
     'connections': connections.map((a) => a.json()).toList(),
+    if (pluginObjects.isNotEmpty)
+      'plugin_objects': pluginObjects.map((a) => a.json()).toList(),
   };
   static List<StudyStroke> chunks(StudyStroke s) {
     if (s.points.length <= 65) return [s];
@@ -452,6 +474,11 @@ class StudyDocument extends ChangeNotifier {
     connections = s.connections
         .map((a) => StudyConnection.fromJson(a.json()))
         .toList();
+    if (s.pluginObjects.length != pluginObjects.length ||
+        Iterable.generate(pluginObjects.length)
+            .any((i) => !identical(s.pluginObjects[i], pluginObjects[i])))
+      pluginRevision++;
+    pluginObjects = List.of(s.pluginObjects);
     if (!layers.any((a) => a.id == activeLayer)) activeLayer = layers.first.id;
     changed();
   }
@@ -472,6 +499,58 @@ class StudyDocument extends ChangeNotifier {
     if (s.points.isEmpty) return;
     checkpoint();
     strokes.addAll(chunks(s));
+    changed();
+  }
+
+  /// Checks a plugin's `CanvasBatch` against the current objects and
+  /// [pluginRevision] without changing anything; see [commitPluginBatch].
+  StudyPluginBatch checkPluginBatch(String pluginId, Object? raw) {
+    final batch = StudyPluginBatch.check(
+      pluginId,
+      raw,
+      {for (final o in pluginObjects) o.id: o},
+      pluginRevision,
+      taken: (id) => cards.any((c) => c.id == id),
+    );
+    if (cards.length +
+            pluginObjects.length +
+            batch.created.length -
+            batch.deleted.length >
+        2000)
+      throw const FormatException('画布对象数量超过限制');
+    return batch;
+  }
+
+  /// Commits a checked batch as one undo entry. A batch checked before
+  /// another change to the plugin objects is refused whole.
+  void commitPluginBatch(StudyPluginBatch batch) {
+    if (batch.revision != pluginRevision)
+      throw const FormatException('画布已改变，请重新读取后再试');
+    final updated = {for (final o in batch.updated) o.id: o};
+    final deleted = {for (final o in batch.deleted) o.id};
+    checkpoint();
+    pluginObjects = [
+      for (final o in pluginObjects)
+        if (!deleted.contains(o.id)) updated[o.id] ?? o,
+      ...batch.created,
+    ];
+    connections.removeWhere(
+      (c) => deleted.contains(c.from) || deleted.contains(c.to),
+    );
+    pluginRevision++;
+    changed();
+  }
+
+  /// Removes one plugin object at the user's request, as one undo entry.
+  void removePluginObject(String id) {
+    if (!pluginObjects.any((o) => o.id == id)) return;
+    checkpoint();
+    pluginObjects = [
+      for (final o in pluginObjects)
+        if (o.id != id) o,
+    ];
+    connections.removeWhere((c) => c.from == id || c.to == id);
+    pluginRevision++;
     changed();
   }
 

@@ -33,7 +33,7 @@ const SCOPES = ["note", "course", "library", "schedule"];
 // Slot targets the app has an outlet for, with the mode the host gives each
 // (docs/specs/0032-ui-extension-protocol.md, uiSlotCatalog in
 // app/lib/core/ui_slots.dart). An entry for any other target would never show.
-export const SLOT_TARGETS = { "course.detail.sections": "list" };
+export const SLOT_TARGETS = { "course.detail.sections": "list", "canvas.toolbar.tools": "list" };
 
 const bad = (message, status = 400) => Object.assign(new Error(message), { status });
 const PRIVATE = 0o600;

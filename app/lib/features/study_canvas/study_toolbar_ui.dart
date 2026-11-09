@@ -206,6 +206,13 @@ extension _StudyToolbars on StudyCanvasState {
       _topAction('课程资料', Icons.folder_open_outlined, _courseMaterials),
       _divider(false, compact: true),
       _topAction(l10n.studyLayers, Icons.layers_outlined, _layers),
+      if (_pluginsOffered)
+        _topAction(
+          l10n.studyPlugins,
+          Icons.extension_outlined,
+          _plugins,
+          key: const ValueKey('study-plugins'),
+        ),
       _topAction('纸张背景', Icons.wallpaper_outlined, _paperSettings),
       if (_remotePending) ...[
         TextButton(

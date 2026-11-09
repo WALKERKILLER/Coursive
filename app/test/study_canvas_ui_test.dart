@@ -180,6 +180,7 @@ Future<GlobalKey<StudyCanvasState>> open(
   bool resetPreferences = true,
   LecturePlayer? player,
   Widget? video,
+  Widget Function(Widget app)? wrap,
 }) async {
   if (resetPreferences) SharedPreferences.setMockInitialValues({});
   final prefs = await UiPrefs.load();
@@ -187,29 +188,28 @@ Future<GlobalKey<StudyCanvasState>> open(
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.reset);
   final key = GlobalKey<StudyCanvasState>();
-  await t.pumpWidget(
-    RepaintBoundary(
-      key: capture,
-      child: MaterialApp(
-        theme: buildTheme(buildScheme(prefs, brightness), prefs),
-        home: Scaffold(
-          body: StudyCanvasSurface(
-            prefs: prefs,
-            child: StudyCanvas(
-              key: key,
-              api: api,
-              ctl: player ?? FixturePlayer(),
-              video: video ?? const Text('视频占位'),
-              panel: const SizedBox(width: 240),
-              onClassic: () {},
-              onAsk: (_) {},
-              onBack: () {},
-            ),
+  final app = RepaintBoundary(
+    key: capture,
+    child: MaterialApp(
+      theme: buildTheme(buildScheme(prefs, brightness), prefs),
+      home: Scaffold(
+        body: StudyCanvasSurface(
+          prefs: prefs,
+          child: StudyCanvas(
+            key: key,
+            api: api,
+            ctl: player ?? FixturePlayer(),
+            video: video ?? const Text('视频占位'),
+            panel: const SizedBox(width: 240),
+            onClassic: () {},
+            onAsk: (_) {},
+            onBack: () {},
           ),
         ),
       ),
     ),
   );
+  await t.pumpWidget(wrap == null ? app : wrap(app));
   await t.pumpAndSettle();
   return key;
 }

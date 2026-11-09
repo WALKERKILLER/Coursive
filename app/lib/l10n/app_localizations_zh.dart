@@ -5590,6 +5590,57 @@ class AppLocalizationsZh extends AppLocalizations {
   String get pluginCanvasFallbackExport => '导出数据';
 
   @override
+  String get studyPlugins => '插件';
+
+  @override
+  String get studyPluginsNoTools => '已启用的插件没有画布工具';
+
+  @override
+  String get studyPluginObjects => '画布上的插件对象';
+
+  @override
+  String get studyPluginObjectExport => '导出对象';
+
+  @override
+  String get studyPluginObjectRemove => '移除对象';
+
+  @override
+  String get studyPluginBatchUndo => '应用后可以撤销。';
+
+  @override
+  String get studyPluginBatchApply => '应用改动';
+
+  @override
+  String studyPluginObjectExported(Object value) {
+    return '已导出「$value」';
+  }
+
+  @override
+  String studyPluginBatchTitle(Object value) {
+    return '允许「$value」修改画布吗？';
+  }
+
+  @override
+  String studyPluginBatchCreate(Object value) {
+    return '新增「$value」';
+  }
+
+  @override
+  String studyPluginBatchUpdate(Object value) {
+    return '覆盖「$value」';
+  }
+
+  @override
+  String studyPluginBatchDelete(Object value) {
+    return '删除「$value」';
+  }
+
+  @override
+  String studyPluginBatchFailed(Object value) {
+    return '无法修改画布：$value';
+  }
+
+  @override
   String get pluginSlotNoteToolbar => '笔记工具栏';
 
   @override
