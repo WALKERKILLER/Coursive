@@ -39,7 +39,7 @@ function arg(name) {
 function findBrowser() {
 	const named = arg("--browser") || process.env.CHROME_PATH;
 	if (named) return named;
-	for (const p of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome", "/usr/bin/google-chrome-stable"]) if (existsSync(p)) return p;
+	for (const p of ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium"]) if (existsSync(p)) return p;
 	throw new Error("no Chromium found; pass --browser or set CHROME_PATH");
 }
 
@@ -69,8 +69,12 @@ async function main() {
 			setTimeout(() => fail(new Error("daemon did not start in 30 s")), 30_000);
 		});
 		browser = spawn(findBrowser(), ["--headless=new", "--no-first-run", "--no-default-browser-check", "--disable-gpu", "--block-new-web-contents",
-			"--remote-debugging-port=0", `--user-data-dir=${join(root, "browser")}`, "about:blank"], { stdio: "ignore" });
-		await run(`http://127.0.0.1:${port}`, port, token, join(root, "browser"));
+			"--remote-debugging-port=0", `--user-data-dir=${join(root, "browser")}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+		let browserLog = "";
+		browser.stderr.on("data", (d) => (browserLog = (browserLog + d).slice(-2000)));
+		await run(`http://127.0.0.1:${port}`, port, token, join(root, "browser"), browser).catch((e) => {
+			throw new Error(`${e.message}${browserLog ? `\n--- browser log tail ---\n${browserLog}` : ""}`);
+		});
 		console.log("web-ui e2e: OK");
 	} catch (e) {
 		console.error(`web-ui e2e: ${e.message}\n--- daemon log tail ---\n${logs}`);
@@ -87,14 +91,14 @@ async function main() {
 }
 
 /** One DevTools page connection: commands by id, events by method. */
-async function devtools(profile) {
+async function devtools(profile, browser) {
 	let active = "";
-	for (let i = 0; i < 100 && !active; i++) {
+	for (let i = 0; i < 300 && !active && browser.exitCode === null; i++) {
 		active = await readFile(join(profile, "DevToolsActivePort"), "utf8").catch(() => "");
 		if (!active) await sleep(100);
 	}
 	const port = active.split("\n")[0];
-	if (!port) throw new Error("Chromium did not open its DevTools port");
+	if (!port) throw new Error(browser.exitCode === null ? "Chromium did not open its DevTools port in 30 s" : `Chromium exited with ${browser.exitCode}`);
 	const target = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: "PUT" })).json();
 	const ws = new WebSocket(target.webSocketDebuggerUrl);
 	await new Promise((ok, fail) => ((ws.onopen = ok), (ws.onerror = () => fail(new Error("DevTools connection failed")))));
@@ -116,7 +120,7 @@ async function devtools(profile) {
 	return { send, on: (method, fn) => handlers.set(method, fn), close: () => ws.close() };
 }
 
-async function run(base, daemonPort, token, profile) {
+async function run(base, daemonPort, token, profile, browser) {
 	const call = async (method, path, body) => {
 		const res = await fetch(base + path, {
 			method,
@@ -152,7 +156,7 @@ async function run(base, daemonPort, token, profile) {
 	step("the preview opens a session on the plugin's own origin", opened.preview === true && session?.origin === "coursive-plugin://web-probe", opened);
 	step("the page carries no token and no daemon address", !opened.html.includes(token) && !opened.html.includes(`127.0.0.1:${daemonPort}`));
 
-	const dt = await devtools(profile);
+	const dt = await devtools(profile, browser);
 	const answers = new Map(); // request id → the daemon's answers, in order
 	const leaks = [];
 	const navigations = [];
