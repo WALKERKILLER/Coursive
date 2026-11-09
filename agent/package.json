@@ -7,8 +7,9 @@
   "main": "src/host.mjs",
   "scripts": {
     "start": "node src/host.mjs",
-    "check": "node --check src/host.mjs && node --check src/tools.mjs && node --check src/models.mjs && node --check src/catalog.mjs && node --check src/timeline.mjs && node --check src/vision.mjs && node --check src/usage.mjs && node --check src/practice.mjs && node --check src/tasks.mjs && node --check src/http.mjs && node --check src/plugins.mjs && node --check src/capabilities.mjs && node --check src/bot.mjs && node --check src/memory.mjs && node --check src/operate.mjs && node --check src/sessions.mjs && node --check src/transcript-review.mjs && node --check src/canvas-agent.mjs",
-    "test": "node --test 'src/**/*.test.mjs'"
+    "validate:plugin": "node scripts/validate-plugin.mjs",
+    "check": "node --check src/host.mjs && node --check src/tools.mjs && node --check src/models.mjs && node --check src/catalog.mjs && node --check src/timeline.mjs && node --check src/vision.mjs && node --check src/usage.mjs && node --check src/practice.mjs && node --check src/tasks.mjs && node --check src/http.mjs && node --check src/plugins.mjs && node --check src/capabilities.mjs && node --check src/plugin-manifest.mjs && node --check src/bot.mjs && node --check src/memory.mjs && node --check src/operate.mjs && node --check src/sessions.mjs && node --check src/transcript-review.mjs && node --check src/canvas-agent.mjs && node --check scripts/validate-plugin.mjs",
+    "test": "node --test 'src/**/*.test.mjs' 'scripts/**/*.test.mjs'"
   },
   "engines": {
     "node": ">=22"

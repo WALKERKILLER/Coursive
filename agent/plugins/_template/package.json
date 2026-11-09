@@ -1,0 +1,64 @@
+{
+	"name": "coursive-plugin-template",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Starting point for a Coursive plugin package (manifest v3)",
+	"license": "MIT",
+	"type": "module",
+	"coursive": {
+		"id": "template",
+		"title": "Plugin template",
+		"summary": "A starting point with one page, one slot and one action",
+		"description": "Copy this directory to start a plugin. It declares a declarative page, a course-detail slot and one action, and asks only for the permissions it uses.",
+		"icon": "extension",
+		"categories": ["review"],
+		"api": "^3.0.0",
+		"runtime": [{ "kind": "pi", "entry": "index.mjs" }],
+		"requires": [{ "service": "transcript.read", "version": "^1", "optional": true }],
+		"permissions": ["library.read"],
+		"settings": {
+			"type": "object",
+			"properties": {
+				"greeting": { "type": "string", "title": "Greeting", "default": "Hello" }
+			}
+		},
+		"examples": ["Open the plugin template page"],
+		"contributes": {
+			"navigation": [{ "id": "home", "title": "Template", "icon": "extension", "page": "home", "order": 100 }],
+			"pages": [
+				{
+					"id": "home",
+					"title": "Template",
+					"icon": "extension",
+					"renderer": "declarative",
+					"order": 100,
+					"document": {
+						"schemaVersion": 1,
+						"body": {
+							"type": "column",
+							"children": [
+								{ "type": "text", "variant": "title", "text": "Plugin template" },
+								{ "type": "text", "text": "This page is a declarative document: the app renders it, the plugin ships no UI code." },
+								{ "type": "button", "text": "Say hello", "action": "hello", "args": { "from": "page" } }
+							]
+						}
+					}
+				}
+			],
+			"slots": [
+				{
+					"id": "course-summary",
+					"target": "course.detail.sections",
+					"mode": "list",
+					"order": 100,
+					"document": {
+						"schemaVersion": 1,
+						"body": { "type": "card", "children": [{ "type": "text", "text": "Template slot: add your course summary here." }] }
+					}
+				}
+			],
+			"actions": [{ "id": "hello", "title": "Say hello", "icon": "waving_hand", "action": "hello" }],
+			"settings": [{ "id": "template", "title": "Template" }]
+		}
+	}
+}
