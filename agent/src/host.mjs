@@ -23,6 +23,7 @@ import { entryFrom, UsageLedger } from "./usage.mjs";
 import { Bot, CONSOLIDATE_CALLS, CONSOLIDATE_PROMPT, CONSOLIDATE_TIMEOUT_MS, Consolidator, turnsOf } from "./bot.mjs";
 import { MemoryStore, memoryTools } from "./memory.mjs";
 import { MEMORY_GROUP, OPERATE_GROUP, operateTools, runOp, SETTINGS } from "./operate.mjs";
+import { CAPABILITY_GROUP, capabilityTools, createCapabilityInspector, pluginHostRegistry } from "./capabilities.mjs";
 import { Sessions } from "./sessions.mjs";
 
 const TOKEN = process.env.COURSIVE_TOKEN ?? "";
@@ -207,14 +208,24 @@ const opDeps = {
 	changed: () => closeIdle(),
 };
 
+/**
+ * The capability inspector reads the plugin host's own state: read-only tools
+ * that go through the core guard like every other tool, so the approval mode,
+ * the write guards and the turn budget are untouched.
+ */
+const capabilities = createCapabilityInspector({ registry: pluginHostRegistry(plugins) });
+
 /** The bot's and course agents' own tools for createTools; memory is the bot's alone. */
 function extraTools(conv) {
 	if (conv.kind === "task") return {};
 	const operate = operateTools(opDeps);
-	if (conv.kind !== "bot") return { tools: operate, groups: { operate: OPERATE_GROUP }, core: ["open_page"] };
+	const inspect = capabilityTools(capabilities);
+	if (conv.kind !== "bot") {
+		return { tools: [...operate, ...inspect], groups: { operate: OPERATE_GROUP, capabilities: CAPABILITY_GROUP }, core: ["open_page"] };
+	}
 	return {
-		tools: [...operate, ...memoryTools(memory, { onChange: (r) => botEvent({ kind: "memory_changed", path: r.path, action: r.action }) })],
-		groups: { operate: OPERATE_GROUP, memory: MEMORY_GROUP },
+		tools: [...operate, ...memoryTools(memory, { onChange: (r) => botEvent({ kind: "memory_changed", path: r.path, action: r.action }) }), ...inspect],
+		groups: { operate: OPERATE_GROUP, memory: MEMORY_GROUP, capabilities: CAPABILITY_GROUP },
 		core: ["open_page"],
 	};
 }
