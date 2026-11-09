@@ -3380,6 +3380,25 @@
   "pluginWebNativeKept": "插件的原生页面、UI 扩展和动作照常可用，本地课程库与笔记不受影响。",
   "pluginWebOpenNative": "打开原生页面",
   "pluginPages": "插件页面",
+  "pluginActionFailed": "无法完成「{value}」：{value2}",
+  "@pluginActionFailed": {
+    "placeholders": {
+      "value": {},
+      "value2": {}
+    }
+  },
+  "pluginRouteMissing": "无法打开「{value}」，插件没有提供这个页面",
+  "@pluginRouteMissing": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "pluginProposalPending": "「{value}」已生成，等待你批准后才会写入",
+  "@pluginProposalPending": {
+    "placeholders": {
+      "value": {}
+    }
+  },
   "pluginViewAlternative": "换种方式看",
   "pluginCanvasFallbackMissing": "插件已不可用，以下内容仍保留在本机",
   "pluginCanvasFallbackUntitled": "未命名的插件对象",

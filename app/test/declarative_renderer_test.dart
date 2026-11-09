@@ -3,6 +3,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/features/plugins/declarative_renderer.dart';
 
 void main() {
+  testWidgets('a binding with no value renders empty, not "null"', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: DeclarativeRenderer(
+            document: {
+              'schemaVersion': 1,
+              'body': {
+                'type': 'column',
+                'children': [
+                  {'type': 'text', 'text': r'${front}'},
+                  {'type': 'button', 'text': r'${label}', 'action': 'go'},
+                ],
+              },
+            },
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('null'), findsNothing);
+    expect(find.byType(FilledButton), findsOneWidget);
+  });
+
   testWidgets('renders text, cards, bindings and actions', (tester) async {
     String? action;
     Map<String, dynamic>? args;

@@ -199,6 +199,15 @@ class PluginPageOutlet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A page whose plugin was disabled, removed or lost the page leaves with
+    // the normal pop instead of staying on screen (spec 0032, NAV-02).
+    final pages = context.watch<PluginNavigationRegistry?>();
+    if (pages != null && pages.byRoute(page.routeId) == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const Scaffold(body: SizedBox.shrink());
+    }
     final registry = builders ?? context.read<PluginPageBuilderRegistry>();
     final body = registry.build(context, page);
     if (!showAppBar) return body;

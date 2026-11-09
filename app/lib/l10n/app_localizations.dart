@@ -9689,6 +9689,24 @@ abstract class AppLocalizations {
   /// **'插件页面'**
   String get pluginPages;
 
+  /// No description provided for @pluginActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法完成「{value}」：{value2}'**
+  String pluginActionFailed(Object value, Object value2);
+
+  /// No description provided for @pluginRouteMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开「{value}」，插件没有提供这个页面'**
+  String pluginRouteMissing(Object value);
+
+  /// No description provided for @pluginProposalPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{value}」已生成，等待你批准后才会写入'**
+  String pluginProposalPending(Object value);
+
   /// No description provided for @pluginViewAlternative.
   ///
   /// In zh, this message translates to:
