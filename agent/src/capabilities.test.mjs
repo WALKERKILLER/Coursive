@@ -251,6 +251,34 @@ test("the plugin host registry reports plugins and their tools", async () => {
 	assert.equal(out.items.find((i) => i.id === "pending").usable, false);
 });
 
+test("the plugin host registry reports a v3 plugin's services and slot entries", async () => {
+	const host = {
+		async list() {
+			return [
+				{
+					id: "review-lab", title: "复习实验室", version: "1.0.0", state: "enabled", permissions: [{ id: "library.read" }], needs_permissions: [], error: null,
+					provides: [{ service: "review.generate", version: "1.0.0" }],
+					contributes: { slots: [{ id: "progress", target: "course.detail.sections", mode: "list", order: 20, priority: 0 }] },
+				},
+				{
+					id: "off", title: "已停用", version: "0.1.0", state: "disabled", permissions: [], needs_permissions: [], error: null,
+					contributes: { slots: [{ id: "side", target: "course.detail.sections", mode: "list", order: 10, priority: 0 }] },
+				},
+			];
+		},
+		groups: () => ({}),
+	};
+	const inspector = createCapabilityInspector({ registry: pluginHostRegistry(host) });
+	const out = await inspector.listCapabilities();
+	assert.match(out.summary, /服务 1 个（可用 1）/);
+	const service = await inspector.inspectService("review.generate@1.0.0");
+	assert.deepEqual(service.providers.map((p) => [p.provider, p.usable]), [["review-lab", true]]);
+	// Choosing among providers is the daemon resolver's job, which this host does not run.
+	assert.equal(service.selected, "");
+	const slot = await inspector.inspectSlot("course.detail.sections");
+	assert.deepEqual(slot.entries.map((e) => [e.plugin, e.usable]), [["off", false], ["review-lab", true]]);
+});
+
 test("the inspector needs a registry with a snapshot", () => {
 	assert.throws(() => createCapabilityInspector({}), /snapshot/);
 });

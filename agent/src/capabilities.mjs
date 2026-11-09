@@ -342,6 +342,19 @@ export function pluginHostRegistry(host) {
 					});
 				}
 			}
+			// A v3 plugin's provides are its services; its slot entries group by target.
+			const services = [];
+			const slots = new Map();
+			for (const p of plugins) {
+				for (const x of p.provides ?? []) {
+					services.push({ id: x.service, version: x.version, providerId: p.id, owner: p.id, title: p.title, state: pluginState(p), permissions: declared.get(p.id) ?? [], reason: p.error ?? "" });
+				}
+				for (const e of p.contributes?.slots ?? []) {
+					const slot = slots.get(e.target) ?? { id: e.target, mode: e.mode, entries: [] };
+					slot.entries.push({ pluginId: p.id, entryId: e.id, order: e.order, priority: e.priority, state: pluginState(p), reason: p.error ?? "" });
+					slots.set(e.target, slot);
+				}
+			}
 			return {
 				granted: [...granted],
 				plugins: plugins.map((p) => ({
@@ -353,8 +366,8 @@ export function pluginHostRegistry(host) {
 					permissions: declared.get(p.id) ?? [],
 				})),
 				tools,
-				services: [],
-				slots: [],
+				services,
+				slots: [...slots.values()],
 			};
 		},
 	};
