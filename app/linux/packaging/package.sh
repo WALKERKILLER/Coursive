@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Packages a built Linux bundle as .tar.gz, .deb, .rpm, Arch .pkg.tar.zst
-# and AppImage. Used by .github/workflows/release.yml; runs locally too.
+# and AppImage. Used by .github/workflows/build.yml; runs locally too.
 #
 #   app/linux/packaging/package.sh <version> <bundle dir> <out dir> [formats]
 #

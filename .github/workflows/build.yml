@@ -1,22 +1,32 @@
-name: Release
+name: Build
 
-# Publishing a release or pre-release builds Linux, Windows and macOS
-# packages and Android APKs and attaches them to it. Create it on GitHub
-# (Releases -> Draft a new release) or with
-#   gh release create v0.2.0-beta.1 --target main --prerelease --generate-notes
-# The tag must be v<version> (semantic versioning); a new tag is created on
-# the target when the release is published, and the workflow file is read
-# from the tagged commit.
+# Builds the Linux, Windows and macOS packages and the Android APKs of one
+# commit and attaches them to its draft release. Called by
+# release-prerelease.yml and release-publish.yml, which create the draft
+# before and publish it after (docs/release-policy.md).
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag the packages attach to, v<version>
+        required: true
+        type: string
+      version:
+        description: Version built into the packages, X.Y.Z or X.Y.Z-pre
+        required: true
+        type: string
+      ref:
+        description: Commit to build
+        required: true
+        type: string
+      build:
+        description: Build number, one more than the published v* tags
+        required: true
+        type: string
 
 permissions:
   contents: write
-
-concurrency:
-  group: release-${{ github.event.release.tag_name }}
 
 env:
   FLUTTER_VERSION: "3.47.7"
@@ -25,7 +35,6 @@ env:
 jobs:
   prepare:
     name: Version
-    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
@@ -34,18 +43,18 @@ jobs:
     steps:
       - id: tag
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          version=${TAG#v}
-          if ! [[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::Tag '$TAG' should be v<version>, e.g. v0.2.0 or v0.2.0-beta.1"
+          if ! [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag '$TAG' and version '$VERSION' should be v<version> and <version>, e.g. v0.2.0-beta.1"
             exit 1
           fi
           {
             echo "tag=$TAG"
-            echo "version=$version"
-            echo "build_name=${version%%-*}"   # platforms want plain x.y.z
+            echo "version=$VERSION"
+            echo "build_name=${VERSION%%-*}"   # platforms want plain x.y.z
           } >> "$GITHUB_OUTPUT"
 
   linux:
@@ -70,6 +79,8 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - name: Build dependencies
         timeout-minutes: 15
         run: |
@@ -109,7 +120,7 @@ jobs:
       - name: Build
         run: |
           (cd daemon && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/walkerkiller/coursive/daemon/internal/server.Version=$VERSION" -o bin/coursive-daemon ./cmd/coursive-daemon)
-          (cd app && flutter pub get && flutter build linux --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number "$GITHUB_RUN_NUMBER")
+          (cd app && flutter pub get && flutter build linux --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number '${{ inputs.build }}')
 
       # The app looks for coursive-daemon and agent/src/host.mjs next to its executable.
       - name: Stage
@@ -147,6 +158,8 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: daemon/go.mod
@@ -165,7 +178,7 @@ jobs:
       - name: Build
         run: |
           (cd daemon && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/walkerkiller/coursive/daemon/internal/server.Version=$VERSION" -o bin/coursive-daemon.exe ./cmd/coursive-daemon)
-          (cd app && flutter pub get && flutter build windows --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number "$GITHUB_RUN_NUMBER")
+          (cd app && flutter pub get && flutter build windows --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number '${{ inputs.build }}')
 
       - name: Stage
         run: |
@@ -210,6 +223,8 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: daemon/go.mod
@@ -239,7 +254,7 @@ jobs:
           lipo bin/coursive-study-pdf -verify_arch arm64 x86_64
           cd ../app
           flutter pub get
-          flutter build macos --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number "$GITHUB_RUN_NUMBER"
+          flutter build macos --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number '${{ inputs.build }}'
 
       # Not notarized: the app is signed ad hoc after the daemon and the agent
       # are added, so it runs once the user allows it (see the README).
@@ -289,6 +304,8 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -329,7 +346,7 @@ jobs:
           flutter pub get
           flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64 \
             --obfuscate --split-debug-info=build/symbols \
-            --build-name '${{ needs.prepare.outputs.build_name }}' --build-number "$GITHUB_RUN_NUMBER"
+            --build-name '${{ needs.prepare.outputs.build_name }}' --build-number '${{ inputs.build }}'
           mkdir -p ../dist
           for abi in arm64-v8a x86_64; do
             cp "build/app/outputs/flutter-apk/app-$abi-release.apk" "../dist/coursive-$VERSION-android-$abi.apk"
