@@ -25,5 +25,5 @@ The application treated playback, transcription, PDF import and AI setup as sepa
 
 - [Diagnostics regression](../../app/test/diagnostics_test.dart) checks independent failures, partial installations, refresh and PDF backend-specific guidance; unknown results must not retain stale success.
 - [Daemon tool detection test](../../daemon/internal/server/media_tools_test.go) distinguishes missing and partially installed executables, while [desktop PATH regression](../../app/test/daemon_path_test.dart) preserves explicit tool priority and includes standard package-manager locations.
-- [macOS release workflow](../../.github/workflows/release.yml) compiles both PDF helper architectures, verifies them, copies the helper beside the daemon and checks executable presence before signing.
+- [macOS release build](../../.github/workflows/build.yml) compiles both PDF helper architectures, verifies them, copies the helper beside the daemon and checks executable presence before signing.
 - [Feature reference](../features.md) separates executable presence from decoding, model and network validation. Windows PDF compatibility remains explicitly unsupported rather than inferred from installed tools.

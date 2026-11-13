@@ -31,6 +31,7 @@ Write code for human readers. Keep the primary logic path visible; introduce an 
 - Test: `(cd daemon && go test -count=1 -race ./...) && (cd agent && npm test) && (cd app && flutter test)`
 - Lint: `(cd daemon && test -z "$(gofmt -l .)" && go vet ./...) && (cd agent && npm run check) && (cd app && flutter analyze --no-fatal-infos)`
 - Interface text: edit `app/lib/l10n/app_zh.arb`, then run `flutter gen-l10n` in `app/`.
+- Releases: `node --test scripts/release.test.mjs` tests the version and promotion rules; cutting and promoting releases follows [docs/release-policy.md](docs/release-policy.md).
 
 Run relevant tests while working and the shared gate runner before every commit. CI or an installed pre-commit hook may repeat the exhaustive matrix.
 
@@ -90,6 +91,6 @@ Follow [docs/testing.md](docs/testing.md). Name the regression risk, then choose
 
 ## Enabled optional capabilities
 
-- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates on every push and pull request to `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes. Publishing a `v*` release or pre-release builds the Linux, Windows, macOS and Android packages and attaches them through [.github/workflows/release.yml](.github/workflows/release.yml).
-- Path-level owners live in [CODEOWNERS](CODEOWNERS). The `main` branch ruleset requires an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request.
+- CI is an existing mechanism (`ci` capability: external). [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the gates and the release-rule tests on every push and pull request to `dev` and `main` and checks that the brand exports are complete and generated from the current master; the daemon, assistant-host and app jobs run only for changes that touch them, and the app's Linux build only for changes to `app/linux/`, the pubspec or the workflow and on pushes. Releases follow [docs/release-policy.md](docs/release-policy.md): **Release / Prerelease** cuts a pre-release from `dev`, the `promotion` check admits only a published pre-release into `main`, and **Release / Publish** releases it as stable; each builds the Linux, Windows, macOS and Android packages through [.github/workflows/build.yml](.github/workflows/build.yml) into a draft and publishes it last.
+- Path-level owners live in [CODEOWNERS](CODEOWNERS). The `dev` and `main` branch rulesets require an approving code-owner review (@WALKERKILLER) and green CI checks on every pull request; `dev` is the default branch, and `main` also requires the `promotion` check.
 - Security vulnerabilities are reported per [SECURITY.md](SECURITY.md).

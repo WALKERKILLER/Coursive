@@ -1,0 +1,96 @@
+name: Release / Publish
+
+# Publishes the stable release of a promotion (docs/release-policy.md). A
+# promotion is a merge commit on main whose second parent is a dev commit
+# carrying a published pre-release vX.Y.Z-pre and whose files equal that
+# commit's; it releases vX.Y.Z. The workflow opens a draft on the merge
+# commit, builds and attaches every package from it, and publishes the draft
+# only when all of them succeeded. Any other commit on main releases nothing.
+# Run it from Actions on main to retry the newest promotion.
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.version.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! promoted=$(git rev-parse -q --verify "$GITHUB_SHA^2"); then
+            echo "::notice::$GITHUB_SHA is not a promotion merge; nothing to release."
+            exit 0
+          fi
+          out=$(node scripts/release.mjs promote --head "$promoted" --merged "$GITHUB_SHA")
+          echo "$out"
+          prerelease=$(jq -r .prerelease <<<"$out")
+          gh release view "$prerelease" --json isDraft,isPrerelease -q 'select(.isPrerelease and (.isDraft | not))' | grep -q . \
+            || { echo "::error::$prerelease is not a published pre-release"; exit 1; }
+          for k in tag version build previous; do echo "$k=$(jq -r ".$k" <<<"$out")" >> "$GITHUB_OUTPUT"; done
+      - name: Draft the release
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          set -euo pipefail
+          if target=$(gh release view "$TAG" --json isDraft,targetCommitish -q 'select(.isDraft) | .targetCommitish' 2>/dev/null); then
+            [ "$target" = "$GITHUB_SHA" ] || { echo "::error::$TAG exists and is not a draft of $GITHUB_SHA"; exit 1; }
+          else
+            # Notes run from the previous stable release, not from the last pre-release.
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" --title "Coursive $VERSION" \
+              --generate-notes ${PREVIOUS:+--notes-start-tag "$PREVIOUS"}
+          fi
+
+  build:
+    name: Build
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    uses: ./.github/workflows/build.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ github.sha }}
+      build: ${{ needs.prepare.outputs.build }}
+    secrets: inherit
+
+  publish:
+    name: Publish
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft and check its tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" -q .sha)
+          [ "$sha" = "$GITHUB_SHA" ] || { echo "::error::$TAG points at $sha, not $GITHUB_SHA"; exit 1; }

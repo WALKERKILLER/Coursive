@@ -4,10 +4,10 @@ Thank you for considering contributing to Coursive. This repository is agent-nat
 
 ## Branches
 
-- `main` is the integration branch.
-- Work on a short-lived branch from `main`, named by type: `feat/…`, `fix/…`, `docs/…`, `ci/…`, `refactor/…`, `chore/…`. Contributors without write access work on a fork.
-- Every change reaches `main` through a pull request. The `main` ruleset blocks deletion and force-pushes, and requires the CI check `governance (gates)` plus an approving review from the code owner @WALKERKILLER ([CODEOWNERS](CODEOWNERS)). Each migrated module adds its CI job to the required checks; CI runs a part's job only when the change touches that part, Markdown-only changes run just the gates, and skipped jobs count as passed.
-- Releases: publishing a GitHub release or pre-release tagged `vX.Y.Z` (or `vX.Y.Z-beta.N`) on `main` runs [release.yml](.github/workflows/release.yml), which builds and attaches the Linux, Windows, macOS and Android packages. Icons for every platform come from [scripts/export-brand-icons.sh](scripts/export-brand-icons.sh).
+- `dev` is the default and development branch; `main` holds the latest stable release and changes only by promoting `dev` ([docs/release-policy.md](docs/release-policy.md)).
+- Work on a short-lived branch from `dev`, named by type: `feat/…`, `fix/…`, `docs/…`, `ci/…`, `refactor/…`, `chore/…`, and open the pull request against `dev`. Contributors without write access work on a fork.
+- Every change reaches `dev` through a pull request. The `dev` and `main` rulesets block deletion and force-pushes, and require the CI checks `governance (gates)`, `daemon (Go)`, `agent (Node)`, `app (Flutter)` and `app (Linux build)` plus an approving review from the code owner @WALKERKILLER ([CODEOWNERS](CODEOWNERS)); `main` also requires the `promotion` check. CI runs a part's job only when the change touches that part, Markdown-only changes run just the gates, and skipped jobs count as passed.
+- Releases: pre-releases are cut from `dev` with **Release / Prerelease**; a stable release is published by merging a promotion pull request from `dev` into `main` after its pre-release. [docs/release-policy.md](docs/release-policy.md) has the steps. Icons for every platform come from [scripts/export-brand-icons.sh](scripts/export-brand-icons.sh).
 
 ## Governance loop
 
@@ -31,7 +31,7 @@ Setup per platform is in [docs/development.md](docs/development.md). Before push
 - UI changes include a screenshot or short recording.
 - Never commit credentials, local data (the course library or the app's data directory), build outputs, or code copied from GPL/AGPL projects; see the project rules in [AGENTS.md](AGENTS.md#project-rules).
 - Core code, docs and assets never name a specific institution or course platform; that knowledge belongs in a source plugin.
-- Pull requests are squash- or rebase-merged by the code owner after approval. Migration pull requests that import history are merge commits, so every original commit keeps its author ([docs/migration.md](docs/migration.md#history)).
+- Pull requests into `dev` are squash- or rebase-merged by the code owner after approval. Migration pull requests that import history are merge commits, so every original commit keeps its author ([docs/migration.md](docs/migration.md#history)), and so are promotions into `main`.
 
 ## Plugins
 

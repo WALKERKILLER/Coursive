@@ -1,0 +1,51 @@
+name: Release / Promotion
+
+# The required `promotion` check of pull requests into main
+# (docs/release-policy.md): main changes only by promoting dev, and only to a
+# commit already published as a pre-release. The pull request must come from
+# this repository's dev branch, its head must carry a published pre-release
+# vX.Y.Z-pre whose vX.Y.Z is unreleased, and the merge must leave main with
+# exactly that commit's files. Publish the pre-release before opening the pull
+# request, or re-run this check after.
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  promotion:
+    name: promotion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Check the promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] || [ "$HEAD_REF" != dev ]; then
+            echo "::error::Only dev is promoted to main; open this pull request against dev instead."
+            exit 1
+          fi
+          out=$(node scripts/release.mjs promote --head "$HEAD_SHA" --base "$BASE_SHA")
+          prerelease=$(jq -r .prerelease <<<"$out")
+          gh release view "$prerelease" --json isDraft,isPrerelease -q 'select(.isPrerelease and (.isDraft | not))' | grep -q . \
+            || { echo "::error::$prerelease is not a published pre-release"; exit 1; }
+          echo "Merging publishes $(jq -r .tag <<<"$out") from $prerelease ($HEAD_SHA)." | tee -a "$GITHUB_STEP_SUMMARY"

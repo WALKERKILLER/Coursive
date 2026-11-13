@@ -41,6 +41,11 @@
       "codeowners": {
         "state": "enabled"
       },
+      "release": {
+        "state": "external",
+        "assessmentHash": "3abe3676844404de3602190c591bb617ab39cd2f1f5d0f51e49dfdc4adc222bb",
+        "reason": "docs/release-policy.md and the release workflows are repository-owned; commit-msg enforcement is not adopted"
+      },
       "monorepo": {
         "state": "deferred",
         "reason": "the app, daemon and assistant host migrate as separate modules; revisit when they get separate owners or policies",

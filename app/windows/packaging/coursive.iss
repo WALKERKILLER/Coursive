@@ -1,4 +1,4 @@
-; Per-user installer for the Windows build; see .github/workflows/release.yml.
+; Per-user installer for the Windows build; see .github/workflows/build.yml.
 ;   iscc /DAppVersion=0.2.0 /DSourceDir=<staged dir> /DOutputDir=<dir> /DOutputName=<name> coursive.iss
 
 #define AppName "Coursive"

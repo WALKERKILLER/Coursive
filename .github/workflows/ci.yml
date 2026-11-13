@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main", "import/**"]
+    branches: ["dev", "main", "import/**"]
   pull_request:
-    branches: ["main", "import/**"]
+    branches: ["dev", "main", "import/**"]
   workflow_dispatch:
 
 permissions:
@@ -71,6 +71,8 @@ jobs:
         with:
           node-version: 24
       - run: node scripts/run-gates.mjs
+      - name: Release rules
+        run: node --test scripts/release.test.mjs
       - name: Brand exports match the master
         run: node scripts/check-brand-assets.mjs
 

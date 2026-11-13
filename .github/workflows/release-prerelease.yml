@@ -1,0 +1,94 @@
+name: Release / Prerelease
+
+# Cuts a pre-release from the current dev head (docs/release-policy.md):
+# picks the version, opens a draft pre-release on that commit, builds and
+# attaches every package, and publishes the draft only when all of them
+# succeeded. Run it on dev from Actions or with
+#   gh workflow run release-prerelease.yml --ref dev [-f version=0.2.0-beta.1]
+# With publish=false it stops at the draft: a rehearsal that releases nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version, e.g. 0.2.0-beta.1; empty continues the newest pre-release
+        required: false
+        type: string
+      publish:
+        description: Publish the pre-release once every package is attached
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.version.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          out=$(node scripts/release.mjs prerelease ${VERSION:+--version "$VERSION"})
+          echo "$out"
+          for k in tag version build; do echo "$k=$(jq -r ".$k" <<<"$out")" >> "$GITHUB_OUTPUT"; done
+      - name: Draft the pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # A rerun of this run finds its own draft; any other release with the tag is an error.
+          if target=$(gh release view "$TAG" --json isDraft,targetCommitish -q 'select(.isDraft) | .targetCommitish' 2>/dev/null); then
+            [ "$target" = "$GITHUB_SHA" ] || { echo "::error::$TAG exists and is not a draft of $GITHUB_SHA"; exit 1; }
+          else
+            gh release create "$TAG" --draft --prerelease --target "$GITHUB_SHA" \
+              --title "Coursive $VERSION" --generate-notes
+          fi
+
+  build:
+    name: Build
+    needs: prepare
+    uses: ./.github/workflows/build.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ github.sha }}
+      build: ${{ needs.prepare.outputs.build }}
+    secrets: inherit
+
+  publish:
+    name: Publish
+    needs: [prepare, build]
+    if: inputs.publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft and check its tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" -q .sha)
+          [ "$sha" = "$GITHUB_SHA" ] || { echo "::error::$TAG points at $sha, not $GITHUB_SHA"; exit 1; }
