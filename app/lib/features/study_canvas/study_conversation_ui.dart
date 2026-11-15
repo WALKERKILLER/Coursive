@@ -64,7 +64,7 @@ extension _StudyModules on StudyCanvasState {
     if (newConversation || (state == null && picked)) {
       await _startConversation(bind: bind, snapshot: snapshot);
     } else if (state != null && picked) {
-      await state.bind(_selectedQuery(), []);
+      await state.bind(snapshot?.query ?? _selectedQuery(), []);
       if (snapshot != null) await state.attachSnapshot(snapshot);
     }
     if (!mounted) return;
@@ -120,6 +120,7 @@ extension _StudyModules on StudyCanvasState {
             ? data['paper_color'] as int
             : 0xffffffff;
         _dockSmall = data['pens_small'] == true;
+        _angleSnapping = data['angle_snapping'] != false;
         _penPlacement = StudyDockPlacement.parse(data['pens'], _penPlacement);
         _aiPlacement = StudyDockPlacement.parse(data['ai'], _aiPlacement);
       });
@@ -138,6 +139,7 @@ extension _StudyModules on StudyCanvasState {
         'pens': _penPlacement.json(),
         'ai': _aiPlacement.json(),
         'pens_small': _dockSmall,
+        'angle_snapping': _angleSnapping,
       }),
     );
   }
@@ -638,7 +640,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
     _stopRequested = false;
     runId = null;
     setState(() => busy = true);
-    final repaired = await refreshContext();
+    bool repaired;
+    try {
+      await context.read<AssistantController?>()?.waitForPreferences();
+      repaired = await refreshContext();
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          busy = false;
+          error = '$e';
+        });
+      return;
+    }
     if (repaired || preview == null || !mounted || _stopRequested) {
       if (mounted) setState(() => busy = false);
       return;
@@ -768,6 +781,11 @@ class _ConversationBodyState extends State<_ConversationBody> {
         'task': ?task,
         'turn_id': turn['id'],
         'question': question,
+        if (context.read<AssistantController?>()?.selected case final choice?)
+          'model_choice': {
+            'provider': choice['provider'],
+            'model': choice['model'],
+          },
         'selection': query,
         'attachments': sentAttachments,
         'context_scope': sentScope,
@@ -929,8 +947,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
               'outline_proposal': out['outline_proposal'],
           },
         };
+        runId = null;
+        setState(() => busy = false);
         await save();
-        if (mounted) setState(() => busy = false);
         // A finished draft opens for review; nothing is written until then.
         if (mounted && outlineProposal(turn) != null) {
           owner._openReview(widget.card.id, '${turn['id']}');
@@ -938,6 +957,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       } else if (out['state'] == 'error' || out['state'] == 'cancelled') {
         turn['state'] = out['state'];
         turn['error'] = out['error'];
+        runId = null;
         setState(() => busy = false);
         await save();
       } else {

@@ -290,7 +290,7 @@ class _CanvasPdfState extends State<_CanvasPdf> {
         pressureThreshold: widget.owner._pressureEraser
             ? widget.owner._pressureThreshold
             : null,
-        canvasZoom: widget.owner.document!.zoom,
+        canvasZoom: widget.owner.document!.zoom * widget.card.contentScale,
         pdf: s.data!,
         horizontal: widget.card.pdfPaged,
         firstPage: widget.card.page,
@@ -306,7 +306,7 @@ class _CanvasPdfState extends State<_CanvasPdf> {
         squareTip: widget.owner._brush.squareTip,
         marker: widget.owner._brush.family == 'highlighter',
         eraseMode: widget.owner._eraserMode,
-        eraseRadius: widget.owner._eraserSize / widget.owner.document!.zoom,
+        eraseRadius: widget.owner._eraserSize / (widget.owner.document!.zoom * widget.card.contentScale),
         onTool: (eraser) =>
             widget.owner._chooseTool(eraser ? StudyTool.eraser : StudyTool.pen),
         onEraseLegacy: _eraseLegacy,

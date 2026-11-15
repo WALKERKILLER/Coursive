@@ -426,10 +426,9 @@ extension _StudyInteraction on StudyCanvasState {
   Future<void> _setQuickVision(bool on) async {
     _update(() {
       _quickImages = on;
-      _quickSnapshot = null;
       _quickError = null;
     });
-    if (on) await _previewQuickVision();
+    if (on && _quickSnapshot == null) await _previewQuickVision();
   }
 
   /// Takes the screenshot 「看图」 will send, so the learner sees it first.

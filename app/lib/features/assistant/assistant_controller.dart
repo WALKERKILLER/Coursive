@@ -143,9 +143,17 @@ class AssistantController extends ChangeNotifier {
 
   // ---- models ----
 
+  Future<void> _preferenceWrite = Future.value();
+  int _prefsGeneration = 0;
+  Object? _preferenceError;
+
   Future<void> loadModels() async {
+    final generation = _prefsGeneration;
+    await _preferenceWrite;
     try {
-      models = (await app.api.get('/agent/models') as Map).cast<String, dynamic>();
+      final result = (await app.api.get('/agent/models') as Map).cast<String, dynamic>();
+      if (generation != _prefsGeneration) return;
+      models = result;
       modelsError = null;
     } catch (e) {
       modelsError = e;
@@ -153,9 +161,20 @@ class AssistantController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setPrefs(Map<String, dynamic> patch) async {
-    models = (await app.api.put('/agent/prefs', patch) as Map).cast<String, dynamic>();
-    notifyListeners();
+  Future<void> waitForPreferences() async {
+    await _preferenceWrite;
+    if (_preferenceError != null) throw StateError(l10n.modelPrefsSaveFailed);
+  }
+
+  Future<void> setPrefs(Map<String, dynamic> patch) {
+    ++_prefsGeneration;
+    final write = _preferenceWrite.then((_) async {
+      models = (await app.api.put('/agent/prefs', patch) as Map).cast<String, dynamic>();
+      modelsError = _preferenceError = null;
+      notifyListeners();
+    });
+    _preferenceWrite = write.catchError((Object e) { modelsError = _preferenceError = e; notifyListeners(); });
+    return write;
   }
 
   Future<void> setKey(String provider, String key) async {
@@ -555,7 +574,14 @@ class AssistantController extends ChangeNotifier {
 
   Future<void> send(String text) async {
     final msg = text.trim();
+    await _preferenceWrite;
     if (msg.isEmpty || busy || !ready) return;
+    if (_preferenceError != null) {
+      final reply = ChatMessage.assistant()..error = l10n.modelPrefsSaveFailed;
+      messages = [...messages, reply];
+      notifyListeners();
+      return;
+    }
     ActivityTracker.instance?.count('ask', lectureId: players.value?.lectureId ?? '');
     final reply = ChatMessage.assistant()..streaming = true;
     messages = [...messages, ChatMessage.user(msg), reply];
@@ -566,6 +592,7 @@ class AssistantController extends ChangeNotifier {
       'session_id': ?sessionId,
       if (sessionId == null && view == 'bot') 'agent': 'bot',
       if (sessionId == null && view != 'bot') 'course_id': ?pendingCourse?.id,
+      if (selected case final choice?) 'model_choice': {'provider':choice['provider'],'model':choice['model']},
       'message': msg,
       'context': _context(),
     }).listen(
@@ -595,6 +622,7 @@ class AssistantController extends ChangeNotifier {
           pendingCourse = null;
         }
       case 'block':
+        r.error = null;
         r.blocks.add(e['kind'] == 'thinking' ? ChatBlock.thinking() : ChatBlock.text());
         r.status = null;
       case 'text':
@@ -633,8 +661,9 @@ class AssistantController extends ChangeNotifier {
                   'cost': ((prev['cost'] as num?) ?? 0) + ((u['cost'] as num?) ?? 0),
                 };
         }
-        if (e['error'] != null) r.error = '${e['error']}';
+        r.error = e['error']?.toString();
       case 'status':
+        if (e['retrying'] == true) r.error = null;
         r.status = '${e['text']}';
       case 'error':
         r.error = '${e['message']}';

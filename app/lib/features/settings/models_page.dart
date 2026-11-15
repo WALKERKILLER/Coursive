@@ -297,13 +297,17 @@ class _ProviderTile extends StatelessWidget {
 
 /// Searchable picker over every usable model of every configured provider.
 Future<void> showModelPicker(BuildContext context) {
+  final controller = context.read<AssistantController>();
   return showModalBottomSheet(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
     showDragHandle: true,
     constraints: const BoxConstraints(maxWidth: 640),
-    builder: (_) => const _ModelPicker(),
+    builder: (_) => ChangeNotifierProvider.value(
+      value: controller,
+      child: const _ModelPicker(),
+    ),
   );
 }
 
@@ -315,6 +319,8 @@ class _ModelPicker extends StatefulWidget {
 
 class _ModelPickerState extends State<_ModelPicker> {
   final _q = TextEditingController();
+  bool _saving = false;
+  String? _error;
   @override
   void dispose() {
     _q.dispose();
@@ -328,60 +334,171 @@ class _ModelPickerState extends State<_ModelPicker> {
     final cs = Theme.of(context).colorScheme;
     final q = _q.text.trim().toLowerCase();
     final groups = <(Map<String, dynamic>, List<Map<String, dynamic>>)>[];
-    for (final p in providersOf(a.models).where((p) => p['configured'] == true)) {
+    for (final p in providersOf(
+      a.models,
+    ).where((p) => p['configured'] == true)) {
       final ms = jsonList(p['models'])
           .whereType<Map>()
           .map((e) => e.cast<String, dynamic>())
-          .where((m) => m['available'] == true && (q.isEmpty || '${m['id']} ${m['name']} ${p['name']}'.toLowerCase().contains(q)))
+          .where(
+            (m) =>
+                m['available'] == true &&
+                (q.isEmpty ||
+                    '${m['id']} ${m['name']} ${p['name']}'
+                        .toLowerCase()
+                        .contains(q)),
+          )
           .toList();
       if (ms.isNotEmpty) groups.add((p, ms));
     }
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.75,
-      maxChildSize: 0.95,
-      builder: (context, scroll) => Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.md),
-          child: SearchBar(
-            controller: _q,
-            autoFocus: true,
-            hintText: l10n.modelsSearch,
-            leading: const Icon(Icons.search_rounded),
-            onChanged: (_) => setState(() {}),
-            elevation: const WidgetStatePropertyAll(0),
-            backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHighest),
-          ),
-        ),
-        Expanded(
-          child: groups.isEmpty
-              ? Center(child: Text(l10n.modelsNoneAvailable, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)))
-              : ListView(controller: scroll, padding: const EdgeInsets.fromLTRB(Space.md, 0, Space.md, Space.xl), children: [
-                  for (final (p, ms) in groups) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(Space.sm, Space.md, Space.sm, Space.xs),
-                      child: Row(children: [
-                        ProviderLogo(providerId: '${p['id']}', name: '${p['name']}', size: 24),
-                        const SizedBox(width: Space.sm),
-                        Text(presetFor('${p['id']}')?.name ?? '${p['name']}', style: tt.labelLarge?.copyWith(color: cs.primary)),
-                      ]),
-                    ),
-                    for (final m in ms)
-                      ListTile(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Corners.lg)),
-                        selected: a.selected?['provider'] == p['id'] && a.selected?['model'] == m['id'],
-                        selectedTileColor: cs.secondaryContainer,
-                        title: Text('${m['name']}'),
-                        subtitle: Padding(padding: const EdgeInsets.only(top: 4), child: ModelBadges(m: m, dense: true)),
-                        onTap: () {
-                          a.setPrefs({'provider': p['id'], 'model': m['id']});
-                          Navigator.pop(context);
-                        },
+    return SafeArea(
+      child: SizedBox(
+        height:
+            (MediaQuery.sizeOf(context).height * .78 -
+                    MediaQuery.viewInsetsOf(context).bottom)
+                .clamp(180.0, 720.0),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                Space.xl,
+                0,
+                Space.xl,
+                Space.md,
+              ),
+              child: SearchBar(
+                controller: _q,
+                autoFocus: false,
+                hintText: l10n.modelsSearch,
+                leading: const Icon(Icons.search_rounded),
+                onChanged: (_) => setState(() {}),
+                elevation: const WidgetStatePropertyAll(0),
+                backgroundColor: WidgetStatePropertyAll(
+                  cs.surfaceContainerHighest,
+                ),
+              ),
+            ),
+            Expanded(
+              child: groups.isEmpty
+                  ? Center(
+                      child: Text(
+                        l10n.modelsNoneAvailable,
+                        style: tt.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
-                  ],
-                ]),
+                    )
+                  : ListView(
+                      key: const ValueKey('model-picker-list'),
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(
+                        Space.md,
+                        0,
+                        Space.md,
+                        Space.xl,
+                      ),
+                      children: [
+                        for (final (p, ms) in groups) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              Space.sm,
+                              Space.md,
+                              Space.sm,
+                              Space.xs,
+                            ),
+                            child: Row(
+                              children: [
+                                ProviderLogo(
+                                  providerId: '${p['id']}',
+                                  name: '${p['name']}',
+                                  size: 24,
+                                ),
+                                const SizedBox(width: Space.sm),
+                                Text(
+                                  presetFor('${p['id']}')?.name ??
+                                      '${p['name']}',
+                                  style: tt.labelLarge?.copyWith(
+                                    color: cs.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          for (final m in ms)
+                            ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(Corners.lg),
+                              ),
+                              selected:
+                                  a.selected?['provider'] == p['id'] &&
+                                  a.selected?['model'] == m['id'],
+                              selectedTileColor: cs.secondaryContainer,
+                              title: Text('${m['name']}'),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: ModelBadges(m: m, dense: true),
+                              ),
+                              enabled: !_saving,
+                              onTap: () async {
+                                setState(() {
+                                  _saving = true;
+                                  _error = null;
+                                });
+                                try {
+                                  await a.setPrefs({
+                                    'provider': p['id'],
+                                    'model': m['id'],
+                                  });
+                                  if (context.mounted) Navigator.pop(context);
+                                } catch (_) {
+                                  if (mounted)
+                                    setState(() {
+                                      _saving = false;
+                                      _error = l10n.modelsSwitchFailed;
+                                    });
+                                }
+                              },
+                            ),
+                        ],
+                      ],
+                    ),
+            ),
+            if (_saving) const LinearProgressIndicator(),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(Space.md),
+                child: Text(_error!, style: TextStyle(color: cs.error)),
+              ),
+          ],
         ),
-      ]),
+      ),
+    );
+  }
+}
+
+/// Shared by the assistant and the canvas sidebar; no nested model submenus.
+class AssistantModelButton extends StatelessWidget {
+  const AssistantModelButton({super.key, this.enabled = true});
+  final bool enabled;
+  @override
+  Widget build(BuildContext context) {
+    final a = context.watch<AssistantController?>();
+    if (a == null) return const SizedBox.shrink();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 190),
+      child: ActionChip(
+        key: const ValueKey('assistant-model-picker'),
+        avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+        label: Text(a.modelLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+        onPressed: !enabled
+            ? null
+            : () async {
+                await a.loadModels();
+                if (context.mounted) await showModelPicker(context);
+              },
+      ),
     );
   }
 }

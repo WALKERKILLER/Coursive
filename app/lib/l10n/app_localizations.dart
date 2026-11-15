@@ -14210,6 +14210,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'上下滚动'**
   String get pdfCardScroll;
+
+  /// No description provided for @modelsSwitchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型切换未保存，请检查连接后重试'**
+  String get modelsSwitchFailed;
+
+  /// No description provided for @studyRestoreUpright.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复正向'**
+  String get studyRestoreUpright;
+
+  /// No description provided for @studyAngleSnapping.
+  ///
+  /// In zh, this message translates to:
+  /// **'角度吸附'**
+  String get studyAngleSnapping;
+
+  /// No description provided for @modelPrefsSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型选择未能保存，请重新选择模型后发送'**
+  String get modelPrefsSaveFailed;
 }
 
 class _AppLocalizationsDelegate

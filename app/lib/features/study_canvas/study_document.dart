@@ -59,6 +59,7 @@ class StudyCard {
     this.expandedH = 0,
     this.quarterTurns = 0,
     this.rotation = 0,
+    this.contentScale = 1,
     List<StudyBlock>? blocks,
     List<StudyAnchor>? sources,
     Map<String, String>? responses,
@@ -74,7 +75,7 @@ class StudyCard {
   bool collapsed;
   double expandedH;
   int page, pageCount, quarterTurns;
-  double rotation;
+  double rotation, contentScale;
   double pageAspect;
   Offset mapWorld(Offset world, double angle) {
     final v = world - rect.center;
@@ -169,6 +170,7 @@ class StudyCard {
     collapsed: m['collapsed'] == true,
     expandedH: _n(m['expanded_h']),
     rotation: _n(m['rotation']),
+    contentScale: _n(m['content_scale'], 1),
     quarterTurns: (m['quarter_turns'] as num? ?? 0).toInt(),
     responses: Map<String, String>.from(m['responses'] as Map? ?? {}),
     blocks: [
@@ -206,6 +208,7 @@ class StudyCard {
     'collapsed': collapsed,
     'expanded_h': expandedH,
     if (rotation != 0) 'rotation': rotation,
+    if (contentScale != 1) 'content_scale': contentScale,
     if (quarterTurns != 0) 'quarter_turns': quarterTurns,
     'responses': responses,
     'blocks': blocks.map((b) => b.json()).toList(),
@@ -450,7 +453,8 @@ class StudyDocument extends ChangeNotifier {
         m['version'] != 3 &&
         m['version'] != 4 &&
         m['version'] != 5 &&
-        m['version'] != 6)
+        m['version'] != 6 &&
+        m['version'] != 7)
       throw FormatException(l10n.studyUnknownVersion);
     final d = StudyDocument();
     d.formatVersion = math.max(3, (m['version'] as num).toInt());
@@ -492,7 +496,9 @@ class StudyDocument extends ChangeNotifier {
   Map<String, dynamic> json() => {
     'version': math.max(
       formatVersion,
-      cards.any(
+      cards.any((c) => c.contentScale != 1)
+          ? 7
+          : cards.any(
             (c) =>
                 c.rotation != 0 || (c.quarterTurns != 0 && c.type != 'image'),
           )

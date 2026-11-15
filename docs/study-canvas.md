@@ -34,7 +34,7 @@ PDF 模块标题栏的「在画布展开为一列」将各页按页码竖向铺�
 | 课件导入 | `POST /api/lectures/{id}/study-canvas/assets?path=...` | 当前课次内的原课件相对路径；返回同一对象结构 |
 | 导出预览 | `POST /api/export/pdf-preview?page=n` | 应用即将保存的 PDF 字节（不超过 40 MiB）；返回该页 PNG、页数与尺寸，不保存文件。仅供应用使用，Node 客户端不调用 |
 
-客户端读取 version 1–5，保存 version 3，包含 camera 的 x/y/z、layers、objects、strokes 和 connections；有旋转图片时保存 version 4，有插件对象时保存 version 5。新字段定义见[多模态对象](multimodal-canvas.md)。不支持新版格式的旧应用拒绝更高版本，回退前须保留新版画布或恢复备份，不能用旧版覆盖新版文档。卡片记录 id/type/layer、x/y/w/h、title/text 及库内 path/source；笔迹记录 id/layer/anchor、tool/color/width 和 `[x,y,pressure]` 点列。导入素材引用只允许本课次 study-assets 内的常规文件；课程视频引用通过课程归属校验解析其他课次的本地视频；目录与文件符号链接均拒绝。所有接口使用现有 coursive-daemon 认证，Node 客户端同步声明接口；模型只返回回答与来源，完整画布文档由 Flutter 验证并保存。
+客户端读取 version 1–7，默认保存 version 3，包含 camera 的 x/y/z、layers、objects、strokes 和 connections；有旋转图片时保存 version 4，有插件对象时保存 version 5；自由旋转使用 version 6，整体内容缩放通过 version 7 的 `content_scale` 保存，旧卡片默认比例 1。缩放与输入契约见[统一变换规范](specs/0034-canvas-gesture-and-uniform-scale.md)。新字段定义见[多模态对象](multimodal-canvas.md)。不支持新版格式的旧应用拒绝更高版本，回退前须保留新版画布或恢复备份，不能用旧版覆盖新版文档。卡片记录 id/type/layer、x/y/w/h、title/text 及库内 path/source；笔迹记录 id/layer/anchor、tool/color/width 和 `[x,y,pressure]` 点列。导入素材引用只允许本课次 study-assets 内的常规文件；课程视频引用通过课程归属校验解析其他课次的本地视频；目录与文件符号链接均拒绝。所有接口使用现有 coursive-daemon 认证，Node 客户端同步声明接口；模型只返回回答与来源，完整画布文档由 Flutter 验证并保存。
 
 插件对象保存在 `plugin_objects`，每项都是 `coursive/canvas-object@1`（字段与锚点见 [spec 0032](specs/0032-ui-extension-protocol.md)），后端保存时逐项校验，对象 ID 与卡片共用命名空间，关联线可以连到插件对象。插件不直接写文件：画布工具（`canvas.toolbar.tools` 插槽）返回一个 `canvas` 批次，Flutter 按插件对象版本整批检查，只允许插件改动自己的对象，覆盖或删除前列出改动请用户确认，提交时作为一条撤销记录；检查失败、用户放弃或期间画布已改变都不提交任何改动。插件对象画在卡片与笔迹之间，不参与命中测试，不会接住笔迹或选区。插件停用或卸载后对象仍保留，以标题、来源和摘要显示，并可从画布的「插件」面板导出完整对象。
 

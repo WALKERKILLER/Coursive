@@ -8144,4 +8144,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pdfCardScroll => '上下滚动';
+
+  @override
+  String get modelsSwitchFailed => '模型切换未保存，请检查连接后重试';
+
+  @override
+  String get studyRestoreUpright => '恢复正向';
+
+  @override
+  String get studyAngleSnapping => '角度吸附';
+
+  @override
+  String get modelPrefsSaveFailed => '模型选择未能保存，请重新选择模型后发送';
 }

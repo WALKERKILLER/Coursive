@@ -270,3 +270,18 @@ test('the shared outline fixture is what the host produces',async()=>{
  if(process.env.UPDATE_FIXTURES)writeFileSync(file,JSON.stringify(result,null,1)+'\n');
  assert.deepEqual(JSON.parse(readFileSync(file,'utf8')),JSON.parse(JSON.stringify(result)));
 });
+
+test('canvas pins provider/model and never sends a mismatched choice', async()=>{
+ let sent=false;
+ const r=new CanvasRunner({currentModel:async()=>({provider:'other',id:'different'}),runtime:{completeSimple:async()=>{sent=true;}}},{call:async()=>context()});
+ const s=await r.start({lecture_id:'L',question:'Question',selection:{},model_choice:{provider:'selected',model:'chosen'}});
+ const done=await settled(r,s.id);
+ assert.equal(done.state,'error');assert.match(done.error,/模型选择/);assert.equal(sent,false);
+});
+test('provider failures have actionable errors without leaking SDK payloads', async()=>{
+ for(const [failure,expected] of [[{status:401,message:'private-key'},/授权/],[{status:429,message:'private-key'},/额度/],[{message:'fetch failed private-key'},/网络/]]) {
+  const r=new CanvasRunner({currentModel:async()=>({id:'fixture'}),runtime:{completeSimple:async()=>{throw failure;}}},{call:async()=>context()});
+  const s=await r.start({lecture_id:'L',question:'Question',selection:{}}),done=await settled(r,s.id);
+  assert.equal(done.state,'error');assert.match(done.error,expected);assert(!JSON.stringify(done).includes('private-key'));
+ }
+});

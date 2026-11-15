@@ -115,3 +115,6 @@ export async function importNotebookAsset(id, name, bytes) {
  if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`);
  return result;
 }
+
+// Canvas format 7 carries optional object.content_scale (default 1). Forward
+// complete documents unchanged so uniform layout transforms survive edits.

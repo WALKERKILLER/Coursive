@@ -32,6 +32,8 @@ import '../plugins/canvas_fallback.dart';
 import '../plugins/plugin_actions.dart' show PluginViewPatch;
 import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
 import '../player/pdf_dock.dart';
+import '../settings/models_page.dart' show AssistantModelButton;
+import '../assistant/assistant_controller.dart';
 
 import 'package:path/path.dart' as filePath;
 
@@ -47,6 +49,8 @@ import 'outline_document.dart';
 import 'outline_pdf.dart';
 import 'reading_glow.dart';
 import 'study_selection_geometry.dart';
+import 'study_transform.dart';
+import 'study_input_router.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 
@@ -66,6 +70,7 @@ part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
 part 'study_selection_tools.dart';
+part 'study_transforms.dart';
 part 'study_evidence.dart';
 part 'study_outline_review.dart';
 part 'study_outline_export.dart';
@@ -194,10 +199,16 @@ class StudyCanvasState extends State<StudyCanvas>
   Timer? _shapeTimer;
   Timer? _cardHoldTimer;
   Offset? _cardHoldOrigin;
-  Offset? _rotatePivot, _groupRotateGrip;
+  Offset? _rotatePivot;
   double _rotateLast = 0;
-  bool _rotateChanged = false;
-  bool _heldCardNeedsCheckpoint = false;
+  StudyTransformSession? _transformSession;
+  int? _transformPointer, _transformCorner;
+  Offset _transformStart = Offset.zero, _transformVector = Offset.zero;
+  double _rotationRaw = 0, _rotationBase = 0;
+  String? _rotationLabel;
+  bool _angleSnapping = true;
+  StudyAngleSnap _angleSnap = StudyAngleSnap();
+  final _readingContacts = <int>{}, _blockedTouches = <int>{};
   final _videoSurfacePointers = <int>{};
   final _videoControlPointers = <int>{};
   final _inputSurface = GlobalKey();
@@ -231,7 +242,8 @@ class StudyCanvasState extends State<StudyCanvas>
   final _stageKeys = <GlobalKey>{};
   bool get _inlinePDF =>
       widget.pdfLibraryRoot != null &&
-      (Platform.isMacOS || Platform.isAndroid ||
+      (Platform.isMacOS ||
+          Platform.isAndroid ||
           widget.openCanvasPDF != DockPDF.open);
   final _pdfBodies = <String, GlobalKey<_CanvasPdfState>>{};
   final _pdfFiles = <String, Future<DockPDF>>{};
@@ -358,7 +370,7 @@ class StudyCanvasState extends State<StudyCanvas>
   Rect? _marquee;
   String? _dragCard;
   int _cardTextEpoch = 0;
-  bool _resize = false, _erasing = false;
+  bool _erasing = false;
   double? _pinchDistance, _pinchZoom;
   Offset? _pinchWorld;
   int? _drawingPointer;
@@ -410,6 +422,7 @@ class StudyCanvasState extends State<StudyCanvas>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) unawaited(_refreshFromSync());
     if (state != AppLifecycleState.resumed) {
+      _finishTransform(cancel: true);
       _cancelCardHold();
       _cancelShapeHold();
       _clearPrediction();
@@ -419,6 +432,7 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   bool get _editingCanvas =>
+      _transformSession != null ||
       _importing ||
       _selectionBusy ||
       (document != null && document!.edit != _savedEdit) ||
@@ -536,6 +550,7 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   Future<bool> flush() async {
+    if (_transformSession != null) return false;
     _saveTimer?.cancel();
     for (final key in _pdfBodies.values.toList()) {
       if (!(await key.currentState?.flush() ?? true)) return false;
@@ -800,407 +815,219 @@ class StudyCanvasState extends State<StudyCanvas>
     _fly.forward(from: 0);
   }
 
-  void _holdMaterial(PointerDownEvent e, StudyCard card) {
-    final d = document!, tool = _tool;
-    if (!d.canTransformCard(card)) return;
-    _cardHoldOrigin = e.localPosition;
-    _holdCue.value = e.localPosition;
-    _cardHoldTimer = Timer(canvasCardHoldDelay, () {
-      _cancelCardHold();
-      if (!mounted ||
-          document != d ||
-          _tool != tool ||
-          _erasing ||
-          _shape != null ||
-          _pressureTimer != null ||
-          ModalRoute.of(context)?.isCurrent == false ||
-          _pointers.length != 1 ||
-          !_pointers.containsKey(e.pointer) ||
-          !d.cards.contains(card) ||
-          !d.canTransformCard(card))
-        return;
-      // A touchdown hold selects an object; an endpoint hold after writing
-      // belongs to shape assist. See docs/decisions/0027-stylus-card-holds.md.
-      if (_drawingPointer == e.pointer) {
-        _drawingPointer = null;
-        _clearPrediction();
-        _lastRealStylusTime = null;
-        _resetShape();
-        _pressureStart = null;
-        _pressureOrigin = null;
-        _points = [];
-        _prefix.clear();
-        _prefixEnd = 0;
-        _live.value++;
-      }
-      // A completed card hold takes ownership from selectable text/editors.
-      // Close their selection handles before moving the enclosing card.
-      FocusManager.instance.primaryFocus?.unfocus();
-      _cardTextEpoch++;
-      final startCamera = _panCamera;
-      if (startCamera != null && d.camera != startCamera) {
-        d.camera = startCamera;
-        _cameraChanged();
-      }
-      _panCamera = null;
-      _detail.clear();
-      _regionSelection = null;
-      _selectionReady = false;
-      _selectionBounds = null;
-      _selection
-        ..clear()
-        ..add(card.id);
-      _dragCard = card.id;
-      _resize = false;
-      _last = _world(_pointers[e.pointer]!);
-      _heldCardNeedsCheckpoint = true;
-      unawaited(HapticFeedback.selectionClick());
-      setState(() {});
-      _scene.value++;
-    });
-  }
-
   void _down(PointerDownEvent e) {
-    _trackStylusPresence(e);
-    if (e.kind == PointerDeviceKind.touch && _touchBlocked) return;
-    _cancelCardHold();
-    _realStylus(e);
-    final overPdf = _onPdf(e.position);
-    if (overPdf) _clearPaperCursor();
-    if (e.kind == PointerDeviceKind.touch &&
-        _drawingPointer == null &&
-        !_erasing &&
-        !_overControls(e.position, includePdf: false) &&
-        (overPdf || _pdfContacts.isNotEmpty)) {
-      if (overPdf) _pdfContacts.add(e.pointer);
-      if (_touchPointers.isNotEmpty || _overControls(e.position)) {
-        _pointers[e.pointer] = e.localPosition;
-        _touchPointers.add(e.pointer);
-        if (_touchPointers.length == 2) {
-          _fly.stop();
-          _dragCard = null;
-          _marquee = null;
-          _lasso.clear();
-          _selectionDragging = false;
-          _panCamera = null;
-          final touches = _touchPointers.map((id) => _pointers[id]!).toList();
-          _pinchDistance = (touches.first - touches.last).distance;
-          _pinchZoom = document!.zoom;
-          _pinchWorld = _world((touches.first + touches.last) / 2);
-          setState(() => _pdfPinching = true);
-        }
-        return;
-      }
-    }
-    if (_overControls(
-      e.position,
-      expandedInk:
-          e.kind == PointerDeviceKind.stylus ||
-          e.kind == PointerDeviceKind.invertedStylus ||
-          (e.kind == PointerDeviceKind.mouse && _writing),
-    ))
-      return;
-    _fly.stop();
     final d = document!;
-    final hitPoint = _world(e.localPosition);
-    final hitCard = d.cards
+    // Controls remain usable by the other hand during pen contact.
+    if (_overControls(e.position, includePdf: false) ||
+        _videoControlPointers.contains(e.pointer))
+      return;
+    final point = _world(e.localPosition);
+    final card = d.cards
         .where(
           (c) =>
               c.type != 'conversation' &&
               d.visible(c.layer) &&
-              c.containsWorld(hitPoint),
+              c.containsWorld(point),
         )
         .lastOrNull;
-    final videoBody =
-        hitCard != null &&
-        const {'lecture', 'video'}.contains(hitCard.type) &&
-        hitCard.contentPoint(hitPoint).dy >= hitCard.contentRect.top + 36 &&
-        hitCard.contentPoint(hitPoint).dy < hitCard.contentRect.bottom - 16;
-    if (videoBody &&
-        _videoControlPointers.contains(e.pointer) &&
-        _tool != StudyTool.region)
-      return;
-    if (hitCard != null &&
-        hitCard.pinnedAnswer &&
-        _tool != StudyTool.region &&
-        hitCard.contentPoint(hitPoint).dy >= hitCard.contentRect.top + 36 &&
-        hitCard.contentPoint(hitPoint).dy < hitCard.contentRect.bottom - 16 &&
-        (e.kind == PointerDeviceKind.touch ||
-            e.kind == PointerDeviceKind.mouse ||
-            !_writing))
-      return;
-    final contentY = hitCard?.contentPoint(hitPoint).dy ?? 0;
-    // Static material bodies are part of the pan surface. Keep their title
-    // actions and PDF paging controls interactive; ink still uses the pen.
-    final materialBody =
-        hitCard != null &&
-        const {'pdfdoc', 'pdf', 'image'}.contains(hitCard.type) &&
-        contentY >= hitCard.contentRect.top + 36 &&
-        contentY <
-            hitCard.contentRect.bottom - (hitCard.type == 'pdfdoc' ? 36 : 0);
-    // Text cards must reach the same touch hold router as media cards.
-    // Mouse text selection and embedded controls retain their normal behavior.
-    final selectedCard =
-        (_tool == StudyTool.select ||
-            (_ink && e.kind != PointerDeviceKind.mouse)) &&
-        e.kind != PointerDeviceKind.invertedStylus &&
-        !(_ink &&
-            _pressureEraser &&
-            e.kind == PointerDeviceKind.stylus &&
-            e.pressureMax > e.pressureMin &&
-            _pressure(e) >= _pressureThreshold) &&
-        e.buttons != kMiddleMouseButton &&
-        hitCard != null &&
-        _selection.contains(hitCard.id) &&
-        _detail.objectId == null &&
-        (contentY < hitCard.contentRect.top + 36 ||
-            (_writing ||
-                !const {'lecture', 'video'}.contains(hitCard.type) ||
-                _videoSurfacePointers.contains(e.pointer))) &&
-        (hitCard.type != 'pdfdoc' ||
-            contentY < hitCard.contentRect.bottom - 36) &&
-        d.canTransformCard(hitCard);
-    final directTextBody =
-        (e.kind == PointerDeviceKind.touch ||
-            (e.kind == PointerDeviceKind.stylus &&
-                _tool == StudyTool.select)) &&
-        hitCard != null &&
-        const {
-          'note',
-          'text',
-          'explanation',
-          'knowledge',
-          'practice',
-        }.contains(hitCard.type);
-    final selectedRegion =
-        _tool == StudyTool.region &&
-        _selectionReady &&
-        _selectionBounds != null &&
-        _selectionBounds!.inflate(16 / d.zoom).contains(hitPoint) &&
-        (_selection.isNotEmpty ||
-            _detail.strokeIds.isNotEmpty ||
-            studySelectionHandleAt(_selectionBounds!, hitPoint, 16 / d.zoom) !=
-                null);
-    final passiveVideoBody =
-        hitCard != null &&
-        const {'lecture', 'video'}.contains(hitCard.type) &&
-        !_videoControlPointers.contains(e.pointer) &&
-        contentY >= hitCard.contentRect.top + 36 &&
-        contentY < hitCard.contentRect.bottom - 20;
-    if (hitCard != null && e.buttons != kMiddleMouseButton) {
-      final actions =
-          _cardHeaderActions[hitCard.id]?.currentContext?.findRenderObject()
+    final actions = card == null
+        ? null
+        : _cardHeaderActions[card.id]?.currentContext?.findRenderObject()
               as RenderBox?;
-      final headerAction =
-          actions != null &&
-          actions.hasSize &&
-          actions.size.contains(actions.globalToLocal(e.position));
-      final resizeHandle =
-          e.kind == PointerDeviceKind.mouse &&
-          !hitCard.collapsed &&
-          (hitCard.contentPoint(hitPoint) - hitCard.contentRect.bottomRight)
-                  .distance <
-              28 / d.zoom;
-      final content = contentY >= hitCard.contentRect.top + 36 && !resizeHandle;
-      if (_tool != StudyTool.region &&
-          (headerAction ||
-              (content &&
-                  !materialBody &&
-                  !directTextBody &&
-                  !selectedRegion &&
-                  !selectedCard &&
-                  !passiveVideoBody &&
-                  (hitCard.type == 'conversation' || !_writing))))
-        return;
+    if (actions != null &&
+        actions.hasSize &&
+        actions.size.contains(actions.globalToLocal(e.position)))
+      return;
+    _trackStylusPresence(e);
+    if (e.kind == PointerDeviceKind.touch &&
+        (_touchBlocked || _blockedTouches.contains(e.pointer))) {
+      _blockedTouches.add(e.pointer);
+      return;
     }
+    _cancelCardHold();
+    _realStylus(e);
+    _fly.stop();
+    if (_drawingPointer != null && _drawingPointer != e.pointer) return;
     final stylus =
         e.kind == PointerDeviceKind.stylus ||
         e.kind == PointerDeviceKind.invertedStylus;
-    if (_erasing || _selectionDragging || _lasso.isNotEmpty) return;
-    if (_drawingPointer != null && e.pointer != _drawingPointer) return;
-    if (stylus) {
-      _pointers.clear();
-      _panCamera = null;
-    }
     _pointers[e.pointer] = e.localPosition;
     if (e.kind == PointerDeviceKind.touch) _touchPointers.add(e.pointer);
-    if (_pointers.length == 2 && _drawingPointer == null) {
-      _dragCard = null;
-      _heldCardNeedsCheckpoint = false;
-      final p = _pointers.values.toList();
+    if (_touchPointers.length == 2 && _drawingPointer == null) {
+      _finishTransform();
       _marquee = null;
       _lasso.clear();
       _selectionDragging = false;
-      _pinchDistance = (p[0] - p[1]).distance;
+      final touches = _touchPointers.map((id) => _pointers[id]!).toList();
+      _pinchDistance = (touches.first - touches.last).distance;
       _pinchZoom = d.zoom;
-      _pinchWorld = _world((p[0] + p[1]) / 2);
+      _pinchWorld = _world((touches.first + touches.last) / 2);
+      _panCamera = null;
+      setState(() => _pdfPinching = true);
       return;
     }
-    if (_pointers.length > 1 || _drawingPointer != null) return;
-    final p = _world(e.localPosition);
-    _start = _last = p;
-    if (_penButtons && stylus && (e.buttons & kPrimaryStylusButton) != 0) {
-      _temporaryEraser = true;
-      _beginErase(e, p);
+    if (_pointers.length > 1) return;
+    final local = card == null
+        ? Offset.zero
+        : StudyCardTransform(card).toLocal(point);
+    final header = card != null && local.dy < 36;
+    final paper =
+        card != null &&
+        _inlinePDF &&
+        (card.type == 'pdfdoc' || _pdfPageCard(card)) &&
+        !header;
+    final reading =
+        card != null &&
+        !header &&
+        (paper ||
+            card.readerCard ||
+            const {
+              'text',
+              'note',
+              'explanation',
+              'knowledge',
+              'practice',
+            }.contains(card.type));
+    final pan =
+        e.buttons == kMiddleMouseButton ||
+        (e.kind == PointerDeviceKind.mouse &&
+            HardwareKeyboard.instance.logicalKeysPressed.contains(
+              LogicalKeyboardKey.space,
+            ));
+    final owner = studyContactOwner(
+      kind: e.kind,
+      controls: false,
+      blocked: false,
+      header: header,
+      paper: paper,
+      reading: reading,
+      inkTool: _ink || _tool == StudyTool.eraser,
+      lasso: _tool == StudyTool.region,
+      selectionHandle: _selectionReady && _selectionBounds != null &&
+        studySelectionHandleAt(_selectionBounds!, point, 16 / d.zoom) != null,
+      pan: pan,
+    );
+    _start = _last = point;
+    if (owner == StudyContactOwner.card) {
+      if (card == null || !d.canTransformCard(card)) return;
+      if (!_selection.contains(card.id))
+        _selection
+          ..clear()
+          ..add(card.id);
+      _detail.clear();
+      _selectionReady = false;
+      _regionSelection = null;
+      _selectionPolygon = [];
+      _selectionBounds = null;
+      _dragCard = card.id;
+      _transformSession = StudyTransformSession(
+        d,
+        Set.of(_selection),
+        {},
+        pivot: card.rect.center,
+      );
+      _transformStart = point;
+      _saveTimer?.cancel();
+      setState(() {});
       return;
     }
-    if (e.kind == PointerDeviceKind.invertedStylus ||
-        (_tool == StudyTool.eraser && e.kind != PointerDeviceKind.touch)) {
-      _temporaryEraser = e.kind == PointerDeviceKind.invertedStylus;
-      _beginErase(e, p);
+    if (owner == StudyContactOwner.paper ||
+        owner == StudyContactOwner.reading) {
+      _readingContacts.add(e.pointer);
+      _start = _last = null;
       return;
     }
-    if (_tool == StudyTool.region &&
-        (e.kind != PointerDeviceKind.touch ||
-            selectedRegion ||
-            _lassoRectangle)) {
-      final handle = _selectionReady && _selectionBounds != null
-          ? studySelectionHandleAt(_selectionBounds!, p, 16 / d.zoom)
+    if (owner == StudyContactOwner.selection) {
+      final selected = _selectionReady && _selectionBounds != null;
+      final handle = selected
+          ? studySelectionHandleAt(_selectionBounds!, point, 16 / d.zoom)
           : null;
       if (handle != null) {
         _selectionHandle = handle;
         _selectionResizeStart = _selectionBounds;
         _selectionResizePolygon = List.of(_selectionPolygon);
         _selectionDragging = true;
-        setState(() {});
-        return;
-      }
-      if (_selectionReady &&
-          _selectionBounds?.contains(p) == true &&
+      } else if (selected &&
+          _selectionBounds!.contains(point) &&
           (_selection.isNotEmpty || _detail.strokeIds.isNotEmpty)) {
-        d.checkpoint();
-        _selectionHandle = null;
+        _transformSession = StudyTransformSession(
+          d,
+          Set.of(_selection),
+          Set.of(_detail.strokeIds),
+          pivot: _selectionBounds!.center,
+        );
+        _transformStart = point;
         _selectionDragging = true;
-        return;
+      } else {
+        _selectionReady = false;
+        _selectionBounds = null;
+        _detail.clear();
+        _selection.clear();
+        _regionSelection = null;
+        _lasso
+          ..clear()
+          ..add(point);
+        _marquee = Rect.fromPoints(point, point);
       }
-      _selectionReady = false;
-      _selectionBounds = null;
-      _lasso
-        ..clear()
-        ..add(p);
-      _detail.clear();
-      _regionSelection = null;
-      _marquee = Rect.fromPoints(p, p);
-      _selection.clear();
       _scene.value++;
-      return;
-    }
-    // Selection survives pointer-up. Re-grabbing it moves the object, not
-    // the camera; a second finger still enters the pinch branch above.
-    if (selectedCard) {
-      _panCamera = null;
-      _dragCard = hitCard.id;
-      _resize =
-          e.kind == PointerDeviceKind.mouse &&
-          !hitCard.collapsed &&
-          (hitCard.contentPoint(p) - hitCard.contentRect.bottomRight).distance <
-              28 / d.zoom;
-      _heldCardNeedsCheckpoint = true;
-      _cardTextEpoch++;
       setState(() {});
       return;
     }
-    if (e.kind == PointerDeviceKind.touch && hitCard == null) {
-      _selection.clear();
-      _detail.clear();
-      _selectionReady = false;
-      _selectionBounds = null;
-      _scene.value++;
-    }
-    if (e.kind == PointerDeviceKind.stylus &&
-        _tool == StudyTool.select &&
-        hitCard != null) {
-      _holdMaterial(e, hitCard);
-      return;
-    }
-    if (e.kind == PointerDeviceKind.touch ||
-        ((materialBody || passiveVideoBody) && _tool == StudyTool.select) ||
-        e.buttons == kMiddleMouseButton) {
-      _panCamera = d.camera;
-      _start = e.localPosition;
-      final touchCard = e.kind == PointerDeviceKind.touch && hitCard != null;
-      if ((touchCard || materialBody || passiveVideoBody) &&
-          !stylus &&
-          e.buttons != kMiddleMouseButton &&
-          (e.kind == PointerDeviceKind.touch || _tool == StudyTool.select)) {
-        _holdMaterial(e, hitCard);
+    if (owner == StudyContactOwner.ink) {
+      if (_tool == StudyTool.select && stylus) _tool = StudyTool.pen;
+      final temporary =
+          e.kind == PointerDeviceKind.invertedStylus ||
+          (_penButtons && stylus && (e.buttons & kPrimaryStylusButton) != 0);
+      if (_tool == StudyTool.eraser || temporary) {
+        _temporaryEraser = temporary;
+        _beginErase(e, point);
+        return;
       }
-      return;
-    }
-    if (_ink) {
       if (!d.editable(d.activeLayer)) {
         _toast(l10n.studyLayerUnavailable);
         return;
       }
-      if (d.strokes.length >= 29000 ||
-          d.strokes.fold<int>(0, (n, s) => n + s.points.length) >= 490000) {
+      final used = d.strokes.fold<int>(0, (n, s) => n + s.points.length);
+      if (d.strokes.length >= 29000 || used >= 490000) {
         _toast(l10n.studyInkLimit);
         return;
       }
-      _pointBudget = math.min(
-        20000,
-        499900 - d.strokes.fold<int>(0, (n, s) => n + s.points.length),
-      );
+      _pointBudget = math.min(20000, 499900 - used);
       _drawingPointer = e.pointer;
       _pressureStart = e.localPosition;
       _resetShape();
       _gestureBrush = _brush;
       _gestureWidth = _penWidth;
       _gestureColor = _color;
-      _points = [InkPoint(p, _pressure(e))];
+      _points = [InkPoint(point, _pressure(e))];
       _prefix.clear();
       _prefixEnd = 0;
-      _anchor = '';
-      for (final c in d.cards.reversed) {
-        if (d.visible(c.layer) && c.containsWorld(p)) {
-          _anchor = c.id;
-          break;
-        }
-      }
-      if (e.kind == PointerDeviceKind.stylus && hitCard != null) {
-        _holdMaterial(e, hitCard);
-      }
+      _anchor = card?.id ?? '';
       _watchPressure(e);
       _watchShape(e);
       _live.value++;
+      setState(() {});
       return;
     }
-    final hits = d.cards.where(
-      (a) =>
-          a.type != 'conversation' && d.visible(a.layer) && a.containsWorld(p),
-    );
-    if (hits.isNotEmpty) {
-      final c = hits.last;
-      if (!_selection.contains(c.id)) {
-        _detail.clear();
-        _regionSelection = null;
-        _selection.clear();
-        _selection.add(c.id);
-      }
-      if (!stylus &&
-          d.canTransformCard(c) &&
-          (c.contentPoint(p).dy < c.contentRect.top + 38 ||
-              (!c.collapsed &&
-                  (c.contentPoint(p) - c.contentRect.bottomRight).distance <
-                      28 / d.zoom))) {
-        _heldCardNeedsCheckpoint = true;
-        _dragCard = c.id;
-        _resize =
-            !c.collapsed &&
-            (c.contentPoint(p) - c.contentRect.bottomRight).distance <
-                28 / d.zoom;
-      }
-    } else {
-      _selection.clear();
+    if (e.kind == PointerDeviceKind.mouse && card != null && !pan) {
+      _selection
+        ..clear()
+        ..add(card.id);
       _detail.clear();
       _regionSelection = null;
+      setState(() {});
+      return;
+    }
+    if (card == null) {
+      _selection.clear();
+      _detail.clear();
       _selectionReady = false;
       _selectionBounds = null;
-      _panCamera = d.camera;
-      _start = e.localPosition;
     }
-    setState(() {});
+    _panCamera = d.camera;
+    _start = e.localPosition;
     _scene.value++;
+    setState(() {});
   }
 
   double _pressure(PointerEvent e) =>
@@ -1238,6 +1065,7 @@ class StudyCanvasState extends State<StudyCanvas>
       return;
     }
     if (_pointers.length > 1) return;
+    if (_readingContacts.contains(e.pointer)) return;
     final p = _world(e.localPosition);
     if (_pdfPinching || (_pdfContacts.contains(e.pointer) && _start == null))
       return;
@@ -1313,8 +1141,6 @@ class StudyCanvasState extends State<StudyCanvas>
       return;
     }
     if (_selectionDragging && _selectionBounds != null) {
-      final from = _selectionBounds!;
-      final delta = p - _last!;
       if (_selectionHandle != null) {
         final to = studyResizeSelection(
           _selectionResizeStart!,
@@ -1342,7 +1168,9 @@ class StudyCanvasState extends State<StudyCanvas>
         _setRegionSelection(to, polygon);
         _update(() {});
       } else {
-        _transformSelection(from, from.shift(delta));
+        _transformSession?.preview(translation: p - _transformStart);
+        _scene.value++;
+        setState(() {});
       }
       _last = p;
       return;
@@ -1362,31 +1190,9 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   void _moveHeldCard(Offset p) {
-    final d = document!;
-    final c = d.cards.firstWhere((a) => a.id == _dragCard), old = c.rect;
-    if (!d.canTransformCard(c)) return;
-    final delta = p - _last!;
-    if (delta == Offset.zero) return;
-    if (_heldCardNeedsCheckpoint) {
-      d.checkpoint();
-      _heldCardNeedsCheckpoint = false;
-    }
-    final next = _resize
-        ? Rect.fromLTWH(
-            old.left,
-            old.top,
-            math.max(
-              c.type == 'conversation' ? 240 : 280,
-              old.width + delta.dx,
-            ),
-            math.max(
-              c.type == 'conversation' ? 160 : 180,
-              old.height + delta.dy,
-            ),
-          )
-        : old.shift(delta);
-    d.transformCards(_resize ? {c.id} : _selection, old, next);
-    _last = p;
+    _transformSession?.preview(translation: p - _transformStart);
+    _scene.value++;
+    setState(() {});
   }
 
   Widget _videoInput(Widget child) => VideoCardHoldScope(
@@ -1402,8 +1208,12 @@ class StudyCanvasState extends State<StudyCanvas>
 
   void _up(PointerEvent e) {
     _trackStylusPresence(e);
+    _blockedTouches.remove(e.pointer);
+    _readingContacts.remove(e.pointer);
     final d = document!;
     if (!_pointers.containsKey(e.pointer)) return;
+    if (_transformSession != null && _transformPointer == null)
+      _finishTransform(cancel: e is PointerCancelEvent);
     _cancelCardHold();
     _touchPointers.remove(e.pointer);
     _pdfContacts.remove(e.pointer);
@@ -1517,7 +1327,6 @@ class StudyCanvasState extends State<StudyCanvas>
       _start = _last = null;
       _marquee = null;
       _dragCard = null;
-      _heldCardNeedsCheckpoint = false;
       _erasing = false;
       _pinchDistance = null;
       _scene.value++;
@@ -1853,6 +1662,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _selectionBounds != null &&
         _tool == StudyTool.region) {
       _update(() => _quickAsk = true);
+      if (_quickImages) await _previewQuickVision();
     } else {
       await _openConversation();
     }
@@ -2213,7 +2023,18 @@ class StudyCanvasState extends State<StudyCanvas>
                                             child: RepaintBoundary(
                                               child: RotatedBox(
                                                 quarterTurns: c.quarterTurns,
-                                                child: _card(c),
+                                                child: FittedBox(
+                                                  fit: BoxFit.fill,
+                                                  child: SizedBox(
+                                                    width:
+                                                        c.contentRect.width /
+                                                        c.contentScale,
+                                                    height:
+                                                        c.contentRect.height /
+                                                        c.contentScale,
+                                                    child: _card(c),
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -2501,14 +2322,7 @@ class StudyCanvasState extends State<StudyCanvas>
         ),
     ];
     return IgnorePointer(
-      ignoring:
-          !d.editable(c.layer) ||
-          (_writing &&
-              !c.readerCard &&
-              c.type != "lecture" &&
-              c.type != "video" &&
-              !(c.type == 'pdfdoc' && _inlinePDF) &&
-              !_pdfPageCard(c)),
+      ignoring: !d.editable(c.layer),
       child: Container(
         decoration: ShapeDecoration(
           color: chrome.paper,
@@ -2787,6 +2601,9 @@ class StudyCanvasState extends State<StudyCanvas>
                       'text' when c.readerCard => SingleChildScrollView(
                         key: PageStorageKey('study-reader/${c.id}'),
                         primary: false,
+                        physics: _pdfPinching
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
                         padding: const EdgeInsets.all(18),
                         child: CoursiveMarkdown(
                           c.text,

@@ -1,6 +1,6 @@
 # Notein 输入行为：APK 静态参考
 
-本文是输入交互的证据索引，不是 Notein 源码或运行时一致性声明。Coursive 的实际规则见[画布输入](drawing-controls.md)，取舍见[笔长按决策](decisions/0027-stylus-card-holds.md)。
+本文是输入交互的证据索引，不是 Notein 源码或运行时一致性声明。Coursive 的实际规则见[画布输入](drawing-controls.md)，取舍见[笔与统一变换决策](decisions/0040-pen-writing-and-uniform-card-transforms.md)。
 
 ## 分析对象
 

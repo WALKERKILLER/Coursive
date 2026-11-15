@@ -38,6 +38,7 @@ type StudyCamera struct {
 	Z float64 `json:"z"`
 }
 type StudyObject struct {
+	ContentScale    float64           `json:"content_scale,omitempty"`
 	Rotation        float64           `json:"rotation,omitempty"`
 	QuarterTurns    int               `json:"quarter_turns,omitempty"`
 	ID              string            `json:"id"`
@@ -275,7 +276,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 			return ErrStudyInvalid
 		}
 	}
-	if (d.Version < 1 || d.Version > 6) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
+	if (d.Version < 1 || d.Version > 7) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
 		return invalid("版本或视图")
 	}
 	if len(d.Layers) < 1 || len(d.Layers) > 32 || len(d.Objects) > 2000 || len(d.Strokes) > 30000 {
@@ -305,6 +306,9 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 		return e == nil && st.Mode().IsRegular()
 	}
 	for _, a := range d.Objects {
+		if a.ContentScale != 0 && (d.Version < 7 || !finite(a.ContentScale) || a.ContentScale < 0.05 || a.ContentScale > 20) {
+			return invalid("卡片比例或画布版本")
+		}
 		if a.QuarterTurns < 0 || a.QuarterTurns > 3 || (a.QuarterTurns != 0 && (d.Version < 4 || (d.Version < 6 && a.Type != "image"))) || !finite(a.Rotation) || math.Abs(a.Rotation) > math.Pi || (a.Rotation != 0 && d.Version < 6) {
 			return invalid("旋转角度或画布版本")
 		}

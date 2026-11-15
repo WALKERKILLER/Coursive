@@ -33,3 +33,7 @@ An embedded player's picture drag still changed playback or volume instead of na
 ## Follow-up: palm priority
 
 A mixed-input audit reproduced touch navigation continuing when the pen entered hover, including a matured card hold and an existing pinch. The old guard checked only the time since the last pen down/move at touch-down, without cancelling existing touches or renewing protection at pen-up. Pen contact lifetime now takes priority independently of drawing mode; hover/down cancels accepted touch navigation, and lift/cancel starts a one-second cooldown. Rejected contacts remain inert until lifted. [Palm regressions](../../app/test/study_palm_rejection_test.dart) cover hover takeover, stationary contact, lift/cancel, recovery through fresh touches and palm contacts overlapping a saved stroke. These injected events verify routing, not hardware palm classification.
+
+## Input contract
+
+Current ownership and transform rules follow [the unified gesture contract](../specs/0034-canvas-gesture-and-uniform-scale.md). Its tests replace the hold-to-move and hover-cooldown assumptions recorded in the historical follow-ups above.
