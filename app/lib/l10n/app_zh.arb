@@ -1479,6 +1479,11 @@
   "thinkingHintMax": "尽可能深入，最慢，花费也最多",
   "thinkingSheetBody": "更强的思考回答更周全，也更慢、更费 token。",
   "commonModel": "模型",
+  "gptLogin": "登录 ChatGPT",
+  "gptLoginDone": "小 C 已连接 GPT",
+  "gptLoginFailed": "登录未完成，请检查网络后重试",
+  "modelPrefsSaveFailed": "模型设置保存失败，请重新选择后再发送。",
+  "modelPrefsRetry": "模型设置保存失败，请重试。",
   "modelsImportPi": "导入 Pi CLI 配置",
   "modelsCatalogUpdated": "已更新 models.dev 目录",
   "modelsUpdateCatalog": "更新 models.dev 目录",
@@ -5007,10 +5012,5 @@
   "studyAgentReadingCourse": "正在读课程资料…",
   "studyAgentLookingShot": "正在看截图…",
   "studyAgentCheckingQuotes": "正在核对引文…",
-  "studyShot": "选区截图",
-  "gptLogin": "登录 ChatGPT",
-  "gptLoginDone": "小 C 已连接 GPT",
-  "gptLoginFailed": "登录未完成，请检查网络后重试",
-  "modelPrefsSaveFailed": "模型设置保存失败，请重新选择后再发送。",
-  "modelPrefsRetry": "模型设置保存失败，请重试。"
+  "studyShot": "选区截图"
 }

@@ -2471,6 +2471,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonModel => '模型';
 
   @override
+  String get gptLogin => '登录 ChatGPT';
+
+  @override
+  String get gptLoginDone => '小 C 已连接 GPT';
+
+  @override
+  String get gptLoginFailed => '登录未完成，请检查网络后重试';
+
+  @override
+  String get modelPrefsSaveFailed => '模型设置保存失败，请重新选择后再发送。';
+
+  @override
+  String get modelPrefsRetry => '模型设置保存失败，请重试。';
+
+  @override
   String get modelsImportPi => '导入 Pi CLI 配置';
 
   @override
@@ -8072,19 +8087,4 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyShot => '选区截图';
-
-  @override
-  String get gptLogin => '登录 ChatGPT';
-
-  @override
-  String get gptLoginDone => '小 C 已连接 GPT';
-
-  @override
-  String get gptLoginFailed => '登录未完成，请检查网络后重试';
-
-  @override
-  String get modelPrefsSaveFailed => '模型设置保存失败，请重新选择后再发送。';
-
-  @override
-  String get modelPrefsRetry => '模型设置保存失败，请重试。';
 }
