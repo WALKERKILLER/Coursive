@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [0040](0040-pen-writing-and-uniform-card-transforms.md)
 Class: feature
 
 ## Context and Problem Statement
