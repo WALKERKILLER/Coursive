@@ -220,7 +220,7 @@ void main() {
     final key = await fixture.open(t, api);
     await t.tap(find.byKey(const ValueKey('study-ai-tab')));
     await t.pumpAndSettle();
-    await t.tap(find.byKey(const ValueKey('study-tool-hand')));
+    await t.tap(find.byKey(const ValueKey('study-tool-select')));
     await follow(t, 1);
     await t.pump();
     await t.pump(const Duration(milliseconds: 50));

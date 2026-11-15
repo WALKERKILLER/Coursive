@@ -609,7 +609,7 @@ void main() {
       }
 
       readable(find.byKey(const ValueKey('study-tool-select')), 3);
-      readable(find.byKey(const ValueKey('study-tool-hand')), 3);
+      expect(find.byKey(const ValueKey('study-tool-hand')), findsNothing);
       readable(find.byTooltip('画笔与橡皮设置'), 3);
       readable(find.byTooltip('添加模块'), 3);
       readable(find.byTooltip('课程资料'), 3);

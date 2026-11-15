@@ -342,6 +342,7 @@ class _KnowledgeBody extends StatelessWidget {
   Widget build(BuildContext context) => Material(
     type: MaterialType.transparency,
     child: SingleChildScrollView(
+      key:PageStorageKey("study-reader/${card.id}"),primary:false,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,7 +444,7 @@ class _KnowledgeBody extends StatelessWidget {
                       ),
                   ],
                 ),
-                _ => SelectableText(b.text),
+                _ => CoursiveMarkdown(b.text),
               },
             ),
           if (card.sources.isNotEmpty) ...[

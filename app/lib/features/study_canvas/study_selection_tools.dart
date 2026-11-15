@@ -88,11 +88,12 @@ extension _StudySelectionTools on StudyCanvasState {
           enabled: ink,
           child: Text(l10n.studyEditShape),
         ),
-        PopupMenuItem(
-          value: 'recognize',
-          enabled: ink,
-          child: Text(l10n.studyRecognizeInk),
-        ),
+        if (!widget.standalone)
+          PopupMenuItem(
+            value: 'recognize',
+            enabled: ink,
+            child: Text(l10n.studyRecognizeInk),
+          ),
         if (_linkStart != null)
           PopupMenuItem(
             value: 'cancel-link',
@@ -327,6 +328,115 @@ extension _StudySelectionTools on StudyCanvasState {
     _linkStart = null;
     _linkStartBounds = null;
     await flush();
+  }
+
+  Widget _rotationHandle() {
+    final d = document!;
+    if (!d.canRotateSelection(_selection, _detail.strokeIds) ||
+        (_detail.objectId != null && _detail.strokeIds.isEmpty) ||
+        _quickAsk)
+      return const SizedBox.shrink();
+    final bounds = _boundsOfSelection();
+    if (bounds == null) return const SizedBox.shrink();
+    final single = _selection.length == 1 && _detail.strokeIds.isEmpty
+        ? d.cards.where((c) => _selection.contains(c.id)).firstOrNull
+        : null;
+    Offset worldAt(Offset global) {
+      final box = _inputSurface.currentContext!.findRenderObject() as RenderBox;
+      return _world(box.globalToLocal(global));
+    }
+
+    void finish({bool cancel = false}) {
+      if (_rotateChanged && cancel) d.undo();
+      _update(() {
+        _groupRotateGrip = _rotatePivot = null;
+        _rotateChanged = false;
+        if (_selectionReady) {
+          _selectionPolygon = [];
+          _detail.region = _regionSelection = _selectionBounds =
+              _boundsOfSelection();
+        }
+        _cursor.value++;
+      });
+      unawaited(flush());
+    }
+
+    return AnimatedBuilder(
+      animation: _camera,
+      builder: (_, __) {
+        final off = Offset(0, -28 / d.zoom);
+        final world = single == null
+            ? (_groupRotateGrip ?? bounds.topCenter + off)
+            : single.mapWorld(
+                single.contentRect.topCenter + off,
+                single.rotation + single.quarterTurns * math.pi / 2,
+              );
+        final screen = world * d.zoom + d.camera;
+        return Positioned(
+          left: screen.dx - 20,
+          top: screen.dy - 20,
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            key: const ValueKey('study-rotation-handle'),
+            behavior: HitTestBehavior.opaque,
+            dragStartBehavior: DragStartBehavior.down,
+            onPanStart: (e) {
+              _rotatePivot = bounds.center;
+              _rotateLast =
+                  (worldAt(e.globalPosition) - _rotatePivot!).direction;
+              _rotateChanged = false;
+            },
+            onPanUpdate: (e) {
+              final v = worldAt(e.globalPosition) - _rotatePivot!;
+              if (v.distance * d.zoom < 4) return;
+              final angle = v.direction;
+              final diff = math.atan2(
+                math.sin(angle - _rotateLast),
+                math.cos(angle - _rotateLast),
+              );
+              if (diff.abs() < 0.0001) return;
+              d.rotateSelection(
+                _selection,
+                _detail.strokeIds,
+                _rotatePivot!,
+                radians: diff,
+                recordUndo: !_rotateChanged,
+              );
+              if (single == null) _groupRotateGrip = _rotatePivot! + v;
+              _rotateLast = angle;
+              _rotateChanged = true;
+              _update(() {
+                if (_selectionReady) {
+                  _selectionPolygon = [];
+                  _detail.region = _selectionBounds = _regionSelection =
+                      _boundsOfSelection();
+                }
+                _cursor.value++;
+              });
+            },
+            onPanEnd: (_) => finish(),
+            onPanCancel: () => finish(cancel: true),
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.rotate_right,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _rotateSelected() async {

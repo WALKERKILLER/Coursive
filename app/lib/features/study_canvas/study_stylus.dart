@@ -26,6 +26,8 @@ extension _StudyStylus on StudyCanvasState {
       _pointers.remove(pointer);
     }
     _touchPointers.clear();
+    _pdfContacts.clear();
+    if (_pdfPinching) _update(() => _pdfPinching = false);
     _cancelCardHold();
     _panCamera = null;
     _pinchDistance = _pinchZoom = null;

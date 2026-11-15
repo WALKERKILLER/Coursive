@@ -147,7 +147,7 @@ void main() {
     t,
   ) async {
     for (final type in ['lecture', 'pdfdoc']) {
-      for (final tool in ['hand', 'pen']) {
+      for (final tool in ['select', 'pen']) {
         final d = sheet()
           ..cards.add(StudyCard.fromJson({...pdf.pdf().json(), 'type': type}));
         final key = await fixture.open(t, pdf.PDFApi(d.json()));

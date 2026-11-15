@@ -15,6 +15,27 @@ StudyStroke line({String layer = 'main', String anchor = ''}) => StudyStroke(
   width: 3,
 );
 void main() {
+  test(
+    'long translucent markers remain one path after saving and reopening',
+    () {
+      final doc = StudyDocument();
+      final pen = line();
+      doc.addStroke(
+        StudyStroke(
+          id: pen.id,
+          layer: pen.layer,
+          points: pen.points,
+          color: 0xffffd34f,
+          width: 22,
+          tool: 'highlighter',
+        ),
+      );
+      expect(
+        StudyDocument.fromJson(doc.json()).strokes.single.points.length,
+        201,
+      );
+    },
+  );
   test('a card cannot move while an attached annotation layer is locked', () {
     final d = StudyDocument();
     final card = StudyCard(

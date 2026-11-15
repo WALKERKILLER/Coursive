@@ -252,6 +252,11 @@ jobs:
           done
           lipo -create -output bin/coursive-study-pdf bin/coursive-study-pdf-arm64 bin/coursive-study-pdf-x86_64
           lipo bin/coursive-study-pdf -verify_arch arm64 x86_64
+          for a in arm64 x86_64; do
+            xcrun swiftc -O -target "$a-apple-macosx11.0" ../scripts/desktop/pdf-notes-render.swift -o "bin/coursive-pdf-notes-render-$a"
+          done
+          lipo -create -output bin/coursive-pdf-notes-render bin/coursive-pdf-notes-render-arm64 bin/coursive-pdf-notes-render-x86_64
+          lipo bin/coursive-pdf-notes-render -verify_arch arm64 x86_64
           cd ../app
           flutter pub get
           flutter build macos --release --build-name '${{ needs.prepare.outputs.build_name }}' --build-number '${{ inputs.build }}'
@@ -269,6 +274,12 @@ jobs:
           cp -r agent/src agent/plugins agent/package.json agent/package-lock.json "$res/agent/"
           (cd "$res/agent" && npm ci --omit=dev)
           daemon/bin/coursive-daemon prune "$res/agent/node_modules"
+          mkdir -p "$res/pdf-notes"
+          python3 -m venv "$RUNNER_TEMP/pdf-notes-venv"
+          "$RUNNER_TEMP/pdf-notes-venv/bin/python" -m pip install -r scripts/desktop/pdf-notes-requirements.txt
+          "$RUNNER_TEMP/pdf-notes-venv/bin/python" scripts/desktop/build-pdf-notes.py "$res/pdf-notes/coursive-pdf-notes"
+          cp daemon/bin/coursive-pdf-notes-render "$res/pdf-notes/"
+          test -x "$res/pdf-notes/coursive-pdf-notes"
           cp LICENSE "$res/"
           codesign --force --deep --sign - "$app"
           codesign --verify --deep --strict "$app"

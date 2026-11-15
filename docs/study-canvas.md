@@ -45,3 +45,7 @@ PDF 模块标题栏的「在画布展开为一列」将各页按页码竖向铺�
 ## 模块画布版本
 
 版本 3 读取版本 1/2 的画布，保留既有对象 ID、位置和笔迹。首次把已有画布保存为版本 3 前，后端保留原字节到 `study-canvas.pre-v3.json`；较旧应用不能直接读取新格式，回退需使用这份副本。新对话内容位于课次的 `study-conversations/`，与布局撤销分开保存，并进入既有资料备份范围；删除对话卡片保留其侧文件，以支持撤销恢复。原始课程文件不修改。三栏布局、分页文档、来源范围及对话协议见[多模态模块画布](multimodal-canvas.md)。
+
+## Independent documents and PDF annotation
+
+The library and course views create Markdown notes or independent canvases without a recording. Both entry points open the same stored document ID. PDF cards provide paged, expanded and vertical reading, with embedded ink and right margins in vertical mode. Native working-copy requirements, preservation rules, version compatibility and notebook sync limitations are defined in [the canvas/PDF contract](specs/0033-canvas-documents-and-pdf-ink.md).

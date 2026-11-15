@@ -7,6 +7,7 @@ import (
 	"github.com/walkerkiller/coursive/daemon/internal/events"
 	"github.com/walkerkiller/coursive/daemon/internal/library"
 	"github.com/walkerkiller/coursive/daemon/internal/store"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
@@ -110,5 +111,77 @@ func TestStudyCanvasAuthenticatedRoutes(t *testing.T) {
 	w = call("GET", "/api/lectures/other/study-canvas", "", "fixture")
 	if w.Code != 200 || strings.Contains(w.Body.String(), "local text") {
 		t.Fatal("lecture state leaked", w.Code, w.Body.String())
+	}
+}
+
+func TestStandaloneNotebookRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	st, err := store.Open(filepath.Join(root, "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err = st.UpsertCourse(ctx, store.Course{ID: "os", Title: "操作系统"}); err != nil {
+		t.Fatal(err)
+	}
+	handler := func() http.Handler {
+		lib, e := library.Open(root, st)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return (&Server{Token: "fixture", St: st, Lib: lib, Bus: events.New(), Agent: &agent.Supervisor{}}).Handler()
+	}
+	h := handler()
+	call := func(method, path, body string, code int, out any) {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer fixture")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != code {
+			t.Fatalf("%s %s: %d %s", method, path, w.Code, w.Body.String())
+		}
+		if out != nil {
+			if e := json.Unmarshal(w.Body.Bytes(), out); e != nil {
+				t.Fatal(e)
+			}
+		}
+	}
+	var n library.Notebook
+	call("POST", "/api/notebooks", `{"title":"进程与线程","course_id":"os"}`, 200, &n)
+	base := "/api/notebooks/" + n.ID
+	var d library.StudyDocument
+	call("GET", base+"/canvas", "", 200, &d)
+	if len(d.Objects) != 0 {
+		t.Fatal("expected empty canvas")
+	}
+	var imported library.StudyImport
+	call("POST", base+"/assets?name=snippet.md", "class notes", 200, &imported)
+	d.Objects = imported.Objects
+	d.Strokes = []library.StudyStroke{{ID: "a", Layer: "main", Tool: "pen", Width: 2, Points: [][3]float64{{1, 2, 1}, {3, 4, 1}}}}
+	d.Camera = library.StudyCamera{X: 95, Y: -23, Z: 1.5}
+	data, _ := json.Marshal(d)
+	call("PUT", base+"/canvas", string(data), 200, nil)
+	call("PUT", base+"/canvas", string(data), 409, nil)
+	h = handler()
+	var reopened library.StudyDocument
+	call("GET", base+"/canvas", "", 200, &reopened)
+	if reopened.Camera != d.Camera || len(reopened.Strokes) != 1 || reopened.Objects[0].Text != "class notes" {
+		t.Fatal("lost document state")
+	}
+	var items []library.CatalogItem
+	call("GET", "/api/library/catalog?course_id=os", "", 200, &items)
+	if len(items) != 1 || items[0].CanvasID != n.ID {
+		t.Fatal(items)
+	}
+	var docs []library.Notebook
+	call("GET", "/api/notebooks?course_id=os", "", 200, &docs)
+	if len(docs) != 1 || docs[0] != n {
+		t.Fatal(docs)
+	}
+	call("GET", "/api/notebooks?course_id=other", "", 200, &docs)
+	if len(docs) != 0 {
+		t.Fatal(docs)
 	}
 }

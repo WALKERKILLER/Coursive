@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/api.dart';
+import '../../core/ink_erase.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../core/plugins.dart';
@@ -30,6 +31,10 @@ import '../player/lecture_player.dart';
 import '../plugins/canvas_fallback.dart';
 import '../plugins/plugin_actions.dart' show PluginViewPatch;
 import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
+import '../player/pdf_dock.dart';
+
+import 'package:path/path.dart' as filePath;
+
 import '../player/video_card_hold.dart';
 import '../practice/quiz.dart';
 import 'study_document.dart';
@@ -66,25 +71,61 @@ part 'study_outline_review.dart';
 part 'study_outline_export.dart';
 part 'study_plugin_ui.dart';
 
-enum StudyTool { select, hand, pen, highlighter, eraser, region }
+enum StudyTool { select, pen, highlighter, eraser, region }
 
 class StudyCanvas extends StatefulWidget {
   const StudyCanvas({
     super.key,
     required this.api,
-    required this.ctl,
+    required LecturePlayer ctl,
     required this.video,
     required this.panel,
     required this.onClassic,
+    this.pdfLibraryRoot,
+    this.openCanvasPDF = DockPDF.open,
     required this.onAsk,
     required this.onBack,
     this.fullscreen = false,
-  });
+  }) : _player = ctl,
+       notebookId = null,
+       title = null;
+
+  const StudyCanvas.notebook({
+    super.key,
+    required this.api,
+    required String id,
+    required String name,
+    this.pdfLibraryRoot,
+    this.openCanvasPDF = DockPDF.open,
+    required this.onBack,
+  }) : notebookId = id,
+       title = name,
+       _player = null,
+       video = const SizedBox.shrink(),
+       panel = const SizedBox.shrink(),
+       onAsk = null,
+       onClassic = null,
+       fullscreen = false;
+  final String? notebookId, title;
+  bool get standalone => notebookId != null;
+  String get draftKey => standalone
+      ? 'notebook-draft-$notebookId'
+      : 'study-draft-${ctl.lectureId}';
+  Future<dynamic> load() => standalone
+      ? api.get('/api/notebooks/$notebookId/canvas')
+      : api.studyCanvas(ctl.lectureId);
+  Future<dynamic> save(Map<String, dynamic> document) => standalone
+      ? api.put('/api/notebooks/$notebookId/canvas', document)
+      : api.saveStudyCanvas(ctl.lectureId, document);
   final Api api;
-  final LecturePlayer ctl;
+  final LecturePlayer? _player;
+  LecturePlayer get ctl => _player!;
   final Widget video, panel;
-  final VoidCallback onClassic, onBack;
-  final ValueChanged<String> onAsk;
+  final VoidCallback? onClassic;
+  final String? pdfLibraryRoot;
+  final Future<DockPDF> Function(String, String) openCanvasPDF;
+  final VoidCallback onBack;
+  final ValueChanged<String>? onAsk;
   final bool fullscreen;
   @override
   State<StudyCanvas> createState() => StudyCanvasState();
@@ -153,8 +194,12 @@ class StudyCanvasState extends State<StudyCanvas>
   Timer? _shapeTimer;
   Timer? _cardHoldTimer;
   Offset? _cardHoldOrigin;
+  Offset? _rotatePivot, _groupRotateGrip;
+  double _rotateLast = 0;
+  bool _rotateChanged = false;
   bool _heldCardNeedsCheckpoint = false;
   final _videoSurfacePointers = <int>{};
+  final _videoControlPointers = <int>{};
   final _inputSurface = GlobalKey();
   StreamSubscription? _stylusEvents;
   Timer? _predictionExpiry;
@@ -184,6 +229,37 @@ class StudyCanvasState extends State<StudyCanvas>
   final _threadSummary = <String, Map>{};
   final _threadTick = ValueNotifier(0);
   final _stageKeys = <GlobalKey>{};
+  bool get _inlinePDF =>
+      widget.pdfLibraryRoot != null && (Platform.isMacOS || Platform.isAndroid);
+  final _pdfBodies = <String, GlobalKey<_CanvasPdfState>>{};
+  final _pdfFiles = <String, Future<DockPDF>>{};
+  bool _pdfPageCard(StudyCard c) =>
+      _inlinePDF &&
+      c.type == 'pdf' &&
+      c.pdfColumn.isNotEmpty &&
+      document!.cards.any((p) => p.id == c.pdfColumn && p.type == 'pdfdoc');
+  Future<DockPDF> _openPaper(StudyCard root) {
+    final base = filePath.normalize(widget.pdfLibraryRoot!);
+    final source = filePath.normalize(filePath.join(base, root.source));
+    final scope = widget.standalone
+        ? 'notebooks/${widget.notebookId}'
+        : widget.ctl.lecture!.dir;
+    final folder = filePath.normalize(filePath.join(base, scope, 'courseware'));
+    if (!filePath.isWithin(base, source) || !filePath.isWithin(base, folder))
+      throw StateError(l10n.pdfDockChanged);
+    final title = filePath.basenameWithoutExtension(root.title);
+    final output = filePath.join(folder, title + l10n.pdfDockSuffix + '.pdf');
+    return _pdfFiles.putIfAbsent(source + '\n' + output, () async {
+      await Directory(folder).create(recursive: true);
+      try {
+        return await widget.openCanvasPDF(source, output);
+      } catch (_) {
+        _pdfFiles.remove(source + '\n' + output);
+        rethrow;
+      }
+    });
+  }
+
   final _cardHeaderActions = <String, GlobalKey>{};
   final _composerFocus = FocusNode(debugLabel: 'study-composer');
   final _idleInput = TextEditingController();
@@ -261,6 +337,22 @@ class StudyCanvasState extends State<StudyCanvas>
   String _anchor = '';
   Offset? _start, _last;
   Offset? _panCamera;
+  final _pdfContacts = <int>{};
+  bool _pdfPinching = false;
+  bool _trackpadOnPdf = false;
+  bool _onPdf(Offset global) => _pdfBodies.values.any((key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    return box != null &&
+        box.hasSize &&
+        box.size.contains(box.globalToLocal(global));
+  });
+  void _clearPaperCursor() {
+    if (_eraserCursor != null) {
+      _eraserCursor = null;
+      _cursor.value++;
+    }
+  }
+
   Rect? _marquee;
   String? _dragCard;
   int _cardTextEpoch = 0;
@@ -275,6 +367,7 @@ class StudyCanvasState extends State<StudyCanvas>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.standalone) _tool = StudyTool.pen;
     _load();
     _syncCheck = Timer.periodic(const Duration(seconds: 5), (_) {
       final lifecycle = WidgetsBinding.instance.lifecycleState;
@@ -330,17 +423,19 @@ class StudyCanvasState extends State<StudyCanvas>
       _saving != null ||
       _drawingPointer != null ||
       _erasing ||
-      _dragCard != null;
+      _dragCard != null ||
+      _rotatePivot != null ||
+      _pdfPinching;
 
   bool get _wholeCardSelected =>
       _selection.isNotEmpty && _detail.objectId == null;
 
   Future<void> _load({Map? synced}) async {
     try {
-      final data = synced ?? await widget.api.studyCanvas(widget.ctl.lectureId);
+      final data = synced ?? await widget.load();
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
-      final draft = prefs.getString('study-draft-${widget.ctl.lectureId}');
+      final draft = prefs.getString(widget.draftKey);
       if (!mounted) return;
       if (synced != null && _editingCanvas) return;
       final d = StudyDocument.fromJson(data as Map);
@@ -375,7 +470,7 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_refreshing || !mounted) return;
     _refreshing = true;
     try {
-      final remote = await widget.api.studyCanvas(widget.ctl.lectureId) as Map;
+      final remote = await widget.load() as Map;
       final d = document;
       if (d == null || !mounted) return;
       if (remote['base_hash'] == d.baseHash) return;
@@ -403,12 +498,12 @@ class StudyCanvasState extends State<StudyCanvas>
     } else {
       _remotePending = false;
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('study-draft-${widget.ctl.lectureId}');
+      await prefs.remove(widget.draftKey);
       await _load();
     }
     if (!_remotePending) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('study-draft-${widget.ctl.lectureId}');
+      await prefs.remove(widget.draftKey);
       if (mounted) setState(() {});
     }
   }
@@ -440,6 +535,9 @@ class StudyCanvasState extends State<StudyCanvas>
 
   Future<bool> flush() async {
     _saveTimer?.cancel();
+    for (final key in _pdfBodies.values.toList()) {
+      if (!(await key.currentState?.flush() ?? true)) return false;
+    }
     final current = _saving;
     if (current != null) {
       if (!await current) return false;
@@ -464,14 +562,17 @@ class StudyCanvasState extends State<StudyCanvas>
         if (mounted) setState(() => _status = l10n.studySaving);
         Map out;
         try {
-          out = await widget.api.saveStudyCanvas(
-            widget.ctl.lectureId,
-            d.json(),
-          ) as Map;
+          out = await widget.save(d.json()) as Map;
         } on ApiError catch (e) {
           if (e.status != 409 || retries++ >= 2) rethrow;
-          final remote =
-              await widget.api.studyCanvas(widget.ctl.lectureId) as Map;
+          final remote = await widget.load() as Map;
+          if (widget.standalone) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(widget.draftKey, jsonEncode(d.json()));
+            _remoteDocument = remote;
+            _remotePending = true;
+            rethrow;
+          }
           // Retain the superseded saved document before replacing it.
           await widget.api.post(
             '/api/lectures/${widget.ctl.lectureId}/study-canvas/draft',
@@ -539,7 +640,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _tool == StudyTool.region &&
         _selectionReady &&
         !_quickAsk) {
-      unawaited(_ask());
+      if (!widget.standalone) unawaited(_ask());
       return true;
     }
     if ((keys.isMetaPressed || keys.isControlPressed) &&
@@ -549,7 +650,7 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     final tool = {
       LogicalKeyboardKey.keyV: StudyTool.select,
-      LogicalKeyboardKey.keyH: StudyTool.hand,
+      LogicalKeyboardKey.keyH: StudyTool.select,
       LogicalKeyboardKey.keyD: StudyTool.pen,
       LogicalKeyboardKey.keyE: StudyTool.eraser,
     }[k];
@@ -587,6 +688,15 @@ class StudyCanvasState extends State<StudyCanvas>
     _evidenceLanding.dispose();
     _gesturing.dispose();
     _dropHint.dispose();
+    for (final file in _pdfFiles.values) {
+      unawaited(
+        file
+            .then((doc) async {
+              await doc.cache.delete(recursive: true);
+            })
+            .catchError((_) {}),
+      );
+    }
     document?.removeListener(_changed);
     document?.dispose();
     _scene.dispose();
@@ -599,6 +709,7 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _writing =>
       _ink || _tool == StudyTool.eraser || _tool == StudyTool.region;
   void _cameraChanged() {
+    document!.edit++;
     _camera.value++;
     final stage = _stageRect, view = _visibleWorld;
     if (stage == null ||
@@ -609,13 +720,22 @@ class StudyCanvasState extends State<StudyCanvas>
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 700), () {
       if (!mounted) return;
-      document!.edit++;
       setState(() {}); // Re-cull only after the gesture settles.
       unawaited(flush());
     });
   }
 
-  bool _overControls(Offset global) {
+  bool _selectsPdf(String id) =>
+      _tool == StudyTool.region ||
+      (_tool == StudyTool.select &&
+          _selection.contains(id) &&
+          _detail.objectId == null);
+
+  bool _overControls(
+    Offset global, {
+    bool expandedInk = false,
+    bool includePdf = true,
+  }) {
     for (final key in [
       _dockKey,
       _aiDockKey,
@@ -628,6 +748,11 @@ class StudyCanvasState extends State<StudyCanvas>
       _topBarKey,
       _shelfKey,
       ..._stageKeys,
+      if (includePdf)
+        for (final entry in _pdfBodies.entries)
+          if (!_selectsPdf(entry.key) &&
+              (entry.value.currentState?.widget.root == null || expandedInk))
+            entry.value,
     ]) {
       final box = key.currentContext?.findRenderObject() as RenderBox?;
       if (box != null &&
@@ -710,6 +835,11 @@ class StudyCanvasState extends State<StudyCanvas>
       // Close their selection handles before moving the enclosing card.
       FocusManager.instance.primaryFocus?.unfocus();
       _cardTextEpoch++;
+      final startCamera = _panCamera;
+      if (startCamera != null && d.camera != startCamera) {
+        d.camera = startCamera;
+        _cameraChanged();
+      }
       _panCamera = null;
       _detail.clear();
       _regionSelection = null;
@@ -733,7 +863,41 @@ class StudyCanvasState extends State<StudyCanvas>
     if (e.kind == PointerDeviceKind.touch && _touchBlocked) return;
     _cancelCardHold();
     _realStylus(e);
-    if (_overControls(e.position)) return;
+    final overPdf = _onPdf(e.position);
+    if (overPdf) _clearPaperCursor();
+    if (e.kind == PointerDeviceKind.touch &&
+        _drawingPointer == null &&
+        !_erasing &&
+        !_overControls(e.position, includePdf: false) &&
+        (overPdf || _pdfContacts.isNotEmpty)) {
+      if (overPdf) _pdfContacts.add(e.pointer);
+      if (_touchPointers.isNotEmpty || _overControls(e.position)) {
+        _pointers[e.pointer] = e.localPosition;
+        _touchPointers.add(e.pointer);
+        if (_touchPointers.length == 2) {
+          _fly.stop();
+          _dragCard = null;
+          _marquee = null;
+          _lasso.clear();
+          _selectionDragging = false;
+          _panCamera = null;
+          final touches = _touchPointers.map((id) => _pointers[id]!).toList();
+          _pinchDistance = (touches.first - touches.last).distance;
+          _pinchZoom = document!.zoom;
+          _pinchWorld = _world((touches.first + touches.last) / 2);
+          setState(() => _pdfPinching = true);
+        }
+        return;
+      }
+    }
+    if (_overControls(
+      e.position,
+      expandedInk:
+          e.kind == PointerDeviceKind.stylus ||
+          e.kind == PointerDeviceKind.invertedStylus ||
+          (e.kind == PointerDeviceKind.mouse && _writing),
+    ))
+      return;
     _fly.stop();
     final d = document!;
     final hitPoint = _world(e.localPosition);
@@ -742,16 +906,36 @@ class StudyCanvasState extends State<StudyCanvas>
           (c) =>
               c.type != 'conversation' &&
               d.visible(c.layer) &&
-              c.rect.contains(hitPoint),
+              c.containsWorld(hitPoint),
         )
         .lastOrNull;
+    final videoBody =
+        hitCard != null &&
+        const {'lecture', 'video'}.contains(hitCard.type) &&
+        hitCard.contentPoint(hitPoint).dy >= hitCard.contentRect.top + 36 &&
+        hitCard.contentPoint(hitPoint).dy < hitCard.contentRect.bottom - 16;
+    if (videoBody &&
+        _videoControlPointers.contains(e.pointer) &&
+        _tool != StudyTool.region)
+      return;
+    if (hitCard != null &&
+        hitCard.pinnedAnswer &&
+        _tool != StudyTool.region &&
+        hitCard.contentPoint(hitPoint).dy >= hitCard.contentRect.top + 36 &&
+        hitCard.contentPoint(hitPoint).dy < hitCard.contentRect.bottom - 16 &&
+        (e.kind == PointerDeviceKind.touch ||
+            e.kind == PointerDeviceKind.mouse ||
+            !_writing))
+      return;
+    final contentY = hitCard?.contentPoint(hitPoint).dy ?? 0;
     // Static material bodies are part of the pan surface. Keep their title
     // actions and PDF paging controls interactive; ink still uses the pen.
     final materialBody =
         hitCard != null &&
         const {'pdfdoc', 'pdf', 'image'}.contains(hitCard.type) &&
-        hitPoint.dy >= hitCard.rect.top + 36 &&
-        hitPoint.dy < hitCard.rect.bottom - (hitCard.type == 'pdfdoc' ? 36 : 0);
+        contentY >= hitCard.contentRect.top + 36 &&
+        contentY <
+            hitCard.contentRect.bottom - (hitCard.type == 'pdfdoc' ? 36 : 0);
     // Text cards must reach the same touch hold router as media cards.
     // Mouse text selection and embedded controls retain their normal behavior.
     final selectedCard =
@@ -767,11 +951,12 @@ class StudyCanvasState extends State<StudyCanvas>
         hitCard != null &&
         _selection.contains(hitCard.id) &&
         _detail.objectId == null &&
-        (hitPoint.dy < hitCard.rect.top + 36 ||
+        (contentY < hitCard.contentRect.top + 36 ||
             (_writing ||
                 !const {'lecture', 'video'}.contains(hitCard.type) ||
                 _videoSurfacePointers.contains(e.pointer))) &&
-        (hitCard.type != 'pdfdoc' || hitPoint.dy < hitCard.rect.bottom - 36) &&
+        (hitCard.type != 'pdfdoc' ||
+            contentY < hitCard.contentRect.bottom - 36) &&
         d.canTransformCard(hitCard);
     final directTextBody =
         (e.kind == PointerDeviceKind.touch ||
@@ -797,14 +982,10 @@ class StudyCanvasState extends State<StudyCanvas>
     final passiveVideoBody =
         hitCard != null &&
         const {'lecture', 'video'}.contains(hitCard.type) &&
-        (_writing ||
-            _tool == StudyTool.hand ||
-            _videoSurfacePointers.contains(e.pointer)) &&
-        hitPoint.dy >= hitCard.rect.top + 36 &&
-        hitPoint.dy < hitCard.rect.bottom - 20;
-    if (hitCard != null &&
-        _tool != StudyTool.hand &&
-        e.buttons != kMiddleMouseButton) {
+        !_videoControlPointers.contains(e.pointer) &&
+        contentY >= hitCard.contentRect.top + 36 &&
+        contentY < hitCard.contentRect.bottom - 20;
+    if (hitCard != null && e.buttons != kMiddleMouseButton) {
       final actions =
           _cardHeaderActions[hitCard.id]?.currentContext?.findRenderObject()
               as RenderBox?;
@@ -815,16 +996,19 @@ class StudyCanvasState extends State<StudyCanvas>
       final resizeHandle =
           e.kind == PointerDeviceKind.mouse &&
           !hitCard.collapsed &&
-          (hitPoint - hitCard.rect.bottomRight).distance < 28 / d.zoom;
-      final content = hitPoint.dy >= hitCard.rect.top + 36 && !resizeHandle;
-      if (headerAction ||
-          (content &&
-              !materialBody &&
-              !directTextBody &&
-              !selectedRegion &&
-              !selectedCard &&
-              !passiveVideoBody &&
-              (hitCard.type == 'conversation' || !_writing)))
+          (hitCard.contentPoint(hitPoint) - hitCard.contentRect.bottomRight)
+                  .distance <
+              28 / d.zoom;
+      final content = contentY >= hitCard.contentRect.top + 36 && !resizeHandle;
+      if (_tool != StudyTool.region &&
+          (headerAction ||
+              (content &&
+                  !materialBody &&
+                  !directTextBody &&
+                  !selectedRegion &&
+                  !selectedCard &&
+                  !passiveVideoBody &&
+                  (hitCard.type == 'conversation' || !_writing))))
         return;
     }
     final stylus =
@@ -865,7 +1049,9 @@ class StudyCanvasState extends State<StudyCanvas>
       return;
     }
     if (_tool == StudyTool.region &&
-        (e.kind != PointerDeviceKind.touch || selectedRegion)) {
+        (e.kind != PointerDeviceKind.touch ||
+            selectedRegion ||
+            _lassoRectangle)) {
       final handle = _selectionReady && _selectionBounds != null
           ? studySelectionHandleAt(_selectionBounds!, p, 16 / d.zoom)
           : null;
@@ -905,7 +1091,8 @@ class StudyCanvasState extends State<StudyCanvas>
       _resize =
           e.kind == PointerDeviceKind.mouse &&
           !hitCard.collapsed &&
-          (p - hitCard.rect.bottomRight).distance < 28 / d.zoom;
+          (hitCard.contentPoint(p) - hitCard.contentRect.bottomRight).distance <
+              28 / d.zoom;
       _heldCardNeedsCheckpoint = true;
       _cardTextEpoch++;
       setState(() {});
@@ -925,7 +1112,6 @@ class StudyCanvasState extends State<StudyCanvas>
       return;
     }
     if (e.kind == PointerDeviceKind.touch ||
-        _tool == StudyTool.hand ||
         ((materialBody || passiveVideoBody) && _tool == StudyTool.select) ||
         e.buttons == kMiddleMouseButton) {
       _panCamera = d.camera;
@@ -964,7 +1150,7 @@ class StudyCanvasState extends State<StudyCanvas>
       _prefixEnd = 0;
       _anchor = '';
       for (final c in d.cards.reversed) {
-        if (d.visible(c.layer) && c.rect.contains(p)) {
+        if (d.visible(c.layer) && c.containsWorld(p)) {
           _anchor = c.id;
           break;
         }
@@ -979,7 +1165,7 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     final hits = d.cards.where(
       (a) =>
-          a.type != 'conversation' && d.visible(a.layer) && a.rect.contains(p),
+          a.type != 'conversation' && d.visible(a.layer) && a.containsWorld(p),
     );
     if (hits.isNotEmpty) {
       final c = hits.last;
@@ -991,13 +1177,16 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       if (!stylus &&
           d.canTransformCard(c) &&
-          (p.dy < c.rect.top + 38 ||
+          (c.contentPoint(p).dy < c.contentRect.top + 38 ||
               (!c.collapsed &&
-                  (p - c.rect.bottomRight).distance < 28 / d.zoom))) {
-        d.checkpoint();
+                  (c.contentPoint(p) - c.contentRect.bottomRight).distance <
+                      28 / d.zoom))) {
+        _heldCardNeedsCheckpoint = true;
         _dragCard = c.id;
         _resize =
-            !c.collapsed && (p - c.rect.bottomRight).distance < 28 / d.zoom;
+            !c.collapsed &&
+            (c.contentPoint(p) - c.contentRect.bottomRight).distance <
+                28 / d.zoom;
       }
     } else {
       _selection.clear();
@@ -1028,7 +1217,7 @@ class StudyCanvasState extends State<StudyCanvas>
       final pen = e.kind == PointerDeviceKind.stylus;
       if ((e.localPosition - _cardHoldOrigin!).distance > (pen ? 6 : 8)) {
         _cancelCardHold();
-      } else if (!pen) {
+      } else if (!pen && _panCamera == null) {
         _pointers[e.pointer] = e.localPosition;
         return;
       }
@@ -1048,6 +1237,8 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     if (_pointers.length > 1) return;
     final p = _world(e.localPosition);
+    if (_pdfPinching || (_pdfContacts.contains(e.pointer) && _start == null))
+      return;
     if (_panCamera != null) {
       d.camera = _panCamera! + e.localPosition - _start!;
       _cameraChanged();
@@ -1064,10 +1255,12 @@ class StudyCanvasState extends State<StudyCanvas>
           delta = (p - previous.p) * (1 - _gestureBrush.smoothing * .7);
       if (delta.distance < .4 / d.zoom || _points.length >= _pointBudget)
         return;
-      final steps = (delta.distance / 4).ceil().clamp(
-        1,
-        math.min(100, _pointBudget - _points.length),
-      );
+      final steps = _gestureBrush.family == 'highlighter'
+          ? 1
+          : (delta.distance / 4).ceil().clamp(
+              1,
+              math.min(100, _pointBudget - _points.length),
+            );
       for (var i = 1; i <= steps; i++) {
         final t = i / steps;
         _points.add(
@@ -1077,7 +1270,9 @@ class StudyCanvasState extends State<StudyCanvas>
           ),
         );
       }
-      while (_points.length - _prefixEnd > 65) {
+      // Painting translucent chunks separately leaves dark bands at their joins.
+      while (_gestureBrush.family != 'highlighter' &&
+          _points.length - _prefixEnd > 65) {
         _prefix.add(
           StudyStroke(
             id: studyId(),
@@ -1193,8 +1388,13 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   Widget _videoInput(Widget child) => VideoCardHoldScope(
+    writing: _writing,
     onSurfaceDown: (e) => _videoSurfacePointers.add(e.pointer),
-    onSurfaceEnd: (e) => _videoSurfacePointers.remove(e.pointer),
+    onControlDown: (e) => _videoControlPointers.add(e.pointer),
+    onSurfaceEnd: (e) {
+      _videoSurfacePointers.remove(e.pointer);
+      _videoControlPointers.remove(e.pointer);
+    },
     child: child,
   );
 
@@ -1204,6 +1404,9 @@ class StudyCanvasState extends State<StudyCanvas>
     if (!_pointers.containsKey(e.pointer)) return;
     _cancelCardHold();
     _touchPointers.remove(e.pointer);
+    _pdfContacts.remove(e.pointer);
+    if (_pdfPinching && _touchPointers.isEmpty)
+      setState(() => _pdfPinching = false);
     if (_drawingPointer == e.pointer) {
       _clearPrediction();
       _lastRealStylusTime = null;
@@ -1376,6 +1579,75 @@ class StudyCanvasState extends State<StudyCanvas>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s)));
   }
 
+  Future<void> _setPDFView(StudyCard c, String view) async {
+    if (_importing ||
+        !await flush() ||
+        !mounted ||
+        !document!.cards.contains(c))
+      return;
+    if (view == 'column') {
+      await _expandPDFColumn(c);
+      return;
+    }
+    try {
+      if (c.pdfColumn.isNotEmpty)
+        document!.collapsePDFColumn(c.id);
+      else
+        document!.checkpoint();
+      c.pdfPaged = view == 'paged';
+      if (c.collapsed) {
+        c.collapsed = false;
+        c.rect = Rect.fromLTWH(
+          c.rect.left,
+          c.rect.top,
+          c.rect.width,
+          math.max(240, c.expandedH),
+        );
+      }
+      document!.changed();
+      await flush();
+    } catch (e) {
+      if (mounted) _toast('$e');
+    }
+  }
+
+  Future<Map> _expandedPage(StudyCard root, int page) async {
+    if (!widget.standalone) {
+      try {
+        return await widget.api.studyPDFPage(
+          widget.ctl.lectureId,
+          root.source,
+          page,
+        ) as Map;
+      } catch (_) {
+        if (!_inlinePDF) rethrow;
+      }
+    }
+    final pdf = await _openPaper(root);
+    final rel = filePath.join(
+      filePath.dirname(root.source),
+      'canvas-page-$page.png',
+    );
+    final target = File(filePath.join(widget.pdfLibraryRoot!, rel));
+    await target.parent.create(recursive: true);
+    if (!await target.exists()) {
+      final tmp = File('${target.path}.${studyId()}.tmp');
+      try {
+        await tmp.writeAsBytes(await pdf.render(page), flush: true);
+        await tmp.rename(target.path);
+      } finally {
+        if (await tmp.exists()) await tmp.delete();
+      }
+    }
+    final size = pdf.sizes[page - 1];
+    return {
+      'file': rel,
+      'width': size.width,
+      'height': size.height,
+      'text': page == root.page ? root.text : '',
+    };
+  }
+
   Future<void> _expandPDFColumn(StudyCard root) async {
     if (_importing) return;
     final d = document!;
@@ -1388,11 +1660,7 @@ class StudyCanvasState extends State<StudyCanvas>
           return;
         if (d.pdfPages(root.id).any((c) => c.page == page)) continue;
         setState(() => _status = '正在展开课件 $page / ${root.pageCount} 页');
-        final data = await widget.api.studyPDFPage(
-          widget.ctl.lectureId,
-          root.source,
-          page,
-        ) as Map;
+        final data = await _expandedPage(root, page);
         if (!mounted || !d.cards.contains(root) || root.pdfColumn != root.id)
           return;
         d.appendPDFPage(root, page, data);
@@ -1474,12 +1742,19 @@ class StudyCanvasState extends State<StudyCanvas>
       } else {
         final length = await file!.length();
         if (length > 300 << 20) throw FormatException(l10n.studyFileTooLarge);
-        out = await widget.api.importStudyAsset(
-          widget.ctl.lectureId,
-          file.name,
-          file.openRead(),
-          length,
-        );
+        out = widget.standalone
+            ? await widget.api.upload(
+                '/api/notebooks/${widget.notebookId}/assets',
+                {'name': file.name},
+                file.openRead(),
+                length,
+              )
+            : await widget.api.importStudyAsset(
+                widget.ctl.lectureId,
+                file.name,
+                file.openRead(),
+                length,
+              );
       }
       if (!mounted) return;
       final cards = [
@@ -1716,7 +1991,7 @@ class StudyCanvasState extends State<StudyCanvas>
   Future<void> exportRecovery() async {
     if (document == null) return;
     final dest = await getSaveLocation(
-      suggestedName: '学习画布-${widget.ctl.lectureId}.json',
+      suggestedName: '学习画布-${widget.notebookId ?? widget.ctl.lectureId}.json',
     );
     if (dest == null || !mounted) return;
     try {
@@ -1793,6 +2068,7 @@ class StudyCanvasState extends State<StudyCanvas>
   Widget _canvas(StudyDocument d) {
     final cardIds = d.cards.map((c) => c.id).toSet();
     _cardHeaderActions.removeWhere((id, _) => !cardIds.contains(id));
+    _pdfBodies.removeWhere((id, _) => !cardIds.contains(id));
     final stage = _visibleWorld.inflate(
       math.max(_viewport.width, _viewport.height) / d.zoom,
     );
@@ -1800,322 +2076,338 @@ class StudyCanvasState extends State<StudyCanvas>
     return RepaintBoundary(
       key: _inputSurface,
       child: ClipRect(
-        child: Listener(
-          key: const ValueKey('study-input'),
-          behavior: HitTestBehavior.translucent,
-          onPointerHover: (e) {
-            _trackStylusPresence(e);
-            if (_tool == StudyTool.eraser ||
-                e.kind == PointerDeviceKind.invertedStylus)
-              _updateEraserCursor(e.localPosition);
-          },
-          onPointerDown: _down,
-          onPointerMove: _move,
-          onPointerUp: _up,
-          onPointerCancel: _up,
-          onPointerSignal: _scroll,
-          onPointerPanZoomStart: (e) {
-            if (_drawingPointer != null ||
-                _erasing ||
-                _overControls(e.position))
-              return;
-            _fly.stop();
-            _pinchZoom = d.zoom;
-            _pinchWorld = _world(e.localPosition);
-            _panCamera = d.camera;
-          },
-          onPointerPanZoomUpdate: (e) {
-            if (_pinchWorld == null || _pinchZoom == null || _panCamera == null)
-              return;
-            d.zoom = (_pinchZoom! * e.scale).clamp(.05, 8);
-            d.camera = e.localPosition + e.pan - _pinchWorld! * d.zoom;
-            _cameraChanged();
-          },
-          onPointerPanZoomEnd: (_) {
-            _pinchWorld = null;
-            _panCamera = null;
-          },
-          child: MouseRegion(
-            onExit: (_) {
-              _eraserCursor = null;
-              _cursor.value++;
-            },
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.hardEdge,
-              children: [
-                Positioned.fill(
-                  child: RepaintBoundary(
-                    key: _capture,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(
-                          child: RepaintBoundary(
-                            child: CustomPaint(
-                              painter: _Paper(
-                                document: d,
-                                repaint: _camera,
-                                style: _paperStyle,
-                                color: _paperColor,
-                                scheme: Theme.of(context).colorScheme,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Only the paper's hit-test path can start a drawing gesture.
+            Listener(
+              key: const ValueKey('study-input'),
+              behavior: HitTestBehavior.translucent,
+              onPointerHover: (e) {
+                _trackStylusPresence(e);
+                if (_onPdf(e.position)) {
+                  _clearPaperCursor();
+                  return;
+                }
+                if (_tool == StudyTool.eraser ||
+                    e.kind == PointerDeviceKind.invertedStylus)
+                  _updateEraserCursor(e.localPosition);
+              },
+              onPointerDown: _down,
+              onPointerMove: _move,
+              onPointerUp: _up,
+              onPointerCancel: _up,
+              onPointerSignal: _scroll,
+              onPointerPanZoomStart: (e) {
+                if (_drawingPointer != null ||
+                    _erasing ||
+                    _overControls(e.position, includePdf: false))
+                  return;
+                _trackpadOnPdf = _onPdf(e.position);
+                _fly.stop();
+                _pinchZoom = d.zoom;
+                _pinchWorld = _world(e.localPosition);
+                _panCamera = d.camera;
+              },
+              onPointerPanZoomUpdate: (e) {
+                if (_pinchWorld == null ||
+                    _pinchZoom == null ||
+                    _panCamera == null)
+                  return;
+                if (_trackpadOnPdf && e.scale == 1) return;
+                d.zoom = (_pinchZoom! * e.scale).clamp(.05, 8);
+                d.camera = e.localPosition + e.pan - _pinchWorld! * d.zoom;
+                _cameraChanged();
+              },
+              onPointerPanZoomEnd: (_) {
+                _pinchWorld = null;
+                _panCamera = null;
+              },
+              child: MouseRegion(
+                onExit: (_) {
+                  _eraserCursor = null;
+                  _cursor.value++;
+                },
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    Positioned.fill(
+                      child: RepaintBoundary(
+                        key: _capture,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fill(
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  painter: _Paper(
+                                    document: d,
+                                    repaint: _camera,
+                                    style: _paperStyle,
+                                    color: _paperColor,
+                                    scheme: Theme.of(context).colorScheme,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        // Camera changes transform an already laid-out world. Media widgets and
-                        // recorded ink are retained until the visible area leaves this bounded stage.
-                        Positioned(
-                          left: 0,
-                          top: 0,
-                          width: stage.width,
-                          height: stage.height,
-                          child: AnimatedBuilder(
-                            animation: _camera,
-                            builder: (_, child) => Transform(
-                              alignment: Alignment.topLeft,
-                              transform: Matrix4.identity()
-                                ..translate(
-                                  d.camera.dx + stage.left * d.zoom,
-                                  d.camera.dy + stage.top * d.zoom,
-                                )
-                                ..scale(d.zoom),
-                              child: child,
-                            ),
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: RepaintBoundary(
-                                      child: CustomPaint(
-                                        painter: _ConnectionPainter(
-                                          d,
-                                          stage,
-                                          _scene,
-                                          chrome,
+                            // Camera changes transform an already laid-out world. Media widgets and
+                            // recorded ink are retained until the visible area leaves this bounded stage.
+                            Positioned(
+                              left: 0,
+                              top: 0,
+                              width: stage.width,
+                              height: stage.height,
+                              child: AnimatedBuilder(
+                                animation: _camera,
+                                builder: (_, child) => Transform(
+                                  alignment: Alignment.topLeft,
+                                  transform: Matrix4.identity()
+                                    ..translate(
+                                      d.camera.dx + stage.left * d.zoom,
+                                      d.camera.dy + stage.top * d.zoom,
+                                    )
+                                    ..scale(d.zoom),
+                                  child: child,
+                                ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: RepaintBoundary(
+                                          child: CustomPaint(
+                                            painter: _ConnectionPainter(
+                                              d,
+                                              stage,
+                                              _scene,
+                                              chrome,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                                for (final c in d.cards.where(
-                                  (a) =>
-                                      a.type != 'conversation' &&
-                                      d.visible(a.layer) &&
-                                      (a.type == 'lecture' ||
-                                          a.type == 'video' ||
-                                          a.rect.overlaps(stage)),
-                                ))
-                                  Positioned(
-                                    key: ValueKey('study-card/${c.id}'),
-                                    left: c.rect.left - stage.left,
-                                    top: c.rect.top - stage.top,
-                                    width: c.rect.width,
-                                    height: c.rect.height,
-                                    child: RepaintBoundary(
-                                      child: Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          RotatedBox(
-                                            quarterTurns: c.quarterTurns,
-                                            child: _card(c),
-                                          ),
-                                          if (c.quarterTurns != 0)
-                                            Align(
-                                              alignment: Alignment.bottomRight,
-                                              child: IgnorePointer(
-                                                child: Icon(
-                                                  Icons.south_east,
-                                                  size: 12,
-                                                  color:
-                                                      _selection.contains(c.id)
-                                                      ? chrome.accent
-                                                      : chrome.inkFaint,
-                                                ),
+                                    for (final c in d.cards.where(
+                                      (a) =>
+                                          a.type != 'conversation' &&
+                                          d.visible(a.layer) &&
+                                          (a.type == 'lecture' ||
+                                              a.type == 'video' ||
+                                              a.visualBounds.overlaps(stage)),
+                                    ))
+                                      Positioned.fromRect(
+                                        key: ValueKey('study-card/${c.id}'),
+                                        rect: c.visualBounds.shift(
+                                          -stage.topLeft,
+                                        ),
+                                        child: OverflowBox(
+                                          minWidth: c.rect.width,
+                                          maxWidth: c.rect.width,
+                                          minHeight: c.rect.height,
+                                          maxHeight: c.rect.height,
+                                          child: Transform.rotate(
+                                            angle: c.rotation,
+                                            child: RepaintBoundary(
+                                              child: RotatedBox(
+                                                quarterTurns: c.quarterTurns,
+                                                child: _card(c),
                                               ),
                                             ),
-                                        ],
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                for (final o in d.pluginObjects.where(
-                                  (o) => o.rect.overlaps(stage),
-                                ))
-                                  _pluginObject(
-                                    o,
-                                    stage,
-                                    _enabledPlugins.contains(o.pluginId),
-                                  ),
-                                Positioned.fill(
-                                  child: IgnorePointer(
-                                    child: RepaintBoundary(
-                                      child: CustomPaint(
-                                        painter: _InkScene(
-                                          document: d,
-                                          live: _prefix,
-                                          stage: stage,
-                                          repaint: _scene,
-                                          dark: _dark,
+                                    for (final o in d.pluginObjects.where(
+                                      (o) => o.rect.overlaps(stage),
+                                    ))
+                                      _pluginObject(
+                                        o,
+                                        stage,
+                                        _enabledPlugins.contains(o.pluginId),
+                                      ),
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: RepaintBoundary(
+                                          child: CustomPaint(
+                                            painter: _InkScene(
+                                              inlinePDF: _inlinePDF,
+                                              document: d,
+                                              live: _prefix,
+                                              stage: stage,
+                                              repaint: _scene,
+                                              dark: _dark,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: RepaintBoundary(
-                              child: CustomPaint(
-                                painter: _InkTail(
-                                  document: d,
-                                  points: () =>
-                                      _shapePreview ??
-                                      (_predicted.isEmpty
-                                          ? _points
-                                          : [
-                                              ..._points.skip(_prefixEnd),
-                                              ..._predicted,
-                                            ]),
-                                  start: () =>
-                                      _predicted.isEmpty ? _prefixEnd : 0,
-                                  color: () =>
-                                      _dark &&
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: RepaintBoundary(
+                                  child: CustomPaint(
+                                    painter: _InkTail(
+                                      document: d,
+                                      points: () =>
+                                          _shapePreview ??
+                                          (_predicted.isEmpty
+                                              ? _points
+                                              : [
+                                                  ..._points.skip(_prefixEnd),
+                                                  ..._predicted,
+                                                ]),
+                                      start: () =>
+                                          _predicted.isEmpty ? _prefixEnd : 0,
+                                      color: () =>
+                                          _dark &&
+                                              !studyOnPrintedPage(
+                                                d.cards
+                                                    .where(
+                                                      (c) => c.id == _anchor,
+                                                    )
+                                                    .firstOrNull
+                                                    ?.type,
+                                              )
+                                          ? inkOnDark(
+                                              _gestureColor,
+                                              _tool == StudyTool.highlighter
+                                                  ? 'highlighter'
+                                                  : 'pen',
+                                            )
+                                          : _gestureColor,
+                                      width: () => _gestureWidth,
+                                      brush: () => _gestureBrush,
+                                      darkPaper: () =>
+                                          _dark &&
                                           !studyOnPrintedPage(
                                             d.cards
                                                 .where((c) => c.id == _anchor)
                                                 .firstOrNull
                                                 ?.type,
-                                          )
-                                      ? inkOnDark(
-                                          _gestureColor,
-                                          _tool == StudyTool.highlighter
-                                              ? 'highlighter'
-                                              : 'pen',
-                                        )
-                                      : _gestureColor,
-                                  width: () => _gestureWidth,
-                                  brush: () => _gestureBrush,
-                                  tool: () => _tool,
-                                  repaint: Listenable.merge([
-                                    _live,
-                                    _scene,
-                                    _camera,
-                                  ]),
+                                          ),
+                                      tool: () => _tool,
+                                      repaint: Listenable.merge([
+                                        _live,
+                                        _scene,
+                                        _camera,
+                                      ]),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        key: const ValueKey('study-feedback'),
-                        painter: _InteractionFeedback(
-                          this,
-                          Listenable.merge([_cursor, _scene, _camera]),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: RepaintBoundary(
-                      child: CustomPaint(
-                        key: const ValueKey('study-evidence'),
-                        painter: _EvidencePainter(this),
-                      ),
-                    ),
-                  ),
-                ),
-                if (Platform.isMacOS)
-                  const Positioned(
-                    top: 0,
-                    left: 80,
-                    right: 0,
-                    height: 22,
-                    child: DragToMoveArea(child: SizedBox.expand()),
-                  ),
-                _assetDropTarget(),
-                _dropOutline(),
-                _HoldCue(at: _holdCue),
-                _DockGroup(
-                  topInset: _topBarsBottom + 8,
-                  children: [_penDock(), if (!_stageOpen) _aiDock()],
-                ),
-                _fixedTopBars(),
-                _agentStage(),
-                _reviewPanel(),
-                _returnPill(),
-                if (!_selectionToolbarDocked) _selectionToolbar(),
-                _shelf(),
-                if (_viewport.width >= 600)
-                  Positioned(
-                    right: studyZoomInset,
-                    bottom: studyZoomInset,
-                    child: GlassSurface(
-                      key: _zoomKey,
-                      radius: Corners.full,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: Space.xxs,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: l10n.studyZoomOut,
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _zoomBy(1 / 1.2),
-                            icon: const Icon(Icons.remove_rounded, size: 18),
-                          ),
-                          ValueListenableBuilder<int>(
-                            valueListenable: _camera,
-                            builder: (_, value, child) => SizedBox(
-                              width: 44,
-                              child: Text(
-                                '${(d.zoom * 100).round()}%',
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
-                                    ),
-                              ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            key: const ValueKey('study-feedback'),
+                            painter: _InteractionFeedback(
+                              this,
+                              Listenable.merge([_cursor, _scene, _camera]),
                             ),
                           ),
-                          IconButton(
-                            tooltip: l10n.studyZoomIn,
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _zoomBy(1.2),
-                            icon: const Icon(Icons.add_rounded, size: 18),
-                          ),
-                          IconButton(
-                            tooltip: l10n.studyFit,
-                            visualDensity: VisualDensity.compact,
-                            onPressed: _fit,
-                            icon: const Icon(
-                              Icons.fit_screen_outlined,
-                              size: 18,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            key: const ValueKey('study-evidence'),
+                            painter: _EvidencePainter(this),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (Platform.isMacOS)
+              const Positioned(
+                top: 0,
+                left: 80,
+                right: 0,
+                height: 22,
+                child: DragToMoveArea(child: SizedBox.expand()),
+              ),
+            if (!widget.standalone) _assetDropTarget(),
+            _dropOutline(),
+            _HoldCue(at: _holdCue),
+            _DockGroup(
+              topInset: _topBarsBottom + 8,
+              children: [
+                _penDock(),
+                if (!widget.standalone && !_stageOpen) _aiDock(),
               ],
             ),
-          ),
+            if (_tool == StudyTool.select ||
+                _tool == StudyTool.region ||
+                (_wholeCardSelected && _drawingPointer == null))
+              _rotationHandle(),
+            _fixedTopBars(),
+            if (!widget.standalone) _agentStage(),
+            if (!widget.standalone) _reviewPanel(),
+            if (!widget.standalone) _returnPill(),
+            if (!_selectionToolbarDocked) _selectionToolbar(),
+            if (!widget.standalone) _shelf(),
+            if (_viewport.width >= 600)
+              Positioned(
+                right: studyZoomInset,
+                bottom: studyZoomInset,
+                child: GlassSurface(
+                  key: _zoomKey,
+                  radius: Corners.full,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.xxs),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: l10n.studyZoomOut,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _zoomBy(1 / 1.2),
+                        icon: const Icon(Icons.remove_rounded, size: 18),
+                      ),
+                      ValueListenableBuilder<int>(
+                        valueListenable: _camera,
+                        builder: (_, value, child) => SizedBox(
+                          width: 44,
+                          child: Text(
+                            '${(d.zoom * 100).round()}%',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: l10n.studyZoomIn,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _zoomBy(1.2),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: l10n.studyFit,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _fit,
+                        icon: const Icon(Icons.fit_screen_outlined, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -2207,7 +2499,14 @@ class StudyCanvasState extends State<StudyCanvas>
         ),
     ];
     return IgnorePointer(
-      ignoring: _writing || _tool == StudyTool.hand || !d.editable(c.layer),
+      ignoring:
+          !d.editable(c.layer) ||
+          (_writing &&
+              !c.readerCard &&
+              c.type != "lecture" &&
+              c.type != "video" &&
+              !(c.type == 'pdfdoc' && _inlinePDF) &&
+              !_pdfPageCard(c)),
       child: Container(
         decoration: ShapeDecoration(
           color: chrome.paper,
@@ -2287,7 +2586,34 @@ class StudyCanvasState extends State<StudyCanvas>
                       ),
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (c.type == 'pdfdoc' &&
+                        if (_inlinePDF && c.type == 'pdfdoc')
+                          PopupMenuButton<String>(
+                            tooltip: l10n.pdfCardView,
+                            iconSize: 17,
+                            icon: const Icon(Icons.view_carousel_outlined),
+                            enabled: !_importing,
+                            onSelected: (view) => _setPDFView(c, view),
+                            itemBuilder: (_) => [
+                              for (final entry in {
+                                'scroll': l10n.pdfCardScroll,
+                                'paged': l10n.pdfCardPaged,
+                                'column': l10n.pdfCardColumns,
+                              }.entries)
+                                CheckedPopupMenuItem(
+                                  value: entry.key,
+                                  checked:
+                                      entry.key ==
+                                      (pdfColumn
+                                          ? 'column'
+                                          : c.pdfPaged
+                                          ? 'paged'
+                                          : 'scroll'),
+                                  child: Text(entry.value),
+                                ),
+                            ],
+                          ),
+                        if (!_inlinePDF &&
+                            c.type == 'pdfdoc' &&
                             (c.pdfColumn.isEmpty ||
                                 d.pdfPages(c.id).length < c.pageCount))
                           action(
@@ -2370,110 +2696,152 @@ class StudyCanvasState extends State<StudyCanvas>
                 maxHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
                 child: Offstage(
                   offstage: c.collapsed,
-                  child: switch (c.type) {
-                    'pdfdoc' => _PDFBody(owner: this, card: c),
-                    'conversation' => _ThreadNode(owner: this, card: c),
-                    'lecture' => Column(
-                      children: [
-                        Expanded(
-                          child: _snapshotVideo(c, _videoInput(widget.video)),
+                  child: IgnorePointer(
+                    ignoring:
+                        _tool == StudyTool.region ||
+                        (_selectsPdf(c.id) &&
+                            (c.type == "pdfdoc" || c.type == "pdf")),
+                    child: switch (c.type) {
+                      'pdfdoc' when _inlinePDF && !c.collapsed => _CanvasPdf(
+                        key: _pdfBodies.putIfAbsent(
+                          c.id,
+                          () => GlobalKey<_CanvasPdfState>(),
                         ),
-                        TextButton.icon(
-                          key: const ValueKey('study-video-shelf'),
-                          style: TextButton.styleFrom(
-                            minimumSize: const Size(0, 48),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
+                        owner: this,
+                        card: c,
+                      ),
+                      'pdfdoc' when _inlinePDF => const SizedBox.shrink(),
+                      'pdfdoc' => _PDFBody(owner: this, card: c),
+                      'conversation' => _ThreadNode(owner: this, card: c),
+                      'lecture' => Column(
+                        children: [
+                          Expanded(
+                            child: _snapshotVideo(c, _videoInput(widget.video)),
+                          ),
+                          TextButton.icon(
+                            key: const ValueKey('study-video-shelf'),
+                            style: TextButton.styleFrom(
+                              minimumSize: const Size(0, 48),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                            ),
+                            onPressed: () => _toggleShelf(_ShelfTab.transcript),
+                            icon: const Icon(
+                              Icons.subtitles_outlined,
+                              size: 16,
+                            ),
+                            label: Text(
+                              l10n.studyShelfFromVideo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          onPressed: () => _toggleShelf(_ShelfTab.transcript),
-                          icon: const Icon(Icons.subtitles_outlined, size: 16),
-                          label: Text(
-                            l10n.studyShelfFromVideo,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    'image' || 'pdf' => Image(
-                      image: ResizeImage(
-                        NetworkImage(widget.api.fileUrl(c.path)),
-                        width: 1500,
-                        height: 1500,
-                        policy: ResizeImagePolicy.fit,
+                        ],
                       ),
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, error, stack) =>
-                          Center(child: Text(l10n.studyImageFailed)),
-                    ),
-                    'video' => _snapshotVideo(
-                      c,
-                      _videoInput(
-                        _LocalVideo(
-                          key: _localVideoKeys.putIfAbsent(
-                            c.id,
-                            () => GlobalKey<_LocalVideoState>(),
-                          ),
-                          url: c.path.isEmpty
-                              ? widget.api.studyMediaUrl(
-                                  widget.ctl.lectureId,
-                                  c.id,
-                                )
-                              : widget.api.fileUrl(c.path),
-                          prepare: flush,
-                          initialMs: _localVideoTimes[c.id] ?? 0,
-                          onPosition: (ms) => _localVideoTimes[c.id] = ms,
+                      'pdf' when _pdfPageCard(c) => _CanvasPdf(
+                        key: _pdfBodies.putIfAbsent(
+                          c.id,
+                          () => GlobalKey<_CanvasPdfState>(),
                         ),
-                      ),
-                    ),
-                    'note' ||
-                    'explanation' ||
-                    'knowledge' ||
-                    'practice' => KeyedSubtree(
-                      key: ValueKey('${c.id}:$_cardTextEpoch'),
-                      child: _KnowledgeBody(
+                        owner: this,
                         card: c,
-                        onSource: _focusSource,
-                        editable: d.editable(c.layer),
-                        onBeginAnswer: d.checkpoint,
-                        onAnswer: (i, value) {
-                          if (d.editable(c.layer)) {
-                            c.responses['$i'] = value;
-                            d.changed();
-                          }
-                        },
+                        root: document!.cards.firstWhere(
+                          (p) => p.id == c.pdfColumn,
+                        ),
                       ),
-                    ),
-                    _ => SingleChildScrollView(
-                      key: ValueKey('${c.id}:$_cardTextEpoch'),
-                      padding: const EdgeInsets.all(20),
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: SelectableText(
+                      'image' || 'pdf' => Image(
+                        image: ResizeImage(
+                          NetworkImage(widget.api.fileUrl(c.path)),
+                          width: 1500,
+                          height: 1500,
+                          policy: ResizeImagePolicy.fit,
+                        ),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, error, stack) =>
+                            Center(child: Text(l10n.studyImageFailed)),
+                      ),
+                      'video' => _snapshotVideo(
+                        c,
+                        _videoInput(
+                          _LocalVideo(
+                            key: _localVideoKeys.putIfAbsent(
+                              c.id,
+                              () => GlobalKey<_LocalVideoState>(),
+                            ),
+                            url: c.path.isEmpty
+                                ? widget.api.studyMediaUrl(
+                                    widget.ctl.lectureId,
+                                    c.id,
+                                  )
+                                : widget.api.fileUrl(c.path),
+                            prepare: flush,
+                            initialMs: _localVideoTimes[c.id] ?? 0,
+                            onPosition: (ms) => _localVideoTimes[c.id] = ms,
+                          ),
+                        ),
+                      ),
+                      'text' when c.readerCard => SingleChildScrollView(
+                        key: PageStorageKey('study-reader/${c.id}'),
+                        primary: false,
+                        padding: const EdgeInsets.all(18),
+                        child: CoursiveMarkdown(
                           c.text,
-                          onSelectionChanged: (selection, cause) {
-                            if (!selection.isCollapsed) {
-                              _selection
-                                ..clear()
-                                ..add(c.id);
-                              _detail.clear();
-                              _detail
-                                ..objectId = c.id
-                                ..start = selection.start
-                                ..end = selection.end;
-                            }
-                          },
                           style: TextStyle(
                             fontSize: 16,
-                            height: 1.65,
-                            color: chrome.paperInk,
+                            height: 1.55,
+                            color: chrome.ink,
                           ),
                         ),
                       ),
-                    ),
-                  },
+                      'note' ||
+                      'explanation' ||
+                      'knowledge' ||
+                      'practice' => KeyedSubtree(
+                        key: ValueKey('${c.id}:$_cardTextEpoch'),
+                        child: _KnowledgeBody(
+                          card: c,
+                          onSource: _focusSource,
+                          editable: d.editable(c.layer),
+                          onBeginAnswer: d.checkpoint,
+                          onAnswer: (i, value) {
+                            if (d.editable(c.layer)) {
+                              c.responses['$i'] = value;
+                              d.changed();
+                            }
+                          },
+                        ),
+                      ),
+                      _ => SingleChildScrollView(
+                        key: ValueKey('${c.id}:$_cardTextEpoch'),
+                        padding: const EdgeInsets.all(20),
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: SelectableText(
+                            c.text,
+                            onSelectionChanged: (selection, cause) {
+                              if (!selection.isCollapsed) {
+                                _selection
+                                  ..clear()
+                                  ..add(c.id);
+                                _detail.clear();
+                                _detail
+                                  ..objectId = c.id
+                                  ..start = selection.start
+                                  ..end = selection.end;
+                              }
+                            },
+                            style: TextStyle(
+                              fontSize: 16,
+                              height: 1.65,
+                              color: chrome.paperInk,
+                            ),
+                          ),
+                        ),
+                      ),
+                    },
+                  ),
                 ),
               ),
             ),
@@ -2669,6 +3037,7 @@ class _Paper extends CustomPainter {
 
 class _InkScene extends CustomPainter {
   _InkScene({
+    this.inlinePDF = false,
     required this.document,
     required this.live,
     required this.stage,
@@ -2676,6 +3045,7 @@ class _InkScene extends CustomPainter {
     this.dark = false,
   }) : super(repaint: repaint);
   final StudyDocument document;
+  final bool inlinePDF;
   final List<StudyStroke> live;
   final Rect stage;
   final bool dark;
@@ -2691,7 +3061,20 @@ class _InkScene extends CustomPainter {
               if (studyOnPrintedPage(card.type)) card.id,
           }
         : const <String>{};
+    final inCard = inlinePDF
+        ? {
+            for (final card in d.cards)
+              if ((card.type == 'pdfdoc' && !card.collapsed) ||
+                  (card.type == 'pdf' &&
+                      card.pdfColumn.isNotEmpty &&
+                      d.cards.any(
+                        (r) => r.id == card.pdfColumn && r.type == 'pdfdoc',
+                      )))
+                card.id,
+          }
+        : const <String>{};
     for (final stroke in [...d.strokes, ...live]) {
+      if (inCard.contains(stroke.anchor)) continue;
       if (d.strokeVisible(stroke) && stroke.bounds.overlaps(viewport))
         stroke.paint(c, dark: dark && !printed.contains(stroke.anchor));
     }
@@ -2714,6 +3097,7 @@ class _InkTail extends CustomPainter {
     required this.width,
     required this.tool,
     required this.brush,
+    required this.darkPaper,
     required Listenable repaint,
   }) : super(repaint: repaint);
   final StudyDocument document;
@@ -2722,6 +3106,7 @@ class _InkTail extends CustomPainter {
   final double Function() width;
   final StudyTool Function() tool;
   final StudyBrush Function() brush;
+  final bool Function() darkPaper;
   @override
   void paint(Canvas c, Size s) {
     final p = points();
@@ -2736,6 +3121,7 @@ class _InkTail extends CustomPainter {
       width(),
       tool() == StudyTool.highlighter ? 'highlighter' : 'pen',
       brush: brush(),
+      darkPaper: darkPaper(),
     );
     c.restore();
   }

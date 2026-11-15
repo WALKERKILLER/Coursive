@@ -179,6 +179,12 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
+      - name: PDF working-copy and package regression
+        working-directory: .
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pdf-notes-tests"
+          "$RUNNER_TEMP/pdf-notes-tests/bin/python" -m pip install -r scripts/desktop/pdf-notes-requirements.txt
+          "$RUNNER_TEMP/pdf-notes-tests/bin/python" -m unittest discover -s scripts/desktop -p 'test_*.py'
 
   app-linux:
     name: app (Linux build)

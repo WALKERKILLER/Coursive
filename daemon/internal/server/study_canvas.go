@@ -6,11 +6,16 @@ import (
 	"github.com/walkerkiller/coursive/daemon/internal/library"
 	"io"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
+	"strings"
 )
 
 func studyError(e error) error {
+	if errors.Is(e, os.ErrNotExist) {
+		return apiError{404, "文档不存在"}
+	}
 	if errors.Is(e, library.ErrStudyConflict) {
 		return apiError{409, e.Error()}
 	}
@@ -22,9 +27,25 @@ func studyError(e error) error {
 	}
 	return e
 }
+func (s *Server) createNotebook(w http.ResponseWriter, r *http.Request) (any, error) {
+	var q library.Notebook
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&q); err != nil {
+		return nil, badRequest("无效的画布标题或课程")
+	}
+	n, e := s.Lib.CreateNotebook(r.Context(), q.Title, q.CourseID)
+	if e == nil {
+		s.Bus.Publish("notes_changed", map[string]string{"course_id": n.CourseID, "canvas_id": n.ID})
+	}
+	return n, studyError(e)
+}
 func (s *Server) studyCanvas(w http.ResponseWriter, r *http.Request) (any, error) {
 	id := r.PathValue("id")
+	standalone := strings.HasPrefix(r.URL.Path, "/api/notebooks/")
 	if r.Method == "GET" {
+		if standalone {
+			d, e := s.Lib.NotebookCanvas(r.Context(), id, nil)
+			return d, studyError(e)
+		}
 		d, e := s.Lib.StudyCanvas(r.Context(), id)
 		return d, studyError(e)
 	}
@@ -36,7 +57,11 @@ func (s *Server) studyCanvas(w http.ResponseWriter, r *http.Request) (any, error
 	if e = json.Unmarshal(b, &d); e != nil {
 		return nil, badRequest("画布 JSON 无效")
 	}
-	d, e = s.Lib.SaveStudyCanvas(r.Context(), id, d)
+	if standalone {
+		d, e = s.Lib.NotebookCanvas(r.Context(), id, &d)
+	} else {
+		d, e = s.Lib.SaveStudyCanvas(r.Context(), id, d)
+	}
 	if e != nil {
 		return nil, studyError(e)
 	}
@@ -113,4 +138,9 @@ func (s *Server) exportPDFPreview(w http.ResponseWriter, r *http.Request) (any, 
 func (s *Server) studyVideoFile(w http.ResponseWriter, r *http.Request) (any, error) {
 	s.studyMediaFile(w, r)
 	return nil, nil
+}
+
+func (s *Server) notebookAsset(w http.ResponseWriter, r *http.Request) (any, error) {
+	out, e := s.Lib.ImportNotebookAsset(r.Context(), r.PathValue("id"), r.URL.Query().Get("name"), http.MaxBytesReader(w, r.Body, library.StudyAssetLimit+1))
+	return out, studyError(e)
 }

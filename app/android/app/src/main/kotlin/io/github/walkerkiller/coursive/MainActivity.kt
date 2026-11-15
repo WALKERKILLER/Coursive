@@ -12,10 +12,13 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class MainActivity : FlutterActivity() {
     private var stylus: StylusBridge? = null
+    // Bound live PDF parsers and raster buffers across all canvas readers.
+    private val pdfNotesExecutor = Executors.newSingleThreadExecutor()
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         val handled = super.dispatchTouchEvent(event)
@@ -34,6 +37,7 @@ class MainActivity : FlutterActivity() {
     override fun onPause() { stylus?.reset(); super.onPause() }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pdfNotesExecutor.shutdown()
         stylus?.dispose(); stylus = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -71,6 +75,14 @@ class MainActivity : FlutterActivity() {
 
     private fun onAndroid(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "pdfNotes" -> pdfNotesExecutor.execute {
+                try {
+                    val value = AndroidPdfNotes.run(this, call)
+                    runOnUiThread { result.success(value) }
+                } catch (e: Exception) {
+                    runOnUiThread { result.error("pdf", e.message, null) }
+                }
+            }
             "info" -> result.success(
                 mapOf(
                     "nativeLibraryDir" to applicationInfo.nativeLibraryDir,

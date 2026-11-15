@@ -16,6 +16,7 @@ import '../../widgets/states.dart';
 import '../assistant/assistant_panel.dart';
 import '../player/player_page.dart';
 import '../lms/lms_course.dart';
+import '../library/notebooks.dart';
 import '../plugins/plugin_views.dart';
 import 'courses_page.dart';
 import 'download_sheet.dart';
@@ -285,6 +286,11 @@ class _CoursePageState extends State<CoursePage> {
                     ),
                   ),
                 ),
+              if (course != null)
+                SliverToBoxAdapter(child: ContentWidth(child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: pad),
+                  child: CourseDocuments(key: ValueKey(widget.courseId), courseId: widget.courseId),
+                ))),
               SliverToBoxAdapter(
                 child: ContentWidth(
                   child: Padding(

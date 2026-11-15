@@ -7387,7 +7387,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyRotateSelection => '顺时针旋转 90°';
 
   @override
-  String get studyRotateUnsupported => '旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象';
+  String get studyRotateUnsupported => '请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转';
 
   @override
   String get studyEditShape => '编辑形状锚点';
@@ -8072,4 +8072,76 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyShot => '选区截图';
+
+  @override
+  String get documentCreate => '新建';
+
+  @override
+  String get documentMarkdown => '文字笔记';
+
+  @override
+  String get documentCanvas => '无限画布';
+
+  @override
+  String get documentCanvasTitle => '画布名称';
+
+  @override
+  String get documentUngrouped => '未归入课程';
+
+  @override
+  String get courseDocuments => '笔记与画布';
+
+  @override
+  String get pdfDockCanvasRead => '在卡片内滚动阅读';
+
+  @override
+  String get pdfDockOpen => '并排批注 PDF';
+
+  @override
+  String get pdfDockCropped => '此 PDF 已裁剪，可在原页书写';
+
+  @override
+  String get pdfDockMargin => '右侧白边';
+
+  @override
+  String get pdfDockPen => '鼠标书写';
+
+  @override
+  String get pdfDockChanged => '批注版已发生变化，请重新打开';
+
+  @override
+  String get pdfDockSaving => '正在写入 PDF…';
+
+  @override
+  String get pdfDockSaved => '已保存到批注版 PDF';
+
+  @override
+  String get pdfDockHint => '笔或鼠标书写，触控或滚轮翻页';
+
+  @override
+  String get pdfDockChoose => '选择本机 PDF…';
+
+  @override
+  String get pdfDockSuffix => ' · 批注版';
+
+  @override
+  String get pdfCardEraser => '橡皮擦';
+
+  @override
+  String get pdfCardPrevious => '上一页';
+
+  @override
+  String get pdfCardNext => '下一页';
+
+  @override
+  String get pdfCardView => 'PDF 视图';
+
+  @override
+  String get pdfCardColumns => '展开为一列';
+
+  @override
+  String get pdfCardPaged => '左右翻页';
+
+  @override
+  String get pdfCardScroll => '上下滚动';
 }

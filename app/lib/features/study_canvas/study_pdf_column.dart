@@ -3,12 +3,12 @@ import 'dart:ui';
 
 import 'study_document.dart';
 
-Rect _paper(StudyCard card, double aspect) {
-  final height = card.collapsed ? card.expandedH : card.rect.height;
+Rect studyOriginalPaper(StudyCard card, double aspect) {
+  final height = card.collapsed ? card.expandedH : card.contentRect.height;
   final area = Rect.fromLTWH(
-    card.rect.left,
-    card.rect.top + 36,
-    card.rect.width,
+    card.contentRect.left,
+    card.contentRect.top + 36,
+    card.contentRect.width,
     math.max(1, height - (card.type == 'pdfdoc' ? 72 : 36)),
   );
   final width = math.min(area.width, area.height * aspect);
@@ -122,7 +122,8 @@ extension StudyPDFColumn on StudyDocument {
       );
       nextTop = after.rect.bottom + 24;
     }
-    final from = _paper(root, aspect), to = _paper(card, aspect);
+    final from = studyOriginalPaper(root, aspect),
+        to = studyOriginalPaper(card, aspect);
     strokes = [
       for (final s in strokes)
         if (s.anchor == root.id &&
@@ -153,8 +154,8 @@ extension StudyPDFColumn on StudyDocument {
             s,
             root.id,
             page.page,
-            _paper(page, page.pageAspect),
-            _paper(root, page.pageAspect),
+            studyOriginalPaper(page, page.pageAspect),
+            studyOriginalPaper(root, page.pageAspect),
           )
         else
           s,

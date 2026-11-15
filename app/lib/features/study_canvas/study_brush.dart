@@ -97,7 +97,7 @@ class StudyPenPreset {
       '铅笔',
       0xff4d5969,
       4,
-      const StudyBrush(family: 'pencil', opacity: .72),
+      const StudyBrush(family: 'pencil', opacity: .9),
     ),
     StudyPenPreset(
       '软笔',

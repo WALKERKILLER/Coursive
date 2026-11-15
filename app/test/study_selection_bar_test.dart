@@ -69,7 +69,7 @@ void main() {
       expect(r.right, closeTo(560, .5));
       expect(r.height, greaterThanOrEqualTo(44));
 
-      await lasso(t, const Rect.fromLTRB(230, 60, 560, 300), tool: false);
+      await lasso(t, const Rect.fromLTRB(230, 100, 560, 300), tool: false);
       r = t.getRect(bar);
       expect(
         r.top,

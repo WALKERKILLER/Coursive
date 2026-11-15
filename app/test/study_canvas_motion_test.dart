@@ -11,6 +11,42 @@ Finder _private(String type) =>
     find.byWidgetPredicate((w) => w.runtimeType.toString() == type);
 
 void main() {
+  testWidgets(
+    'a selected text card rotates continuously with its handle and undo restores it',
+    (t) async {
+      final d = sheet()
+        ..cards.add(
+          StudyCard(
+            id: 'text',
+            type: 'text',
+            layer: 'main',
+            rect: const Rect.fromLTWH(480, 330, 360, 220),
+            text: '示例',
+          ),
+        );
+      final key = await fixture.open(t, fixture.FixtureApi(d.json()));
+      await t.tap(find.byKey(const ValueKey('study-tool-select')));
+      await t.pumpAndSettle();
+      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
+      await t.longPressAt(origin + const Offset(550, 346));
+      await t.pumpAndSettle();
+      final handle = find.byKey(const ValueKey('study-rotation-handle'));
+      final at = t.getCenter(handle);
+      final g = await t.startGesture(at);
+      await g.moveBy(const Offset(55, 14));
+      await t.pump();
+      await g.moveBy(const Offset(35, 22));
+      await t.pump();
+      await g.up();
+      await t.pumpAndSettle();
+      final actual = key.currentState!.document!;
+      expect(actual.cards.single.rotation, greaterThan(.3));
+      actual.undo();
+      expect(actual.cards.single.rotation, 0);
+      await close(t);
+    },
+  );
+
   testWidgets('显示全部卡片 carries the view there and a touch stops it', (t) async {
     final d = sheet()
       ..cards.add(

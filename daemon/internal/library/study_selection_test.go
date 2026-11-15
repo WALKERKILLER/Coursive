@@ -52,6 +52,15 @@ func TestStudyImageQuarterTurnsPersistAndRejectDowngrade(t *testing.T) {
 	read.Objects[1].QuarterTurns = 0
 	read.Objects[0].QuarterTurns = 1
 	if _, e = l.SaveStudyCanvas(ctx, "one", read); !errors.Is(e, ErrStudyInvalid) {
-		t.Fatal("video rotation accepted", e)
+		t.Fatal("video rotation accepted in v4", e)
+	}
+	read.Version = 6
+	read.Objects[0].Rotation = 0.72
+	if _, e = l.SaveStudyCanvas(ctx, "one", read); e != nil {
+		t.Fatal(e)
+	}
+	reopen, e := l.StudyCanvas(ctx, "one")
+	if e != nil || reopen.Objects[0].Rotation != 0.72 || reopen.Objects[0].QuarterTurns != 1 {
+		t.Fatal("lost rotation", e)
 	}
 }

@@ -41,7 +41,7 @@ class _CatalogBrowserState extends State<CatalogBrowser> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final courses = <String, String>{
-      for (final i in widget.items) '${i['course_id']}': '${i['course']}',
+      for (final i in widget.items) if ('${i['course_id']}'.isNotEmpty) '${i['course_id']}': '${i['course']}',
     };
     final scoped = widget.items
         .where(
@@ -142,7 +142,7 @@ class _CatalogBrowserState extends State<CatalogBrowser> {
             child: Text(l10n.catalogEmpty),
           ),
         for (final course in grouped.entries) ...[
-          Text(course.key, style: tt.titleMedium),
+          Text(course.key.isEmpty ? l10n.documentUngrouped : course.key, style: tt.titleMedium),
           const SizedBox(height: Space.sm),
           for (final group in course.value.entries)
             Card(

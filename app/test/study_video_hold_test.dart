@@ -42,13 +42,13 @@ void main() {
               left: 0,
               right: 0,
               height: 70,
-              child: GestureDetector(
+              child: VideoCardControls(child: GestureDetector(
                 key: const ValueKey('controls'),
                 behavior: HitTestBehavior.opaque,
                 onTap: () => taps++,
                 onHorizontalDragUpdate: (_) => scrubs++,
                 child: const ColoredBox(color: Colors.grey),
-              ),
+              )),
             ),
           ],
         ),
@@ -118,7 +118,6 @@ void main() {
       expect(actual.camera, camera);
       actual.undo();
       actual.undo();
-      await t.tap(find.byKey(const ValueKey('study-tool-select')));
       await t.pump(const Duration(seconds: 2));
       await t.tap(find.byKey(const ValueKey('controls')));
       await t.pumpAndSettle();
@@ -134,6 +133,8 @@ void main() {
       expect(scrubs, greaterThan(0));
       expect(actual.cards.single.rect, before);
       scrubs = 0;
+      await t.tap(find.byKey(const ValueKey('study-tool-select')));
+      await t.pumpAndSettle();
       // Clear the persistent object selection before testing camera panning.
       await t.tapAt(const Offset(1300, 700));
       await t.pumpAndSettle();

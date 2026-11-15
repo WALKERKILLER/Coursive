@@ -337,6 +337,7 @@ class _PlayerPageState extends State<PlayerPage> {
               fullscreen: _fullscreen,
               child: StudyCanvas(
                 key: _canvas,
+                pdfLibraryRoot: context.read<AppState>().daemon.libraryRoot,
                 api: ctl.api,
                 ctl: ctl,
                 video: view,
