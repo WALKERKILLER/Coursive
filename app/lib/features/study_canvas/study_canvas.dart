@@ -230,7 +230,9 @@ class StudyCanvasState extends State<StudyCanvas>
   final _threadTick = ValueNotifier(0);
   final _stageKeys = <GlobalKey>{};
   bool get _inlinePDF =>
-      widget.pdfLibraryRoot != null && (Platform.isMacOS || Platform.isAndroid);
+      widget.pdfLibraryRoot != null &&
+      (Platform.isMacOS || Platform.isAndroid ||
+          widget.openCanvasPDF != DockPDF.open);
   final _pdfBodies = <String, GlobalKey<_CanvasPdfState>>{};
   final _pdfFiles = <String, Future<DockPDF>>{};
   bool _pdfPageCard(StudyCard c) =>
