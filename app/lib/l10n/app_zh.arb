@@ -4089,7 +4089,7 @@
   "localVideosPartialSaved": "课程和已导入的课次都已保留。继续导入会从这个视频开始。",
   "localVideoLimit": "超过 4 GiB，请移除后再导入",
   "folderSyncTitle": "课程同步",
-  "folderSyncBody": "把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。",
+  "folderSyncBody": "通过 NAS WebDAV 或 Syncthing 文件夹同步选中的课程。来源登录、模型密钥和本机设置留在本机；画布以最新保存版本为准，并保留恢复副本。",
   "folderSyncAccount": "NAS 账号",
   "folderSyncAccountHint": "和整库同步共用一个账号与目录，课程放在 courses/ 下",
   "folderSyncCourses": "同步的课程",
@@ -5007,5 +5007,9 @@
   "studyAgentReadingCourse": "正在读课程资料…",
   "studyAgentLookingShot": "正在看截图…",
   "studyAgentCheckingQuotes": "正在核对引文…",
-  "studyShot": "选区截图"
+  "studyShot": "选区截图",
+  "folderSyncLocalFolder": "选择 Syncthing 同步文件夹",
+  "folderSyncLocalHint": "选择专用交换目录，两端由 Syncthing 保持一致。",
+  "folderSyncLocalConnected": "已连接同步文件夹",
+  "folderSyncUseWebDav": "使用 WebDAV"
 }

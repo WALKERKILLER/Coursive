@@ -64,12 +64,24 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('the account form never offers a local folder', (tester) async {
-    var puts = 0;
+  testWidgets('shared folder reconnects without WebDAV credentials', (
+    tester,
+  ) async {
+    Map? saved;
     Future<dynamic> call(String m, String p, [Object? body]) async {
-      if (m == 'PUT') puts++;
-      if (p.endsWith('/preview')) return {'courses': {}};
-      return {};
+      if (m == 'PUT') saved = body as Map;
+      if (p.endsWith('/preview'))
+        return {
+          'courses': {'pilot': '操作系统速成'},
+        };
+      return {
+        'kind': 'folder',
+        'configured': true,
+        'local_folder': '/sync/Coursive',
+        'course_ids': ['pilot'],
+        'media': true,
+        'auto': true,
+      };
     }
 
     tester.view.physicalSize = const Size(1000, 2200);
@@ -78,9 +90,21 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(home: FolderSyncPage(api: call)));
     await settle(tester);
-    expect(find.text('选择文件夹'), findsNothing);
-    expect(find.text('Syncthing'), findsNothing);
-    expect(puts, 0);
+    expect(find.text('/sync/Coursive'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '服务器地址'), findsNothing);
+    expect(find.text('操作系统速成'), findsOneWidget);
+    await tester.ensureVisible(find.text('连接并同步'));
+    await tester.tap(find.text('连接并同步'));
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, '连接并同步').last);
+    await settle(tester);
+    expect(saved?['local_folder'], '/sync/Coursive');
+    expect(saved?['course_ids'], ['pilot']);
+    expect(saved?.containsKey('url'), false);
+    expect(saved?.containsKey('password'), false);
+    await tester.tap(find.text('使用 WebDAV'));
+    await settle(tester);
+    expect(find.widgetWithText(TextField, '服务器地址'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }
