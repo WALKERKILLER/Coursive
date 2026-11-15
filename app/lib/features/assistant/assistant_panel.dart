@@ -904,11 +904,14 @@ class _ModelChip extends StatelessWidget {
                 MenuItemButton(
                   leadingIcon: Icon(sel != null && sel['provider'] == p['id'] && sel['model'] == m['id'] ? Icons.check_rounded : null, size: 18),
                   trailingIcon: m['reasoning'] == true ? const Icon(Icons.psychology_outlined, size: 16) : null,
-                  onPressed: () => a.setPrefs({'provider': p['id'], 'model': m['id']}),
+                  onPressed: () async {
+                    try { await a.setPrefs({'provider': p['id'], 'model': m['id']}); }
+                    catch (_) { if (context.mounted) ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(l10n.modelPrefsRetry))); }
+                  },
                   child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 260), child: Text('${m['name']}', overflow: TextOverflow.ellipsis)),
                 ),
             ],
-            child: Text('${p['name']}'),
+            child: Text(sel?['provider'] == p['id'] ? '✓  ${p['name']}' : '${p['name']}'),
           ),
         if (sel?['reasoning'] == true) ...[
           const Divider(),

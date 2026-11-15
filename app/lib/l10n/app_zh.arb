@@ -5007,5 +5007,10 @@
   "studyAgentReadingCourse": "正在读课程资料…",
   "studyAgentLookingShot": "正在看截图…",
   "studyAgentCheckingQuotes": "正在核对引文…",
-  "studyShot": "选区截图"
+  "studyShot": "选区截图",
+  "gptLogin": "登录 ChatGPT",
+  "gptLoginDone": "小 C 已连接 GPT",
+  "gptLoginFailed": "登录未完成，请检查网络后重试",
+  "modelPrefsSaveFailed": "模型设置保存失败，请重新选择后再发送。",
+  "modelPrefsRetry": "模型设置保存失败，请重试。"
 }

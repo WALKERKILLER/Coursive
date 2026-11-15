@@ -102,6 +102,35 @@ class DaemonService extends ChangeNotifier {
     await _spawn();
   }
 
+  // Finder launches do not inherit shell proxy settings. Give the local Node
+  // assistant the same explicit HTTP(S) proxy as the macOS network service.
+  Future<Map<String, String>> _macAssistantProxy() async {
+    if (!Platform.isMacOS) return {};
+    try {
+      final result = await Process.run('/usr/sbin/scutil', ['--proxy']);
+      final values = <String,String>{};
+      for (final line in result.stdout.toString().split('\n')) {
+        final m = RegExp(r'^\s*(HTTPS?\w+)\s*:\s*(.+)$').firstMatch(line);
+        if (m != null) values[m[1]!] = m[2]!.trim();
+      }
+      final env = <String,String>{};
+      for (final protocol in ['HTTP', 'HTTPS']) {
+        final host = values['${protocol}Proxy'];
+        final port = int.tryParse(values['${protocol}Port'] ?? '');
+        if (values['${protocol}Enable'] != '1' || host == null || port == null) continue;
+        final url = Uri(scheme:'http', host:host, port:port).toString();
+        env['${protocol}_PROXY'] = url;
+        env['${protocol.toLowerCase()}_proxy'] = url;
+      }
+      if (env.isNotEmpty || Platform.environment.containsKey('HTTPS_PROXY')) {
+        env['NODE_USE_ENV_PROXY'] = '1';
+        final bypass = ['127.0.0.1','localhost','::1',Platform.environment['NO_PROXY'] ?? Platform.environment['no_proxy'] ?? ''].where((v)=>v.isNotEmpty).join(',');
+        env['NO_PROXY'] = env['no_proxy'] = bypass;
+      }
+      return env;
+    } catch (_) { return {}; }
+  }
+
   Future<void> _spawn() async {
     final ws = workspace;
     if (ws != null) return _spawnInWorkspace(ws);
@@ -121,6 +150,7 @@ class DaemonService extends ChangeNotifier {
     if (node != null) args.addAll(['-node', node]);
     await _launch(bin, args, {
       'COURSIVE_TOKEN': token,
+      ...await _macAssistantProxy(),
       if (Platform.isMacOS) 'PATH': macOSDaemonPath(Platform.environment['PATH']),
     });
   }
@@ -150,7 +180,10 @@ class DaemonService extends ChangeNotifier {
       '-data', ws.dataDir,
       '-library', ws.library,
       '-agent', '${ws.agentDir}/src/host.mjs',
-    ], env: {'COURSIVE_TOKEN': token, if (ws.device.isNotEmpty) 'COURSIVE_DEVICE': ws.device});
+    ], env: {
+      'COURSIVE_TOKEN': token,
+      if (ws.device.isNotEmpty) 'COURSIVE_DEVICE': ws.device,
+    });
     await _launch(exe, args, env);
   }
 

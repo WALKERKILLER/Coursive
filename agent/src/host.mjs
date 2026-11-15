@@ -10,6 +10,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { chatGPTLogin } from "./chatgpt-login.mjs";
 import { DATA_DIR, ModelPipeline } from "./models.mjs";
 import { createTools, guard, TURN_TOOL_BUDGET } from "./tools.mjs";
 import { bundledPluginsDir, PluginHost } from "./plugins.mjs";
@@ -267,7 +268,7 @@ async function openConversation(id, init = { kind: "chat" }) {
 		sessionManager = sessions.create();
 	}
 	const model = await pipeline.currentModel();
-	if (!model) throw httpError(409, "还没有可用的模型。请在 设置 → 模型 中添加 API Key 或导入 Pi CLI 配置。");
+	if (!model) throw httpError(409, "所选模型不可用。请在设置中检查对应服务的登录或重新选择模型。");
 	const conv = {
 		session: null,
 		context: null,
@@ -422,6 +423,9 @@ const routes = [];
 const route = (method, pattern, fn) => routes.push({ method, re: new RegExp(`^${pattern}$`), fn });
 
 route("GET", "/health", async () => ({ ok: true, sdk: "@earendil-works/pi-coding-agent" }));
+const openaiLogin = chatGPTLogin(pipeline, DATA_DIR);
+route("POST", "/openai-login", () => openaiLogin.start());
+route("GET", "/openai-login", () => openaiLogin.status());
 route("GET", "/models", async () => pipeline.describe());
 // The daemon's action bridge records the approval mode on each plugin write proposal.
 route("GET", "/prefs", async () => pipeline.prefs);
@@ -587,7 +591,7 @@ route("POST", "/sessions/([^/]+)/abort", async (_req, [id]) => {
 
 // POST /chat streams Server-Sent Events for one prompt.
 route("POST", "/chat", async (req, _m, res) => {
-	const { session_id, message, context, agent, course_id } = await body(req);
+	const { session_id, message, context, agent, course_id, model_choice } = await body(req);
 	if (!message?.trim()) throw httpError(400, "消息为空");
 	let conv;
 	if (session_id) conv = await openConversation(session_id);
@@ -602,7 +606,18 @@ route("POST", "/chat", async (req, _m, res) => {
 	conv.context = context ?? null;
 	conv.calls = 0;
 	conv.lastUser = message;
-	await refreshPrompt(conv);
+	try {
+		const selected = await pipeline.currentModel();
+		if (!selected) throw httpError(409, "所选模型当前不可用，请检查对应服务的登录或重新选择模型。");
+		if (model_choice && (model_choice.provider !== selected.provider || model_choice.model !== selected.id))
+			throw httpError(409, "模型选择已改变，请重新确认后发送。");
+		if (s.model?.provider !== selected.provider || s.model?.id !== selected.id)
+			await s.setModel(selected);
+		await refreshPrompt(conv);
+	} catch (error) {
+		conv.busy = false;
+		throw error;
+	}
 
 	res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
 	const emit = (type, data = {}) => res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
@@ -638,7 +653,7 @@ route("POST", "/chat", async (req, _m, res) => {
 				}
 				break;
 			case "auto_retry_start":
-				emit("status", { text: "请求失败，正在重试…" });
+				emit("status", { retrying: true, text: `连接暂时失败，正在重试（${ev.attempt}/${ev.maxAttempts}）…` });
 				break;
 			case "compaction_start":
 				emit("status", { text: "正在压缩上下文…" });

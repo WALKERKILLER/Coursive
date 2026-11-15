@@ -14066,6 +14066,36 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'选区截图'**
   String get studyShot;
+
+  /// No description provided for @gptLogin.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录 ChatGPT'**
+  String get gptLogin;
+
+  /// No description provided for @gptLoginDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'小 C 已连接 GPT'**
+  String get gptLoginDone;
+
+  /// No description provided for @gptLoginFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录未完成，请检查网络后重试'**
+  String get gptLoginFailed;
+
+  /// No description provided for @modelPrefsSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型设置保存失败，请重新选择后再发送。'**
+  String get modelPrefsSaveFailed;
+
+  /// No description provided for @modelPrefsRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型设置保存失败，请重试。'**
+  String get modelPrefsRetry;
 }
 
 class _AppLocalizationsDelegate
