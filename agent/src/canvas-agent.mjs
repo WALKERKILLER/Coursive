@@ -246,7 +246,9 @@ class CanvasModelFailure extends Error {}
 export function canvasModelError(error) {
  const status=Number(error?.status??error?.statusCode);
  const text=String(error?.message??error??'');
- if(status===401||status===403||/\b(401|403)\b|unauthorized|authentication/i.test(text))return '模型授权失效，请在设置中重新登录或更新 API Key';
+ if(/country|unsupported.{0,8}region|region.{0,8}(not|unsupported)/i.test(text))return '当前网络地区不支持此模型服务，请检查代理或更换网络';
+ if(status===403||/\b403\b/.test(text))return '模型访问被拒绝，请检查网络出口及账号的模型访问权限';
+ if(status===401||/\b401\b|unauthorized|authentication/i.test(text))return '模型授权失效，请在设置中重新登录或更新 API Key';
  if(status===429||/\b429\b|rate.?limit|quota/i.test(text))return '模型额度或请求频率受限，请稍后重试或切换模型';
  if(/timeout|timed out|ECONN|ENOTFOUND|fetch failed|network/i.test(text))return '模型连接超时或网络不可达，请检查代理后重试';
  return PUBLIC_ERROR;

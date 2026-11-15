@@ -1,14 +1,51 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:coursive/features/settings/models_page.dart';
-import 'package:coursive/features/assistant/assistant_controller.dart';
-import 'package:coursive/core/app_state.dart';
+import '../lib/features/settings/models_page.dart';
+import '../lib/features/assistant/assistant_controller.dart';
+import '../lib/core/app_state.dart';
+
+import 'study_canvas_ui_test.dart' as canvas;
+
+import '../lib/features/study_canvas/study_document.dart';
 
 import 'assistant_preferences_test.dart' show FakeApi, FakeApp;
 
 void main() {
+  testWidgets(
+    'canvas sidebar offers the same usable model picker without overflow',
+    (t) async {
+      final api = FakeApi(), owner = FakeApp(FakeApi());
+      final a = AssistantController(FakeApp(api), ScreenContext(), PlayerHub());
+      a.models = {
+        'providers': [],
+        'selected': {'provider': 'demo', 'model': 'demo-model'},
+      };
+      await canvas.open(
+        t,
+        canvas.FixtureApi(StudyDocument().json()),
+        wrap: (child) => ChangeNotifierProvider.value(value: a, child: child),
+      );
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
+      await t.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('assistant-model-picker')),
+        findsOneWidget,
+      );
+      expect(t.takeException(), isNull);
+      await t.tap(find.byKey(const ValueKey('assistant-model-picker')));
+      await t.pump();
+      api.read!.complete(a.models);
+      await t.pumpAndSettle();
+      expect(find.byType(SearchBar), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      a.dispose();
+      owner.dispose();
+    },
+  );
+
   testWidgets(
     'finger scroll reaches every model and selection waits for persistence',
     (t) async {

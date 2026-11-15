@@ -1,7 +1,7 @@
 # Pen writing and uniform card transforms
 
 ## Status
-Proposed
+Accepted
 Class: feature
 
 ## Context and Problem Statement

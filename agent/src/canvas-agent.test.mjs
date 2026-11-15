@@ -285,3 +285,10 @@ test('provider failures have actionable errors without leaking SDK payloads', as
   assert.equal(done.state,'error');assert.match(done.error,expected);assert(!JSON.stringify(done).includes('private-key'));
  }
 });
+
+import {canvasModelError} from './canvas-agent.mjs';
+test('geographic access denial is not reported as an expired credential',()=>{
+ assert.match(canvasModelError({message:'403 unsupported_country_region_territory private-key'}),/网络地区/);
+ assert.match(canvasModelError({status:403,message:'private-key forbidden'}),/访问权限/);
+ assert.match(canvasModelError({status:401,message:'private-key'}),/授权失效/);
+});

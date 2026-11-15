@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:coursive/core/api.dart';
-import 'package:coursive/core/app_state.dart';
-import 'package:coursive/core/daemon_service.dart';
-import 'package:coursive/features/assistant/assistant_controller.dart';
+import '../lib/core/api.dart';
+import '../lib/core/app_state.dart';
+import '../lib/core/daemon_service.dart';
+import '../lib/features/assistant/assistant_controller.dart';
 
 class FakeApi extends Api {
   FakeApi() : super('http://127.0.0.1', 'synthetic');
