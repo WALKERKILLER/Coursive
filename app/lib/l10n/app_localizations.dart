@@ -11458,6 +11458,30 @@ abstract class AppLocalizations {
   /// **'通过 NAS WebDAV 或 Syncthing 文件夹同步选中的课程。来源登录、模型密钥和本机设置留在本机；画布以最新保存版本为准，并保留恢复副本。'**
   String get folderSyncBody;
 
+  /// No description provided for @folderSyncLocalFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 Syncthing 同步文件夹'**
+  String get folderSyncLocalFolder;
+
+  /// No description provided for @folderSyncLocalHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择专用交换目录，两端由 Syncthing 保持一致。'**
+  String get folderSyncLocalHint;
+
+  /// No description provided for @folderSyncLocalConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已连接同步文件夹'**
+  String get folderSyncLocalConnected;
+
+  /// No description provided for @folderSyncUseWebDav.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用 WebDAV'**
+  String get folderSyncUseWebDav;
+
   /// No description provided for @folderSyncAccount.
   ///
   /// In zh, this message translates to:
@@ -14066,30 +14090,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'选区截图'**
   String get studyShot;
-
-  /// No description provided for @folderSyncLocalFolder.
-  ///
-  /// In zh, this message translates to:
-  /// **'选择 Syncthing 同步文件夹'**
-  String get folderSyncLocalFolder;
-
-  /// No description provided for @folderSyncLocalHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'选择专用交换目录，两端由 Syncthing 保持一致。'**
-  String get folderSyncLocalHint;
-
-  /// No description provided for @folderSyncLocalConnected.
-  ///
-  /// In zh, this message translates to:
-  /// **'已连接同步文件夹'**
-  String get folderSyncLocalConnected;
-
-  /// No description provided for @folderSyncUseWebDav.
-  ///
-  /// In zh, this message translates to:
-  /// **'使用 WebDAV'**
-  String get folderSyncUseWebDav;
 }
 
 class _AppLocalizationsDelegate
