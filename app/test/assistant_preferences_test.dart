@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+
 import '../lib/core/api.dart';
 import '../lib/core/app_state.dart';
 import '../lib/core/daemon_service.dart';
@@ -77,6 +78,25 @@ void main() {
     });
     await read;
     expect(controller.selected?['model'], 'new');
+  });
+  test('non-model preferences do not change model failure state', () async {
+    Future<void> write(Map<String, dynamic> patch, {bool fail = false}) async {
+      final result = controller.setPrefs(patch);
+      final check = fail ? expectLater(result, throwsStateError) : result;
+      await tick();
+      if (fail) {
+        api.writes.last.completeError(StateError('save failed'));
+      } else {
+        api.writes.last.complete({});
+      }
+      await check;
+    }
+
+    await write({'approval': 'ask'}, fail: true);
+    await controller.waitForPreferences();
+    await write({'model': 'new'}, fail: true);
+    await write({'thinking': 'low'});
+    await expectLater(controller.waitForPreferences(), throwsStateError);
   });
   test(
     'a failed preference save blocks sending until a successful reselection',

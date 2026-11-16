@@ -143,56 +143,47 @@ void main() {
     final read = StudyDocument.fromJson(json);
     expect(read.cards.single.contentScale, 1);
   });
-  test(
-    'controls precede palm rejection; pen content never becomes card movement',
-    () {
-      StudyContactOwner route(
-        PointerDeviceKind k, {
-        bool controls = false,
-        bool blocked = false,
-        bool header = false,
-        bool reading = false,
-        bool paper = false,
-        bool lasso = false,
-      }) => studyContactOwner(
-        kind: k,
-        controls: controls,
-        blocked: blocked,
-        header: header,
-        reading: reading,
-        paper: paper,
-        inkTool: false,
-        lasso: lasso,
-      );
-      expect(
-        route(PointerDeviceKind.touch, controls: true, blocked: true),
-        StudyContactOwner.controls,
-      );
-      expect(
-        route(PointerDeviceKind.touch, blocked: true),
-        StudyContactOwner.blocked,
-      );
-      expect(
-        route(PointerDeviceKind.stylus, reading: true),
-        StudyContactOwner.ink,
-      );
-      expect(
-        route(PointerDeviceKind.stylus, paper: true),
-        StudyContactOwner.paper,
-      );
-      expect(
-        route(PointerDeviceKind.touch, header: true),
-        StudyContactOwner.card,
-      );
-      expect(
-        route(PointerDeviceKind.touch, reading: true),
-        StudyContactOwner.reading,
-      );
-      expect(route(PointerDeviceKind.touch), StudyContactOwner.camera);
-      expect(
-        route(PointerDeviceKind.stylus, lasso: true),
-        StudyContactOwner.selection,
-      );
-    },
-  );
+  test('pen contact writes on card titles and content', () {
+    StudyContactOwner route(
+      PointerDeviceKind k, {
+      bool header = false,
+      bool reading = false,
+      bool paper = false,
+      bool lasso = false,
+    }) => studyContactOwner(
+      kind: k,
+      header: header,
+      reading: reading,
+      paper: paper,
+      inkTool: false,
+      lasso: lasso,
+    );
+    for (final kind in [
+      PointerDeviceKind.stylus,
+      PointerDeviceKind.invertedStylus,
+    ]) {
+      expect(route(kind, header: true), StudyContactOwner.ink);
+    }
+    expect(
+      route(PointerDeviceKind.stylus, reading: true),
+      StudyContactOwner.ink,
+    );
+    expect(
+      route(PointerDeviceKind.stylus, paper: true),
+      StudyContactOwner.paper,
+    );
+    expect(
+      route(PointerDeviceKind.touch, header: true),
+      StudyContactOwner.card,
+    );
+    expect(
+      route(PointerDeviceKind.touch, reading: true),
+      StudyContactOwner.reading,
+    );
+    expect(route(PointerDeviceKind.touch), StudyContactOwner.camera);
+    expect(
+      route(PointerDeviceKind.stylus, lasso: true),
+      StudyContactOwner.selection,
+    );
+  });
 }

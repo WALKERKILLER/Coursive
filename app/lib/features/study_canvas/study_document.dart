@@ -915,30 +915,27 @@ class StudyDocument extends ChangeNotifier {
         next.add(s);
         continue;
       }
-      final points = [for (final sample in s.points) sample.p];
-      final fragments = clipInk(
-        points,
-        [a, b],
-        const Size(1, 1),
-        radius + s.width / 2,
-        'partial',
+      final eraser = InkEraser([a, b], const Size(1, 1), radius + s.width / 2, 'partial');
+      final fragments = eraser.clipSamples(
+        s.points,
+        position: (sample) => sample.p,
+        interpolate: (start, end, t) => InkPoint(
+          Offset.lerp(start.p, end.p, t)!,
+          start.pressure + (end.pressure - start.pressure) * t,
+        ),
+        bounds: s.bounds,
       );
-      if (fragments.length == 1 && identical(fragments.first, points)) {
+      if (fragments.length == 1 && identical(fragments.first, s.points)) {
         next.add(s);
         continue;
       }
       touched = true;
-      final pressures = {for (final point in s.points) point.p: point.pressure};
       for (final fragment in fragments) {
-        final f = [
-          for (final p in fragment)
-            InkPoint(p, pressures[p] ?? s.points.first.pressure),
-        ];
         next.add(
           StudyStroke(
             id: studyId(),
             layer: s.layer,
-            points: f,
+            points: fragment,
             color: s.color,
             width: s.width,
             tool: s.tool,

@@ -17,17 +17,20 @@ import '../lib/theme/prefs.dart';
 import '../lib/theme/theme.dart';
 import 'study_canvas_ui_test.dart' show FixtureApi;
 
+const bookId = '0123456789abcdef0123456789abcdef';
+const assetDir = 'notebooks/$bookId/study-assets/abc';
+
 class _NotebookApi extends FixtureApi {
   _NotebookApi() : super(StudyDocument().json());
   @override
   Future<dynamic> get(String path, [Map<String, String>? query]) async {
-    expect(path, '/api/notebooks/book/canvas');
+    expect(path, '/api/notebooks/$bookId/canvas');
     return doc;
   }
 
   @override
   Future<dynamic> put(String path, Object body) async {
-    expect(path, '/api/notebooks/book/canvas');
+    expect(path, '/api/notebooks/$bookId/canvas');
     return doc = {
       ...body as Map<String, dynamic>,
       'revision': (doc['revision'] as int) + 1,
@@ -51,7 +54,9 @@ void main() {
         type: 'pdfdoc',
         layer: 'main',
         title: 'Lecture.pdf',
-        source: 'notebooks/book/study-assets/source.pdf',
+        source: '$assetDir/source.pdf',
+        path: '$assetDir/page-1.png',
+        pageAspect: 1.2,
         rect: const Rect.fromLTWH(220, 180, 580, 420),
         page: 1,
         pageCount: 4,
@@ -71,7 +76,7 @@ void main() {
             child: StudyCanvas.notebook(
               key: canvasKey,
               api: api,
-              id: 'book',
+              id: bookId,
               name: 'Canvas',
               pdfLibraryRoot: tmp!.path,
               openCanvasPDF: (src, out) async {
@@ -199,7 +204,7 @@ void main() {
               child: StudyCanvas.notebook(
                 key: key,
                 api: api,
-                id: 'book',
+                id: bookId,
                 name: 'Test',
                 onBack: () {},
               ),

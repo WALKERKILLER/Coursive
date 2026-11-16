@@ -167,13 +167,19 @@ class AssistantController extends ChangeNotifier {
   }
 
   Future<void> setPrefs(Map<String, dynamic> patch) {
+    final changesModel = patch.containsKey('provider') || patch.containsKey('model');
     ++_prefsGeneration;
     final write = _preferenceWrite.then((_) async {
       models = (await app.api.put('/agent/prefs', patch) as Map).cast<String, dynamic>();
-      modelsError = _preferenceError = null;
+      modelsError = null;
+      if (changesModel) _preferenceError = null;
       notifyListeners();
     });
-    _preferenceWrite = write.catchError((Object e) { modelsError = _preferenceError = e; notifyListeners(); });
+    _preferenceWrite = write.catchError((Object e) {
+      modelsError = e;
+      if (changesModel) _preferenceError = e;
+      notifyListeners();
+    });
     return write;
   }
 

@@ -206,6 +206,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	h("POST /api/notebooks", s.createNotebook)
 	h("POST /api/notebooks/{id}/assets", s.notebookAsset)
+	h("GET /api/notebooks/{id}/pdf-page", s.notebookPDFPage)
 	h("GET /api/notebooks/{id}/canvas", s.studyCanvas)
 	h("PUT /api/notebooks/{id}/canvas", s.studyCanvas)
 	h("DELETE /api/notes/{id}", func(_ http.ResponseWriter, r *http.Request) (any, error) {

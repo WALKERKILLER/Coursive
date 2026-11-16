@@ -17,9 +17,21 @@ import '../study_canvas/study_shape.dart';
 /// A local PDF working copy. The opening revision is rendered throughout this
 /// session; ink added since opening is painted as an overlay and persisted once.
 class DockPDF {
-  DockPDF._(this.source, this.output, this.cache, this.helper);
+  DockPDF._(
+    this.source,
+    this.output,
+    this.cache,
+    this.helper,
+    this.helperTimeout,
+  );
   final String source, output, helper;
   final Directory cache;
+  final Duration helperTimeout;
+  final _renders = <void Function()>{};
+  bool _closing = false;
+  Future<void>? _closeFuture;
+  static int _requestId = 0;
+
   late List<Size> sizes;
   late String revision;
   late bool canExpand;
@@ -35,6 +47,7 @@ class DockPDF {
     String source,
     String output, {
     String? executable,
+    Duration helperTimeout = const Duration(seconds: 45),
   }) async {
     final helper =
         executable ??
@@ -45,7 +58,7 @@ class DockPDF {
           'coursive-pdf-notes',
         );
     final cache = await Directory.systemTemp.createTemp('coursive-pdf-view-');
-    final pdf = DockPDF._(source, output, cache, helper);
+    final pdf = DockPDF._(source, output, cache, helper, helperTimeout);
     try {
       // A single copy fixes the render revision while asynchronous saves replace
       // the working file. Verify it matches the metadata we opened.
@@ -90,24 +103,101 @@ class DockPDF {
     }
   }
 
-  Future<Map> command(String op, [Map? payload]) async {
-    if (Platform.isAndroid) {
-      return (await AndroidBridge.pdfNotes<Map>(
-        op,
-        source,
-        output,
-        edit: payload,
-      ))!;
+  Future<void> close() => _closeFuture ??= _close();
+  Future<void> _close() async {
+    _closing = true;
+    for (final cancel in _renders.toList()) {
+      cancel();
     }
-    final process = await Process.start(helper, [op, source, output]);
-    final response = process.stdout.transform(utf8.decoder).join();
-    final errors = process.stderr.transform(utf8.decoder).join();
-    if (payload != null) process.stdin.write(jsonEncode(payload));
-    await process.stdin.close();
-    final code = await process.exitCode;
-    final data = await response, message = await errors;
-    if (code != 0) throw FormatException(message);
-    return jsonDecode(data) as Map;
+    try {
+      // A final flush may already be in flight when the owner leaves.
+      await _pendingSave;
+      if (dirty) await save();
+    } finally {
+      await cache.delete(recursive: true);
+    }
+  }
+
+  Future<T> _bounded<T>(
+    bool render,
+    Future<T> work,
+    void Function() abort,
+  ) async {
+    final stopped = Completer<T>();
+    void cancel() {
+      abort();
+      if (!stopped.isCompleted) {
+        stopped.completeError(StateError('PDF reader closed'));
+      }
+    }
+
+    if (render) _renders.add(cancel);
+    try {
+      return await Future.any([work, stopped.future]).timeout(
+        helperTimeout,
+        onTimeout: () {
+          abort();
+          throw TimeoutException('PDF operation timed out', helperTimeout);
+        },
+      );
+    } finally {
+      _renders.remove(cancel);
+    }
+  }
+
+  Future<T> _android<T>(String op, String input, {int? page, Map? edit}) {
+    final id = ++_requestId;
+    final work = AndroidBridge.pdfNotes<T>(
+      op,
+      input,
+      output,
+      page: page,
+      edit: edit,
+      requestId: id,
+    );
+    return _bounded(op == 'render', work.then((v) => v!), () {
+      unawaited(AndroidBridge.cancelPDFNotes(id));
+    });
+  }
+
+  Future<Uint8List> _native(List<String> args, {Map? payload}) async {
+    final render = args.first == 'render';
+    final process = await Process.start(helper, args);
+    void abort() {
+      process.kill(ProcessSignal.sigkill);
+    }
+
+    if (render && _closing) {
+      abort();
+      throw StateError('PDF reader closed');
+    }
+    Future<Uint8List> collect() async {
+      final buffer = BytesBuilder(copy: false);
+      final errors = StringBuffer();
+      Future<void> write() async {
+        if (payload != null) process.stdin.write(jsonEncode(payload));
+        await process.stdin.close();
+      }
+
+      final exit = process.exitCode;
+      await Future.wait<void>([
+        process.stdout.forEach(buffer.add),
+        process.stderr.transform(utf8.decoder).forEach(errors.write),
+        write(),
+        exit.then((_) {}),
+      ]);
+      if (await exit != 0) throw FormatException(errors.toString());
+      return buffer.takeBytes();
+    }
+
+    return _bounded(render, collect(), abort);
+  }
+
+  Future<Map> command(String op, [Map? payload]) async {
+    if (Platform.isAndroid) return _android<Map>(op, source, edit: payload);
+    return jsonDecode(
+      utf8.decode(await _native([op, source, output], payload: payload)),
+    ) as Map;
   }
 
   final _rendering = <int, Future<Uint8List>>{};
@@ -120,27 +210,22 @@ class DockPDF {
   Future<Uint8List> _renderPage(int page) async {
     final file = File(path.join(cache.path, '$page.png'));
     if (await file.exists()) return file.readAsBytes();
-    if (Platform.isAndroid) {
-      final data = (await AndroidBridge.pdfNotes<Uint8List>(
-        'render',
-        snapshot,
-        output,
-        page: page,
-        edit: {'hidden': _hidden[page]?.toList() ?? []},
-      ))!;
-      if (await cache.exists()) await file.writeAsBytes(data);
-      return data;
-    }
-    final result = await Process.run(helper, [
-      'render',
-      snapshot,
-      snapshot,
-      '$page',
-      if (_hidden.containsKey(page)) _hidden[page]!.join(','),
-    ], stdoutEncoding: null);
-    if (result.exitCode != 0) throw FormatException('${result.stderr}');
-    final data = Uint8List.fromList(result.stdout as List<int>);
-    if (await cache.exists()) await file.writeAsBytes(data);
+    if (_closing) throw StateError('PDF reader closed');
+    final data = Platform.isAndroid
+        ? await _android<Uint8List>(
+            'render',
+            snapshot,
+            page: page,
+            edit: {'hidden': _hidden[page]?.toList() ?? []},
+          )
+        : await _native([
+            'render',
+            snapshot,
+            snapshot,
+            '$page',
+            if (_hidden.containsKey(page)) _hidden[page]!.join(','),
+          ]);
+    if (!_closing && await cache.exists()) await file.writeAsBytes(data);
     return data;
   }
 

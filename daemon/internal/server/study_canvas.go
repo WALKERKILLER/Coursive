@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/walkerkiller/coursive/daemon/internal/library"
@@ -116,12 +117,18 @@ func (s *Server) studyMaterial(w http.ResponseWriter, r *http.Request) (any, err
 	return out, studyError(e)
 }
 
+func (s *Server) notebookPDFPage(w http.ResponseWriter, r *http.Request) (any, error) {
+	return canvasPDFPage(r, s.Lib.NotebookPDFPage)
+}
 func (s *Server) studyPDFPage(w http.ResponseWriter, r *http.Request) (any, error) {
+	return canvasPDFPage(r, s.Lib.StudyPDFPage)
+}
+func canvasPDFPage(r *http.Request, load func(context.Context, string, string, int) (library.StudyPDFPage, error)) (any, error) {
 	page, e := strconv.Atoi(r.URL.Query().Get("page"))
 	if e != nil {
 		return nil, badRequest("页码无效")
 	}
-	out, e := s.Lib.StudyPDFPage(r.Context(), r.PathValue("id"), r.URL.Query().Get("source"), page)
+	out, e := load(r.Context(), r.PathValue("id"), r.URL.Query().Get("source"), page)
 	return out, studyError(e)
 }
 
@@ -141,6 +148,6 @@ func (s *Server) studyVideoFile(w http.ResponseWriter, r *http.Request) (any, er
 }
 
 func (s *Server) notebookAsset(w http.ResponseWriter, r *http.Request) (any, error) {
-	out, e := s.Lib.ImportNotebookAsset(r.Context(), r.PathValue("id"), r.URL.Query().Get("name"), http.MaxBytesReader(w, r.Body, library.StudyAssetLimit+1))
+	out, e := s.Lib.ImportNotebookAsset(r.Context(), r.PathValue("id"), r.URL.Query().Get("name"), http.MaxBytesReader(w, r.Body, library.StudyAssetLimit+1), r.URL.Query().Get("paged") == "1")
 	return out, studyError(e)
 }

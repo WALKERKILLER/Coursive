@@ -55,7 +55,7 @@ test('cancellation aborts an active provider request without canvas operations',
 test('no configured model is an explicit error, and text-only vision never pretends to see',async()=>{
  const runner=new CanvasRunner({currentModel:async()=>null},{call:async()=>context()});
  const start=await runner.start({lecture_id:'L',question:'解释',selection:{}});const r=await settled(runner,start.id);
- assert.equal(r.state,'error');assert.match(r.error,/配置模型/);assert.deepEqual(r.operations,[]);
+ assert.equal(r.state,'error');assert.match(r.error,/重新选择模型/);assert.deepEqual(r.operations,[]);
  const vision=await seeCanvasImages({currentModel:async()=>({input:['text']}),visionModel:async()=>null},[{label:'selected pixels',img:{bytes:Buffer.from('pixels'),mimeType:'image/png'}}]);
  assert.equal(vision.mode,'unavailable');assert(vision.content.every(c=>c.type==='text'));
 });

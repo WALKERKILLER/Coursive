@@ -4,8 +4,9 @@ import 'package:flutter/services.dart';
 abstract final class AndroidBridge {
   static const _ch = MethodChannel('coursive/android');
   static Map<String, dynamic>? _info;
-  static Future<T?> pdfNotes<T>(String op, String source, String output, {int? page, Map? edit}) =>
-      _ch.invokeMethod<T>('pdfNotes', {'op': op, 'source': source, 'output': output, 'page': page, 'edit': edit});
+  static Future<T?> pdfNotes<T>(String op, String source, String output, {int? page, Map? edit, required int requestId}) =>
+      _ch.invokeMethod<T>('pdfNotes', {'op': op, 'source': source, 'output': output, 'page': page, 'edit': edit, 'requestId':requestId});
+  static Future<void> cancelPDFNotes(int requestId) => _ch.invokeMethod<void>('cancelPDFNotes', {'requestId':requestId});
 
   /// nativeLibraryDir, filesDir, cacheDir, abi, sdk.
   static Future<Map<String, dynamic>> info() async =>

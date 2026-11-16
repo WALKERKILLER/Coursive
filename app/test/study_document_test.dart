@@ -77,6 +77,22 @@ void main() {
     d.redo();
     expect(d.strokes.length, 4);
   });
+  test('partial erasing interpolates pressure on each surviving fragment', () {
+    final d = StudyDocument();
+    d.addStroke(StudyStroke(id:'varying',layer:'main',color:0xff111111,width:2,
+      points:[InkPoint(const Offset(0,50),.1), InkPoint(const Offset(200,50),.9)]));
+    d.checkpoint();
+    expect(d.erase(const Offset(100,40),const Offset(100,60),10),isTrue);
+    expect(d.strokes,hasLength(2));
+    for (final stroke in d.strokes) {
+      expect(stroke.points.length, greaterThan(2));
+      for (final p in stroke.points) {
+        expect(p.pressure,closeTo(.1 + p.p.dx * .8/200, .000001));
+      }
+    }
+    d.undo();
+    expect(d.strokes.single.points.map((p)=>p.pressure),[.1,.9]);
+  });
   test(
     'eraser splits a stroke, respects locked/hidden layers and can undo',
     () {

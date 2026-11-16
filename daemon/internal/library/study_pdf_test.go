@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -137,14 +138,7 @@ func TestStudyPDFPageLimitBeforeRasterization(t *testing.T) {
 }
 
 func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		exe, _ := os.Executable()
-		if _, e := os.Stat(filepath.Join(filepath.Dir(exe), "coursive-study-pdf")); e != nil {
-			studyPDFDependencyMissing(t, "run compiled library.test beside the built PDFKit helper")
-		}
-	} else {
-		requireStudyPoppler(t)
-	}
+	requirePagedRenderer(t)
 	l, _ := reviewFixture(t)
 	ctx := t.Context()
 	source := filepath.Join(t.TempDir(), "two.pdf")
@@ -211,5 +205,76 @@ func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
 	}
 	if _, e = l.StudyPDFPage(ctx, "one", first.Source, 3); e == nil {
 		t.Fatal("accepted out-of-range page")
+	}
+}
+
+func requirePagedRenderer(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		exe, _ := os.Executable()
+		if _, e := os.Stat(filepath.Join(filepath.Dir(exe), "coursive-study-pdf")); e != nil {
+			studyPDFDependencyMissing(t, "run compiled library.test beside the built PDFKit helper")
+		}
+	} else {
+		requireStudyPoppler(t)
+	}
+}
+func TestNotebookPagedPDFImportSaveAndReopen(t *testing.T) {
+	requirePagedRenderer(t)
+	l, _ := reviewFixture(t)
+	ctx := t.Context()
+	book, e := l.CreateNotebook(ctx, "Notes", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, e := l.CreateNotebook(ctx, "Other", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	source := filepath.Join(t.TempDir(), "sample.pdf")
+	writeStudyPDFFixture(t, source)
+	f, e := os.Open(source)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer f.Close()
+	imported, e := l.ImportNotebookAsset(ctx, book.ID, "sample.pdf", f, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(imported.Objects) != 1 {
+		t.Fatal(imported)
+	}
+	card := imported.Objects[0]
+	if card.Type != "pdfdoc" || card.PageCount != 2 {
+		t.Fatal(card)
+	}
+	doc, e := l.NotebookCanvas(ctx, book.ID, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc.Objects = append(doc.Objects, card)
+	saved, e := l.NotebookCanvas(ctx, book.ID, &doc)
+	if e != nil {
+		t.Fatal(e)
+	}
+	reopened, e := l.NotebookCanvas(ctx, book.ID, nil)
+	if e != nil || reopened.Revision != saved.Revision || len(reopened.Objects) != 1 || reopened.Objects[0].Source != card.Source {
+		t.Fatal(e, reopened)
+	}
+	second, e := l.NotebookPDFPage(ctx, book.ID, card.Source, 2)
+	if e != nil || !strings.Contains(second.Text, "Second") {
+		t.Fatal(e, second)
+	}
+	if _, e = l.NotebookPDFPage(ctx, other.ID, card.Source, 2); !errors.Is(e, ErrStudyInvalid) {
+		t.Fatal("cross-notebook read", e)
+	}
+	foreign, e := l.NotebookCanvas(ctx, other.ID, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	foreign.Objects = append(foreign.Objects, card)
+	if _, e = l.NotebookCanvas(ctx, other.ID, &foreign); !errors.Is(e, ErrStudyInvalid) {
+		t.Fatal("cross-notebook save", e)
 	}
 }

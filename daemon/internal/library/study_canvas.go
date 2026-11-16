@@ -435,7 +435,7 @@ func (l *Library) saveStudy(ctx context.Context, r *os.Root, dir, id string, d S
 		return d, ErrStudyConflict
 	}
 	for _, object := range d.Objects {
-		if id == "" && ((object.Type != "text" && object.Type != "pdf" && object.Type != "image" && object.Type != "video") || object.OriginalPath != "" || len(object.Sources) > 0) {
+		if id == "" && ((object.Type != "text" && object.Type != "pdf" && object.Type != "pdfdoc" && object.Type != "image" && object.Type != "video") || object.OriginalPath != "" || object.SourceLectureID != "" || len(object.Sources) > 0) {
 			return d, ErrStudyInvalid
 		}
 		if object.Type == "video" && object.OriginalPath != "" && object.Path == "" {
@@ -511,8 +511,8 @@ func (l *Library) ImportStudyAsset(ctx context.Context, id, name string, reader 
 func (l *Library) ImportStudyModule(ctx context.Context, id, name string, reader io.Reader) (StudyImport, error) {
 	return l.importStudyAsset(ctx, id, name, reader, true, false)
 }
-func (l *Library) ImportNotebookAsset(ctx context.Context, id, name string, reader io.Reader) (StudyImport, error) {
-	return l.importStudyAsset(ctx, id, name, reader, false, true)
+func (l *Library) ImportNotebookAsset(ctx context.Context, id, name string, reader io.Reader, paged bool) (StudyImport, error) {
+	return l.importStudyAsset(ctx, id, name, reader, paged, true)
 }
 func (l *Library) importStudyAsset(ctx context.Context, id, name string, reader io.Reader, paged, standalone bool) (StudyImport, error) {
 	var out StudyImport
@@ -712,6 +712,10 @@ func (l *Library) StudySource(ctx context.Context, id, rel string) (*os.File, er
 		return nil, e
 	}
 	defer r.Close()
+	return openStudySource(r, dir, rel)
+}
+
+func openStudySource(r *os.Root, dir, rel string) (*os.File, error) {
 	if path.Clean(rel) != rel || !strings.HasPrefix(rel, dir+"/") || checkedStudyDir(r, path.Dir(rel), false) != nil {
 		return nil, ErrStudyInvalid
 	}

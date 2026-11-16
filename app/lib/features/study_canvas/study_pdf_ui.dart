@@ -18,9 +18,8 @@ class _PDFBodyState extends State<_PDFBody> {
       error = null;
     });
     try {
-      final out = await widget.owner.widget.api.studyPDFPage(
-        widget.owner.widget.ctl.lectureId,
-        widget.card.source,
+      final out = await widget.owner._loadPDFPage(
+        widget.card,
         number,
       );
       if (!mounted) return;

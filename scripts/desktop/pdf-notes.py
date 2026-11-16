@@ -9,7 +9,6 @@ import hashlib
 import json
 import math
 import os
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -184,8 +183,7 @@ def main():
     source,dest=Path(src),Path(dst)
     if op=="render":
         renderer=Path(sys.argv[0]).resolve().with_name("coursive-pdf-notes-render")
-        subprocess.run([renderer,dest if dest.is_file() and dest!=source else source,str(int(rest[0])), *rest[1:]],check=True)
-        return
+        os.execv(renderer, [str(renderer), str(dest if dest.is_file() and dest!=source else source), str(int(rest[0])), *rest[1:]])
     if op not in ("info","save") or source.resolve()==dest.resolve():
         raise ValueError("无效的 PDF 操作")
     # A persistent, private lock path prevents two first writes from racing.

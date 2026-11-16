@@ -47,14 +47,27 @@ class InkEraser {
     return false;
   }
 
-  List<List<Offset>> clip(List<Offset> points, {Rect? bounds}) {
-    if (points.isEmpty || !touchesBounds(bounds ?? inkBounds(points)))
+  List<List<Offset>> clip(List<Offset> points, {Rect? bounds}) => clipSamples(
+    points,
+    position: (p) => p,
+    interpolate: (a, b, t) => Offset.lerp(a, b, t)!,
+    bounds: bounds,
+  );
+
+  List<List<T>> clipSamples<T>(
+    List<T> points, {
+    required Offset Function(T) position,
+    required T Function(T, T, double) interpolate,
+    Rect? bounds,
+  }) {
+    if (points.isEmpty ||
+        !touchesBounds(bounds ?? inkBounds(points.map(position).toList())))
       return [points];
     Offset px(Offset p) => Offset(p.dx * paper.width, p.dy * paper.height);
     var hit = false;
-    final result = <List<Offset>>[];
-    var fragment = <Offset>[];
-    bool sample(Offset p, Offset pixel) {
+    final result = <List<T>>[];
+    var fragment = <T>[];
+    bool sample(T p, Offset pixel) {
       if (!_inside(pixel)) {
         fragment.add(p);
         return false;
@@ -67,10 +80,10 @@ class InkEraser {
       return mode != 'partial';
     }
 
-    var previous = px(points.first);
+    var previous = px(position(points.first));
     if (sample(points.first, previous)) return [];
     for (var i = 1; i < points.length; i++) {
-      final end = px(points[i]);
+      final end = px(position(points[i]));
       if (Rect.fromPoints(previous, end).inflate(.5).overlaps(region)) {
         final steps = ((end - previous).distance / math.max(2, radius / 2))
             .ceil()
@@ -78,7 +91,7 @@ class InkEraser {
         for (var j = 1; j <= steps; j++) {
           final t = j / steps;
           if (sample(
-            Offset.lerp(points[i - 1], points[i], t)!,
+            j == steps ? points[i] : interpolate(points[i - 1], points[i], t),
             Offset.lerp(previous, end, t)!,
           ))
             return [];

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,6 +10,50 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/features/player/pdf_dock.dart';
 
 void main() {
+  test('a timed out or closed reader terminates its native renderer', () async {
+    final dir = await Directory.systemTemp.createTemp('pdf-worker-test-');
+    addTearDown(() => dir.delete(recursive: true));
+    final source = File('${dir.path}/source.pdf');
+    await source.writeAsString('fixture');
+    final helper = File('${dir.path}/helper');
+    await helper.writeAsString(r'''#!/bin/sh
+if [ "$1" = info ]; then
+  echo '{"revision":"","canExpand":true,"margin":0,"sizes":[[100,150]]}'
+else
+  echo "$$" > "$(dirname "$0")/pid"
+  exec sleep 30
+fi
+''');
+    expect((await Process.run('chmod', ['700', helper.path])).exitCode, 0);
+    final pdf = await DockPDF.open(
+      source.path,
+      '${dir.path}/out.pdf',
+      executable: helper.path,
+      helperTimeout: const Duration(seconds: 5),
+    );
+    final pid = File('${dir.path}/pid');
+    Future<void> exited() async {
+      final id = (await pid.readAsString()).trim();
+      for (int i = 0; i < 30; i++) {
+        if ((await Process.run('kill', ['-0', id])).exitCode != 0) return;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      fail('renderer still running');
+    }
+
+    await expectLater(pdf.render(1), throwsA(isA<TimeoutException>()));
+    await exited();
+    await pid.delete();
+    final render = expectLater(pdf.render(1), throwsStateError);
+    for (int i = 0; i < 200 && !await pid.exists(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(await pid.exists(), isTrue);
+    await pdf.close();
+    await render;
+    await exited();
+    expect(await pdf.cache.exists(), isFalse);
+  }, skip: Platform.isWindows);
   testWidgets('jumping deep into a long PDF renders only nearby pages', (
     t,
   ) async {
@@ -290,6 +335,8 @@ class TestPDF extends Fake implements DockPDF {
   final Directory cache = Directory.systemTemp.createTempSync(
     "coursive-test-reader-",
   );
+  @override
+  Future<void> close() => cache.delete(recursive: true);
   @override
   final String source = 'slides.pdf', output = 'slides · 批注版.pdf';
   @override

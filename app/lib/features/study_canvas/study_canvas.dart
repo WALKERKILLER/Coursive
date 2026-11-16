@@ -344,14 +344,12 @@ class StudyCanvasState extends State<StudyCanvas>
   void _update(VoidCallback action) => setState(action);
   final _pointers = <int, Offset>{};
   final _touchPointers = <int>{}, _stylusPointers = <int>{};
-  Timer? _palmCooldown;
   List<InkPoint> _points = [];
   final List<StudyStroke> _prefix = [];
   int _prefixEnd = 0;
   String _anchor = '';
   Offset? _start, _last;
   Offset? _panCamera;
-  final _pdfContacts = <int>{};
   bool _pdfPinching = false;
   bool _trackpadOnPdf = false;
   bool _onPdf(Offset global) => _pdfBodies.values.any((key) {
@@ -681,7 +679,6 @@ class StudyCanvasState extends State<StudyCanvas>
   @override
   void dispose() {
     _cancelCardHold();
-    _palmCooldown?.cancel();
     unawaited(_titlebar(false));
     WidgetsBinding.instance.removeObserver(this);
     _syncCheck?.cancel();
@@ -709,7 +706,7 @@ class StudyCanvasState extends State<StudyCanvas>
       unawaited(
         file
             .then((doc) async {
-              await doc.cache.delete(recursive: true);
+              await doc.close();
             })
             .catchError((_) {}),
       );
@@ -896,8 +893,6 @@ class StudyCanvasState extends State<StudyCanvas>
             ));
     final owner = studyContactOwner(
       kind: e.kind,
-      controls: false,
-      blocked: false,
       header: header,
       paper: paper,
       reading: reading,
@@ -1067,8 +1062,7 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_pointers.length > 1) return;
     if (_readingContacts.contains(e.pointer)) return;
     final p = _world(e.localPosition);
-    if (_pdfPinching || (_pdfContacts.contains(e.pointer) && _start == null))
-      return;
+    if (_pdfPinching) return;
     if (_panCamera != null) {
       d.camera = _panCamera! + e.localPosition - _start!;
       _cameraChanged();
@@ -1216,7 +1210,6 @@ class StudyCanvasState extends State<StudyCanvas>
       _finishTransform(cancel: e is PointerCancelEvent);
     _cancelCardHold();
     _touchPointers.remove(e.pointer);
-    _pdfContacts.remove(e.pointer);
     if (_pdfPinching && _touchPointers.isEmpty)
       setState(() => _pdfPinching = false);
     if (_drawingPointer == e.pointer) {
@@ -1422,17 +1415,15 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  Future<dynamic> _loadPDFPage(StudyCard card, int page) => widget.standalone
+      ? widget.api.get('/api/notebooks/${widget.notebookId}/pdf-page', {'source': card.source, 'page': '$page'})
+      : widget.api.studyPDFPage(widget.ctl.lectureId, card.source, page);
+
   Future<Map> _expandedPage(StudyCard root, int page) async {
-    if (!widget.standalone) {
-      try {
-        return await widget.api.studyPDFPage(
-          widget.ctl.lectureId,
-          root.source,
-          page,
-        ) as Map;
-      } catch (_) {
-        if (!_inlinePDF) rethrow;
-      }
+    try {
+      return await _loadPDFPage(root, page) as Map;
+    } catch (_) {
+      if (!_inlinePDF) rethrow;
     }
     final pdf = await _openPaper(root);
     final rel = filePath.join(
@@ -1556,7 +1547,7 @@ class StudyCanvasState extends State<StudyCanvas>
         out = widget.standalone
             ? await widget.api.upload(
                 '/api/notebooks/${widget.notebookId}/assets',
-                {'name': file.name},
+                {'name': file.name, 'paged': '1'},
                 file.openRead(),
                 length,
               )

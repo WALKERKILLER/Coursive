@@ -235,6 +235,7 @@ internal object AndroidPdfNotes {
                     doc.save(tmp)
                     load(context, tmp).use { check(it.numberOfPages == layouts.size) }
                     val updated = hash(tmp)
+                    if (Thread.currentThread().isInterrupted) throw InterruptedException("PDF save cancelled")
                     Os.rename(tmp.path,dest.path)
                     mapOf("revision" to updated)
                 } finally { tmp.delete() }

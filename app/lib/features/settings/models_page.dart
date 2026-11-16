@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api.dart';
@@ -31,6 +32,49 @@ class _ModelsPageState extends State<ModelsPage> {
     context.read<AssistantController>().loadModels();
   }
 
+  bool _loggingIn = false;
+  Future<void> _loginGPT() async {
+    if (_loggingIn) return;
+    setState(() => _loggingIn = true);
+    final assistant = context.read<AssistantController>();
+    try {
+      final started = await assistant.app.api.post('/agent/openai-login');
+      if (started['status'] == 'done') {
+        await assistant.loadModels();
+        if (mounted) showSnack(context, l10n.gptLoginDone);
+        return;
+      }
+      final url = Uri.parse(started['url'] as String);
+      if (url.scheme != 'https' || url.host != 'auth.openai.com' ||
+          !await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw StateError(l10n.gptLoginFailed);
+      }
+      for (var i = 0; mounted && i < 155; i++) {
+        await Future<void>.delayed(const Duration(seconds: 2));
+        if (!mounted) return;
+        final status = await assistant.app.api.get('/agent/openai-login');
+        if (status['status'] == 'done') {
+          await assistant.loadModels();
+          if (mounted) showSnack(context, l10n.gptLoginDone);
+          return;
+        }
+        if (status['status'] == 'idle') {
+          if (mounted) showSnack(context, l10n.gptLoginRestarted);
+          return;
+        }
+        if (status['status'] == 'error') {
+          if (mounted) showSnack(context, status['phase'] == 'callback_busy' ? l10n.gptLoginPortBusy : l10n.gptLoginFailed);
+          return;
+        }
+      }
+      if (mounted) showSnack(context, l10n.gptLoginFailed);
+    } catch (error) {
+      if (mounted) showSnack(context, error.toString().contains('登录端口 1455') ? l10n.gptLoginPortBusy : l10n.gptLoginFailed);
+    } finally {
+      if (mounted) setState(() => _loggingIn = false);
+    }
+  }
+
   void _add() => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddProviderPage()));
 
   @override
@@ -45,6 +89,8 @@ class _ModelsPageState extends State<ModelsPage> {
       appBar: AppBar(
         title: Text(l10n.commonModel),
         actions: [
+          TextButton.icon(onPressed:a.ready && !_loggingIn ? _loginGPT : null,
+            icon:const Icon(Icons.login),label:Text(l10n.gptLogin)),
           MenuAnchor(
             menuChildren: [
               if (m?['pi_cli_available'] == true)

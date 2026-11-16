@@ -4414,6 +4414,48 @@ abstract class AppLocalizations {
   /// **'模型'**
   String get commonModel;
 
+  /// No description provided for @gptLogin.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录 ChatGPT'**
+  String get gptLogin;
+
+  /// No description provided for @gptLoginDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'小 C 已连接 GPT'**
+  String get gptLoginDone;
+
+  /// No description provided for @gptLoginRestarted.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手已重启，请重新发起登录。'**
+  String get gptLoginRestarted;
+
+  /// No description provided for @gptLoginPortBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机登录端口 1455 正被占用，请结束其他登录后重试。'**
+  String get gptLoginPortBusy;
+
+  /// No description provided for @gptLoginFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录未完成，请检查网络后重试'**
+  String get gptLoginFailed;
+
+  /// No description provided for @modelPrefsSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型选择未能保存，请重新选择模型后发送'**
+  String get modelPrefsSaveFailed;
+
+  /// No description provided for @modelPrefsRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型设置保存失败，请重试。'**
+  String get modelPrefsRetry;
+
   /// No description provided for @modelsImportPi.
   ///
   /// In zh, this message translates to:
@@ -14228,12 +14270,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'角度吸附'**
   String get studyAngleSnapping;
-
-  /// No description provided for @modelPrefsSaveFailed.
-  ///
-  /// In zh, this message translates to:
-  /// **'模型选择未能保存，请重新选择模型后发送'**
-  String get modelPrefsSaveFailed;
 }
 
 class _AppLocalizationsDelegate

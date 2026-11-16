@@ -18,7 +18,6 @@ extension _StudyStylus on StudyCanvasState {
     _blockedTouches.addAll(_touchPointers);
     for (final pointer in _touchPointers) _pointers.remove(pointer);
     _touchPointers.clear();
-    _pdfContacts.clear();
     _readingContacts.clear();
     if (_pdfPinching) _update(() => _pdfPinching = false);
     _cancelCardHold();

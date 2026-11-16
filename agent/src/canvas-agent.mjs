@@ -294,7 +294,7 @@ export class CanvasRunner {
    const context=await cancellable(this.call("POST",`/api/lectures/${encodeURIComponent(request.lecture_id)}/study-canvas/context`,request.selection),signal);
    signal.throwIfAborted();
    if(!Array.isArray(context.sources)||context.sources.length>24||JSON.stringify(context).length>180000)throw new Error("画布上下文超过限制");
-   const model=await cancellable(this.pipeline.currentModel(),signal);if(!model)throw new Error("尚未配置模型，请到 设置 → 模型 添加模型服务；识别手写/扫描件需图像能力或识图模型");
+   const model=await cancellable(this.pipeline.currentModel(),signal);if(!model)throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
    if(request.model_choice && (model.provider!==request.model_choice.provider || model.id!==request.model_choice.model))throw new CanvasModelFailure('模型选择已变化，请重新选择后重试');
    view.model={provider:model.provider,model:model.id};
    const visualAttachments=new Map((request.visuals??[]).map(i=>[i.source_id,i]));
