@@ -17,7 +17,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/api.dart';
-import '../../core/ink_erase.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../core/plugins.dart';

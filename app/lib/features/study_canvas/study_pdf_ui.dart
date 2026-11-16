@@ -191,80 +191,15 @@ class _CanvasPdfState extends State<_CanvasPdf> {
     double radius,
     String mode,
   ) {
-    final doc = widget.owner.document!, card = widget.card;
-    final paper = studyOriginalPaper(card, _doc!.sizes[page - 1].aspectRatio);
-    final eraser = InkEraser(trail, size, radius, mode);
-    final next = <StudyStroke>[];
-    var changed = false;
-    for (final s in doc.strokes) {
-      if (s.anchor != card.id ||
-          !doc.editable(s.layer) ||
-          !(s.page == page || (s.page == 0 && card.page == page))) {
-        next.add(s);
-        continue;
-      }
-      final box = s.bounds;
-      final bounds =
-          [box.topLeft, box.topRight, box.bottomLeft, box.bottomRight]
-              .map(card.contentPoint)
-              .map((p) => Rect.fromPoints(p, p))
-              .reduce((a, b) => a.expandToInclude(b));
-      final normalizedBounds = Rect.fromLTRB(
-        (bounds.left - paper.left) / paper.width,
-        (bounds.top - paper.top) / paper.height,
-        (bounds.right - paper.left) / paper.width,
-        (bounds.bottom - paper.top) / paper.height,
-      );
-      if (!eraser.touchesBounds(normalizedBounds)) {
-        next.add(s);
-        continue;
-      }
-      final normalized = [
-        for (final p in s.points.map((v) => card.contentPoint(v.p)))
-          Offset(
-            (p.dx - paper.left) / paper.width,
-            (p.dy - paper.top) / paper.height,
-          ),
-      ];
-      final fragments = eraser.clip(normalized, bounds: normalizedBounds);
-      if (fragments.length == 1 && identical(fragments.first, normalized)) {
-        next.add(s);
-        continue;
-      }
-      changed = true;
-      for (final f in fragments)
-        next.add(
-          StudyStroke(
-            id: studyId(),
-            layer: s.layer,
-            anchor: s.anchor,
-            page: s.page,
-            color: s.color,
-            width: s.width,
-            gesture: s.gesture,
-            brush: s.brush,
-            tool: s.tool,
-            points: [
-              for (final p in f)
-                InkPoint(
-                  card.mapWorld(
-                    Offset(
-                      paper.left + p.dx * paper.width,
-                      paper.top + p.dy * paper.height,
-                    ),
-                    card.rotation + card.quarterTurns * math.pi / 2,
-                  ),
-                  s.points.first.pressure,
-                ),
-            ],
-          ),
-        );
-    }
-    if (changed) {
-      doc.checkpoint();
-      doc.strokes = next;
-      doc.changed();
-    }
+    widget.owner.document!.erasePDFInk(
+      widget.card,
+      page,
+      _doc!.sizes[page - 1].aspectRatio,
+      trail,
+      size,
+      radius,
+      mode,
+    );
   }
 
   @override

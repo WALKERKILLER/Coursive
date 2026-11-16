@@ -220,6 +220,10 @@ class InkPoint {
   const InkPoint(this.p, this.pressure);
   final Offset p;
   final double pressure;
+  static InkPoint lerp(InkPoint a, InkPoint b, double t) => InkPoint(
+    Offset.lerp(a.p, b.p, t)!,
+    a.pressure + (b.pressure - a.pressure) * t,
+  );
   List<double> json() => [p.dx, p.dy, pressure];
 }
 
@@ -919,10 +923,7 @@ class StudyDocument extends ChangeNotifier {
       final fragments = eraser.clipSamples(
         s.points,
         position: (sample) => sample.p,
-        interpolate: (start, end, t) => InkPoint(
-          Offset.lerp(start.p, end.p, t)!,
-          start.pressure + (end.pressure - start.pressure) * t,
-        ),
+        interpolate: InkPoint.lerp,
         bounds: s.bounds,
       );
       if (fragments.length == 1 && identical(fragments.first, s.points)) {
