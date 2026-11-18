@@ -1,10 +1,13 @@
 name: Release / Prerelease
 
-# Cuts a pre-release from the current dev head (docs/release-policy.md):
+# Cuts a pre-release from the current head of dev, or of the mygo prototype
+# branch (docs/release-policy.md):
 # picks the version, opens a draft pre-release on that commit, builds and
 # attaches every package, and publishes the draft only when all of them
 # succeeded. Run it on dev from Actions or with
 #   gh workflow run release-prerelease.yml --ref dev [-f version=0.2.0-beta.1]
+# and on the mygo branch with --ref mygo and a version such as 0.1.0-alpha-mygo.1,
+# which sorts below the dev beta line so dev keeps continuing its own.
 # With publish=false it stops at the draft: a rehearsal that releases nothing.
 
 on:
@@ -30,7 +33,9 @@ concurrency:
 jobs:
   prepare:
     name: Prepare
-    if: github.ref == 'refs/heads/dev'
+    # The mygo branch cuts its own pre-releases so a prototype can be installed
+    # without waiting on dev; its versions sort below the dev beta line.
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/mygo'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
