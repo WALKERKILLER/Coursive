@@ -27,6 +27,14 @@ type Course struct {
 	LastLectureID string  `json:"last_lecture_id,omitempty"`
 	LastLearnAt   string  `json:"last_learn_at,omitempty"`
 	URL           string  `json:"url,omitempty"`
+
+	// The fields the card draws from, which the daemon sends only when they
+	// differ from their zero value.
+	RawTitle      string `json:"raw_title,omitempty"`
+	Color         string `json:"color,omitempty"`
+	Hidden        bool   `json:"hidden,omitempty"`
+	Pinned        bool   `json:"pinned,omitempty"`
+	LocalLectures int    `json:"local_lectures,omitempty"`
 }
 
 // client speaks the daemon's HTTP API with the token the daemon was started

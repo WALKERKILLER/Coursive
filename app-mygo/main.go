@@ -15,15 +15,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/harukizmoe/mayu"
-	"github.com/harukizmoe/mayu/components"
 	"github.com/harukizmoe/mayu/theme"
 )
 
@@ -48,6 +45,8 @@ type app struct {
 	section int
 	dark    bool
 	query   string
+	// term is the term chip the page filters by; "" means the newest one.
+	term string
 }
 
 func main() {
@@ -138,131 +137,7 @@ func (a *app) rail(c *ui.Context, t *theme.Theme) {
 	mayu.NavigationRail(c, opts)
 }
 
-func (a *app) libraryView(c *ui.Context, t *theme.Theme) {
-	width, _ := c.Size()
-	pad := pagePadding(width)
-	ui.Column(c).Fill().Padding(SpaceLG, pad).Gap(SpaceMD).Children(func() {
-		ui.Row(c).Gap(SpaceMD).AlignItems(ui.Center).Children(func() {
-			textStyle(ui.Text(c, "课程库"), TypeHeadlineMedium)
-			ui.Spacer(c)
-			if ui.Button(c, "刷新").Clicked() {
-				a.loadCourses()
-			}
-		})
-
-		switch a.state {
-		case stateReady:
-			a.readyBody(c, t)
-		case stateFailed:
-			a.failure(c, t)
-		default:
-			textStyle(ui.Text(c, "正在启动本地服务…"), TypeBodyMedium).
-				TextColor(t.Scheme.OnSurfaceVariant)
-		}
-	})
-}
-
-func (a *app) readyBody(c *ui.Context, t *theme.Theme) {
-	ui.Row(c).Gap(SpaceMD).AlignItems(ui.Center).Children(func() {
-		textStyle(ui.Textf(c, "本地服务 %s · 端口 %d", a.state, a.port), TypeBodySmall).
-			TextColor(t.Scheme.OnSurfaceVariant)
-		ui.Spacer(c)
-		textStyle(ui.Textf(c, "共 %d 门课程", len(a.courses)), TypeBodySmall).
-			TextColor(t.Scheme.OnSurfaceVariant)
-	})
-	components.NewTextField(c, &a.query, "搜索课程", fieldOutlined, t).
-		Placeholder("按标题、教师或学期筛选")
-
-	if a.loading {
-		textStyle(ui.Text(c, "正在读取课程…"), TypeBodyMedium).TextColor(t.Scheme.OnSurfaceVariant)
-		return
-	}
-	if a.fetchErr != nil {
-		textStyle(ui.Textf(c, "读取课程失败：%v", a.fetchErr), TypeBodyMedium).TextColor(t.Scheme.Error)
-		return
-	}
-
-	shown := a.filtered()
-	if len(shown) == 0 {
-		textStyle(ui.Text(c, "还没有课程。"), TypeBodyMedium).TextColor(t.Scheme.OnSurfaceVariant)
-		return
-	}
-	// The scroll paints the page colour, as the Flutter page's background does,
-	// so the tonal cards read as cards instead of merging into one block.
-	ui.Scroll(c).Grow(1).Background(t.Scheme.Surface).Children(func() {
-		ui.Column(c).Gap(SpaceSM).Children(func() {
-			for _, course := range shown {
-				a.courseCard(c, t, course)
-			}
-		})
-	})
-}
-
-func (a *app) filtered() []Course {
-	q := strings.TrimSpace(strings.ToLower(a.query))
-	if q == "" {
-		return a.courses
-	}
-	out := make([]Course, 0, len(a.courses))
-	for _, c := range a.courses {
-		if strings.Contains(strings.ToLower(c.Title), q) ||
-			strings.Contains(strings.ToLower(c.Teacher), q) ||
-			strings.Contains(strings.ToLower(c.Term), q) {
-			out = append(out, c)
-		}
-	}
-	return out
-}
-
-// courseCard draws what the Flutter client draws for a course: a card with no
-// elevation in surfaceContainerLow at the M3 medium corner. Mayu's filled card
-// is surfaceContainerHighest, so the card is built from the tokens directly
-// rather than taking Mayu's colour.
-func (a *app) courseCard(c *ui.Context, t *theme.Theme, course Course) {
-	ui.Box(c).Radius(CardRadius).Padding(SpaceLG).Background(t.Scheme.SurfaceContainerLow).
-		Children(func() {
-			ui.Column(c).Gap(SpaceXS + 2).Children(func() {
-				textStyle(ui.Text(c, course.Title), TypeTitleMedium)
-				meta := []string{}
-				if course.Teacher != "" {
-					meta = append(meta, course.Teacher)
-				}
-				if course.Term != "" {
-					meta = append(meta, course.Term)
-				}
-				if course.College != "" {
-					meta = append(meta, course.College)
-				}
-				if len(meta) > 0 {
-					textStyle(ui.Text(c, strings.Join(meta, " · ")), TypeBodySmall).
-						TextColor(t.Scheme.OnSurfaceVariant)
-				}
-				ui.Row(c).Gap(SpaceSM).AlignItems(ui.Center).Children(func() {
-					if course.LectureTotal > 0 {
-						mayu.Chip(c, fmt.Sprintf("%d 讲", course.LectureTotal))
-					}
-					if course.Progress > 0 {
-						mayu.Chip(c, fmt.Sprintf("进度 %.0f%%", course.Progress*100))
-					}
-					if course.LastLearnAt != "" {
-						textStyle(ui.Text(c, "上次 "+course.LastLearnAt), TypeLabelSmall).
-							TextColor(t.Scheme.OnSurfaceVariant)
-					}
-				})
-			})
-		})
-}
-
-func (a *app) failure(c *ui.Context, t *theme.Theme) {
-	ui.Column(c).Gap(SpaceSM).Children(func() {
-		textStyle(ui.Text(c, "本地服务没有启动。"), TypeBodyMedium).TextColor(t.Scheme.Error)
-		textStyle(ui.Textf(c, "%v", a.daemonErr), TypeBodySmall).TextColor(t.Scheme.OnSurfaceVariant)
-		if ui.Button(c, "重试").Clicked() {
-			a.d.start()
-		}
-	})
-}
-
+// placeholder is a section the migration has not reached yet.
 func (a *app) placeholder(c *ui.Context, t *theme.Theme) {
 	width, _ := c.Size()
 	ui.Column(c).Fill().Padding(SpaceLG, pagePadding(width)).Gap(SpaceSM).Children(func() {
