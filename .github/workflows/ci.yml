@@ -49,10 +49,13 @@ jobs:
           fi
           code="$(printf '%s\n' "${files:-}" | grep -Ev '\.md$' || true)"
           for part in daemon agent app app-mygo; do
+            # The job reads `mygo`, since a step output cannot be reached
+            # through a hyphenated name in an expression.
+            key="$part"; [ "$part" = app-mygo ] && key=mygo
             if [ "$all" = true ] || printf '%s\n' "$code" | grep -Eq "^(${part}/|\.github/workflows/ci\.yml$)"; then
-              echo "$part=true" >> "$GITHUB_OUTPUT"
+              echo "$key=true" >> "$GITHUB_OUTPUT"
             else
-              echo "$part=false" >> "$GITHUB_OUTPUT"
+              echo "$key=false" >> "$GITHUB_OUTPUT"
             fi
           done
           if [ "$all" = true ] || [ "$GITHUB_EVENT_NAME" = push ] \
