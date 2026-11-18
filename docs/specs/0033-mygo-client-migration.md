@@ -1,7 +1,7 @@
 # Coursive 迁移到 MyGo 的可行性与实施方案
 
 Artifact-Version: 1
-Status: Draft
+Status: Approved
 
 ## Intent
 
@@ -88,6 +88,8 @@ Android 的工作区以[现有实现与草案](draft-android-app.md)为基线。
 
 MyGo v0.10.0 的输入断言核对成立，但丢失点比草案记录的更窄。`internal/mobile/wire.TouchEvent` 已经携带 `Pointer`、`Kind`、`Pressure`、`Buttons` 和 `Time`；`platform.SurfaceEvent` 已经有 `Pressure` 字段和 `PointerPen` 取值；Android 宿主的 `SurfaceWindow.onTouchEvent` 填了 `getToolType`、`getPressure`、`getPointerId`、`buttonState` 与 `eventTime`，iOS 宿主对 `.pencil` 填 `kind: "pen"` 和 `force`。缺口只在 `internal/mobile/surface.go`：`touch` 把 `Kind != "touch"` 的事件整体交给 `mouse`，该分支只发 `PointerDown`、`PointerMove`、`PointerUp` 与 `PointerLeave`，因此丢掉笔种、压力和触点 ID；`wire.TouchEvent` 本身也没有笔尖与橡皮之分、悬停状态、历史样本、预测点和取消原因。
 
+两个后果是行为层面的，不只是字段缺失。`ui.Touch.Pressure` 没有 `pressureMin`/`pressureMax`，缺省填 0.5，而 Flutter 客户端判压感有效用的是 `e.pressureMax <= e.pressureMin`（`app/lib/features/study_canvas/study_interaction.dart`）；在 MyGo 里这个条件恒为假，压感橡皮会在没有压感的设备上误触发。笔种丢失则让 `study_stylus.dart` 的 `PointerDeviceKind.stylus` 分支整段失效：笔按手指处理，掌触保护和倒置橡皮都不生效。
+
 ### 编译探针
 
 Mayu 在 `9223a115` 的 `go.mod` 声明 `mygo v0.5.1` 与 `go 1.27.2`，把该模块指向 MyGo v0.10.0 后 `go build github.com/harukizmoe/mayu/...` 整包通过，无需改动源码。该提交已提供 P02 需要的按钮、卡片、列表行、筛选 Chip、文本输入、对话框、Navigation Rail 与 SegmentedButton。
@@ -95,3 +97,15 @@ Mayu 在 `9223a115` 的 `go.mod` 声明 `mygo v0.5.1` 与 `go 1.27.2`，把该�
 ### 原型环境
 
 探针于 2026-11-18 在 CachyOS 桌面执行：Go 1.27.0 与 daemon 一致，MyGo 触发的工具链自动切换到 go1.27.3 及以上；Flutter 3.44.9；Android SDK platforms 34 至 37、build-tools 36.0.0、NDK 28.2.13676358、JDK 27；无 Xcode，无连接的 Android 或 iOS 设备，未安装 `mygo` CLI。
+
+### 阶段 0 在桌面上的结果
+
+`app-mygo/` 已在 Linux 上跑通课程库这一条路径：启动真实 daemon、读 `COURSIVE_READY` 握手、用自己签发的 token 调 `GET /api/courses`、建本地课程再读回，错误 token 被拒。握手中位耗时 11 ms。样本库是临时目录，未接触真实用户库。
+
+Mayu 在真实窗口里可用：导航栏、卡片、筛选 Chip、文本框、主题切换都按 Coursive 的种子色 `#3F6CB4` 出图，浅深两套由 golden 图固定。
+
+`app-mygo/gesture.go` 把画布输入规则写成不依赖 UI 类型的纯 Go，用事件回放验证：单指平移、600 ms 长按转整卡拖动、移动先于长按即拖动、第二指接管取消长按、缩放锚点、抬一指不跳变、第三指不跳变、笔打断手指、抬笔后 1 s 掌触保护、取消不留幽灵笔迹、取消回滚卡片位置、无压感设备不触发压感橡皮、笔种丢失时回落为手指。
+
+### iOS 进程内核心的能力面
+
+`run` 的依赖分三类。纯 Go 可原样进沙盒的有：`store.Open` 的 SQLite 与 `segments_fts`/`notes_fts` 两个 FTS5 虚表（`modernc.org/sqlite`，无 cgo）、`library.Open`、`events` 总线、`vault` 密封、`jobs`。需要换实现的有：`signal.NotifyContext(os.Interrupt, SIGTERM)` 与 `-exit-on-stdin-eof` 在应用里没有对应信号，改成显式 context 与显式关闭；`net.Listen("tcp", ...)` 的本地端口在退到后台后不保证存活，受控本地传输或前台续期要单独设计。必须延后的有：`agent.Supervisor` 与 `sources.Registry`/`provider.Exe` 的 Node 与插件子进程、`localasr` 的引擎二进制、`asr` 与 `study_media`、`local_courses`、`study_pdf` 对 `ffmpeg`/`ffprobe` 与 PDF 渲染器的调用——这些在 iOS 上都是外部可执行文件，商店也不允许随包下载。

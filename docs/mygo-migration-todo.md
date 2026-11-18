@@ -1,6 +1,6 @@
 # Coursive MyGo 迁移实施清单
 
-本清单配合[迁移规格草案](specs/draft-mygo-client-migration.md)使用。源码基线为上游 `dev` 的 `bfc7ec8`。链接定位基线行号，文件改动后按旁边的符号查找。拟新增的客户端目录为 `app-mygo/`。实施前先评审规格。以下任务按依赖排列，每项末尾给出完成时应留下的证据。
+本清单配合[迁移规格草案](specs/0033-mygo-client-migration.md)使用。源码基线为上游 `dev` 的 `bfc7ec8`。链接定位基线行号，文件改动后按旁边的符号查找。拟新增的客户端目录为 `app-mygo/`。实施前先评审规格。以下任务按依赖排列，每项末尾给出完成时应留下的证据。
 
 原型阶段可并行验证。P01 先跑通桌面与 Android，签名 iPad 的本地服务依赖 P04。实现阶段先完成 S01、S02，再并行推进业务页面与播放。C03 是画布写入前置条件，C04、C05 和 C06 依次接通坐标、触摸和触笔，C07 在保存和输入稳定后验收。R03 依赖现有功能齐套及同步验收，R04 按平台放行。
 
@@ -38,6 +38,6 @@ P03 若无法保住真实笔迹和取消语义，Android 继续使用 Flutter �
 - [ ] **R01 迁移助手与插件 UI。** 先连现有 Node 主机，再依次移植 [插件导航登记](../app/lib/core/plugin_navigation.dart)、[UI slot](../app/lib/core/ui_slots.dart)、[声明式渲染](../app/lib/features/plugins/declarative_renderer.dart) 和 [动作客户端](../app/lib/features/plugins/plugin_actions.dart)。服务端以 [`pluginAction`、`pluginViewState` 和 proposal 处理](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/daemon/internal/server/plugin_actions.go#L18) 为准。再核对 [Web 回退](../app/lib/features/plugins/plugin_web_fallback.dart)。验收现有插件样本、权限拒绝、批准/拒绝、过期视图和重试幂等。使用 [动作测试](../app/test/plugin_actions_test.dart) 与 [插件协议 fixtures](../app/test/plugin_fabric_fixtures_test.dart)。
 - [ ] **R02 迁移备份与同步。** 对照 [`Api` 的文件夹同步入口](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/app/lib/core/api.dart#L127)、[Android SAF 桥](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/app/android/app/src/main/kotlin/io/github/walkerkiller/coursive/SyncFolderBridge.kt#L18)、[原子发布辅助](../app/android/app/src/main/kotlin/io/github/walkerkiller/coursive/FolderDocumentPublication.kt) 和 [`CourseState` / `MergeCourseState`](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/daemon/internal/server/folder_sync.go#L21)。验收同一个测试库在新旧客户端分别使用恢复包和同步，模拟中断、撤销目录授权及冲突。参照 [文件夹同步页面测试](../app/test/folder_sync_page_test.dart) 和 [服务端集成测试](../daemon/internal/server/folder_integration_test.go)。
 - [ ] **R03 移植打包和升级验证。** 依照 [四平台构建工作流](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/.github/workflows/build.yml#L36)、[Android 包配置](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/app/android/app/build.gradle.kts#L17) 和[发布策略](release-policy.md) 产出候选包。逐平台核对包标识、签名、数据位置及构建产物名。模拟 Flutter→MyGo→Flutter 修复版本，期间创造新笔迹、会话和下载，核对这些记录可读。旧版与候选版使用不同测试库，正式替换时只运行一个写入者。
-- [ ] **R04 按平台放行。** 桌面三系统、Android APK 各自达到[规格中的验收条件](specs/draft-mygo-client-migration.md#verification)才替换稳定产物。Google Play 与 iOS/iPadOS 各自评审后台、插件和代码分发能力。iOS 根据 P04 结果完成端内核心，跑完 iPhone 与 iPad 真机流程再提交分发。原型遇到框架输入、视频或数据兼容阻塞时，保留相应平台的现有交付安排。
+- [ ] **R04 按平台放行。** 桌面三系统、Android APK 各自达到[规格中的验收条件](specs/0033-mygo-client-migration.md#verification)才替换稳定产物。Google Play 与 iOS/iPadOS 各自评审后台、插件和代码分发能力。iOS 根据 P04 结果完成端内核心，跑完 iPhone 与 iPad 真机流程再提交分发。原型遇到框架输入、视频或数据兼容阻塞时，保留相应平台的现有交付安排。
 
 每项验收记录源码提交、目标系统与设备、复现样本、实际结果及剩余缺口。框架能力以构建和真机证据为准，业务等价性以旧版样本和可重复测试为准。
