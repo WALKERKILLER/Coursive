@@ -141,7 +141,7 @@ func (a *app) rail(c *ui.Context, t *theme.Theme) {
 func (a *app) libraryView(c *ui.Context, t *theme.Theme) {
 	width, _ := c.Size()
 	pad := pagePadding(width)
-	ui.Column(c).Fill().Padding(pad, SpaceLG).Gap(SpaceMD).Children(func() {
+	ui.Column(c).Fill().Padding(SpaceLG, pad).Gap(SpaceMD).Children(func() {
 		ui.Row(c).Gap(SpaceMD).AlignItems(ui.Center).Children(func() {
 			textStyle(ui.Text(c, "课程库"), TypeHeadlineMedium)
 			ui.Spacer(c)
@@ -265,7 +265,7 @@ func (a *app) failure(c *ui.Context, t *theme.Theme) {
 
 func (a *app) placeholder(c *ui.Context, t *theme.Theme) {
 	width, _ := c.Size()
-	ui.Column(c).Fill().Padding(pagePadding(width), SpaceLG).Gap(SpaceSM).Children(func() {
+	ui.Column(c).Fill().Padding(SpaceLG, pagePadding(width)).Gap(SpaceSM).Children(func() {
 		textStyle(ui.Text(c, sections[a.section]), TypeHeadlineMedium)
 		textStyle(ui.Text(c, "阶段 0 只验证课程库这一条路径；这一页在阶段 1 才迁。"), TypeBodyMedium).
 			TextColor(t.Scheme.OnSurfaceVariant)
