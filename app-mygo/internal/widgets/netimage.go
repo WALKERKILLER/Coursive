@@ -48,6 +48,9 @@ func loadPicture(key string, fetch func() ([]byte, error)) *picture {
 	return p
 }
 
+// FetchURL gets url's bytes, with the daemon's token on its own URLs.
+func FetchURL(url string) ([]byte, error) { return fetchURL(url) }
+
 func fetchURL(url string) ([]byte, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
