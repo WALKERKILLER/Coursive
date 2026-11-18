@@ -106,9 +106,12 @@ func AskInSheet(prompt string) {
 // ShowAssistantSheet is showAssistantSheet: the assistant docked in a
 // sheet.
 func ShowAssistantSheet() {
-	m3.ShowModalBottomSheet(m3.SheetOptions{ScrollControlled: true, MaxWidth: 720, HeightFactor: .85}, func(c *ui.Context, r *m3.Route) {
-		ui.Column(c).FillWidth().Grow(1).Basis(0).Children(func() { AssistantPanelView(c, true) })
-	})
+	panel := NewAssistantPanel(true, true)
+	m3.ShowModalBottomSheet(m3.SheetOptions{ScrollControlled: true, MaxWidth: 720, HeightFactor: .85, OnClose: func(any) { panel.Dispose() }},
+		func(c *ui.Context, r *m3.Route) {
+			panel.Leave = r.Close
+			ui.Column(c).FillWidth().Grow(1).Basis(0).Children(func() { panel.View(c) })
+		})
 }
 
 // OpenPractice opens a practice set.

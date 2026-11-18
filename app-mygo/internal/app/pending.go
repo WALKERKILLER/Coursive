@@ -13,17 +13,16 @@ type todoPage struct{ name string }
 
 func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
 
-func NewTasksPage() m3.Page                                                 { return &todoPage{"tasks"} }
 func NewPluginsPage() m3.Page                                               { return &todoPage{"plugins"} }
 func NewSettingsPage() m3.Page                                              { return &todoPage{"settings"} }
-func RunBotOp(op core.J)                                                    {}
-func OpenAssistantPanel(c *ui.Context)                                      {}
-func AssistantPanelView(c *ui.Context, d bool)                              {}
-func runStatus(s string) (string, ui.Color, bool)                           { return s, ui.Color{}, s == "failed" }
-func openRunConversation(session string)                                    {}
 func workspaceSetup(c *ui.Context)                                          { m3.Text(c, "setup", design.TT().TitleLarge) }
-func OpenPlugins()                                                          {}
+func OpenPlugins(installed bool)                                            {}
 func PluginMenuButton(c *ui.Context, surface string, ctx map[string]string) {}
 func OpenLink(u string)                                                     {}
 func OpenSettingsSection(id string)                                         {}
 func UiSlotOutlet(c *ui.Context, target string, ctx map[string]string)      {}
+func NewUsagePage() m3.Page                                                 { return &todoPage{"usage"} }
+func NewModelsPage() m3.Page                                                { return &todoPage{"models"} }
+func ShowModelPicker()                                                      {}
+func runPluginEntry(e core.PluginEntry, ctx core.J, onPrompt func(string))  {}
+func PluginView(c *ui.Context, view core.J)                                 {}

@@ -254,7 +254,7 @@ func (s *Shell) View(c *ui.Context) {
 			}
 			ui.Box(c).FillHeight().Padding(design.SpaceSM, design.SpaceLG, design.SpaceLG, design.SpaceSM).Children(func() {
 				ui.Column(c).Width(pw).FillHeight().Radius(design.CornerXL).Clip().Background(cs.SurfaceContainerLow).Children(func() {
-					AssistantPanelView(c, true)
+					dockedAssistant.View(c)
 				})
 			})
 		})

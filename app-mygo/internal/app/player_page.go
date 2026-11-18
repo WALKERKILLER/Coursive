@@ -52,6 +52,7 @@ type PlayerPage struct {
 	ctl        *LecturePlayer
 	view       *PlayerView
 	panel      *PlayerSidePanel
+	assistant  *AssistantPanel
 	fullscreen bool
 	panelOpen  bool
 	started    bool
@@ -65,7 +66,9 @@ type PlayerPage struct {
 func NewPlayerPage(id string, startMs int) m3.Page {
 	ctl := NewLecturePlayer(id)
 	p := &PlayerPage{lectureID: id, startMs: startMs, ctl: ctl, view: NewPlayerView(ctl), panel: NewPlayerSidePanel(ctl), panelOpen: true}
-	p.panel.Assistant = func(c *ui.Context) { AssistantPanelView(c, true) }
+	p.assistant = NewAssistantPanel(true, true)
+	p.assistant.Leave = func() { m3.RootNav.PopPage(p) }
+	p.panel.Assistant = p.assistant.View
 	p.panel.OnAsk = func(text string) { Assistant.Send(text) }
 	playerPages[ctl] = p
 	ctl.Load()
@@ -98,6 +101,7 @@ func NewPlayerPage(id string, startMs int) m3.Page {
 
 // Dispose saves the position and stops playing.
 func (p *PlayerPage) Dispose() {
+	p.assistant.Dispose()
 	if p.cancel != nil {
 		p.cancel()
 	}

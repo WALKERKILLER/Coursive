@@ -32,6 +32,13 @@ type MenuItem struct {
 	Color ui.Color
 	// Custom builds the item's content in place of the label.
 	Custom func(c *ui.Context)
+	// IconSize replaces the 24 DIP icons.
+	IconSize float32
+	// LeadingFn builds the leading widget in place of Icon, as a logo.
+	LeadingFn func(c *ui.Context)
+	// Panel builds content that is not an item, as a slider or a summary
+	// among the items (a Padding child of menuChildren).
+	Panel func(c *ui.Context)
 	// KeepOpen leaves the menu open after a click.
 	KeepOpen bool
 	OnTap    func()
@@ -99,6 +106,10 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 			Text(c.Key(i), it.Label, tt().LabelLarge.C(s.OnSurfaceVariant)).Padding(8, 12)
 			continue
 		}
+		if it.Panel != nil {
+			ui.Column(c.Key(i)).Shrink(0).Children(func() { it.Panel(c) })
+			continue
+		}
 		var e ui.Element
 		switch {
 		case len(it.Sub) > 0:
@@ -111,7 +122,7 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 		if it.KeepOpen {
 			e = e.KeepOpen()
 		}
-		e = e.Key(i).Disabled(it.Disabled).DimDisabled(false).Row().AlignItems(ui.Center).
+		e = e.Disabled(it.Disabled).DimDisabled(false).Row().AlignItems(ui.Center).
 			MinHeight(48+Density()*4).Padding(0, 12).Gap(12)
 		fg, ic := s.OnSurface, s.OnSurfaceVariant
 		if it.Danger {
@@ -129,6 +140,10 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 				e = e.Background(design.WithOpacity(s.OnSurface, .08))
 			}
 		}
+		isz := it.IconSize
+		if isz == 0 {
+			isz = 24
+		}
 		e.Children(func() {
 			if it.Checked != nil {
 				if *it.Checked {
@@ -137,8 +152,10 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 					HGap(c, 24)
 				}
 			}
-			if it.Icon != 0 {
-				Icon(c, it.Icon, 24, ic)
+			if it.LeadingFn != nil {
+				it.LeadingFn(c)
+			} else if it.Icon != 0 {
+				Icon(c, it.Icon, isz, ic)
 			}
 			if it.Custom != nil {
 				it.Custom(c)
@@ -154,7 +171,7 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 				Text(c, it.Trailing, tt().LabelLarge.C(s.OnSurfaceVariant)).NoWrap()
 			}
 			if it.TrailingIcon != 0 {
-				Icon(c, it.TrailingIcon, 24, ic)
+				Icon(c, it.TrailingIcon, isz, ic)
 			}
 			if len(it.Sub) > 0 {
 				Icon(c, icons.ArrowRight, 24, ic)

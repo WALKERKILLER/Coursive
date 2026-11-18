@@ -56,7 +56,7 @@ func FirstCoursePanel(c *ui.Context, width float32) {
 					StartLocalCourse()
 				}
 				if (m3.Button{Kind: m3.Outlined, Icon: icons.SchoolOutlined, Label: l10n.HomeFirstCourseConnect, Height: 48}).Show(c).Clicked() {
-					OpenPlugins()
+					OpenPlugins(false)
 				}
 			})
 			m3.VGap(c, design.SpaceLG)
