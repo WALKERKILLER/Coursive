@@ -80,13 +80,13 @@ Android 的工作区以[现有实现与草案](draft-android-app.md)为基线。
 
 ## Evidence
 
-本草案使用 Coursive 源码、官方版本文档、上游输入实现与官方平台资料。Mayu 与 MyGo v0.10.0 的编译兼容已由阶段 0 前的源码核查和编译探针确认；两端实际触笔事件、视频叠墨性能、iOS 本地核心及商店验收等待阶段 0 验证。
+本规格使用 Coursive 源码、官方版本文档、上游输入实现与官方平台资料。Mayu 与 MyGo v0.10.0 的编译兼容已由阶段 0 前的源码核查和编译探针确认；两端实际触笔事件、视频叠墨性能、iOS 本地核心及商店验收等待阶段 0 验证。
 
 ### 源码核查
 
 [迁移实施清单](../mygo-migration-todo.md) 的 101 个源码链接在 `bfc7ec8` 上全部解析到存在的文件和行，且逐行落在所指符号上，例如 `DaemonService._launch`、`Api._send`、`StudyCanvasState._videoInput`、`StylusBridge.touch`、daemon `run`、`_holdMaterial` 与 `_overControls`。
 
-MyGo v0.10.0 的输入断言核对成立，但丢失点比草案记录的更窄。`internal/mobile/wire.TouchEvent` 已经携带 `Pointer`、`Kind`、`Pressure`、`Buttons` 和 `Time`；`platform.SurfaceEvent` 已经有 `Pressure` 字段和 `PointerPen` 取值；Android 宿主的 `SurfaceWindow.onTouchEvent` 填了 `getToolType`、`getPressure`、`getPointerId`、`buttonState` 与 `eventTime`，iOS 宿主对 `.pencil` 填 `kind: "pen"` 和 `force`。缺口只在 `internal/mobile/surface.go`：`touch` 把 `Kind != "touch"` 的事件整体交给 `mouse`，该分支只发 `PointerDown`、`PointerMove`、`PointerUp` 与 `PointerLeave`，因此丢掉笔种、压力和触点 ID；`wire.TouchEvent` 本身也没有笔尖与橡皮之分、悬停状态、历史样本、预测点和取消原因。
+MyGo v0.10.0 的输入断言核对成立，但丢失点比预期更窄。`internal/mobile/wire.TouchEvent` 已经携带 `Pointer`、`Kind`、`Pressure`、`Buttons` 和 `Time`；`platform.SurfaceEvent` 已经有 `Pressure` 字段和 `PointerPen` 取值；Android 宿主的 `SurfaceWindow.onTouchEvent` 填了 `getToolType`、`getPressure`、`getPointerId`、`buttonState` 与 `eventTime`，iOS 宿主对 `.pencil` 填 `kind: "pen"` 和 `force`。缺口只在 `internal/mobile/surface.go`：`touch` 把 `Kind != "touch"` 的事件整体交给 `mouse`，该分支只发 `PointerDown`、`PointerMove`、`PointerUp` 与 `PointerLeave`，因此丢掉笔种、压力和触点 ID；`wire.TouchEvent` 本身也没有笔尖与橡皮之分、悬停状态、历史样本、预测点和取消原因。
 
 两个后果是行为层面的，不只是字段缺失。`ui.Touch.Pressure` 没有 `pressureMin`/`pressureMax`，缺省填 0.5，而 Flutter 客户端判压感有效用的是 `e.pressureMax <= e.pressureMin`（`app/lib/features/study_canvas/study_interaction.dart`）；在 MyGo 里这个条件恒为假，压感橡皮会在没有压感的设备上误触发。笔种丢失则让 `study_stylus.dart` 的 `PointerDeviceKind.stylus` 分支整段失效：笔按手指处理，掌触保护和倒置橡皮都不生效。
 
