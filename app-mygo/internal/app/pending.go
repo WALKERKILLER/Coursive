@@ -14,8 +14,6 @@ type todoPage struct{ name string }
 func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
 
 func NewPlayerPage(id string, t int) m3.Page                                { return &todoPage{"player " + id} }
-func NewCoursePage(id string) m3.Page                                       { return &todoPage{"course " + id} }
-func NewCoursesPage() m3.Page                                               { return &todoPage{"courses"} }
 func NewDownloadsPage() m3.Page                                             { return &todoPage{"downloads"} }
 func NewLibraryPage() m3.Page                                               { return &todoPage{"library"} }
 func NewTasksPage() m3.Page                                                 { return &todoPage{"tasks"} }
@@ -29,10 +27,12 @@ func runStatus(s string) (string, ui.Color, bool)                           { re
 func openRunConversation(session string)                                    {}
 func SeekOrOpen(id string, t int)                                           { m3.RootNav.Push(NewPlayerPage(id, t)) }
 func workspaceSetup(c *ui.Context)                                          { m3.Text(c, "setup", design.TT().TitleLarge) }
-func StartLocalCourse()                                                     {}
 func OpenPlugins()                                                          {}
 func NewPracticePage(id string) m3.Page                                     { return &todoPage{"practice " + id} }
 func NewNotePage(id string) m3.Page                                         { return &todoPage{"note " + id} }
 func PluginMenuButton(c *ui.Context, surface string, ctx map[string]string) {}
 func OpenLink(u string)                                                     {}
 func OpenSettingsSection(id string)                                         {}
+func NewSourcesPage() m3.Page                                               { return &todoPage{"sources"} }
+func LmsCourseSection(c *ui.Context, courseID string)                       {}
+func UiSlotOutlet(c *ui.Context, target string, ctx map[string]string)      {}

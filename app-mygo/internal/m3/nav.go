@@ -36,6 +36,8 @@ type Navigator struct {
 type navEntry struct {
 	page Page
 	id   int
+	// then runs once the page is popped (push(...).then).
+	then func()
 }
 
 // pageDuration is FadeForwardsPageTransitionsBuilder.kTransitionMilliseconds.
@@ -44,7 +46,7 @@ const pageDuration = 450 * time.Millisecond
 // NewNavigator is a navigator showing root.
 func NewNavigator(root Page) *Navigator {
 	n := &Navigator{}
-	n.pages = []navEntry{{root, 0}}
+	n.pages = []navEntry{{page: root}}
 	n.next = 1
 	return n
 }
@@ -72,16 +74,22 @@ func (n *Navigator) changed() {
 // Push shows p above the current page.
 func (n *Navigator) Push(p Page) {
 	prev := n.pages[len(n.pages)-1]
-	n.pages = append(n.pages, navEntry{p, n.next})
+	n.pages = append(n.pages, navEntry{page: p, id: n.next})
 	n.next++
 	n.leaving, n.popping, n.changedAt = &prev, false, time.Now()
 	n.changed()
 }
 
+// PushThen is Push running then once p is popped.
+func (n *Navigator) PushThen(p Page, then func()) {
+	n.Push(p)
+	n.pages[len(n.pages)-1].then = then
+}
+
 // Replace swaps the top page for p (pushReplacement).
 func (n *Navigator) Replace(p Page) {
 	top := n.pages[len(n.pages)-1]
-	n.pages[len(n.pages)-1] = navEntry{p, n.next}
+	n.pages[len(n.pages)-1] = navEntry{page: p, id: n.next}
 	n.next++
 	if d, ok := top.page.(Disposer); ok {
 		d.Dispose()
@@ -117,6 +125,9 @@ func (n *Navigator) Pop() {
 	}
 	n.leaving, n.popping, n.changedAt = &top, true, time.Now()
 	n.changed()
+	if top.then != nil {
+		top.then()
+	}
 }
 
 // PopUntilRoot pops every page above the root (popUntil(isFirst)).
@@ -137,8 +148,12 @@ func (n *Navigator) PopPage(p Page) {
 			if d, ok := p.(Disposer); ok {
 				d.Dispose()
 			}
+			then := n.pages[i].then
 			n.pages = append(n.pages[:i], n.pages[i+1:]...)
 			n.changed()
+			if then != nil {
+				then()
+			}
 			return
 		}
 	}

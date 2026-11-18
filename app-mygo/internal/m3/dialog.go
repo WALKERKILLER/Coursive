@@ -17,10 +17,13 @@ type Route struct {
 	Dismissible bool
 	// OnClose runs once the route is popped, with the value Pop was given.
 	OnClose func(result any)
-	kind    routeKind
-	result  any
-	id      int
-	closed  bool
+	// OnDismiss replaces the close a dismissible route's Escape or scrim
+	// click makes, as PopScope(canPop: false) does.
+	OnDismiss func()
+	kind      routeKind
+	result    any
+	id        int
+	closed    bool
 }
 
 type routeKind int
@@ -52,6 +55,15 @@ func (r *Route) Pop(result any) {
 	if r.OnClose != nil {
 		r.OnClose(result)
 	}
+}
+
+// dismiss is a click on the scrim or Escape.
+func (r *Route) dismiss() {
+	if r.OnDismiss != nil {
+		r.OnDismiss()
+		return
+	}
+	r.Close()
 }
 
 // Close is Pop(nil).
@@ -118,7 +130,7 @@ func buildDialog(c *ui.Context, r *Route) {
 	})
 	if !open && r.open {
 		if r.Dismissible {
-			r.Close()
+			r.dismiss()
 		}
 	}
 }
@@ -139,13 +151,13 @@ func buildGeneral(c *ui.Context, r *Route) {
 		panel.Background(ui.Transparent).Fill().Children(func() {
 			barrier := ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0)
 			if barrier.Clicked() && r.Dismissible {
-				r.Close()
+				r.dismiss()
 			}
 			r.Build(c, r)
 		})
 	})
 	if !open && r.open && r.Dismissible {
-		r.Close()
+		r.dismiss()
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/walkerkiller/coursive/app-mygo/internal/core"
@@ -216,6 +217,23 @@ func CourseArt(e ui.Element, course core.Course, t, spin float64, layout int) ui
 		layout = spec.layout
 	}
 	return e.Clip().Draw(func(p *ui.Painter, r ui.Rect) { PaintCourseArt(p, r, spec, s, t, spin, layout) })
+}
+
+// CourseArtTurning is CourseArt turning once every period from start, as a
+// repeating AnimationController does; reduced motion holds it still. It
+// repaints at 15 fps, which is smooth at so slow a turn.
+func CourseArtTurning(e ui.Element, course core.Course, t float64, start time.Time, period time.Duration) ui.Element {
+	s := CourseScheme(course)
+	spec := CourseArtSpec(artKey(course))
+	still := design.T().ReduceMotion
+	return e.Clip().Draw(func(p *ui.Painter, r ui.Rect) {
+		spin := 0.0
+		if !still {
+			spin = math.Mod(float64(p.Now().Sub(start))/float64(period), 1)
+			p.AnimationFrameRate(15)
+		}
+		PaintCourseArt(p, r, spec, s, t, spin, spec.layout)
+	})
 }
 
 // PaintCourseArt is CourseArtPainter.paint.

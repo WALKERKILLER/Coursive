@@ -60,6 +60,7 @@ func theme(c *ui.Context) *design.Theme {
 // dialogs over all of them.
 func Root(c *ui.Context) {
 	WindowWidth, WindowHeight = c.Size()
+	m3.WindowWidth = WindowWidth
 	t := theme(c)
 	design.Use(t)
 	c.SetTheme(t.UI())

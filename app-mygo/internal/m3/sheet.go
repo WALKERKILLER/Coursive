@@ -65,7 +65,7 @@ func buildSheet(c *ui.Context, r *Route) {
 		r.Build(c, r)
 	})
 	if !open && r.open && r.Dismissible {
-		r.Close()
+		r.dismiss()
 	}
 }
 
@@ -75,8 +75,7 @@ func AdaptiveSheet(c *ui.Context, maxWidth float32, dismissible bool, build func
 	if maxWidth == 0 {
 		maxWidth = 520
 	}
-	w, _ := c.Size()
-	if design.SizeClassOf(w) != design.SizeCompact {
+	if design.SizeClassOf(windowWidth(c)) != design.SizeCompact {
 		r := &Route{Dismissible: dismissible, OnClose: onClose, kind: dialogRoute}
 		r.Build = func(c *ui.Context, r *Route) {
 			Dialog(c, func() {
@@ -90,10 +89,21 @@ func AdaptiveSheet(c *ui.Context, maxWidth float32, dismissible bool, build func
 
 // SheetPadding is sheetPadding: the inset of a sheet's body.
 func SheetPadding(c *ui.Context, handle bool) (top, right, bottom, left float32) {
-	w, _ := c.Size()
 	top = design.SpaceXL
-	if design.SizeClassOf(w) == design.SizeCompact && handle {
+	if design.SizeClassOf(windowWidth(c)) == design.SizeCompact && handle {
 		top = 0
 	}
 	return top, design.SpaceXL, design.SpaceXL, design.SpaceXL
+}
+
+// WindowWidth is the window's width in the frame being built; the root
+// sets it, for routes opened away from a build.
+var WindowWidth float32
+
+func windowWidth(c *ui.Context) float32 {
+	if c == nil {
+		return WindowWidth
+	}
+	w, _ := c.Size()
+	return w
 }
