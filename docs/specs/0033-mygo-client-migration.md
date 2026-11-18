@@ -71,6 +71,7 @@ Android 的工作区以[现有实现与草案](draft-android-app.md)为基线。
 
 ## Verification
 
+- 视效按设计系统对等，不按像素位对等验收。色板、间距、形状、字号和断点必须与 Flutter 端同值，由两边源码之间的机器校验保证；同一页面在两端的截图差异另做测量并记录，阈值由逐次评审确定，因为两套渲染引擎的字形光栅化不会逐位相同。
 - 阶段 0 不依赖设备的检查先跑完：源码链接解析、Mayu 对 MyGo v0.10.0 的整包编译、daemon 与既有客户端的测试矩阵。触笔与叠墨需要目标 Android 平板，iPad 本地核心需要 macOS 与签名环境；缺任一条件时该项记为受阻，不计为通过。
 - 阶段 0 的构建证据包含锁定版本下的三端产物、安装、启动和课程页可读。Android 额外记录现有 APK 覆盖升级，iPad 额外记录签名真机、沙盒读写与退后台重开。相同样本保存后，核对课程数、笔迹点与关键文件哈希。
 - 测试分三层。Go 事件回放验证缩放锚点、长按取消、压感橡皮与撤销。MyGo Tester 和 `ui/golden` 验证触摸、取消、安全区与主题。真机验证系统返回、触笔、中文输入法、视频合成、文件选择、无障碍与后台行为。[MyGo 测试能力](https://github.com/egoist/mygo/releases/tag/v0.10.0)
@@ -97,6 +98,16 @@ Mayu 在 `9223a115` 的 `go.mod` 声明 `mygo v0.5.1` 与 `go 1.27.2`，把该�
 ### 原型环境
 
 探针于 2026-11-18 在 CachyOS 桌面执行：Go 1.27.0 与 daemon 一致，MyGo 触发的工具链自动切换到 go1.27.3 及以上；Flutter 3.44.9；Android SDK platforms 34 至 37、build-tools 36.0.0、NDK 28.2.13676358、JDK 27；无 Xcode，无连接的 Android 或 iOS 设备，未安装 `mygo` CLI。
+
+### 设计系统对等
+
+设计系统只有一个来源：Flutter 端的源码。`app-mygo/tokens.go` 是 `app/lib/theme/tokens.dart` 的镜像，`tokens_parity_test.go` 解析 Dart 文件逐项比对间距、圆角、页面内边距、内容宽度上限、断点和默认种子色，任一项漂移即失败。
+
+色板不走重新生成。`app/test/design_system_export_test.dart` 用 Flutter 自己的 `ColorScheme.fromSeed` 写出 `app-mygo/design/palette.json`，Go 端直接读这份文件构造 Mayu 的 `ColorScheme` 和 MyGo 的 `ui.Theme`；该测试在常规模式下反过来校验提交的文件与当前主题一致。这样做的原因是实测差距：用同一个种子，Mayu 的 HCT 生成器与 Flutter 的取值在浅色 `primary` 上相差最多 22/255，深色相差 2/255，其余角色 0～3。这个量级会被人眼看出，所以颜色必须是同一组数字，而不是同一套算法。
+
+组件度量按 `buildTheme` 逐个对齐：卡片 `surfaceContainerLow`、圆角 12、无阴影（Mayu 的 filled 卡片是 `surfaceContainerHighest`，因此卡片按令牌直接构建，不取 Mayu 的配色）；按钮 StadiumBorder 与 24/10 内边距；Chip 圆角 8 与 `outlineVariant` 描边；输入框圆角 8 与 16/16 内边距；导航栏底色 `surface`、指示器 `secondaryContainer`、标签 `labelMedium`。字号取 M3 阶梯叠加 Coursive 的覆盖（正文行高 1.6 与 1.55，标题类字重 500）。
+
+两端引擎不同，字形光栅化不会逐位相同：MyGo 用自己的字体栈和排版实现，Flutter 走 Skia 与系统字体。因此验收口径是设计系统对等加截图差异测量，而不是像素位相等。
 
 ### 阶段 0 在桌面上的结果
 
