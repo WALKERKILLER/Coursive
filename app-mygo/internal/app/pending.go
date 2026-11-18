@@ -14,7 +14,6 @@ type todoPage struct{ name string }
 func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
 
 func NewPlayerPage(id string, t int) m3.Page                                { return &todoPage{"player " + id} }
-func NewDownloadsPage() m3.Page                                             { return &todoPage{"downloads"} }
 func NewLibraryPage() m3.Page                                               { return &todoPage{"library"} }
 func NewTasksPage() m3.Page                                                 { return &todoPage{"tasks"} }
 func NewPluginsPage() m3.Page                                               { return &todoPage{"plugins"} }

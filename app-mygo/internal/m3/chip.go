@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 	"github.com/walkerkiller/coursive/app-mygo/internal/icons"
+	"github.com/walkerkiller/coursive/app-mygo/internal/l10n"
 )
 
 // ChipKind is which of Material's chips.
@@ -37,7 +38,12 @@ type Chip struct {
 	NoCheck bool
 	// OnDelete shows the delete icon; DeleteClicked tells of a press.
 	Deletable bool
-	Tooltip   string
+	// DeleteIcon and DeleteTooltip replace Icons.cancel and its "Delete"
+	// (deleteIcon, deleteButtonTooltipMessage).
+	DeleteIcon    icons.Icon
+	DeleteSize    float32
+	DeleteTooltip string
+	Tooltip       string
 	// BG and FG replace the colours.
 	BG, FG ui.Color
 	// Side replaces the border colour; NoSide drops it.
@@ -148,8 +154,19 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 		}
 		Text(c, ch.Label, style.C(fg)).NoWrap().Padding(0, 8)
 		if ch.Deletable {
+			ic, size, tip := icons.Cancel, float32(18), ch.DeleteTooltip
+			if ch.DeleteIcon != 0 {
+				ic = ch.DeleteIcon
+			}
+			if ch.DeleteSize > 0 {
+				size = ch.DeleteSize
+			}
+			if tip == "" {
+				tip = l10n.CommonDelete
+			}
 			d := ui.ButtonBase(c).FocusRing(false).Size(18, 18).Center().Radius(9).Cursor(ui.CursorPointer).
-				Label("Delete").Children(func() { Icon(c, icons.Cancel, 18, fg) })
+				Label(tip).Children(func() { Icon(c, ic, size, fg) })
+			Tip(c, d, tip)
 			deleted = d.Clicked()
 		}
 	})

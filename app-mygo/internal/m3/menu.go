@@ -181,8 +181,12 @@ func MenuButton(c *ui.Context, key any, ic icons.Icon, tooltip string, style Men
 	}
 	return Menu(c, key, style, func(t ui.Element, open bool) {
 		t.Size(40+Density()*4, 40+Density()*4).Center().Radius(design.CornerFull).Cursor(ui.CursorPointer)
-		if tooltip != "" && !open {
-			Tip(c, t, tooltip)
+		if tooltip != "" {
+			// A tooltip is its semantic label too.
+			t.Label(tooltip)
+			if !open {
+				Tip(c, t, tooltip)
+			}
 		}
 		Ink(t, cs().OnSurfaceVariant, design.CornerFull)
 		t.Children(func() { Icon(c, ic, 24, cs().OnSurfaceVariant) })
