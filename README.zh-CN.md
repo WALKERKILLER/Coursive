@@ -14,7 +14,7 @@
 <p>
 <a href="https://github.com/WALKERKILLER/Coursive/stargazers"><img height="22" src="https://m3-markdown-badges.vercel.app/stars/3/3/WALKERKILLER/Coursive" alt="Stars" /></a>
 &nbsp;
-<a href="https://flutter.dev"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Flutter/flutter3.svg" alt="Flutter" /></a>
+<a href="https://mygo.run"><img height="22" src="assets/brand/badges/mygo.svg" alt="MyGo" /></a>
 &nbsp;
 <a href="https://go.dev"><img height="22" src="https://ziadoua.github.io/m3-Markdown-Badges/badges/Go/go3.svg" alt="Go" /></a>
 &nbsp;
