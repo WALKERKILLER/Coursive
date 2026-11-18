@@ -54,6 +54,7 @@ const (
 	StreamNone       = "none"
 	StreamTypewriter = "typewriter"
 	StreamFade       = "fade"
+	StreamBlurIn     = "blurIn"
 	StreamWave       = "wave"
 )
 
@@ -255,7 +256,7 @@ func (p *Prefs) Apply(m map[string]any) (ok bool) {
 	next.ChatBubbles = boolean("chatBubbles", true)
 	next.ShowThinking = boolean("showThinking", true)
 	switch a := str("streamAnimation", next.StreamAnimation); a {
-	case StreamNone, StreamTypewriter, StreamFade, StreamWave:
+	case StreamNone, StreamTypewriter, StreamFade, StreamBlurIn, StreamWave:
 		next.StreamAnimation = a
 	default:
 		panic("streamAnimation")

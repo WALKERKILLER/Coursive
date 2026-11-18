@@ -1,11 +1,11 @@
 package app
 
 import (
-	"embed"
 	"strings"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/walkerkiller/coursive/app-mygo/internal/assets"
 	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 	"github.com/walkerkiller/coursive/app-mygo/internal/l10n"
 	"github.com/walkerkiller/coursive/app-mygo/internal/m3"
@@ -15,9 +15,6 @@ import (
 // provider_presets.dart: providers the user can add in one step, and
 // their brand marks (assets/providers, from @lobehub/icons-static-svg,
 // MIT; see its NOTICE).
-
-//go:embed assets/providers/*.svg
-var providerLogos embed.FS
 
 // Region groups the presets.
 type Region int
@@ -151,7 +148,7 @@ func presetLogo(file string) *ui.SVG {
 		return s
 	}
 	var s *ui.SVG
-	if data, err := providerLogos.ReadFile("assets/providers/" + file); err == nil {
+	if data, err := assets.Bytes("providers/" + file); err == nil {
 		s, _ = ui.ParseSVG(data)
 	}
 	logoSVG[file] = s

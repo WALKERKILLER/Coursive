@@ -46,6 +46,8 @@ type Button struct {
 	Tooltip string
 	// Style replaces labelLarge.
 	Style *design.TextStyle
+	// Busy shows a spinner in place of the icon, as an action that runs.
+	Busy bool
 }
 
 // colors are the container and content colours for the state.
@@ -85,7 +87,7 @@ func (b Button) Show(c *ui.Context) ui.Element {
 	padY := float32(10)
 	if b.Kind == TextKind {
 		padX, padY = 12, 8
-		if b.Icon != 0 {
+		if b.Icon != 0 || b.Busy {
 			padStart, padEnd = 12, 16
 		}
 	}
@@ -150,7 +152,9 @@ func (b Button) Show(c *ui.Context) ui.Element {
 	}
 	style = style.C(fg)
 	e.Children(func() {
-		if b.Icon != 0 && !b.IconAtEnd {
+		if b.Busy {
+			Spinner(c, 18, 2, fg)
+		} else if b.Icon != 0 && !b.IconAtEnd {
 			Icon(c, b.Icon, 18, fg)
 		}
 		if b.Child != nil {
@@ -158,7 +162,7 @@ func (b Button) Show(c *ui.Context) ui.Element {
 		} else {
 			Clamp(Text(c, b.Label, style).TextAlign(ui.Center), 1)
 		}
-		if b.Icon != 0 && b.IconAtEnd {
+		if b.Icon != 0 && b.IconAtEnd && !b.Busy {
 			Icon(c, b.Icon, 18, fg)
 		}
 	})

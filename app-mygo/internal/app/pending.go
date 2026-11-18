@@ -12,9 +12,5 @@ type todoPage struct{ name string }
 
 func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
 
-func NewSettingsPage() m3.Page      { return &todoPage{"settings"} }
-func workspaceSetup(c *ui.Context)  { m3.Text(c, "setup", design.TT().TitleLarge) }
-func OpenSettingsSection(id string) {}
-func NewUsagePage() m3.Page         { return &todoPage{"usage"} }
-func NewModelsPage() m3.Page        { return &todoPage{"models"} }
-func ShowModelPicker()              {}
+func workspaceSetup(c *ui.Context) { m3.Text(c, "setup", design.TT().TitleLarge) }
+func NewUsagePage() m3.Page        { return &todoPage{"usage"} }
