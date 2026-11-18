@@ -4,6 +4,7 @@ import (
 	"maps"
 	"sort"
 
+	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 )
 
@@ -24,3 +25,6 @@ func ReportScreen(v map[string]string) {
 }
 
 func sortStrings(s []string) { sort.Strings(s) }
+
+// OpenLink is launchUrl: it opens a web link in the system browser.
+func OpenLink(u string) { go core.OpenPath(u) }

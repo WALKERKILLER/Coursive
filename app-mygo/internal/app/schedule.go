@@ -208,14 +208,14 @@ func ScheduleTile(c *ui.Context, it core.ScheduleItem, showDate bool) {
 					scheduleMention(c, it)
 				}
 			})
-			ctx := map[string]string{"schedule_id": it.ID()}
+			ctx := core.J{"schedule_id": it.ID()}
 			if it.CourseID() != "" {
 				ctx["course_id"] = it.CourseID()
 			}
 			if it.LectureID() != "" {
 				ctx["lecture_id"] = it.LectureID()
 			}
-			PluginMenuButton(c, "schedule.item", ctx)
+			PluginMenuButton(c, "schedule.item", ctx, false, "")
 			m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.BelowEnd, func() []m3.MenuItem {
 				remove := func() {
 					Schedule.Remove(it, func(err error) {

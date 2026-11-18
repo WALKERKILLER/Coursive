@@ -278,13 +278,16 @@ func (p *TasksPage) open(t core.J) {
 // View builds the page.
 func (p *TasksPage) View(c *ui.Context) {
 	now := time.Now()
-	w, _ := c.Size()
+	// The page's own width, as LayoutBuilder gives it, not the window's:
+	// the docked assistant takes part of the window.
+	root := ui.Column(c).Fill().Background(design.S().Surface)
+	w := widgets.Width(root, WindowWidth)
 	compact := w < 600
 	pad := float32(design.SpaceXL)
 	if compact {
 		pad = design.SpaceLG
 	}
-	ui.Column(c).Fill().Background(design.S().Surface).Children(func() {
+	root.Children(func() {
 		p.header(c, now, pad, compact)
 		ui.Column(c).FillWidth().Grow(1).Basis(0).Children(func() {
 			switch {

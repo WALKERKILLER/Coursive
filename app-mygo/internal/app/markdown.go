@@ -479,6 +479,9 @@ func (m CoursiveMarkdown) Show(c *ui.Context) ui.Element {
 	}
 	baseDir, onImage := m.BaseDir, m.OnImage
 	o.Block = func(c *ui.Context, d *parser.Document, i int) bool {
+		if b := d.Block(i); b.Kind == parser.CodeBlock && b.Fenced && !b.Open {
+			return coursiveViewBlock(c, b.Language(), d.Lines(i))
+		}
 		return imageParagraph(c, d, i, baseDir, onImage)
 	}
 	src := PrepareMarkdown(m.Data, m.LectureID)

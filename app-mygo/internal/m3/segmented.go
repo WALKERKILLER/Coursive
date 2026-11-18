@@ -15,6 +15,8 @@ type Segment[T comparable] struct {
 	Icon     icons.Icon
 	Tooltip  string
 	Disabled bool
+	// Badge puts a small badge on the icon (Badge(isLabelVisible:)).
+	Badge bool
 }
 
 // SegOpts are SegmentedButton's options.
@@ -114,7 +116,7 @@ func segmentedRow[T comparable](c *ui.Context, n int, o SegOpts, seg func(int) (
 				case on && !o.NoCheck:
 					Icon(c, icons.Check, 18, fg)
 				case sg.Icon != 0:
-					Icon(c, sg.Icon, 18, fg)
+					Badged(c, "", sg.Badge, func() { Icon(c, sg.Icon, 18, fg) })
 				}
 				if sg.Label != "" {
 					Clamp(Text(c, sg.Label, style.C(fg)), 1)

@@ -99,11 +99,11 @@ func (p *PlayerSidePanel) Show(c *ui.Context) {
 			ui.Box(c).Grow(1).Basis(0).Children(func() {
 				m3.TabBar(c, tabs, &p.tab, m3.TabOpts{Scrollable: true, Pill: true})
 			})
-			pctx := map[string]string{"lecture_id": ctl.LectureID(), "t": strconv.Itoa(ctl.PositionMs() / 1000)}
+			pctx := core.J{"lecture_id": ctl.LectureID(), "t": ctl.PositionMs() / 1000}
 			if ctl.Lecture != nil && ctl.Lecture.CourseID() != "" {
 				pctx["course_id"] = ctl.Lecture.CourseID()
 			}
-			PluginMenuButton(c, "lecture.menu", pctx)
+			PluginMenuButton(c, "lecture.menu", pctx, false, "")
 		})
 		ui.Column(c).FillWidth().Grow(1).Basis(0).Key(p.tab).Transition(ui.ElementTransition{Duration: design.Medium2,
 			Ease: design.EmphasizedDecelerate, Enter: &ui.Motion{Opacity: 0}}).Children(func() {

@@ -167,14 +167,14 @@ func (p *NotePage) View(c *ui.Context) {
 			if m3.IconBtn(c, icons.EditOutlined, l10n.CommonEdit).Clicked() {
 				p.edit()
 			}
-			ctx := map[string]string{"note_id": n.ID()}
+			ctx := core.J{"note_id": n.ID()}
 			if n.LectureID() != "" {
 				ctx["lecture_id"] = n.LectureID()
 			}
 			if n.CourseID() != "" {
 				ctx["course_id"] = n.CourseID()
 			}
-			PluginMenuButton(c, "note.toolbar", ctx)
+			PluginMenuButton(c, "note.toolbar", ctx, true, "note")
 		}
 		if n != nil && n.LectureID() != "" && m3.IconBtn(c, icons.OndemandVideoRounded, l10n.NoteOpenLecture).Clicked() {
 			m3.RootNav.Push(NewPlayerPage(n.LectureID(), -1))

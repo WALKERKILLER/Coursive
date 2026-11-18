@@ -288,7 +288,7 @@ func (p *CoursePage) View(c *ui.Context) {
 					p.load(true, false)
 				}
 				if course != nil {
-					PluginMenuButton(c, "course.menu", map[string]string{"course_id": p.id})
+					PluginMenuButton(c, "course.menu", core.J{"course_id": p.id}, false, "course")
 					co := *course
 					m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.Over, func() []m3.MenuItem { return courseMenu(co) })
 				}
@@ -326,7 +326,7 @@ func (p *CoursePage) View(c *ui.Context) {
 					widgets.ContentWidth(c, 0, func() {
 						ui.Column(c).FillWidth().PaddingX(pad).Children(func() {
 							p.lms.Show(c)
-							UiSlotOutlet(c, "course.detail.sections", map[string]string{"course_id": p.id})
+							UiSlotOutlet(c, "course.detail.sections", core.J{"course_id": p.id})
 						})
 					})
 					fill := func(child func()) { ui.Column(c).FillWidth().Grow(1).MinHeight(320).Children(child) }
