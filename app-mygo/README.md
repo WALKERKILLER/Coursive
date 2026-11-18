@@ -21,12 +21,28 @@ Without `COURSIVE_DATA` and `COURSIVE_LIBRARY` the daemon uses its own defaults,
 go test ./...
 ```
 
-`TestDaemonHandshakeAndCourses` starts the real daemon against a temporary library and walks the contract end to end: handshake, token, an empty list, a created course, and a rejected token. The gesture tests replay pointer events through the canvas's input rules, so gesture switches, cancels and the pressure-eraser gate are checked without a device. `TestLibraryPageGolden` compares the window with `testdata/library-light.png` and `testdata/library-dark.png`; rewrite them with `MYGO_UPDATE_GOLDEN=1`.
+`TestDaemonHandshakeAndCourses` starts the real daemon against a temporary library and walks the contract end to end: handshake, token, an empty list, a created course, and a rejected token. The gesture tests replay pointer events through the canvas's input rules, so gesture switches, cancels and the pressure-eraser gate are checked without a device. `TestLibraryPageGolden` compares the window with `testdata/library-light.png` and `testdata/library-dark.png` on a machine with Coursive's fonts (`COURSIVE_GOLDEN=1`, and `MYGO_UPDATE_GOLDEN=1` to rewrite them).
+
+## The design system comes from Flutter
+
+The window is meant to look like the Flutter client, so nothing here invents a colour, a spacing or a shape:
+
+- `tokens.go` mirrors `app/lib/theme/tokens.dart`; `tokens_parity_test.go` parses the Dart and fails when the two drift — spacing, corners, page padding, content width, size-class breakpoints, default seed.
+- `design/palette.json` is written by Flutter's own `ColorScheme.fromSeed` in `app/test/design_system_export_test.dart`, and `palette.go` loads it. Regenerating the palette with Mayu's HCT instead would differ by up to 22/255 on the light primary, which is visible.
+- Component metrics follow `buildTheme` in `app/lib/theme/theme.dart`: cards on `surfaceContainerLow` at corner 12 with no elevation, stadium buttons at 24/10, chips at corner 8 with an `outlineVariant` outline, fields at corner 8 with 16/16 padding, the rail on `surface` with a `secondaryContainer` indicator.
+
+```sh
+# After changing the Flutter theme, re-export the palette and commit the file.
+(cd ../app && COURSIVE_EXPORT_DESIGN=1 flutter test test/design_system_export_test.dart)
+```
+
+Text still differs between the two: MyGo shapes and rasterises glyphs itself. `testdata/library-*.png` are therefore opt-in (`COURSIVE_GOLDEN=1`), while `TestLibraryLayoutMatchesTheTokens` checks the geometry everywhere.
 
 ## What is here
 
 - `daemon.go` — the daemon child process: token, `COURSIVE_READY` handshake, restart backoff, clean shutdown. The contract is the Flutter client's `app/lib/core/daemon_service.dart`.
 - `api.go` — the HTTP client: `GET /api/courses`, `POST /api/local-courses`, `GET /api/health`.
-- `theme.go` — Coursive's seed colour, 湛蓝 `#3F6CB4`, through Mayu into MyGo's own theme.
+- `theme.go` — Coursive's palette and metrics into Mayu's theme and MyGo's own.
+- `tokens.go` and `palette.go` — the design system, from Flutter's source.
 - `main.go` — the window: navigation rail, course library, the setup/starting/ready/failed states.
 - `gesture.go` — the canvas's input rules in plain Go, with no UI types, so they replay in a test.
