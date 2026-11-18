@@ -38,8 +38,12 @@ func CardColor(c *ui.Context, color ui.Color) ui.Element {
 }
 
 // Tappable is InkWell(onTap:) filling its parent: a button base with the
-// plain InkWell look; style its layout and read Clicked.
+// plain InkWell look, rounded as the Material around it, so a background
+// set on it keeps the corners; style its layout and read Clicked.
 func Tappable(c *ui.Context, radius float32) ui.Element {
 	e := ui.ButtonBase(c).FocusRing(false).Cursor(ui.CursorPointer)
+	if radius > 0 {
+		e = e.Radius(radius)
+	}
 	return InkWell(e, radius)
 }

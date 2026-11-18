@@ -10,7 +10,7 @@ func TestTypeset(t *testing.T) {
 		`\sqrt[3]{x}`, `\begin{pmatrix} a & b \\ c & d \end{pmatrix}`, `f(x)=\begin{cases} 1 & x>0 \\ 0 & \text{其他} \end{cases}`,
 		`\hat{x} \widehat{xyz} \overline{AB} \overrightarrow{AB} \underbrace{a+b}_{n}`, `\mathbb{R}^n \mathcal{L} \mathbf{v} \boldsymbol\theta`,
 		`\lim_{x\to 0}\frac{\sin x}{x}`, `\left\{ x \middle| x>0 \right\}`, `\xrightarrow[a]{f} \not= \neq \color{red}{x} \boxed{E=mc^2}`,
-		`a \over b`, `x^{2^{3}}`, `\big( \Big[ \bigg\{ \Bigg\langle`, `\operatorname{tr} A \pmod p`, "速度 v",
+		`a \over b`, `x^{2^{3}}`, `\big( \Big[ \bigg\{ \Bigg\langle`, `\operatorname{tr} A \pmod p`, "速度 v", `a \iff b \implies c`,
 	} {
 		f := Typeset(s, 16, true)
 		if f.Width <= 0 || f.Height <= 0 {

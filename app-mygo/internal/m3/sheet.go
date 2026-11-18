@@ -19,6 +19,11 @@ type SheetOptions struct {
 	OnClose  func(any)
 	// MaxHeight caps the sheet's height when not zero.
 	MaxHeight float32
+	// MaxWidth replaces 640 (constraints: BoxConstraints(maxWidth:)).
+	MaxWidth float32
+	// HeightFactor fixes the height to this share of the window, as a
+	// FractionallySizedBox(heightFactor:) around the content.
+	HeightFactor float32
 }
 
 var sheetOptions = map[*Route]SheetOptions{}
@@ -53,7 +58,14 @@ func buildSheet(c *ui.Context, r *Route) {
 	ui.DialogBase(c.Key(r.id), &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).Justify(ui.End).
 			Transition(ui.ElementTransition{Duration: 250 * time.Millisecond, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
-		panel.Width(640).MaxWidthPercent(100).MaxHeight(maxH).Radius(design.CornerXL, design.CornerXL, 0, 0).
+		w := float32(640)
+		if o.MaxWidth > 0 {
+			w = o.MaxWidth
+		}
+		if o.HeightFactor > 0 {
+			panel = panel.Height(min(h*o.HeightFactor, maxH))
+		}
+		panel.Width(w).MaxWidthPercent(100).MaxHeight(maxH).Radius(design.CornerXL, design.CornerXL, 0, 0).
 			Background(cs().SurfaceContainerLow).Clip().
 			Transition(ui.ElementTransition{Duration: 250 * time.Millisecond, ExitDuration: 200 * time.Millisecond,
 				Ease: design.EaseOutCubic, Enter: &ui.Motion{YPercent: 100}, Exit: &ui.Motion{YPercent: 100}})

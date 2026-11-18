@@ -476,7 +476,7 @@ func continueCard(c *ui.Context, l core.Lecture, co core.Course, ok bool, width 
 				p.FillPath(&path, scheme.PrimaryContainer)
 			}).Children(func() { m3.Icon(c, icons.PlayArrowRounded, 22, scheme.OnPrimaryContainer) })
 			if roomy {
-				m3.Text(c, core.FmtClock(l.PositionMs())+" / "+core.FmtClock(dur), tt.LabelSmall.C(ui.RGB(1, 1, 1))).FontFeatures("tnum").
+				m3.Text(c, core.FmtClock(l.PositionMs())+" / "+core.FmtClock(dur), tt.LabelSmall.C(ui.RGB(255, 255, 255))).FontFeatures("tnum").
 					Absolute().Right(design.SpaceMD).Bottom(design.SpaceMD)
 			}
 		})

@@ -676,6 +676,11 @@ func (p *parser) atom() node {
 		return &sym{text: "…", cls: Inner}
 	case `\dotsb`, `\dotsm`:
 		return &sym{text: "⋯", cls: Inner}
+	case `\iff`, `\implies`, `\impliedby`:
+		// KaTeX's \;\Longleftrightarrow\;, the arrow's own thick
+		// spaces counted in.
+		arrow := map[string]string{`\iff`: "⟺", `\implies`: "⟹", `\impliedby`: "⟸"}[t]
+		return &group{items: []node{&space{mu: 10}, &sym{text: arrow, cls: Rel}, &space{mu: 10}}}
 	case `\lt`:
 		return &sym{text: "<", cls: Rel}
 	case `\gt`:
