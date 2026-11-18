@@ -59,6 +59,7 @@ func theme(c *ui.Context) *design.Theme {
 // workspace setup, the daemon's failure, its start and the shell, and the
 // dialogs over all of them.
 func Root(c *ui.Context) {
+	WindowWidth, WindowHeight = c.Size()
 	t := theme(c)
 	design.Use(t)
 	c.SetTheme(t.UI())

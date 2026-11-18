@@ -222,7 +222,7 @@ func (s *Shell) View(c *ui.Context) {
 					ui.Column(c).AlignItems(ui.Center).Children(func() {
 						NotificationBell(c)
 						m3.VGap(c, design.SpaceSM)
-						av := ui.Box(c).Radius(design.CornerFull).Cursor(ui.CursorPointer)
+						av := ui.ButtonBase(c).FocusRing(false).Radius(design.CornerFull).Cursor(ui.CursorPointer).Label(l10n.ShellProfileTooltip(UserDisplayName()))
 						m3.InkWell(av, design.CornerFull)
 						m3.Tip(c, av, l10n.ShellProfileTooltip(UserDisplayName()))
 						av.Children(func() { UserAvatar(c, 40) })
