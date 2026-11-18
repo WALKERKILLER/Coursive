@@ -42,6 +42,7 @@ func main() {
 		})
 		core.Post = win.Update
 		app.ShowWindow = func() { win.Show(); win.Focus() }
+		app.SetFullScreen = win.SetFullScreen
 		d.OnChange = func() { core.Post(app.State.OnDaemon) }
 		d.Start()
 	})

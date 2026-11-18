@@ -137,6 +137,18 @@ func (n *Navigator) PopUntilRoot() {
 	}
 }
 
+// PopUntil pops the pages above p, when p is in the stack
+// (popUntil(route == p)).
+func (n *Navigator) PopUntil(p Page) {
+	found := false
+	for _, e := range n.pages {
+		found = found || e.page == p
+	}
+	for found && n.pages[len(n.pages)-1].page != p {
+		n.Pop()
+	}
+}
+
 // PopPage removes p wherever it is in the stack.
 func (n *Navigator) PopPage(p Page) {
 	for i := len(n.pages) - 1; i > 0; i-- {

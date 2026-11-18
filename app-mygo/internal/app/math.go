@@ -27,7 +27,7 @@ func MathBlock(c *ui.Context, src string, size float32, color ui.Color) {
 	f := tex.Typeset(src, size*mathScale, true)
 	ui.ScrollHorizontal(c).FillWidth().Children(func() {
 		ui.Box(c).MinWidthPercent(100).AlignItems(ui.Center).Padding(design.SpaceXS, 0).Children(func() {
-			ui.Box(c).Width(f.Width).Height(f.Height+f.Depth).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
+			ui.Box(c).Width(f.Width).Height(f.Height + f.Depth).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 				f.Draw(p, r.X, r.Y+f.Height, color)
 			})
 		})

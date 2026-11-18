@@ -24,6 +24,10 @@ type TabOpts struct {
 	// NoDivider drops the outlineVariant line below (dividerColor:
 	// transparent).
 	NoDivider bool
+	// Pill is the player panel's look: 44 DIP tabs in labelLarge, the
+	// selected one on a secondaryContainer pill 6 DIPs in from the top and
+	// bottom, without a divider.
+	Pill bool
 }
 
 // TabBar is Material 3's primary TabBar: labels in titleSmall, primary
@@ -33,6 +37,9 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 	s := cs()
 	changed := false
 	h := float32(48)
+	if o.Pill {
+		h, o.NoDivider = 44, true
+	}
 	for _, t := range tabs {
 		if t.Icon != 0 && t.Label != "" {
 			h = 64
@@ -56,6 +63,30 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 						if o.Secondary {
 							fg = s.OnSurface
 						}
+					}
+					if o.Pill {
+						if on {
+							fg = s.OnSecondaryContainer
+						}
+						b := ui.ButtonBase(c.Key(i)).FocusRing(false).Row().AlignItems(ui.Center).
+							FillHeight().Padding(0, 14).Cursor(ui.CursorPointer).Selected(on).Role(ui.RoleTab)
+						b.Children(func() {
+							if on {
+								ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).Radius(design.CornerFull).Background(s.SecondaryContainer).
+									Transition(ui.ElementTransition{Duration: 300 * time.Millisecond, Ease: design.FastOutSlowIn,
+										Position: true, Size: true, Match: selected, Fly: true})
+							}
+							hover := ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).PassThrough()
+							if b.Hovered() {
+								hover.Radius(design.CornerFull).Background(design.WithOpacity(s.OnSurface, .06))
+							}
+							Text(c, t.Label, tt().LabelLarge.C(fg)).NoWrap()
+						})
+						if b.Clicked() && !on {
+							*selected = i
+							changed = true
+						}
+						continue
 					}
 					b := ui.ButtonBase(c.Key(i)).FocusRing(false).Column().AlignItems(ui.Center).Justify(ui.Center).
 						FillHeight().Padding(0, 16).Cursor(ui.CursorPointer).Selected(on).Role(ui.RoleTab)
