@@ -32,6 +32,7 @@ type CoursePage struct {
 	scroll           ui.ScrollState
 	spinStart        time.Time
 	theme            courseTheme
+	lms              *LmsSection
 }
 
 // courseTheme caches the theme the page builds with: the app's with the
@@ -51,6 +52,7 @@ func NewCoursePage(id string) m3.Page {
 		p.course = &co
 	}
 	p.load(false, false)
+	p.lms = NewLmsSection(id)
 	p.cancel = State.Events.Listen(func(e core.J) {
 		if e.S("type") == "lecture_changed" && core.Obj(e["data"]).S("course_id") == id {
 			p.load(false, true)
@@ -60,7 +62,10 @@ func NewCoursePage(id string) m3.Page {
 }
 
 // Dispose stops listening for lecture changes.
-func (p *CoursePage) Dispose() { p.cancel() }
+func (p *CoursePage) Dispose() {
+	p.cancel()
+	p.lms.Dispose()
+}
 
 // MainScroll is the page's scroll.
 func (p *CoursePage) MainScroll() *ui.ScrollState { return &p.scroll }
@@ -320,7 +325,7 @@ func (p *CoursePage) View(c *ui.Context) {
 					}
 					widgets.ContentWidth(c, 0, func() {
 						ui.Column(c).FillWidth().PaddingX(pad).Children(func() {
-							LmsCourseSection(c, p.id)
+							p.lms.Show(c)
 							UiSlotOutlet(c, "course.detail.sections", map[string]string{"course_id": p.id})
 						})
 					})

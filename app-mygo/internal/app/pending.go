@@ -31,6 +31,4 @@ func NewNotePage(id string) m3.Page                                         { re
 func PluginMenuButton(c *ui.Context, surface string, ctx map[string]string) {}
 func OpenLink(u string)                                                     {}
 func OpenSettingsSection(id string)                                         {}
-func LmsCourseSection(c *ui.Context, courseID string)                       {}
 func UiSlotOutlet(c *ui.Context, target string, ctx map[string]string)      {}
-func NewLmsPage() m3.Page                                                   { return &todoPage{"lms"} }
