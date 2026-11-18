@@ -254,14 +254,23 @@ func (a *AppState) Course(id string) (Course, bool) {
 }
 
 // LoadSources reloads the source plugins.
-func (a *AppState) LoadSources() {
+func (a *AppState) LoadSources() { a.LoadSourcesThen(nil) }
+
+// LoadSourcesThen is LoadSources running done once they are in.
+func (a *AppState) LoadSourcesThen(done func()) {
 	if !a.Connected() {
+		if done != nil {
+			done()
+		}
 		return
 	}
 	api := a.api
 	Async(func() ([]SourcePlugin, error) { return loadPlugins(api), nil }, func(p []SourcePlugin, _ error) {
 		if p != nil {
 			a.Plugins = p
+		}
+		if done != nil {
+			done()
 		}
 	})
 }

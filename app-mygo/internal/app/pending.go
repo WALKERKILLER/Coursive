@@ -21,7 +21,6 @@ func NewSettingsPage() m3.Page                                              { re
 func RunBotOp(op core.J)                                                    {}
 func OpenAssistantPanel(c *ui.Context)                                      {}
 func AssistantPanelView(c *ui.Context, d bool)                              {}
-func SignInSource(s core.Source)                                            {}
 func runStatus(s string) (string, ui.Color, bool)                           { return s, ui.Color{}, s == "failed" }
 func openRunConversation(session string)                                    {}
 func SeekOrOpen(id string, t int)                                           { m3.RootNav.Push(NewPlayerPage(id, t)) }
@@ -32,6 +31,6 @@ func NewNotePage(id string) m3.Page                                         { re
 func PluginMenuButton(c *ui.Context, surface string, ctx map[string]string) {}
 func OpenLink(u string)                                                     {}
 func OpenSettingsSection(id string)                                         {}
-func NewSourcesPage() m3.Page                                               { return &todoPage{"sources"} }
 func LmsCourseSection(c *ui.Context, courseID string)                       {}
 func UiSlotOutlet(c *ui.Context, target string, ctx map[string]string)      {}
+func NewLmsPage() m3.Page                                                   { return &todoPage{"lms"} }
