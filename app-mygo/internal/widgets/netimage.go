@@ -88,3 +88,16 @@ func ForgetPicture(key string) {
 	delete(pictures, "file:"+key)
 	picturesMu.Unlock()
 }
+
+// NetImage is Image.network(fit: cover) filling its parent, with fallback
+// built while it loads and after it failed (errorBuilder).
+func NetImage(c *ui.Context, url string, fallback func()) {
+	bmp, failed := NetBitmap(url)
+	if bmp == nil || failed {
+		if fallback != nil {
+			fallback()
+		}
+		return
+	}
+	ui.Image(c, bmp).Fit(ui.Cover).Absolute().Top(0).Left(0).Right(0).Bottom(0)
+}
