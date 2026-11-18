@@ -13,4 +13,3 @@ type todoPage struct{ name string }
 func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
 
 func workspaceSetup(c *ui.Context) { m3.Text(c, "setup", design.TT().TitleLarge) }
-func NewUsagePage() m3.Page        { return &todoPage{"usage"} }
