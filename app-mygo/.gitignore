@@ -1,4 +1,5 @@
 # A frame a failing golden test wrote beside its expectation.
 testdata/*.got.png
-# A local build of the prototype.
+# Local builds of the client.
 /coursive-mygo
+/app-mygo
