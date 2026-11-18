@@ -1,10 +1,11 @@
-package main
+package widgets
 
 import (
 	"math"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 )
 
 // TestShapePathFitsItsRect is the invariant the covers depend on: a shape is
@@ -12,7 +13,7 @@ import (
 func TestShapePathFitsItsRect(t *testing.T) {
 	rect := ui.Rect{X: 10, Y: 20, W: 200, H: 120}
 	for s := ShapeCircle; s <= ShapeGhost; s++ {
-		path := shapePath(shapeRadii(s), rect, 0.3)
+		path := ShapePath(ShapeRadii(s), rect, 0.3)
 		b := path.Bounds()
 		if b.X < rect.X-0.5 || b.Y < rect.Y-0.5 ||
 			b.X+b.W > rect.X+rect.W+0.5 || b.Y+b.H > rect.Y+rect.H+0.5 {
@@ -28,7 +29,7 @@ func TestShapePathFitsItsRect(t *testing.T) {
 // TestShapeRadiiAreNormalised checks every shape has a unit maximum radius.
 func TestShapeRadiiAreNormalised(t *testing.T) {
 	for s := ShapeCircle; s <= ShapeGhost; s++ {
-		r := shapeRadii(s)
+		r := ShapeRadii(s)
 		if len(r) != shapeSamples {
 			t.Fatalf("shape %d has %d samples", s, len(r))
 		}
@@ -50,15 +51,15 @@ func TestShapeRadiiAreNormalised(t *testing.T) {
 // TestCourseArtSpecIsDeterministic is what makes a cover a course's signature:
 // the same id always draws the same picture, and different ids do not.
 func TestCourseArtSpecIsDeterministic(t *testing.T) {
-	a := courseArtSpec("course-a")
-	b := courseArtSpec("course-a")
+	a := CourseArtSpec("course-a")
+	b := CourseArtSpec("course-a")
 	if a != b {
 		t.Fatal("the same id gave two recipes")
 	}
 	before := *a
 	seen := map[OrganicShape]bool{}
 	for _, id := range []string{"c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"} {
-		spec := courseArtSpec(id)
+		spec := CourseArtSpec(id)
 		seen[spec.main] = true
 	}
 	if len(seen) < 2 {
@@ -66,7 +67,7 @@ func TestCourseArtSpecIsDeterministic(t *testing.T) {
 	}
 	// The recipe is stable across a fresh cache, so a restart redraws it.
 	delete(artCache, "course-a")
-	after := *courseArtSpec("course-a")
+	after := *CourseArtSpec("course-a")
 	if after.main != before.main || after.layout != before.layout ||
 		after.rot != before.rot || after.tone != before.tone ||
 		len(after.cluster) != len(before.cluster) {
@@ -77,12 +78,12 @@ func TestCourseArtSpecIsDeterministic(t *testing.T) {
 // TestCourseSchemeSeedsFromTheTitle checks two courses with different titles
 // get different palettes, and that an explicit colour wins.
 func TestCourseSchemeSeedsFromTheTitle(t *testing.T) {
-	one := courseScheme(Course{Title: "数据结构与算法"}, false)
-	two := courseScheme(Course{Title: "编译原理"}, false)
+	one := CourseScheme(core.Course{J: core.J{"title": "数据结构与算法"}})
+	two := CourseScheme(core.Course{J: core.J{"title": "编译原理"}})
 	if one.Primary == two.Primary {
 		t.Error("two titles share a primary colour")
 	}
-	pinned := courseScheme(Course{Title: "x", Color: "#00ADD8"}, false)
+	pinned := CourseScheme(core.Course{J: core.J{"title": "x", "color": "#00ADD8"}})
 	if pinned.Primary == one.Primary {
 		t.Error("an explicit colour did not change the palette")
 	}

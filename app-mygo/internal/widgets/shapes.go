@@ -1,4 +1,4 @@
-package main
+package widgets
 
 import (
 	"math"
@@ -48,9 +48,9 @@ const shapeSamples = 180
 
 var shapeCache = map[OrganicShape][]float64{}
 
-// shapeRadii is the unit-radius polar form of s, index i at angle
+// ShapeRadii is the unit-radius polar form of s, index i at angle
 // 2πi/N from -π/2, as shapeRadii in the Dart client.
-func shapeRadii(s OrganicShape) []float64 {
+func ShapeRadii(s OrganicShape) []float64 {
 	if r, ok := shapeCache[s]; ok {
 		return r
 	}
@@ -59,9 +59,9 @@ func shapeRadii(s OrganicShape) []float64 {
 	return r
 }
 
-// morphRadii interpolates between two shapes' radii.
-func morphRadii(a, b OrganicShape, t float64) []float64 {
-	ra, rb := shapeRadii(a), shapeRadii(b)
+// MorphRadii interpolates between two shapes' radii.
+func MorphRadii(a, b OrganicShape, t float64) []float64 {
+	ra, rb := ShapeRadii(a), ShapeRadii(b)
 	if t <= 0 {
 		return ra
 	}
@@ -75,10 +75,10 @@ func morphRadii(a, b OrganicShape, t float64) []float64 {
 	return out
 }
 
-// shapePath builds the smooth closed path for radii, rotated by rotation
+// ShapePath builds the smooth closed path for radii, rotated by rotation
 // radians and scaled so its bounds fit inside r, centred, aspect preserved.
 // The curve is Catmull-Rom through the samples, as the Dart client draws it.
-func shapePath(radii []float64, r ui.Rect, rotation float64) ui.Path {
+func ShapePath(radii []float64, r ui.Rect, rotation float64) ui.Path {
 	n := len(radii)
 	xs := make([]float64, n)
 	ys := make([]float64, n)

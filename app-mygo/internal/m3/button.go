@@ -223,6 +223,8 @@ type IconButton struct {
 	Box float32
 	// Square gives it Corners.sm corners in place of a circle.
 	Radius float32
+	// Child replaces the icon, in the content colour.
+	Child func(fg ui.Color)
 }
 
 // Show builds the button.
@@ -303,7 +305,13 @@ func (b IconButton) Show(c *ui.Context) ui.Element {
 	if b.Toggle && b.Selected && b.SelectedIcon != 0 {
 		ic = b.SelectedIcon
 	}
-	e.Children(func() { Icon(c, ic, size, fg) })
+	e.Children(func() {
+		if b.Child != nil {
+			b.Child(fg)
+			return
+		}
+		Icon(c, ic, size, fg)
+	})
 	return e
 }
 
@@ -320,12 +328,21 @@ type FAB struct {
 	Small    bool
 	Tooltip  string
 	Disabled bool
+	// BG replaces primaryContainer; Child the icon.
+	BG    ui.Color
+	Child func()
+	// Flat is elevation 0.
+	Flat bool
 }
 
 // Show builds the button.
 func (f FAB) Show(c *ui.Context) ui.Element {
 	s := cs()
 	bg, fg := s.PrimaryContainer, s.OnPrimaryContainer
+	if f.BG.A != 0 {
+		bg = f.BG
+		fg = s.OnSurface
+	}
 	e := ui.ButtonBase(c).Disabled(f.Disabled).DimDisabled(false).FocusRing(false).
 		Background(bg).Radius(design.CornerLG).Cursor(ui.CursorPointer).Shrink(0)
 	radius := design.CornerLG
@@ -342,13 +359,18 @@ func (f FAB) Show(c *ui.Context) ui.Element {
 	if e.Hovered() && !f.Disabled {
 		lvl = 4
 	}
+	if f.Flat {
+		lvl = 0
+	}
 	e = Elevation(e, lvl).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Shadows: true})
 	if f.Tooltip != "" {
 		e = Tip(c, e, f.Tooltip)
 	}
 	Ink(e, fg, radius)
 	e.Children(func() {
-		if f.Icon != 0 {
+		if f.Child != nil {
+			f.Child()
+		} else if f.Icon != 0 {
 			Icon(c, f.Icon, 24, fg)
 		}
 		if f.Label != "" {

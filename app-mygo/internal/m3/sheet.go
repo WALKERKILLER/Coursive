@@ -21,10 +21,6 @@ type SheetOptions struct {
 	MaxHeight float32
 }
 
-type sheetData struct {
-	o SheetOptions
-}
-
 var sheetOptions = map[*Route]SheetOptions{}
 
 // ShowModalBottomSheet is showModalBottomSheet with the app's theme:

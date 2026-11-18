@@ -29,6 +29,7 @@ const (
 	dialogRoute routeKind = iota
 	sheetRoute
 	fullscreenRoute
+	generalRoute
 )
 
 var (
@@ -96,6 +97,8 @@ func Host(c *ui.Context) {
 		switch r.kind {
 		case sheetRoute:
 			buildSheet(c, r)
+		case generalRoute:
+			buildGeneral(c, r)
 		default:
 			buildDialog(c, r)
 		}
@@ -117,6 +120,32 @@ func buildDialog(c *ui.Context, r *Route) {
 		if r.Dismissible {
 			r.Close()
 		}
+	}
+}
+
+// ShowGeneral is showGeneralDialog: build lays out the whole route over the
+// black54 barrier, placing its panel itself; a click on the barrier closes a
+// dismissible route.
+func ShowGeneral(dismissible bool, build func(c *ui.Context, r *Route), onClose func(any)) *Route {
+	return push(&Route{Build: build, Dismissible: dismissible, OnClose: onClose, kind: generalRoute})
+}
+
+func buildGeneral(c *ui.Context, r *Route) {
+	open := r.open
+	ui.DialogBase(c.Key(r.id), &open, func(backdrop, panel ui.Element) {
+		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).
+			Transition(ui.ElementTransition{Duration: design.Medium4, Ease: design.EmphasizedDecelerate,
+				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+		panel.Background(ui.Transparent).Fill().Children(func() {
+			barrier := ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0)
+			if barrier.Clicked() && r.Dismissible {
+				r.Close()
+			}
+			r.Build(c, r)
+		})
+	})
+	if !open && r.open && r.Dismissible {
+		r.Close()
 	}
 }
 

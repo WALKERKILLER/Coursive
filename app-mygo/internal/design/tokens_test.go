@@ -1,4 +1,4 @@
-package main
+package design
 
 import (
 	"os"
@@ -12,7 +12,7 @@ import (
 // test reads that file and fails when the Go mirror drifts, so "the two clients
 // look the same" is checked rather than asserted in a review.
 
-const tokensPath = "../app/lib/theme/tokens.dart"
+const tokensPath = "../../../app/lib/theme/tokens.dart"
 
 // dartConsts pulls `static const double <name> = <number>;` out of one class in
 // tokens.dart.
@@ -111,13 +111,13 @@ func TestSizeClassBreakpointsMatchTheFlutterTokens(t *testing.T) {
 	}
 	// Just below each breakpoint is the lower class; at it, the next one.
 	for _, b := range want {
-		if sizeClassOf(b-1) == sizeClassOf(b) {
+		if SizeClassOf(b-1) == SizeClassOf(b) {
 			t.Errorf("Go does not switch at %v", b)
 		}
 	}
 	classes := []SizeClass{SizeCompact, SizeMedium, SizeExpanded, SizeLarge, SizeExtraLarge}
 	for i, b := range want {
-		if got := sizeClassOf(b); got != classes[i+1] {
+		if got := SizeClassOf(b); got != classes[i+1] {
 			t.Errorf("at %v Go says %v, want %v", b, got, classes[i+1])
 		}
 	}
@@ -126,7 +126,7 @@ func TestSizeClassBreakpointsMatchTheFlutterTokens(t *testing.T) {
 // TestSeedMatchesTheFlutterDefault checks the colour both clients derive their
 // palette from.
 func TestSeedMatchesTheFlutterDefault(t *testing.T) {
-	prefs, err := os.ReadFile(filepath.Join("..", "app", "lib", "theme", "prefs.dart"))
+	prefs, err := os.ReadFile(filepath.Join("..", "..", "..", "app", "lib", "theme", "prefs.dart"))
 	if err != nil {
 		t.Fatalf("read prefs.dart: %v", err)
 	}
@@ -138,8 +138,7 @@ func TestSeedMatchesTheFlutterDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Dart writes ARGB; ui.Color holds straight R, G, B, A.
-	got := uint32(seed.A)<<24 | uint32(seed.R)<<16 | uint32(seed.G)<<8 | uint32(seed.B)
+	got := DefaultPrefs().Seed
 	if got != uint32(want) {
 		t.Errorf("seed: Dart #%08X, Go #%08X", want, got)
 	}
