@@ -1,6 +1,6 @@
 // Package assets holds the Flutter client's app/assets that the MyGo
-// client shows: brand and provider marks, and the reward code. The fonts
-// stay with the PDF export that embeds them.
+// client shows: brand and provider marks, the reward code, and the Noto
+// Sans SC subset the outline PDF export embeds (fonts/NOTICE).
 package assets
 
 import (
@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-//go:embed brands providers reward.png
+//go:embed brands providers reward.png fonts
 var files embed.FS
 
 var (

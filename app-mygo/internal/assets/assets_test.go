@@ -33,7 +33,7 @@ func TestParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range []string{"brands", "providers"} {
+	for _, dir := range []string{"brands", "providers", "fonts"} {
 		entries, _ := os.ReadDir(filepath.Join(src, dir))
 		for _, e := range entries {
 			if !seen[dir+"/"+e.Name()] {

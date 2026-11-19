@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 	"github.com/walkerkiller/coursive/app-mygo/internal/study"
 )
 
@@ -70,5 +69,3 @@ const (
 	shelfNotes
 	shelfThreads
 )
-
-func (s *StudyCanvas) exportOutlinePdf(turn core.J) {}

@@ -1,0 +1,7 @@
+NotoSansSC-Regular.ttf and NotoSansSC-Bold.ttf are subsets of Noto Sans SC
+version 2.004 (https://github.com/google/fonts/tree/main/ofl/notosanssc,
+Copyright 2014-2021 Adobe, with Reserved Font Name 'Source'), licensed under
+the SIL Open Font License 1.1 (OFL.txt). They were instanced at weights 400
+and 700 and reduced to GB2312, Latin, Greek, punctuation, arrows and math
+symbols by scripts/subset-export-font.py. They are embedded only in PDFs the
+app exports and are not sold on their own.
