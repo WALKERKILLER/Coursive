@@ -4,6 +4,14 @@
 
 原型阶段可并行验证。P01 先跑通桌面与 Android，签名 iPad 的本地服务依赖 P04。实现阶段先完成 S01、S02，再并行推进业务页面与播放。C03 是画布写入前置条件，C04、C05 和 C06 依次接通坐标、触摸和触笔，C07 在保存和输入稳定后验收。R03 依赖现有功能齐套及同步验收，R04 按平台放行。
 
+## Linux 桌面进度
+
+按文件对照，`app-mygo/` 已移植 Flutter 客户端在桌面上的页面、流程和设计系统，并在 Linux 上连接真实 daemon 运行。下面的条目仍未勾选，因为各自要求的设备、样本和验收记录还没有补齐。已知缺口：
+
+- Android 首次运行的工作区安装（[`WorkspaceSetupPage`](../app/lib/features/setup/workspace_setup_page.dart)）随 Android 构建移植。桌面不会进入这一步。
+- MyGo 客户端还没有桥接的系统 WebView。插件的 web-ui 页面在 macOS 和 Android 上回退为原生说明页，Flutter 客户端在这两个平台上会渲染它。Linux 和 Windows 上 daemon 本身就不放行，两个客户端都回退。
+- Linux 视频经系统 GStreamer 播放，需要 `gst-plugins-good` 等插件包，清单见 [app-mygo/README.md](../app-mygo/README.md#video-on-linux)。Flutter 客户端自带 libmpv，没有这项系统依赖。
+
 ## 0．先验证四条高风险路径
 
 - [ ] **P01 签名构建并连接真实 daemon。** 新客户端先实现一个课程列表。用 [`DaemonService._launch`](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/app/lib/core/daemon_service.dart#L157) 对照启动握手，用 [`Api._send` 和 `Api.sse`](https://github.com/WALKERKILLER/Coursive/blob/bfc7ec84e9cdbaa6783adb0c8cc301dd8188fe47/app/lib/core/api.dart#L83) 对照请求与事件。先验证 Linux、Android 手写平板和签名 iPad。iPad 的本地核心由 P04 验证。证据为锁定版本、设备、启动耗时、课程列表和事件恢复记录。
