@@ -865,7 +865,7 @@ func (p *SchedulePage) dayRow(c *ui.Context, day time.Time, items []core.Schedul
 					fill, fg = cs.SecondaryContainer, cs.OnSecondaryContainer
 				}
 				ui.Box(c).Size(40, 40).Radius(20).Center().Background(fill).
-					Transition(ui.ElementTransition{Duration: design.T().Motion(design.Medium1, nil).Duration, Colors: true}).
+					Transition(ui.ElementTransition{Duration: design.T().Motion(design.Medium1, nil).Duration, Ease: ui.Linear, Colors: true}).
 					Children(func() { m3.Text(c, strconv.Itoa(day.Day()), tt.TitleLarge.C(fg)) })
 			})
 		})

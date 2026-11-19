@@ -114,7 +114,7 @@ func ShowProfileDialog() {
 							sel := p.Kind == core.AvatarArt && p.Value == seed
 							pick := ui.Box(c.Key(seed)).Padding(3).Radius(design.CornerFull).Cursor(ui.CursorPointer).
 								Border(2, map[bool]ui.Color{true: s.Primary, false: ui.Transparent}[sel]).
-								Transition(ui.ElementTransition{Duration: design.Medium1, Colors: true})
+								Transition(ui.ElementTransition{Duration: design.Medium1, Ease: ui.Linear, Colors: true})
 							m3.InkWell(pick, design.CornerFull)
 							pick.Children(func() {
 								widgets.Avatar{Kind: core.AvatarArt, Value: seed, Frame: p.Frame, Size: size}.Show(c)
@@ -191,7 +191,7 @@ func toneDot(c *ui.Context, i int, selected bool) bool {
 		side, w = s.Primary, 2.5
 	}
 	d := ui.Box(c.Key(i)).Size(32, 32).Radius(16).Background(bg).Border(w, side).Center().Cursor(ui.CursorPointer).
-		Transition(ui.ElementTransition{Duration: design.Medium1, Colors: true})
+		Transition(ui.ElementTransition{Duration: design.Medium1, Ease: ui.Linear, Colors: true})
 	tip := l10n.ProfileBackgroundIndex(i)
 	if i == 0 {
 		tip = l10n.CommonFollowTheme

@@ -432,7 +432,7 @@ func (p *ProviderSetupPage) connect(c *ui.Context) {
 	m3.Field{Label: "Base URL", Prefix: icons.LinkRounded}.Show(c.Key("base"), &p.base)
 	m3.VGap(c, design.SpaceSM)
 	adv := ui.ButtonBase(c).FocusRing(true).Cursor(ui.CursorPointer).Row().AlignItems(ui.Center).Padding(design.SpaceSM, 0).Radius(design.CornerSM)
-	turn := adv.AnimateTo("adv.turn", map[bool]float32{true: 180, false: 0}[p.adv], design.T().Motion(design.Medium1, design.Standard))
+	turn := adv.AnimateTo("adv.turn", map[bool]float32{true: 180, false: 0}[p.adv], design.T().Motion(design.Medium1, ui.Linear))
 	adv.Children(func() {
 		m3.Text(c, l10n.CommonAdvanced, tt.LabelLarge.C(cs.Primary))
 		m3.Icon(c, icons.ExpandMoreRounded, 24, cs.Primary).Rotate(turn)
@@ -645,7 +645,7 @@ func providerStep(c *ui.Context, n int, title string, done bool, child func()) {
 			if done {
 				bg = cs.Primary
 			}
-			ui.Box(c).Size(28, 28).Radius(14).Center().Background(bg).Transition(ui.ElementTransition{Duration: design.Medium2, Colors: true}).Children(func() {
+			ui.Box(c).Size(28, 28).Radius(14).Center().Background(bg).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: ui.Linear, Colors: true}).Children(func() {
 				if done {
 					m3.Icon(c, icons.CheckRounded, 16, cs.OnPrimary)
 				} else {

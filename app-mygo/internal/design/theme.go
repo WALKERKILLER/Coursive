@@ -150,5 +150,10 @@ func (t *Theme) Motion(d time.Duration, ease ui.Easing) ui.Animation {
 	if t.ReduceMotion {
 		return ui.Animation{Duration: time.Nanosecond, Ease: ui.Linear}
 	}
+	if ease == nil {
+		// Flutter's implicit animations go linearly without a curve;
+		// MyGo's default is ease-out.
+		ease = ui.Linear
+	}
 	return ui.Animation{Duration: d, Ease: ease}
 }

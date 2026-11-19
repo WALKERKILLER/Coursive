@@ -464,9 +464,9 @@ func (s *StudyCanvas) fileFan(c *ui.Context, label string, files []core.J) {
 					y = -16
 				}
 				sheet := ui.Box(c.Key(i)).Absolute().Bottom(0).Left(w/2-32).Size(64, 84).TransformOrigin(.5, 1)
-				ax := sheet.Animate("x", x, design.Medium1)
-				ay := sheet.Animate("y", y, design.Medium1)
-				ar := sheet.Animate("r", rot*180/math.Pi, design.Medium1)
+				ax := sheet.AnimateTo("x", x, design.T().Motion(design.Medium1, design.Emphasized))
+				ay := sheet.AnimateTo("y", y, design.T().Motion(design.Medium1, design.Emphasized))
+				ar := sheet.AnimateTo("r", rot*180/math.Pi, design.T().Motion(design.Medium1, design.Emphasized))
 				sheet = sheet.Translate(ax, ay).Rotate(ar)
 				if sheet.Hovered() && st.fanLift[label] != i {
 					st.fanLift[label] = i

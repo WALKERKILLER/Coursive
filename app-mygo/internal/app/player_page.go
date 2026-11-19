@@ -357,7 +357,7 @@ func (p *PlayerPage) View(c *ui.Context) {
 						}
 					}
 					side := ui.Box(c).FillHeight().Shrink(0).Clip()
-					w := side.Animate("panel", target, design.Medium4)
+					w := side.AnimateTo("panel", target, design.T().Motion(design.Medium4, design.Emphasized))
 					side.Width(w).Children(func() {
 						if w < 1 {
 							return

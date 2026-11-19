@@ -463,7 +463,7 @@ func jobTile(c *ui.Context, job core.Job, selecting, picked bool, pick func()) {
 					} else {
 						b = b.Border(2, cs.Outline)
 					}
-					b.Radius(min(b.AnimateTo("r", rad, anim), 22)).Transition(ui.ElementTransition{Duration: anim.Duration, Colors: true}).Children(func() {
+					b.Radius(min(b.AnimateTo("r", rad, anim), 22)).Transition(ui.ElementTransition{Duration: anim.Duration, Ease: ui.Linear, Colors: true}).Children(func() {
 						if picked {
 							m3.Icon(c, icons.CheckRounded, 24, cs.OnPrimary)
 						}

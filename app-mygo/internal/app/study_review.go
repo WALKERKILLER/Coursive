@@ -861,7 +861,7 @@ func (x reviewCtx) header(c *ui.Context, stats study.OutlineStats, stale map[str
 			if stats.Total > 0 {
 				v = float64(stats.Reviewed) / float64(stats.Total)
 			}
-			shown := float64(bar.Animate("progress", float32(v), design.Medium2))
+			shown := float64(bar.AnimateTo("progress", float32(v), design.T().Motion(design.Medium2, design.Emphasized)))
 			bar.Children(func() {
 				m3.Linear(c, m3.Progress{Value: m3.Of(shown), Height: 3, Track: cs.SurfaceContainerHighest})
 			})

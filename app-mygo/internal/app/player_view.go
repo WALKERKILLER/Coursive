@@ -185,7 +185,7 @@ func (v *PlayerView) Show(c *ui.Context, o PlayerViewOpts) ui.Element {
 		root = root.Cursor(ui.CursorNone)
 	}
 	v.menuOpen = false
-	chrome := root.Animate("chrome", map[bool]float32{true: 1, false: 0}[showUI], map[bool]time.Duration{true: design.Short4, false: design.Medium2}[showUI])
+	chrome := root.AnimateTo("chrome", map[bool]float32{true: 1, false: 0}[showUI], design.T().Motion(map[bool]time.Duration{true: design.Short4, false: design.Medium2}[showUI], design.Standard))
 	root.Children(func() {
 		if ctl.Player != nil {
 			ui.Video(c, ctl.Player).Fit(ui.Contain).Absolute().Top(0).Left(0).Right(0).Bottom(0)
@@ -642,7 +642,7 @@ func (v *PlayerView) playButton(c *ui.Context) {
 		tip, ic, target = l10n.PlayerPauseTooltip, icons.PauseRounded, 14
 	}
 	b := ui.ButtonBase(c).FocusRing(false).Size(48, 48).Shrink(0).Center().Background(pWhite).Cursor(ui.CursorPointer)
-	r := b.Animate("radius", target, design.Medium2)
+	r := b.AnimateTo("radius", target, design.T().Motion(design.Medium2, design.Emphasized))
 	b = b.Radius(r)
 	m3.Ink(b, ui.RGB(0, 0, 0), r)
 	m3.Tip(c, b.Label(tip), tip)
@@ -678,7 +678,7 @@ func (v *PlayerView) volumeControl(c *ui.Context) {
 			}
 		}
 		box := ui.Box(c).Height(40).Clip().AlignItems(ui.Center).Justify(ui.Center)
-		w := box.Animate("w", map[bool]float32{true: 96, false: 0}[v.volHover], design.Medium1)
+		w := box.AnimateTo("w", map[bool]float32{true: 96, false: 0}[v.volHover], design.T().Motion(design.Medium1, design.Emphasized))
 		box.Width(w).Children(func() {
 			if w > 1 {
 				val := vol

@@ -319,7 +319,7 @@ func (p *AssistantPanel) thinkingBlock(c *ui.Context, b *ChatBlock, live bool) {
 			m3.HGap(c, design.SpaceSM)
 			m3.Text(c, label, tt.LabelMedium.C(cs.OnSurfaceVariant))
 			m3.HGap(c, 4)
-			turn := h.AnimateTo("turn", map[bool]float32{false: 0, true: 180}[open], design.T().Motion(design.Medium1, design.Standard))
+			turn := h.AnimateTo("turn", map[bool]float32{false: 0, true: 180}[open], design.T().Motion(design.Medium1, ui.Linear))
 			m3.Icon(c, icons.ExpandMoreRounded, 18, cs.OnSurfaceVariant).Rotate(turn)
 		})
 		if h.Clicked() {
@@ -372,7 +372,7 @@ func (p *AssistantPanel) toolCard(c *ui.Context, b *ChatBlock) {
 			bg, fg = cs.ErrorContainer, cs.OnErrorContainer
 		}
 		pill := ui.ButtonBase(c).FocusRing(false).Radius(design.CornerFull).Cursor(ui.CursorPointer).Row().AlignItems(ui.Center).
-			Padding(6, design.SpaceMD).Background(bg).Transition(ui.ElementTransition{Duration: design.Medium1, Colors: true})
+			Padding(6, design.SpaceMD).Background(bg).Transition(ui.ElementTransition{Duration: design.Medium1, Ease: ui.Linear, Colors: true})
 		m3.InkWell(pill, design.CornerFull)
 		pill.Children(func() {
 			switch {

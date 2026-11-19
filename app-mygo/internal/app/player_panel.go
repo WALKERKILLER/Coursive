@@ -301,7 +301,7 @@ func chapterRow(c *ui.Context, ctl *LecturePlayer, ch core.Chapter, number, stat
 			}
 			ui.Box(c).Width(2).Height(14).Background(top)
 			node := ui.Box(c).Shrink(0).Center().Radius(design.CornerFull)
-			sz := node.Animate("size", map[bool]float32{true: 24, false: 20}[now], design.Medium2)
+			sz := node.AnimateTo("size", map[bool]float32{true: 24, false: 20}[now], design.T().Motion(design.Medium2, design.Emphasized))
 			node = node.Size(sz, sz)
 			bg, fg := cs.Surface, cs.OnSurfaceVariant
 			switch state {
@@ -959,7 +959,7 @@ func (s *slidesTab) show(c *ui.Context, ctl *LecturePlayer) {
 		b := m3.Tappable(c, design.CornerLG).FillWidth().Column().Margin(0, 0, design.SpaceMD, 0)
 		b.Children(func() {
 			frame := ui.Box(c).FillWidth().Radius(design.CornerLG)
-			pad := frame.Animate("pad", map[bool]float32{true: 3, false: 0}[on], design.Medium2)
+			pad := frame.AnimateTo("pad", map[bool]float32{true: 3, false: 0}[on], design.T().Motion(design.Medium2, design.Emphasized))
 			frame = frame.Padding(pad)
 			if on {
 				frame = frame.Background(cs.Primary)

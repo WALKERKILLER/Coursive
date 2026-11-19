@@ -460,7 +460,7 @@ func (s *StudyCanvas) palettePen(c *ui.Context, key, label string, vertical, sel
 		s.penItems[key] = b
 	}
 	turns := s.penRotation()
-	lift := e.Animate("lift", map[bool]float32{true: 0, false: .1}[selected], design.Short3)
+	lift := e.AnimateTo("lift", map[bool]float32{true: 0, false: .1}[selected], design.T().Motion(design.Short3, ui.Linear))
 	e.Children(func() {
 		iw, ih := w, h
 		if turns%2 == 1 {

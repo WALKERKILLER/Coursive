@@ -250,7 +250,7 @@ func asrChannelCard(c *ui.Context, ch core.J) (toggled, changed bool) {
 	}
 	card := ui.Column(c).FillWidth().Padding(design.SpaceMD, design.SpaceSM, design.SpaceMD, design.SpaceLG).
 		Background(cs.SurfaceContainerHigh).Radius(design.CornerLG)
-	card = card.Opacity(card.AnimateTo("asr.op", op, design.T().Motion(design.Medium1, design.Standard)))
+	card = card.Opacity(card.AnimateTo("asr.op", op, design.T().Motion(design.Medium1, ui.Linear)))
 	card.Children(func() {
 		ui.Row(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			name := ch.S("name")
