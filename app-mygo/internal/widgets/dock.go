@@ -45,6 +45,7 @@ type dockState struct {
 	finger    float32
 	scrubbing bool
 	downX     float32
+	downAt    time.Time
 	lift      bool
 	init      bool
 }
@@ -101,29 +102,38 @@ func (d Dock) bar(c *ui.Context) int {
 	if n > 0 && w > 0 {
 		slot = w / float32(n)
 	}
+	now := c.Now()
 	if !st.init || d.Selected != st.toIndex && !st.scrubbing {
 		if st.init && slot > 0 {
-			st.from = d.lensStart(st, slot)
-			st.movedAt = time.Now()
+			st.from = d.lensStart(st, slot, now)
+			st.movedAt = now
 		} else {
 			st.movedAt = time.Time{}
 		}
 		st.toIndex, st.init = d.Selected, true
 	}
-	// Scrubbing: a press that slides along the pill carries the lens.
+	// Scrubbing: a press that slides along the pill past a mouse's 1 DIP
+	// drag slop, or is held for a long press, carries the lens.
 	x, _, ok := pill.PointerPosition()
 	x -= DockInset
 	if pill.Pressed() && ok && slot > 0 {
 		if !st.lift {
-			st.lift, st.downX = true, x
+			st.lift, st.downX, st.downAt = true, x, now
 		}
-		if st.scrubbing || abs32(x-st.downX) > 8 {
+		switch {
+		case st.scrubbing:
+			st.finger = x
+		case abs32(x-st.downX) > 1:
+			st.scrubbing, st.finger = true, st.downX
+		case now.Sub(st.downAt) >= dockLongPress:
 			st.scrubbing, st.finger = true, x
+		default:
+			c.Invalidate()
 		}
 	} else if st.lift {
 		if st.scrubbing && slot > 0 {
 			i := int(min(max(st.finger/slot, 0), float32(n-1)))
-			st.from, st.movedAt = d.lensStart(st, slot), time.Now()
+			st.from, st.movedAt = d.lensStart(st, slot, now), now
 			st.scrubbing = false
 			st.toIndex = i
 			if i != d.Selected {
@@ -140,8 +150,8 @@ func (d Dock) bar(c *ui.Context) int {
 	lift = design.Emphasized(lift)
 	pill.Children(func() {
 		if (st.toIndex >= 0 || st.scrubbing) && slot > 0 {
-			a, b := d.edges(st, slot)
-			if time.Since(st.movedAt) < design.Medium4 {
+			a, b := d.edges(st, slot, now)
+			if now.Sub(st.movedAt) < design.Medium4 {
 				c.Invalidate()
 			}
 			lens := ui.Box(c).Absolute().Top(0).Bottom(0).Left(a).Width(b-a).Radius(DockLens).
@@ -178,7 +188,7 @@ func (d Dock) bar(c *ui.Context) int {
 
 // edges are the lens's start and end, from the start of the row: the
 // leading edge runs ahead and the trailing one follows.
-func (d Dock) edges(st *dockState, w float32) (float32, float32) {
+func (d Dock) edges(st *dockState, w float32, now time.Time) (float32, float32) {
 	if st.scrubbing {
 		s := min(max(st.finger-w/2, 0), w*float32(len(d.Items)-1))
 		return s, s + w
@@ -186,7 +196,7 @@ func (d Dock) edges(st *dockState, w float32) (float32, float32) {
 	b := float32(st.toIndex) * w
 	t := float32(1)
 	if !st.movedAt.IsZero() && !design.T().ReduceMotion {
-		t = min(float32(time.Since(st.movedAt))/float32(design.Medium4), 1)
+		t = min(float32(now.Sub(st.movedAt))/float32(design.Medium4), 1)
 	}
 	a := st.from
 	if t >= 1 {
@@ -199,8 +209,8 @@ func (d Dock) edges(st *dockState, w float32) (float32, float32) {
 	return a + (b-a)*lead, a + (b-a)*trail + w
 }
 
-func (d Dock) lensStart(st *dockState, w float32) float32 {
-	a, _ := d.edges(st, w)
+func (d Dock) lensStart(st *dockState, w float32, now time.Time) float32 {
+	a, _ := d.edges(st, w, now)
 	return a
 }
 
@@ -210,6 +220,9 @@ func abs32(x float32) float32 {
 	}
 	return x
 }
+
+// dockLongPress is kLongPressTimeout.
+const dockLongPress = 500 * time.Millisecond
 
 // dockSwitch is the AnimatedSwitcher between the bar and its minimized
 // form: a fade and a scale from 92% about the start edge.

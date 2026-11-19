@@ -57,31 +57,50 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 			row = ui.Row(c).Height(h).FillWidth()
 		}
 		row.Children(func() {
-			ui.Row(c).FillHeight().Children(func() {
+			row := ui.Row(c).FillHeight()
+			// The labels take their colours from the controller's animation
+			// as _TabStyle does: the new tab and the one before it cross-fade
+			// as far as the animated index has gone between them, over
+			// 300 ms as Curves.ease, and the tabs passed on the way stay put.
+			ch := ui.Local(row, "m3.tabs.change", func() tabChange { return tabChange{*selected, *selected} })
+			if ch.cur != *selected {
+				ch.prev, ch.cur = ch.cur, *selected
+			}
+			pos := row.AnimateTo("m3.tabs.pos", float32(*selected), design.T().Motion(tabScroll, design.Ease))
+			moved := float32(1)
+			if span := abs32(float32(ch.cur - ch.prev)); span > 0 {
+				moved = clamp01(1 - abs32(pos-float32(ch.cur))/span)
+			}
+			row.Children(func() {
 				for i, t := range tabs {
 					on := i == *selected
-					fg := s.OnSurfaceVariant
-					if on {
-						fg = s.Primary
-						if o.Secondary {
-							fg = s.OnSurface
-						}
+					var near float32
+					switch i {
+					case ch.cur:
+						near = moved
+					case ch.prev:
+						near = 1 - moved
+					}
+					selFG := s.Primary
+					if o.Secondary {
+						selFG = s.OnSurface
 					}
 					if o.Pill {
-						if on {
-							fg = s.OnSecondaryContainer
-						}
+						selFG = s.OnSecondaryContainer
+					}
+					fg := design.Lerp(s.OnSurfaceVariant, selFG, near)
+					if o.Pill {
 						b := ui.ButtonBase(c.Key(i)).FocusRing(false).Row().AlignItems(ui.Center).
 							FillHeight().Padding(0, 14).Cursor(ui.CursorPointer).Checked(on).Role(ui.RoleTab)
+						// The side panel's overlayColor sets only the hover, 6%
+						// onSurface over the whole tab in a stadium; the press
+						// and focus keep the theme's InkWell colours.
+						pillInk(b, s.OnSurface)
 						b.Children(func() {
 							if on {
 								ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).Radius(design.CornerFull).Background(s.SecondaryContainer).
 									Transition(ui.ElementTransition{Duration: tabScroll, Ease: design.Ease,
 										Position: true, Size: true, Match: selected, Fly: true})
-							}
-							hover := ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).PassThrough()
-							if b.Hovered() {
-								hover.Radius(design.CornerFull).Background(design.WithOpacity(s.OnSurface, .06))
 							}
 							Text(c, t.Label, tt().LabelLarge.C(fg)).NoWrap()
 						})
@@ -96,7 +115,18 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 					if !o.Scrollable {
 						b = b.Grow(1).Basis(0)
 					}
-					Ink(b, fg, 0)
+					// _TabsPrimaryDefaultsM3.overlayColor: hover and focus in
+					// primary on the selected tab and onSurface on the rest, the
+					// press and its splash in primary on all. Secondary tabs
+					// take onSurface throughout.
+					over, pressC := s.OnSurface, s.Primary
+					if o.Secondary {
+						pressC = s.OnSurface
+					} else if on {
+						over = s.Primary
+					}
+					press := design.WithOpacity(pressC, .1)
+					InkColors(b, 0, design.WithOpacity(over, .08), design.WithOpacity(over, .1), press, press)
 					b.Children(func() {
 						lab := ui.Column(c).AlignItems(ui.Center).Gap(2).Children(func() {
 							if t.Icon != 0 {
@@ -132,6 +162,17 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 	})
 	return changed
 }
+
+func pillInk(b ui.Element, on ui.Color) {
+	focus, press, splash := ui.RGBA(0, 0, 0, .12), ui.RGBA(0xBC, 0xBC, 0xBC, 0x66/255.0), ui.RGBA(0xC8, 0xC8, 0xC8, 0x66/255.0)
+	if design.T().Dark {
+		focus, press = ui.RGBA(255, 255, 255, .12), ui.RGBA(0xCC, 0xCC, 0xCC, 0x40/255.0)
+		splash = press
+	}
+	InkColors(b, design.CornerFull, design.WithOpacity(on, .06), focus, press, splash)
+}
+
+type tabChange struct{ prev, cur int }
 
 type tabView struct{ last int }
 

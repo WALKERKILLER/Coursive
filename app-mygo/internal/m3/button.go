@@ -327,7 +327,7 @@ func IconBtn(c *ui.Context, ic icons.Icon, tip string) ui.Element {
 }
 
 // FAB is FloatingActionButton (and .small and .extended) with the app's
-// theme: primaryContainer, elevation 3 (4 hovered), Corners.lg.
+// theme: primaryContainer, elevation 3 (4 hovered, 6 pressed), Corners.lg.
 type FAB struct {
 	Icon     icons.Icon
 	Label    string // .extended when not empty
@@ -361,8 +361,14 @@ func (f FAB) Show(c *ui.Context) ui.Element {
 	default:
 		e = e.Size(56, 56).Center()
 	}
+	// The theme sets 3 and 4 hovered; pressed keeps _FABDefaultsM3's
+	// highlightElevation of 6.
 	lvl := float32(3)
-	if e.Hovered() && !f.Disabled {
+	switch {
+	case f.Disabled:
+	case e.Pressed():
+		lvl = 6
+	case e.Hovered():
 		lvl = 4
 	}
 	if f.Flat {
