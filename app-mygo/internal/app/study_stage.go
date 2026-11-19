@@ -562,7 +562,7 @@ func (s *StudyCanvas) videoModules() {
 		m3.Dialog(c, func() {
 			m3.Text(c, "视频模块", design.TT().HeadlineSmall.C(design.S().OnSurface)).Margin(24, 24, 12, 24)
 			for _, o := range []struct{ value, label string }{{"lecture", "定位当前课程视频"}, {"import", "导入本地视频"}, {"course", "从课程资料选择视频"}} {
-				e := ui.ButtonBase(c).FillWidth().Padding(8, 24).Cursor(ui.CursorPointer)
+				e := ui.ButtonBase(c).FillWidth().Justify(ui.Start).Padding(8, 24).Cursor(ui.CursorPointer)
 				m3.Ink(e, design.S().OnSurface, 0)
 				e.Children(func() { m3.Text(c, o.label, design.TT().BodyLarge.C(design.S().OnSurface)) })
 				if e.Clicked() {

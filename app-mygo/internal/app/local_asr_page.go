@@ -421,7 +421,7 @@ func (p *LocalAsrPage) modelCard(c *ui.Context, m core.J, focused, active bool, 
 	if focused {
 		border = cs.Primary
 	}
-	e := ui.ButtonBase(c).FocusRing(false).Cursor(ui.CursorPointer).Column().FillWidth().Radius(design.CornerLG).Background(bg).Border(2, border).
+	e := ui.ButtonBase(c).FocusRing(false).Cursor(ui.CursorPointer).Column().Justify(ui.Start).AlignItems(ui.Stretch).FillWidth().Radius(design.CornerLG).Background(bg).Border(2, border).
 		Padding(design.SpaceMD, design.SpaceMD, design.SpaceMD, design.SpaceLG).Transition(ui.ElementTransition{Duration: design.Medium1, Ease: design.Standard, Colors: true})
 	m3.InkWell(e, design.CornerLG)
 	e.Children(func() {

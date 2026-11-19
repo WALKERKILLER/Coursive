@@ -176,7 +176,7 @@ func (p *AddProviderPage) View(c *ui.Context) {
 func presetTile(c *ui.Context, p ProviderPreset, added bool) bool {
 	cs := design.S()
 	tt := design.TT()
-	e := ui.ButtonBase(c).FocusRing(true).Cursor(ui.CursorPointer).Column().FillWidth().Height(132).Padding(design.SpaceMD)
+	e := ui.ButtonBase(c).FocusRing(true).Cursor(ui.CursorPointer).Column().Justify(ui.Start).AlignItems(ui.Start).FillWidth().Height(132).Padding(design.SpaceMD)
 	hover := e.Hovered()
 	bg, r := cs.SurfaceContainer, float32(design.CornerLG)
 	if hover {

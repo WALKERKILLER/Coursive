@@ -230,8 +230,9 @@ func showLinkDialog(qq bool, use func(string)) {
 			label, hint, invalid = l10n.ProfileQqNumber, l10n.ProfileQqHint, l10n.ProfileQqInvalid
 		}
 		m3.AlertDialog(c, m3.Alert{Icon: ic, Title: title, Width: 360, Content: func() {
-			ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Box(c.Key(preview)).Transition(design.Switcher(design.Medium2, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
+			// Flutter centres the preview while the TextField takes the width.
+			ui.Column(c).FillWidth().Children(func() {
+				ui.Box(c.Key(preview)).AlignSelf(ui.Center).Transition(design.Switcher(design.Medium2, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					if preview == "" {
 						widgets.CircleAvatar(c, 88, s.SurfaceContainerHighest, func() { m3.Icon(c, icons.ImageSearchRounded, 24, s.OnSurfaceVariant) })
 					} else {

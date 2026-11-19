@@ -325,7 +325,7 @@ func chapterRow(c *ui.Context, ctl *LecturePlayer, ch core.Chapter, number, stat
 			ui.Box(c).Width(2).Grow(1).MinHeight(4).Background(below)
 		})
 		ui.Box(c).Grow(1).Basis(0).Padding(0, 0, design.SpaceXS, 0).Children(func() {
-			b := m3.Tappable(c, design.CornerLG).FillWidth().Column().Padding(10, design.SpaceMD)
+			b := m3.Tappable(c, design.CornerLG).FillWidth().Column().Justify(ui.Start).AlignItems(ui.Start).Padding(10, design.SpaceMD)
 			if now {
 				b = b.Background(cs.SecondaryContainer)
 			}

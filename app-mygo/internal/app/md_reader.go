@@ -221,7 +221,7 @@ func (r *MdReader) ShowToc(c *ui.Context, onPicked func()) {
 		for i, h := range hs {
 			on := i == active
 			depth := min(max(h.Level-top, 0), 3)
-			row := ui.ButtonBase(c.Key(i)).FocusRing(false).FillWidth().Radius(design.CornerFull).
+			row := ui.ButtonBase(c.Key(i)).FocusRing(false).FillWidth().Justify(ui.Start).Radius(design.CornerFull).
 				Padding(10, design.SpaceLG, 10, design.SpaceLG+float32(depth)*design.SpaceMD).Margin(0, 0, 2, 0)
 			if on {
 				row = row.Background(cs.SecondaryContainer)
