@@ -21,6 +21,10 @@ var (
 	EaseInOut    = ui.CubicBezier(0.42, 0, 0.58, 1)
 	EaseOutCubic = ui.CubicBezier(0.215, 0.61, 0.355, 1)
 	EaseOut      = ui.CubicBezier(0, 0, 0.58, 1)
+	// EaseIn is Curves.easeIn, EaseOutBack Curves.easeOutBack, which
+	// overshoots its end a little before it settles.
+	EaseIn      = ui.CubicBezier(0.42, 0, 1, 1)
+	EaseOutBack = ui.CubicBezier(0.175, 0.885, 0.32, 1.275)
 	// Ease is Curves.ease, which TabController.animateTo moves along.
 	Ease = ui.CubicBezier(0.25, 0.1, 0.25, 1)
 )

@@ -8,8 +8,15 @@ import (
 	"github.com/walkerkiller/coursive/app-mygo/internal/icons"
 )
 
+// switchTransitional is the thumb's size half-way along the track, as
+// _SwitchConfigM3 has it: the thumb is a stadium, stretched on its way.
+var switchTransitional = [2]float32{34, 22}
+
 // Switch is Material 3's switch with the app's thumb icon: a check on the
 // thumb while on. It returns the base, whose Changed reports a toggle.
+// The thumb moves as Flutter's does: over 300ms along easeOutBack, past
+// its end and back, shrinking to the transitional size on the way and
+// growing to 28 DIPs while pressed.
 func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 	s := cs()
 	e := ui.SwitchBase(c, on).Disabled(disabled).DimDisabled(false).FocusRing(false).
@@ -18,76 +25,156 @@ func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 		e = e.Cursor(ui.CursorPointer)
 	}
 	sel := *on
-	track, thumb, border, iconC := s.SurfaceContainerHighest, s.Outline, s.Outline, s.OnPrimaryContainer
-	if sel {
-		track, thumb, border = s.Primary, s.OnPrimary, s.Primary
-	}
-	hovered, pressed := e.Hovered(), e.Pressed()
-	if !disabled && (hovered || pressed || e.FocusVisible()) {
-		if sel {
-			thumb = s.PrimaryContainer
-		} else {
-			thumb = s.OnSurfaceVariant
+	ts := toggleReactions(e, disabled, switchPressed(c, e))
+	lit := ts.hovered || ts.focused
+	thumb := func(selected, pressed bool) ui.Color {
+		switch {
+		case disabled && selected:
+			return s.Surface
+		case disabled:
+			return design.WithOpacity(s.OnSurface, .38)
+		case selected && (pressed || lit):
+			return s.PrimaryContainer
+		case selected:
+			return s.OnPrimary
+		case pressed || lit:
+			return s.OnSurfaceVariant
 		}
+		return s.Outline
 	}
+	activeTrack, inactiveTrack := s.Primary, s.SurfaceContainerHighest
+	activeOutline, inactiveOutline := ui.Transparent, s.Outline
+	activeIcon, inactiveIcon := s.OnPrimaryContainer, s.SurfaceContainerHighest
 	if disabled {
-		if sel {
-			track = design.WithOpacity(s.OnSurface, .12)
-			thumb = s.Surface
-			border = ui.Transparent
-			iconC = design.WithOpacity(s.OnSurface, .38)
-		} else {
-			track = design.WithOpacity(s.SurfaceContainerHighest, .12)
-			thumb = design.WithOpacity(s.OnSurface, .38)
-			border = design.WithOpacity(s.OnSurface, .12)
+		activeTrack = design.WithOpacity(s.OnSurface, .12)
+		inactiveTrack = design.WithOpacity(s.SurfaceContainerHighest, .12)
+		inactiveOutline = design.WithOpacity(s.OnSurface, .12)
+		activeIcon = design.WithOpacity(s.OnSurface, .38)
+		inactiveIcon = design.WithOpacity(s.SurfaceContainerHighest, .38)
+	}
+	overlay := func(selected bool, a float32) ui.Color {
+		if selected {
+			return design.WithOpacity(s.Primary, a)
 		}
+		return design.WithOpacity(s.OnSurface, a)
 	}
-	size := float32(16)
-	if sel {
-		size = 24
+	rc := reactionColors{inactive: overlay(false, .1), active: overlay(true, .1), hover: overlay(sel, .08), focus: overlay(sel, .1)}
+
+	pos := controller(e, "m3.switch", sel, 300*time.Millisecond)
+	position := pos.curved(design.EaseOutBack, design.Flipped(design.EaseOutBack))
+	colorV := pos.curved(design.EaseOut, design.EaseIn)
+	reaction := ts.press.curved(design.FastOutSlowIn, nil)
+	// The thumb's radii, off and on, grow with the press while the thumb
+	// rests at either end, and keep their size as it sets off.
+	pr := ui.Local(e, "m3.switch.radii", func() [2]float32 { return [2]float32{8, 12} })
+	if ts.press.status == ctlCompleted {
+		*pr = [2]float32{lerp(8, 14, reaction), lerp(12, 14, reaction)}
 	}
-	if pressed && !disabled {
-		size = 28
+	if pos.v == 0 {
+		*pr = [2]float32{lerp(8, 14, reaction), 12}
 	}
-	anim := design.T().Motion(300*time.Millisecond, design.EaseOutCubic)
-	pos := e.AnimateTo("m3.switch.pos", map[bool]float32{false: 0, true: 1}[sel], anim)
-	sz := e.AnimateTo("m3.switch.size", size, design.T().Motion(250*time.Millisecond, design.EaseOutCubic))
-	trackC := e.AnimateColor("m3.switch.track", track, anim)
-	thumbC := e.AnimateColor("m3.switch.thumb", thumb, anim)
-	borderC := e.AnimateColor("m3.switch.border", border, anim)
-	var layer float32
+	if pos.v == 1 {
+		*pr = [2]float32{8, lerp(12, 14, reaction)}
+	}
+	off, onSize := [2]float32{pr[0] * 2, pr[0] * 2}, [2]float32{pr[1] * 2, pr[1] * 2}
+	var size [2]float32
 	switch {
-	case disabled:
-	case pressed:
-		layer = .1
-	case e.FocusVisible():
-		layer = .1
-	case hovered:
-		layer = .08
+	case ts.press.status == ctlCompleted:
+		size = [2]float32{28, 28}
+	case pos.status == ctlDismissed || pos.status == ctlForward:
+		size = switchThumbForward(pos.v, off, onSize)
+	default:
+		size = switchThumbReverse(pos.v, off, onSize)
 	}
-	layerC := s.OnSurface
-	if sel {
-		layerC = s.Primary
+	var tc ui.Color
+	switch {
+	case ts.press.status != ctlDismissed:
+		tc = design.Lerp(thumb(false, true), thumb(true, true), colorV)
+	case pos.status == ctlForward:
+		tc = design.Lerp(thumb(false, true), thumb(true, false), colorV)
+	case pos.status == ctlReverse:
+		tc = design.Lerp(thumb(false, false), thumb(true, true), colorV)
+	default:
+		tc = design.Lerp(thumb(false, false), thumb(true, false), colorV)
 	}
+	tc = design.AlphaBlend(tc, s.Surface)
+	trackC := design.Lerp(inactiveTrack, activeTrack, colorV)
+	outlineC := design.Lerp(inactiveOutline, activeOutline, colorV)
+	iconC := design.Lerp(inactiveIcon, activeIcon, colorV)
 	return e.Draw(func(p *ui.Painter, r ui.Rect) {
 		p.Fill(r, trackC, 16)
-		if borderC.A != 0 {
-			p.Stroke(r, borderC, 16, 2)
+		if outlineC.A != 0 {
+			p.Stroke(r, outlineC, 16, 2)
 		}
 		// The thumb's centre runs from 16 to 36 DIPs.
-		cx := r.X + 16 + 20*pos
+		cx := r.X + 16 + 20*position
 		cy := r.Y + 16
-		if layer > 0 {
-			p.FillPath((&ui.Path{}).Circle(cx, cy, 20), design.WithOpacity(layerC, layer))
-		}
-		p.FillPath((&ui.Path{}).Circle(cx, cy, sz/2), thumbC)
-		if pos > .5 {
-			IconPaint(p, icons.CheckRounded, cx-8, cy-8, 16, design.WithOpacity(iconC, min(1, (pos-.5)*2)))
+		ts.paint(p, cx-size[0]/2+size[1]/2, cy, rc, position)
+		p.Fill(ui.Rect{X: cx - size[0]/2, Y: cy - size[1]/2, W: size[0], H: size[1]}, tc, size[1]/2)
+		if position >= .5 {
+			IconPaint(p, icons.CheckRounded, cx-8, cy-8, 16, iconC)
 		}
 	})
 }
 
-// Checkbox is Material 3's check box: an 18 DIP box in a 40 DIP target.
+// switchPressed is whether the switch shows its press: as Flutter's tap
+// waits for its horizontal drag in the gesture arena, from kPressTimeout
+// (100ms) after the pointer went down.
+func switchPressed(c *ui.Context, e ui.Element) bool {
+	since := ui.Local(e, "m3.switch.down", func() time.Time { return time.Time{} })
+	if !e.Pressed() {
+		*since = time.Time{}
+		return false
+	}
+	if since.IsZero() {
+		*since = c.Now()
+	}
+	if wait := 100*time.Millisecond - c.Now().Sub(*since); wait > 0 {
+		c.After(wait)
+		return false
+	}
+	return true
+}
+
+func lerp(a, b, t float32) float32 { return a + (b-a)*t }
+
+func lerpSize(a, b [2]float32, t float32) [2]float32 {
+	return [2]float32{lerp(a[0], b[0], t), lerp(a[1], b[1], t)}
+}
+
+var (
+	switchGrow   = ui.CubicBezier(0.31, 0, 0.56, 1)
+	switchSettle = ui.CubicBezier(0.2, 0, 0, 1)
+)
+
+// switchThumbForward is the thumb's size as it turns on, at the
+// controller's value u: to the transitional size in the first 11%, to its
+// size on by 83%.
+func switchThumbForward(u float32, off, on [2]float32) [2]float32 {
+	switch {
+	case u < .11:
+		return lerpSize(off, switchTransitional, switchGrow(u/.11))
+	case u < .83:
+		return lerpSize(switchTransitional, on, switchSettle((u-.11)/.72))
+	}
+	return on
+}
+
+// switchThumbReverse is its size as it turns off, the same way back.
+func switchThumbReverse(u float32, off, on [2]float32) [2]float32 {
+	switch {
+	case u < .17:
+		return off
+	case u < .89:
+		return lerpSize(off, switchTransitional, design.Flipped(switchSettle)((u-.17)/.72))
+	}
+	return lerpSize(switchTransitional, on, design.Flipped(switchGrow)(min((u-.89)/.11, 1)))
+}
+
+// Checkbox is Material 3's check box: an 18 DIP box in a 40 DIP target. It
+// checks as Flutter's does over 200ms: the box fills in its first quarter
+// while it shrinks by its border's width and back, and the check draws
+// its two strokes in the second half.
 func Checkbox(c *ui.Context, checked *bool, disabled bool) ui.Element {
 	s := cs()
 	e := ui.CheckboxBase(c, checked).Disabled(disabled).DimDisabled(false).FocusRing(false).
@@ -96,48 +183,70 @@ func Checkbox(c *ui.Context, checked *bool, disabled bool) ui.Element {
 		e = e.Cursor(ui.CursorPointer)
 	}
 	on := *checked
-	fill, side := s.Primary, s.OnSurfaceVariant
+	ts := toggleReactions(e, disabled, e.Pressed())
+	fill, check := s.Primary, s.OnPrimary
+	side, sideW, activeW := s.OnSurfaceVariant, float32(2), float32(0)
+	if ts.hovered || ts.focused {
+		side = s.OnSurface
+	}
 	if disabled {
-		fill, side = DisabledContent(), DisabledContent()
+		fill, check, side, activeW = DisabledContent(), s.Surface, DisabledContent(), 2
 	}
-	var layer float32
-	switch {
-	case disabled:
-	case e.Pressed():
-		layer = .1
-	case e.FocusVisible():
-		layer = .1
-	case e.Hovered():
-		layer = .08
+	overlay := func(selected bool, a float32) ui.Color {
+		if selected {
+			return design.WithOpacity(s.Primary, a)
+		}
+		return design.WithOpacity(s.OnSurface, a)
 	}
-	layerC := s.OnSurface
-	if on {
-		layerC = s.Primary
-	}
-	t := e.AnimateTo("m3.check", map[bool]float32{false: 0, true: 1}[on], design.T().Motion(200*time.Millisecond, ui.Linear))
+	// A press shows what the click makes of the box.
+	rc := pressedReaction(reactionColors{inactive: overlay(true, .1), active: overlay(false, .1), hover: overlay(on, .08), focus: overlay(on, .1)}, on, ts)
+	pos := controller(e, "m3.check", on, 200*time.Millisecond)
+	t := pos.curved(design.EaseIn, design.EaseOut)
 	return e.Draw(func(p *ui.Painter, r ui.Rect) {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		if layer > 0 {
-			p.FillPath((&ui.Path{}).Circle(cx, cy, 20), design.WithOpacity(layerC, layer))
+		ts.paint(p, cx, cy, rc, t)
+		ox, oy := cx-9, cy-9
+		inset := 1 - abs32(t-.5)*2
+		box := ui.Rect{X: ox + inset, Y: oy + inset, W: 18 - inset*2, H: 18 - inset*2}
+		fc := fill
+		if t < .25 {
+			fc = design.Lerp(ui.Transparent, fill, t*4)
 		}
-		box := ui.Rect{X: cx - 9, Y: cy - 9, W: 18, H: 18}
-		if t > 0 {
-			p.Fill(box, design.WithOpacity(fill, t), 2)
-			check := (&ui.Path{}).MoveTo(cx-5, cy).LineTo(cx-1.5, cy+3.5).LineTo(cx+5.5, cy-3.5)
-			check = check.Trim(0, t).Cap(ui.SquareCap).Join(ui.MiterJoin)
-			on := s.OnPrimary
-			if disabled {
-				on = s.Surface
+		if fc.A > 0 {
+			p.Fill(box, fc, 2)
+		}
+		if t <= .5 {
+			// The border goes to the checked one, of no width.
+			w := lerp(sideW, activeW, t)
+			bc := design.Lerp(side, ui.Transparent, t)
+			if w > 0 && bc.A > 0 {
+				p.Stroke(box, bc, 2, w)
 			}
-			p.StrokePath(check, 2, on)
+			return
 		}
-		if t < 1 {
-			p.Stroke(ui.Rect{X: box.X + 1, Y: box.Y + 1, W: 16, H: 16}, design.WithOpacity(side, 1-t), 1, 2)
+		k := (t - .5) * 2
+		sx, sy := ox+18*.15, oy+18*.45
+		mx, my := ox+18*.4, oy+18*.7
+		ex, ey := ox+18*.85, oy+18*.25
+		path := (&ui.Path{}).MoveTo(sx, sy)
+		if k < .5 {
+			path.LineTo(lerp(sx, mx, k*2), lerp(sy, my, k*2))
+		} else {
+			path.LineTo(mx, my).LineTo(lerp(mx, ex, (k-.5)*2), lerp(my, ey, (k-.5)*2))
 		}
+		p.StrokePath(path.Cap(ui.ButtCap).Join(ui.MiterJoin), 2, check)
 	})
 }
 
-// Radio is Material 3's radio button: a 20 DIP ring in a 40 DIP target.
+func abs32(v float32) float32 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// Radio is Material 3's radio button: a ring of radius 8 in a 40 DIP
+// target, whose dot grows to 4.5 DIPs over 200ms as Flutter's does.
 func Radio[T comparable](c *ui.Context, selected *T, value T, disabled bool) ui.Element {
 	s := cs()
 	e := ui.RadioBase(c, selected, value).Disabled(disabled).DimDisabled(false).FocusRing(false).
@@ -146,37 +255,30 @@ func Radio[T comparable](c *ui.Context, selected *T, value T, disabled bool) ui.
 		e = e.Cursor(ui.CursorPointer)
 	}
 	on := *selected == value
-	ring := s.OnSurfaceVariant
-	if on {
-		ring = s.Primary
+	ts := toggleReactions(e, disabled, e.Pressed())
+	active, inactive := s.Primary, s.OnSurfaceVariant
+	if ts.hovered || ts.focused {
+		inactive = s.OnSurface
 	}
 	if disabled {
-		ring = DisabledContent()
+		active, inactive = DisabledContent(), DisabledContent()
 	}
-	var layer float32
-	switch {
-	case disabled:
-	case e.Pressed():
-		layer = .1
-	case e.FocusVisible():
-		layer = .1
-	case e.Hovered():
-		layer = .08
+	overlay := func(sel bool, a float32) ui.Color {
+		if sel {
+			return design.WithOpacity(s.Primary, a)
+		}
+		return design.WithOpacity(s.OnSurface, a)
 	}
-	layerC := s.OnSurface
-	if on {
-		layerC = s.Primary
-	}
-	dot := e.AnimateTo("m3.radio", map[bool]float32{false: 0, true: 1}[on], design.T().Motion(200*time.Millisecond, design.EaseOutCubic))
-	ringC := e.AnimateColor("m3.radio.c", ring, design.T().Motion(200*time.Millisecond, ui.Linear))
+	rc := pressedReaction(reactionColors{inactive: overlay(true, .1), active: overlay(false, .1), hover: overlay(on, .08), focus: overlay(on, .1)}, on, ts)
+	pos := controller(e, "m3.radio", on, 200*time.Millisecond)
+	t := pos.curved(design.EaseIn, design.EaseOut)
 	return e.Draw(func(p *ui.Painter, r ui.Rect) {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		if layer > 0 {
-			p.FillPath((&ui.Path{}).Circle(cx, cy, 20), design.WithOpacity(layerC, layer))
-		}
-		p.StrokePath((&ui.Path{}).Circle(cx, cy, 9), 2, ringC)
-		if dot > 0 {
-			p.FillPath((&ui.Path{}).Circle(cx, cy, 5*dot), ringC)
+		ts.paint(p, cx, cy, rc, t)
+		ring := design.Lerp(inactive, active, t)
+		p.StrokePath((&ui.Path{}).Circle(cx, cy, 8), 2, ring)
+		if pos.v > 0 {
+			p.FillPath((&ui.Path{}).Circle(cx, cy, 4.5*t), ring)
 		}
 	})
 }
