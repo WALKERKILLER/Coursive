@@ -122,22 +122,49 @@ func (s *StudyCanvas) finishSelection() {
 	}
 }
 
-// rectInPolygon reports a rectangle wholly inside a polygon: its corners
-// inside, and no edge of the polygon crossing it.
+// rectInPolygon reports a rectangle wholly inside a polygon, as the
+// rectangle less the loop being empty: its corners inside, no edge of the
+// loop crossing one of its sides, and no corner of the loop within it,
+// which would cut a piece out.
 func rectInPolygon(r study.Rect, polygon []study.Pt) bool {
-	for _, p := range []study.Pt{r.TopLeft(), r.TopRight(), r.BottomRight(), r.BottomLeft()} {
-		if !study.InPolygon(p, polygon) {
+	corners := []study.Pt{r.TopLeft(), r.TopRight(), r.BottomRight(), r.BottomLeft()}
+	for _, p := range corners {
+		if !study.InPolygon(p, polygon) && !onPolygon(p, polygon) {
 			return false
 		}
 	}
-	for i := range polygon {
-		a, b := polygon[i], polygon[(i+1)%len(polygon)]
-		if r.Contains(a) && a.X > r.L && a.Y > r.T {
+	for i, a := range polygon {
+		if a.X > r.L && a.X < r.R && a.Y > r.T && a.Y < r.B {
 			return false
 		}
-		_ = b
+		b := polygon[(i+1)%len(polygon)]
+		for j, c := range corners {
+			if segmentsCross(a, b, c, corners[(j+1)%len(corners)]) {
+				return false
+			}
+		}
 	}
 	return true
+}
+
+// onPolygon reports p on an edge of the polygon, which the loop's area
+// holds as a path's fill does.
+func onPolygon(p study.Pt, polygon []study.Pt) bool {
+	for i, a := range polygon {
+		b := polygon[(i+1)%len(polygon)]
+		ab, ap := b.Sub(a), p.Sub(a)
+		if l := ab.Dist(); l > 0 && math.Abs(ab.Cross(ap))/l < 1e-6 && ap.Dot(ab) >= 0 && ap.Dot(ab) <= ab.Dist2() {
+			return true
+		}
+	}
+	return false
+}
+
+// segmentsCross reports segments ab and cd crossing at a point inside both.
+func segmentsCross(a, b, c, d study.Pt) bool {
+	side := func(p, q, r study.Pt) float64 { return (q.X-p.X)*(r.Y-p.Y) - (q.Y-p.Y)*(r.X-p.X) }
+	d1, d2, d3, d4 := side(c, d, a), side(c, d, b), side(a, b, c), side(a, b, d)
+	return d1*d2 < 0 && d3*d4 < 0
 }
 
 func (s *StudyCanvas) setRegionSelection(r study.Rect, polygon []study.Pt) {

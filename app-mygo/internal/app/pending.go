@@ -6,10 +6,7 @@ import (
 	"github.com/walkerkiller/coursive/app-mygo/internal/m3"
 )
 
-// Pages and flows not yet ported; each is replaced by its port.
-
-type todoPage struct{ name string }
-
-func (p *todoPage) View(c *ui.Context) { m3.Text(c, p.name, design.TT().TitleLarge) }
-
+// workspaceSetup stands for workspace_setup_page.dart, Android's first run,
+// which installs the Linux workspace the daemon runs in. The desktop never
+// reaches it (DaemonSetup); it is ported with the Android build.
 func workspaceSetup(c *ui.Context) { m3.Text(c, "setup", design.TT().TitleLarge) }
