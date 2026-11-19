@@ -32,9 +32,8 @@ func FirstCoursePanel(c *ui.Context, width float32) {
 		if wide {
 			center, rad = ui.Point{X: .86, Y: .45}, .9*min(r.W, r.H)
 		}
-		p.FillRadialGradient(r, ui.RadialGradient{Center: center, Radius: rad, Stops: []ui.GradientStop{
-			{Color: design.WithOpacity(cs.PrimaryContainer, .55), At: 0}, {Color: cs.SurfaceContainerLow, At: 1},
-		}}, design.CornerXL)
+		p.FillRadialGradient(r, ui.RadialGradient{Center: center, Radius: rad,
+			Stops: straightStops(design.WithOpacity(cs.PrimaryContainer, .55), cs.SurfaceContainerLow, 12)}, design.CornerXL)
 	})
 	text := func() {
 		align := ui.Start
@@ -136,4 +135,17 @@ func constellation(c *ui.Context, enter float32, lifted bool, s float32) {
 			}).Children(func() { m3.Icon(c, t.icon, t.extent*s*.42, t.ink) })
 		}
 	})
+}
+
+// straightStops spreads a gradient from a to b over n stops mixed in
+// straight (unpremultiplied) color, as Skia mixes Flutter's: MyGo mixes
+// premultiplied, which fades a translucent end out sooner.
+func straightStops(a, b ui.Color, n int) []ui.GradientStop {
+	mix := func(x, y uint8, t float32) uint8 { return uint8(float32(x) + (float32(y)-float32(x))*t + .5) }
+	out := make([]ui.GradientStop, n)
+	for i := range out {
+		t := float32(i) / float32(n-1)
+		out[i] = ui.GradientStop{At: t, Color: ui.Color{R: mix(a.R, b.R, t), G: mix(a.G, b.G, t), B: mix(a.B, b.B, t), A: mix(a.A, b.A, t)}}
+	}
+	return out
 }
