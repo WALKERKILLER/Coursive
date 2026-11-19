@@ -67,10 +67,12 @@ func Tinted(surface ui.Color, elevation float32) ui.Color {
 func DisabledContainer() ui.Color { return design.WithOpacity(cs().OnSurface, .12) }
 func DisabledContent() ui.Color   { return design.WithOpacity(cs().OnSurface, .38) }
 
+// splash is a press's sparkle; it starts with the frame that first paints
+// it and is done once it has run its course.
 type splash struct {
 	x, y  float32
 	start time.Time
-	up    time.Time
+	done  bool
 }
 
 type ink struct {
@@ -78,12 +80,29 @@ type ink struct {
 	splashes []splash
 }
 
-// sparkle is InkSparkle's duration.
-const sparkle = 617 * time.Millisecond
+// sparkle is InkSparkle's duration; its wave grows to sparkleReach times
+// half the box's diagonal.
+const (
+	sparkle      = 617 * time.Millisecond
+	sparkleReach = 2.3
+)
+
+// sparkleStops are InkSparkle's soft circle out to 1.5 times its radius:
+// solid to half of it, then a smoothstep to nothing.
+var sparkleStops = func() []float32 {
+	a := make([]float32, 9)
+	for i := range a {
+		x := .5 + float32(i)/8
+		s := x - .5
+		a[i] = 1 - s*s*(3-2*s)
+	}
+	return a
+}()
 
 // Ink gives e Material's state layer and press sparkle in overlay, the
 // content colour: 8% while hovered, 10% while focused or pressed. radius
-// is the corner radius it clips to.
+// is the corner radius it clips to. As InkWell's, the ink paints on the
+// surface under e's children.
 func Ink(e ui.Element, overlay ui.Color, radius float32) ui.Element {
 	return InkLayer(e, overlay, radius, .08, .1, .1)
 }
@@ -106,90 +125,101 @@ func InkWell(e ui.Element, radius float32) ui.Element {
 		ui.RGBA(0xBC, 0xBC, 0xBC, 0x66/255.0), ui.RGBA(0xC8, 0xC8, 0xC8, 0x66/255.0))
 }
 
-// InkColors paints e's state layer in the colour of its state and the
-// press sparkle in splash.
+// InkColors paints e's state layers in the colours of its states and the
+// press sparkle in splash, as InkWell's highlights and InkSparkle do: the
+// hover and focus layers fade in 50ms, the pressed one in 200ms, over the
+// others, and each press starts a sparkle that runs its course whenever
+// the press ends.
 func InkColors(e ui.Element, radius float32, hover, focus, press, splashC ui.Color) ui.Element {
 	st := ui.Local(e, "m3.ink", func() ink { return ink{} })
-	pressed := e.Pressed() && !e.IsDisabled()
-	now := time.Now()
+	enabled := !e.IsDisabled()
+	pressed := e.Pressed() && enabled
 	if pressed && !st.pressed {
 		x, y, ok := e.PointerPosition()
 		if !ok {
 			b := e.Bounds()
 			x, y = b.W/2, b.H/2
 		}
-		st.splashes = append(st.splashes, splash{x: x, y: y, start: now})
-	}
-	if !pressed && st.pressed {
-		for i := range st.splashes {
-			if st.splashes[i].up.IsZero() {
-				st.splashes[i].up = now
-			}
-		}
+		st.splashes = append(st.splashes, splash{x: x, y: y})
 	}
 	st.pressed = pressed
-	target := ui.Transparent
-	switch {
-	case e.IsDisabled():
-	case pressed:
-		target = press
-	case e.FocusVisible():
-		target = focus
-	case e.Hovered():
-		target = hover
+	on := func(b bool) float32 {
+		if b {
+			return 1
+		}
+		return 0
 	}
-	layer := e.AnimateColor("m3.ink.layer", target, design.T().Motion(200*time.Millisecond, ui.Linear))
+	fade := design.T().Motion(50*time.Millisecond, ui.Linear)
+	hoverA := e.AnimateTo("m3.ink.hover", on(enabled && e.Hovered()), fade)
+	focusA := e.AnimateTo("m3.ink.focus", on(enabled && e.FocusVisible()), fade)
+	pressA := e.AnimateTo("m3.ink.press", on(pressed), design.T().Motion(200*time.Millisecond, ui.Linear))
 	live := st.splashes[:0]
 	for _, s := range st.splashes {
-		end := s.start.Add(sparkle)
-		if !s.up.IsZero() && s.up.After(end) {
-			end = s.up
-		}
-		if now.Before(end.Add(200*time.Millisecond)) || (pressed && s.up.IsZero()) {
+		if !s.done {
 			live = append(live, s)
 		}
 	}
 	st.splashes = live
-	if layer.A == 0 && len(live) == 0 {
+	if hoverA == 0 && focusA == 0 && pressA == 0 && len(live) == 0 {
 		return e
 	}
-	splashes := append([]splash(nil), live...)
-	return e.DrawOver(func(p *ui.Painter, r ui.Rect) {
-		p.Clip(r, radius, func() {
-			if layer.A > 0 {
-				p.Fill(r, layer, radius)
+	return e.Draw(func(p *ui.Painter, r ui.Rect) {
+		for _, l := range []struct {
+			c ui.Color
+			a float32
+		}{{focus, focusA}, {hover, hoverA}, {press, pressA}} {
+			if l.a > 0 && l.c.A > 0 {
+				c := l.c
+				c.A = uint8(float32(c.A)*l.a + .5)
+				p.Fill(r, c, radius)
 			}
-			t := p.Now()
-			for _, s := range splashes {
-				el := float32(t.Sub(s.start)) / float32(sparkle)
-				dx := max(s.x, r.W-s.x)
-				dy := max(s.y, r.H-s.y)
-				target := float32(math.Hypot(float64(dx), float64(dy))) * 1.15
-				prog := min(el, 1)
-				rad := target * (1 - (1-prog)*(1-prog)*(1-prog))
-				a := float32(1)
-				if el < .1 {
-					a = el / .1
-				}
-				if s.up.IsZero() {
-					// Held: the sparkle stays at its size until release.
-				} else {
-					if fade := el - .6; fade > 0 {
-						a *= max(0, 1-fade/.4)
-					}
-					if out := float32(t.Sub(s.up)) / float32(200*time.Millisecond); out > 0 {
-						a *= max(0, 1-out)
-					}
-				}
-				if a > 0 {
-					c := splashC
-					c.A = uint8(float32(c.A) * a)
-					p.FillPath((&ui.Path{}).Circle(r.X+s.x, r.Y+s.y, rad), c)
-				}
+		}
+		t := p.Now()
+		reach := sparkleReach * float32(math.Hypot(float64(r.W), float64(r.H))) / 2
+		moving := false
+		for i := range st.splashes {
+			s := &st.splashes[i]
+			if s.start.IsZero() {
+				s.start = t
 			}
-			if len(splashes) > 0 {
-				p.AnimationFrame()
+			k := float32(t.Sub(s.start)) / float32(sparkle)
+			if k >= 1 {
+				s.done = true
+				continue
 			}
-		})
+			moving = true
+			if r.W <= 0 || r.H <= 0 {
+				continue
+			}
+			grow := design.FastOutSlowIn(min(k/.75, 1))
+			a := float32(1)
+			switch {
+			case k < .13:
+				a = k / .13
+			case k > .4:
+				a = 1 - (k-.4)/.6
+			}
+			rad := reach * grow
+			if a <= 0 || rad <= 0 {
+				continue
+			}
+			// The wave drifts from the press to the middle as it grows.
+			drift := min(grow*2, 1)
+			cx := (s.x + (r.W/2-s.x)*drift) / r.W
+			cy := (s.y + (r.H/2-s.y)*drift) / r.H
+			if cx == 0 && cy == 0 {
+				cx = 1e-6
+			}
+			stops := make([]ui.GradientStop, len(sparkleStops))
+			for i, f := range sparkleStops {
+				c := splashC
+				c.A = uint8(float32(c.A)*a*f + .5)
+				stops[i] = ui.GradientStop{Color: c, At: (.5 + float32(i)/8) / 1.5}
+			}
+			p.FillRadialGradient(r, ui.RadialGradient{Center: ui.Point{X: cx, Y: cy}, Radius: 1.5 * rad, Stops: stops}, radius)
+		}
+		if moving {
+			p.AnimationFrame()
+		}
 	})
 }
