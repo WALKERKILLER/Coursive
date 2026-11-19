@@ -93,6 +93,10 @@ func (s *Store) Strings(key string) ([]string, bool) {
 	return out, true
 }
 
+// ReadOnlyStore keeps changed preferences in memory without writing them,
+// for a test run that must leave the user's files as they were.
+var ReadOnlyStore bool
+
 func (s *Store) set(key string, v any) {
 	s.mu.Lock()
 	if v == nil {
@@ -103,6 +107,9 @@ func (s *Store) set(key string, v any) {
 	b, _ := json.Marshal(s.m)
 	path := s.path
 	s.mu.Unlock()
+	if ReadOnlyStore {
+		return
+	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	tmp := path + ".tmp"
 	if os.WriteFile(tmp, b, 0o600) == nil {

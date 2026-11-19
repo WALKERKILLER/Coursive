@@ -56,7 +56,9 @@ type PlayerPage struct {
 	fullscreen bool
 	panelOpen  bool
 	started    bool
-	cancel     func()
+	// canvas is the lecture's study canvas while the page shows it.
+	canvas *StudyCanvas
+	cancel func()
 	// An arrow key held boosts the speed (Kazumi style).
 	rightAt time.Time
 	held    bool
@@ -101,6 +103,9 @@ func NewPlayerPage(id string, startMs int) m3.Page {
 
 // Dispose saves the position and stops playing.
 func (p *PlayerPage) Dispose() {
+	if p.canvas != nil {
+		p.canvas.Dispose()
+	}
 	p.assistant.Dispose()
 	if p.cancel != nil {
 		p.cancel()
@@ -116,13 +121,76 @@ func (p *PlayerPage) Dispose() {
 	p.ctl.Close()
 }
 
-// CanPop leaves full screen before the page.
+// CanPop leaves full screen before the page; on the canvas, the system
+// back action first returns from a followed citation, and leaving saves
+// the canvas.
 func (p *PlayerPage) CanPop() bool {
 	if p.fullscreen {
 		p.setFullscreen(false)
 		return false
 	}
+	if p.canvas != nil {
+		if !p.canvas.ReturnFromSource() {
+			p.leave()
+		}
+		return false
+	}
 	return true
+}
+
+// openCanvas shows the lecture on its study canvas.
+func (p *PlayerPage) openCanvas() {
+	if p.canvas != nil {
+		return
+	}
+	var panelView func(c *ui.Context)
+	panelView = func(c *ui.Context) { p.panel.Show(c) }
+	p.canvas = NewStudyCanvas(p.ctl, func(c *ui.Context) { p.view.Show(c, p.canvasViewOpts()) }, panelView, p.classic, p.leave, func(text string) {
+		p.ctl.PanelTab = "assistant"
+		Assistant.Send(text)
+	})
+}
+
+func (p *PlayerPage) canvasViewOpts() PlayerViewOpts {
+	return PlayerViewOpts{Fullscreen: p.fullscreen, OnFullscreen: func() { p.setFullscreen(!p.fullscreen) }, OnBack: p.leave}
+}
+
+// flushCanvas saves the canvas; when it cannot, it says so and offers a
+// recovery file, and done gets false.
+func (p *PlayerPage) flushCanvas(done func(bool)) {
+	if p.canvas == nil {
+		done(true)
+		return
+	}
+	canvas := p.canvas
+	canvas.Flush(func(ok bool) {
+		if ok {
+			done(true)
+			return
+		}
+		m3.ShowDialog(func(c *ui.Context, r *m3.Route) {
+			m3.AlertDialog(c, m3.Alert{Title: l10n.StudyUnsaved, Message: l10n.StudyUnsavedBody, Actions: func() {
+				if m3.TextButton(c, l10n.StudyKeepEditing).Clicked() {
+					r.Pop(nil)
+				}
+				if m3.FilledButton(c, l10n.StudyExportRecovery).Clicked() {
+					r.Pop(nil)
+					canvas.ExportRecovery()
+				}
+			}})
+		}, nil)
+		done(false)
+	})
+}
+
+// classic leaves the canvas for the player.
+func (p *PlayerPage) classic() {
+	p.flushCanvas(func(ok bool) {
+		if ok && p.canvas != nil {
+			p.canvas.Dispose()
+			p.canvas = nil
+		}
+	})
 }
 
 func (p *PlayerPage) setFullscreen(v bool) {
@@ -137,12 +205,23 @@ func (p *PlayerPage) leave() {
 		p.setFullscreen(false)
 		return
 	}
-	m3.RootNav.PopPage(p)
+	p.flushCanvas(func(ok bool) {
+		if ok {
+			if p.canvas != nil {
+				p.canvas.Dispose()
+				p.canvas = nil
+			}
+			m3.RootNav.PopPage(p)
+		}
+	})
 }
 
 // keys are the player's shortcuts, while no text field has the focus.
 func (p *PlayerPage) keys(c *ui.Context) {
 	if c.FocusTakesText() || m3.AnyRoute() {
+		return
+	}
+	if p.canvas != nil && p.canvas.Keys(c) {
 		return
 	}
 	ctl, v := p.ctl, p.view
@@ -241,7 +320,7 @@ func (p *PlayerPage) View(c *ui.Context) {
 		case ctl.LoadError != nil:
 			m3.Scaffold{AppBar: &m3.AppBar{}, Body: func() { widgets.ErrorState(c, ctl.LoadError, ctl.Load) }}.Show(c)
 		default:
-			opts := PlayerViewOpts{Fullscreen: p.fullscreen, OnFullscreen: func() { p.setFullscreen(!p.fullscreen) }, OnBack: p.leave}
+			opts := PlayerViewOpts{Fullscreen: p.fullscreen, OnFullscreen: func() { p.setFullscreen(!p.fullscreen) }, OnBack: p.leave, OnCanvas: p.openCanvas}
 			if wide {
 				opts.PanelOpen = &p.panelOpen
 				if !p.fullscreen {
@@ -249,6 +328,16 @@ func (p *PlayerPage) View(c *ui.Context) {
 				}
 			}
 			switch {
+			case p.canvas != nil:
+				// StudyCanvasSurface: the canvas follows the app's theme;
+				// printed pages keep their own light background.
+				surface := cs.SurfaceContainerLow
+				top, right, bottom, left := c.SafeArea()
+				if p.fullscreen {
+					surface, top, right, bottom, left = ui.RGB(0, 0, 0), 0, 0, 0, 0
+				}
+				p.canvas.fullscreen = p.fullscreen
+				ui.Box(c).Fill().Background(surface).Padding(top, right, bottom, left).Children(func() { p.canvas.Show(c) })
 			case p.fullscreen:
 				p.view.Show(c, opts)
 			case wide:

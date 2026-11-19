@@ -7,14 +7,16 @@ package main
 // scripts/mygo-drive.py). Release builds leave it out.
 //
 // With COURSIVE_READONLY set, it refuses every request but GET and HEAD,
-// so a run that plays a lecture or opens an editor leaves the library,
-// playback positions and statistics as they were.
+// and writes no preferences, so a run that plays a lecture or opens an
+// editor leaves the library, playback positions, statistics and settings
+// as they were.
 import (
 	"errors"
 	"net/http"
 	"os"
 
 	_ "github.com/egoist/mygo/plugins/automation"
+	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 )
 
 type readOnly struct{ next http.RoundTripper }
@@ -29,5 +31,6 @@ func (r readOnly) RoundTrip(req *http.Request) (*http.Response, error) {
 func init() {
 	if os.Getenv("COURSIVE_READONLY") != "" {
 		http.DefaultTransport = readOnly{http.DefaultTransport}
+		core.ReadOnlyStore = true
 	}
 }
