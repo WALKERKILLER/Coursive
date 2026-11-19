@@ -22,11 +22,27 @@ type SnackBar struct {
 	shown     time.Time
 	id        int
 	gone      bool
+	entered   bool
 }
 
 var (
 	snacks    []*SnackBar
 	snackNext int
+	// snackHidden is when the last bar began to go: the next one waits
+	// for it, as the messenger shows one bar at a time.
+	snackHidden time.Time
+)
+
+// The M3 floating SnackBar's motion: over 250 ms it unfolds from its
+// bottom edge as easeInOutQuart goes while its opacity comes in through
+// Interval(.4, .6, easeInCirc); hidden, it keeps its height and fades
+// back through the same interval.
+const snackTransition = 250 * time.Millisecond
+
+var (
+	snackHeight   = ui.CubicBezier(.77, 0, .175, 1)
+	snackFade     = interval(.4, .6, ui.CubicBezier(.6, .04, .98, .335))
+	snackFadeBack = flipped(snackFade)
 )
 
 // snackKey keys a bar apart from the dialogs beside it in the overlay,
@@ -62,8 +78,15 @@ func SnackAction(msg, label string, fn func()) {
 // HideSnackBar is hideCurrentSnackBar.
 func HideSnackBar() {
 	if len(snacks) > 0 {
-		snacks = snacks[1:]
+		hideSnack(time.Now())
 	}
+}
+
+func hideSnack(now time.Time) {
+	if !snacks[0].shown.IsZero() {
+		snackHidden = now
+	}
+	snacks = snacks[1:]
 }
 
 // ClearSnackBars is clearSnackBars.
@@ -74,12 +97,16 @@ func buildSnackBars(c *ui.Context) {
 		return
 	}
 	s := snacks[0]
-	now := time.Now()
+	now := c.Now()
+	if wait := snackTransition - now.Sub(snackHidden); s.shown.IsZero() && wait > 0 {
+		c.After(wait)
+		return
+	}
 	if s.shown.IsZero() {
 		s.shown = now
 	}
 	if now.Sub(s.shown) >= s.Duration {
-		snacks = snacks[1:]
+		hideSnack(now)
 		c.Invalidate()
 		return
 	}
@@ -91,8 +118,15 @@ func buildSnackBars(c *ui.Context) {
 		bar := ui.Row(c.Key(snackKey(s.id))).Absolute().Bottom(10).Left((w-width)/2).Width(width).
 			MinHeight(48).AlignItems(ui.Center).Padding(0, 8, 0, 16).Gap(8).
 			Radius(design.CornerXS).Background(sch.InverseSurface)
-		bar = Elevation(bar, 6).Transition(ui.ElementTransition{Duration: 250 * time.Millisecond,
-			Ease: design.FastOutSlowIn, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
+		bar = Elevation(bar, 6).Transition(ui.ElementTransition{Duration: snackTransition, ExitEase: snackFadeBack, Exit: &ui.Motion{Opacity: 0}})
+		if !s.entered {
+			bar.Jump("m3.snack", 0)
+			s.entered = true
+		}
+		if t := bar.AnimateTo("m3.snack", 1, design.T().Motion(snackTransition, ui.Linear)); t < 1 {
+			r := bar.LayoutBounds()
+			bar = bar.Opacity(snackFade(t)).ClipInset((1-snackHeight(t))*r.H, -16, -16, -16, 0)
+		}
 		bar.Children(func() {
 			ui.Column(c).Grow(1).PaddingY(14).Children(func() {
 				if s.Content != nil {

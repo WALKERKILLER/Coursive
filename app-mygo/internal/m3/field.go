@@ -173,7 +173,7 @@ func (f Field) Show(c *ui.Context, value *string) ui.Element {
 		if empty && hint != "" {
 			input.Placeholder(hint).PlaceholderColor(s.OnSurfaceVariant)
 		}
-		anim := design.T().Motion(200*time.Millisecond, design.FastOutSlowIn)
+		anim := design.T().Motion(fieldTransition, design.FastOutSlowIn)
 		fl := box.AnimateTo("m3.field.float", map[bool]float32{false: 0, true: 1}[floating || f.Label == ""], anim)
 		hovered := box.Hovered() || input.Hovered()
 		border, width := s.Outline, float32(1)
@@ -230,13 +230,27 @@ func (f Field) Show(c *ui.Context, value *string) ui.Element {
 			}
 			p.StrokePath(outlineWithGap(rr, radius-in, gapStart, gapEnd), bw, borderC)
 		})
-		if f.Error != "" || f.Helper != "" || f.Counter {
+		// _HelperError: the error fades in over the helper, which fades
+		// out, and comes down from a quarter of its height above, linearly
+		// over 167 ms; going, it goes back the same way.
+		shown := ui.Local(outer, "m3.field.shown", func() string { return "" })
+		if f.Error != "" {
+			*shown = f.Error
+		}
+		ev := outer.AnimateTo("m3.field.error", map[bool]float32{false: 0, true: 1}[f.Error != ""], design.T().Motion(fieldTransition, ui.Linear))
+		if ev == 0 {
+			*shown = ""
+		}
+		if *shown != "" || f.Helper != "" || f.Counter {
 			ui.Row(c).Padding(4, 16, 0, 16).Gap(16).Children(func() {
-				msg, col := f.Helper, s.OnSurfaceVariant
-				if f.Error != "" {
-					msg, col = f.Error, s.Error
-				}
-				Text(c, msg, tt().BodySmall.C(col)).Grow(1)
+				ui.Box(c).Grow(1).Basis(0).Children(func() {
+					helper := Text(c, f.Helper, tt().BodySmall.C(s.OnSurfaceVariant))
+					if *shown == "" {
+						return
+					}
+					helper.Opacity(1 - ev).Absolute().Top(0).Left(0).Right(0)
+					Text(c, *shown, tt().BodySmall.C(s.Error)).Opacity(ev).TranslatePercent(0, -25*(1-ev))
+				})
 				if f.Counter && f.MaxLength > 0 {
 					Text(c, itoa(utf8.RuneCountInString(*value))+"/"+itoa(f.MaxLength), tt().BodySmall.C(s.OnSurfaceVariant))
 				}
@@ -245,6 +259,10 @@ func (f Field) Show(c *ui.Context, value *string) ui.Element {
 	})
 	return input
 }
+
+// fieldTransition is InputDecorator's: the label floats and the border
+// changes over 167 ms.
+const fieldTransition = 167 * time.Millisecond
 
 func itoa(n int) string {
 	if n == 0 {

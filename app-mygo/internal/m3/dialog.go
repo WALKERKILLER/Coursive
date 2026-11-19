@@ -121,9 +121,10 @@ func Host(c *ui.Context) {
 func buildDialog(c *ui.Context, r *Route) {
 	open := r.open
 	ui.DialogBase(c.Key(r.id), &open, func(backdrop, panel ui.Element) {
-		// The barrier is Colors.black54; the route fades in over 150 ms.
+		// The barrier is Colors.black54; the route fades in over 150 ms
+		// as easeOut goes, and out back along it.
 		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).Padding(24, 40).
-			Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, Ease: design.EaseOut,
+			Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, Ease: design.EaseOut, ExitEase: flipped(design.EaseOut),
 				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		panel.Background(ui.Transparent).MaxHeightPercent(100)
 		r.Build(c, r)

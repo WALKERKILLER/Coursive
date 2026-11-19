@@ -20,7 +20,10 @@ func Tip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 		tip.AttachTo(anchor, ui.AnchorBottom, ui.AnchorTop).Margin(4, 0, 0, 0).
 			MinHeight(24).Padding(4, 8).Radius(design.CornerXS).Background(s.InverseSurface).
 			MaxWidth(360).Justify(ui.Center).AttachedOrigin().
+			// RawTooltip fades in over 150 ms and out over 75, fastOutSlowIn
+			// both ways.
 			Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, ExitDuration: 75 * time.Millisecond,
+				Ease: design.FastOutSlowIn, ExitEase: flipped(design.FastOutSlowIn),
 				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		tip.Children(func() { Text(c, text, tt().BodySmall.C(s.OnInverseSurface)) })
 	})

@@ -588,7 +588,8 @@ func jobProgress(c *ui.Context, job core.Job) {
 		bar := ui.Box(c).FillWidth()
 		v := float64(bar.AnimateTo("v", float32(job.Progress()), design.T().Motion(design.Medium2, nil)))
 		bar.Children(func() {
-			pr := m3.Progress{Value: m3.Of(v), Radius: design.CornerFull}
+			motion := design.T().Motion(design.Medium2, ui.Linear)
+			pr := m3.Progress{Value: m3.Of(v), Radius: design.CornerFull, Motion: &motion}
 			switch {
 			case running && !known:
 				pr.Value = nil

@@ -119,7 +119,8 @@ func (t Tile) Show(c *ui.Context) ui.Element {
 		e = Tip(c, e, t.Tooltip)
 	}
 	if t.Tap {
-		Ink(e, s.OnSurface, radius)
+		// ListTile's InkWell takes the theme's colours, not a state layer.
+		InkWell(e, radius)
 	}
 	gap := t.Gap
 	if gap == 0 {

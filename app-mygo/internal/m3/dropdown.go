@@ -1,8 +1,6 @@
 package m3
 
 import (
-	"time"
-
 	"github.com/egoist/mygo/ui"
 	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 	"github.com/walkerkiller/coursive/app-mygo/internal/icons"
@@ -75,7 +73,7 @@ func Dropdown[T comparable](c *ui.Context, key any, o DropdownOpts, entries []Dr
 				Icon(c, ic, 24, s.OnSurfaceVariant)
 			})
 		})
-		anim := design.T().Motion(200*time.Millisecond, design.FastOutSlowIn)
+		anim := design.T().Motion(fieldTransition, design.FastOutSlowIn)
 		border, width, labelC := s.Outline, float32(1), s.OnSurfaceVariant
 		switch {
 		case o.Disabled:

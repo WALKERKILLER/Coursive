@@ -27,6 +27,8 @@ var (
 	EaseOutBack = ui.CubicBezier(0.175, 0.885, 0.32, 1.275)
 	// Ease is Curves.ease, which TabController.animateTo moves along.
 	Ease = ui.CubicBezier(0.25, 0.1, 0.25, 1)
+	// LegacyDecelerate is Easing.legacyDecelerate, the modal bottom sheet's.
+	LegacyDecelerate = ui.CubicBezier(0, 0, 0.2, 1)
 )
 
 const (

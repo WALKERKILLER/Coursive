@@ -21,6 +21,10 @@ type Progress struct {
 	Size   float32
 	Stroke float32
 	Radius float32
+	// Motion, if set, eases the value to each new one, as the indicator
+	// inside a TweenAnimationBuilder; without it the value shows at once,
+	// as the indicators' own do.
+	Motion *ui.Animation
 }
 
 func pv(v float64) *float64 { return &v }
@@ -55,7 +59,9 @@ func Linear(c *ui.Context, p Progress) ui.Element {
 	var value float32 = -1
 	if p.Value != nil {
 		value = float32(min(max(*p.Value, 0), 1))
-		value = e.AnimateTo("m3.linear", value, design.T().Motion(250*time.Millisecond, design.EaseInOut))
+		if p.Motion != nil {
+			value = e.AnimateTo("m3.linear", value, *p.Motion)
+		}
 		e = e.Range(0, 1, float64(value))
 	}
 	phase := float32(0)
@@ -151,7 +157,9 @@ func Circular(c *ui.Context, p Progress) ui.Element {
 	var value float32 = -1
 	if p.Value != nil {
 		value = float32(min(max(*p.Value, 0), 1))
-		value = e.AnimateTo("m3.circular", value, design.T().Motion(250*time.Millisecond, design.EaseInOut))
+		if p.Motion != nil {
+			value = e.AnimateTo("m3.circular", value, *p.Motion)
+		}
 		e = e.Range(0, 1, float64(value))
 	}
 	phase := float32(0)

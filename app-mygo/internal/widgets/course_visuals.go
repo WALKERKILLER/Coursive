@@ -393,7 +393,8 @@ func JobProgressLine(c *ui.Context, job core.Job) ui.Element {
 		parts = append(parts, core.FmtSpeed(float64(job.Speed())))
 	}
 	return ui.Column(c).FillWidth().Children(func() {
-		pr := m3.Progress{Radius: 4}
+		motion := design.T().Motion(design.Medium2, design.Standard)
+		pr := m3.Progress{Radius: 4, Motion: &motion}
 		if job.State() != "queued" {
 			pr.Value = m3.Of(job.Progress())
 		}

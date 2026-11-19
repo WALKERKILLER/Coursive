@@ -77,11 +77,16 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 		fg, avatarC = s.OnSurfaceVariant, s.OnSurfaceVariant
 	}
 	side := s.OutlineVariant
-	if ch.Selected && (ch.Kind == FilterChip || ch.Kind == ChoiceChip || ch.Kind == InputChip) {
-		bg, fg, avatarC = s.SecondaryContainer, s.OnSecondaryContainer, s.OnSecondaryContainer
+	selectable := ch.Kind == FilterChip || ch.Kind == ChoiceChip || ch.Kind == InputChip
+	selBG := bg
+	if selectable {
+		selBG = s.SecondaryContainer
+	}
+	if ch.Selected && selectable {
+		fg, avatarC = s.OnSecondaryContainer, s.OnSecondaryContainer
 	}
 	if ch.BG.A != 0 {
-		bg = ch.BG
+		bg, selBG = ch.BG, ch.BG
 	}
 	if ch.FG.A != 0 {
 		fg, avatarC = ch.FG, ch.FG
@@ -91,9 +96,7 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 	}
 	if ch.Disabled {
 		fg, avatarC, side = DisabledContent(), DisabledContent(), DisabledContainer()
-		if ch.Selected {
-			bg = DisabledContainer()
-		}
+		selBG = DisabledContainer()
 	}
 	h := float32(32) + Density()*4
 	if ch.Compact {
@@ -113,12 +116,19 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 	} else {
 		e = ui.Box(c)
 	}
-	check := ch.Selected && !ch.NoCheck && (ch.Kind == FilterChip || ch.Kind == ChoiceChip)
-	hasAvatar := ch.Avatar != 0 || ch.AvatarFn != nil || check
+	checks := !ch.NoCheck && (ch.Kind == FilterChip || ch.Kind == ChoiceChip)
+	avatar := ch.Avatar != 0 || ch.AvatarFn != nil
 	padL, padR := float32(8), float32(8)
-	e = e.Row().AlignItems(ui.Center).Height(h).Padding(0, padR, 0, padL).Radius(radius).Shrink(0).
-		Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Colors: true, Width: true})
-	if bg.A != 0 {
+	e = e.Row().AlignItems(ui.Center).Height(h).Padding(0, padR, 0, padL).Radius(radius).Shrink(0)
+	// RawChip's controllers: the background goes to the selected colour
+	// over 195 ms, the room for a check mark opens over 150 ms and the
+	// check draws itself over the last 150 ms of the 195; going back, the
+	// room closes over the 150 ms through Interval(.49, 1) and the check
+	// fades through Interval(.74, 1) of the 195. The label changes at once.
+	sel := controller(e, "m3.chip.select", ch.Selected, chipSelect)
+	room := controller(e, "m3.chip.room", avatar || checks && ch.Selected, chipDrawer)
+	tick := sel.curved(interval(1-chipCheck, 1, design.FastOutSlowIn), interval(1-chipCheckBack, 1, design.FastOutSlowIn))
+	if bg := design.Lerp(bg, selBG, sel.curved(design.FastOutSlowIn, nil)); bg.A != 0 {
 		e = e.Background(bg)
 	}
 	if !ch.NoSide {
@@ -128,11 +138,8 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 		e = Tip(c, e, ch.Tooltip)
 	}
 	if tap {
-		layer := s.OnSurfaceVariant
-		if ch.Selected {
-			layer = s.OnSecondaryContainer
-		}
-		Ink(e, layer, radius)
+		// RawChip's InkWell takes the theme's colours, not a state layer.
+		InkWell(e, radius)
 	}
 	style := tt().LabelLarge
 	if ch.LabelStyle != nil {
@@ -140,17 +147,27 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 	}
 	var deleted bool
 	e.Children(func() {
-		if hasAvatar {
-			ui.Row(c).Size(18, 18).Center().Shrink(0).Children(func() {
-				switch {
-				case check:
-					Icon(c, icons.Check, 18, fg)
-				case ch.AvatarFn != nil:
-					ch.AvatarFn(avatarC)
-				default:
-					Icon(c, ch.Avatar, 18, avatarC)
-				}
-			})
+		// The avatar and the delete icon each take a square as tall as the
+		// content: the label's line, 16 DIPs at least (contentSize).
+		box := min(max(16, style.Size*style.Height), h)
+		square := func(child func()) {
+			ui.Row(c).Size(box, box).Shrink(0).Center().Children(child)
+		}
+		if w := box * room.curved(design.FastOutSlowIn, interval(1-chipDrawerBack, 1, design.FastOutSlowIn)); w > 0 {
+			slot := ui.Row(c).Size(w, box).Shrink(0).Clip()
+			switch {
+			case avatar && ch.Selected && checks:
+				slot.Children(func() { square(func() { Icon(c, icons.Check, 18, fg) }) })
+			case ch.AvatarFn != nil:
+				slot.Children(func() { square(func() { ch.AvatarFn(avatarC) }) })
+			case avatar:
+				slot.Children(func() { square(func() { Icon(c, ch.Avatar, 18, avatarC) }) })
+			case checks && tick > 0:
+				back := sel.status == ctlReverse
+				slot.Draw(func(p *ui.Painter, r ui.Rect) {
+					paintChipCheck(p, r.X+box*.125, r.Y+box*.125, box*.75, 2*box/24, fg, tick, back)
+				})
+			}
 		}
 		Text(c, ch.Label, style.C(fg)).NoWrap().Padding(0, 8)
 		if ch.Deletable {
@@ -164,7 +181,7 @@ func (ch Chip) Show(c *ui.Context) ChipResult {
 			if tip == "" {
 				tip = l10n.CommonDelete
 			}
-			d := ui.ButtonBase(c).FocusRing(false).Size(18, 18).Center().Radius(9).Cursor(ui.CursorPointer).
+			d := ui.ButtonBase(c).FocusRing(false).Size(box, box).Center().Radius(box / 2).Cursor(ui.CursorPointer).
 				Label(tip).Children(func() { Icon(c, ic, size, fg) })
 			Tip(c, d, tip)
 			deleted = d.Clicked()
@@ -187,4 +204,42 @@ func ChoiceChipOf(c *ui.Context, label string, selected bool) bool {
 // ActionChipOf is ActionChip(avatar: Icon(ic), label:).
 func ActionChipOf(c *ui.Context, ic icons.Icon, label string) bool {
 	return Chip{Kind: ActionChip, Avatar: ic, Label: label}.Show(c).Clicked()
+}
+
+// RawChip's durations, and the parts of the select animation the check
+// mark takes each way, and the room for it going back.
+const (
+	chipSelect     = 195 * time.Millisecond
+	chipDrawer     = 150 * time.Millisecond
+	chipCheck      = float32(150) / 195
+	chipCheckBack  = float32(50) / 195
+	chipDrawerBack = float32(100) / 195
+)
+
+// flipped is curve.flipped: an Exit going as a reversed CurvedAnimation
+// comes back along curve.
+func flipped(curve ui.Easing) ui.Easing { return func(t float32) float32 { return 1 - curve(1-t) } }
+
+// interval is Interval(a, b, curve:).
+func interval(a, b float32, curve ui.Easing) ui.Easing {
+	return func(t float32) float32 { return curve(clamp01((t - a) / (b - a))) }
+}
+
+// paintChipCheck is _paintCheck: the check mark's two strokes drawn from
+// the short side to the long side as t goes to 1 and, going back, whole,
+// fading as t does.
+func paintChipCheck(p *ui.Painter, x, y, size, stroke float32, col ui.Color, t float32, back bool) {
+	if back {
+		col, t = design.WithOpacity(col, t), 1
+	}
+	sx, sy := x+size*.15, y+size*.45
+	mx, my := x+size*.4, y+size*.7
+	ex, ey := x+size*.85, y+size*.25
+	path := (&ui.Path{}).MoveTo(sx, sy)
+	if t < .5 {
+		path.LineTo(lerp(sx, mx, t*2), lerp(sy, my, t*2))
+	} else {
+		path.LineTo(mx, my).LineTo(lerp(mx, ex, (t-.5)*2), lerp(my, ey, (t-.5)*2))
+	}
+	p.StrokePath(path.Cap(ui.ButtCap).Join(ui.MiterJoin), stroke, col)
 }
