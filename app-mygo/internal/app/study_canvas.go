@@ -1135,6 +1135,7 @@ func (s *StudyCanvas) canvas(c *ui.Context, d *study.Document) {
 		if b := input.Bounds(); b.W > 0 {
 			s.origin = ptOf(b.X, b.Y)
 		}
+		s.assetDrops(input)
 		input.Children(func() {
 			s.capture(c, d, stage)
 			// The interaction feedback (lasso, handles, the eraser) and the

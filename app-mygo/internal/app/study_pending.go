@@ -11,6 +11,7 @@ import (
 type studyParts struct {
 	stageParts
 	evidenceParts
+	shelfParts
 	ctx            *ui.Context
 	docks          map[string]*dockState
 	penItems       map[string]ui.Rect
@@ -68,19 +69,13 @@ const (
 	shelfThreads
 )
 
-func (s *StudyCanvas) openReview(cardID, turnID string)                                         {}
-func (s *StudyCanvas) reviewRect() *study.Rect                                                  { return nil }
-func (s *StudyCanvas) reviewNarrow() bool                                                       { return false }
-func (s *StudyCanvas) connectionSettings()                                                      {}
-func (s *StudyCanvas) editKnowledge(card *study.Card)                                           {}
-func paintConnections(p *ui.Painter, r ui.Rect, d *study.Document, stage study.Rect, ch chrome) {}
-func (s *StudyCanvas) dropOutline(c *ui.Context)                                                {}
-func (s *StudyCanvas) reviewPanel(c *ui.Context)                                                {}
-func (s *StudyCanvas) shelf(c *ui.Context)                                                      {}
-func (s *StudyCanvas) toggleShelf(t shelfTab)                                                   {}
-func (s *StudyCanvas) activePlugins() map[string]bool                                           { return nil }
-func (s *StudyCanvas) canvasToolContributions() []any                                           { return nil }
-func (s *StudyCanvas) pluginsOffered() bool                                                     { return false }
-func (s *StudyCanvas) plugins()                                                                 {}
+func (s *StudyCanvas) openReview(cardID, turnID string) {}
+func (s *StudyCanvas) reviewRect() *study.Rect          { return nil }
+func (s *StudyCanvas) reviewNarrow() bool               { return false }
+func (s *StudyCanvas) reviewPanel(c *ui.Context)        {}
+func (s *StudyCanvas) activePlugins() map[string]bool   { return nil }
+func (s *StudyCanvas) canvasToolContributions() []any   { return nil }
+func (s *StudyCanvas) pluginsOffered() bool             { return false }
+func (s *StudyCanvas) plugins()                         {}
 func (s *StudyCanvas) pluginObject(c *ui.Context, o *study.PluginObject, stage study.Rect, active bool) {
 }

@@ -1017,7 +1017,7 @@ func (s *StudyCanvas) snapshotDragHandle(c *ui.Context) {
 	busy := s.selectionBusy || s.snapshotPreparing
 	box := ui.Box(c.Key("study-snapshot-attach"))
 	if !busy {
-		box = box.DragDataFrom(nil).Drag(s.selectionDrop())
+		box = box.Drag(s.selectionDrop())
 	}
 	if box.Dragging() && !s.snapshotPreparing && s.pendingDrop != nil && !s.pendingDrop.started {
 		s.startSelectionDrop(s.pendingDrop)
