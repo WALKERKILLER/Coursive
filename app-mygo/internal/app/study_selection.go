@@ -121,7 +121,7 @@ func (s *StudyCanvas) editSelectionFilters() {
 func (s *StudyCanvas) selectionActions(c *ui.Context) {
 	content := len(s.selection) > 0 || len(s.detail.StrokeIDs) > 0
 	ink := len(s.detail.StrokeIDs) > 0
-	m3.Menu(c, "study-selection-actions", m3.BelowEnd, func(t ui.Element, open bool) {
+	m3.Menu(c, "study-selection-actions", m3.BelowEnd|m3.Popup, func(t ui.Element, open bool) {
 		ic := icons.MoreHoriz
 		if s.selectionBusy {
 			ic = icons.HourglassTop

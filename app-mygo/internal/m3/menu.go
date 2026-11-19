@@ -54,9 +54,13 @@ const (
 	Over
 	// BelowEnd is below the trigger, aligned to its end.
 	BelowEnd
+	// Popup, added to a placement, opens and closes the menu as
+	// PopupMenuButton and showMenu do; MenuAnchor's menus, without it,
+	// come and go at once.
+	Popup MenuStyle = 1 << 8
 )
 
-type menuState struct{ open bool }
+type menuState struct{ open, shown bool }
 
 // Menu builds a menu button: trigger styles the button (the base's
 // trigger, which takes the clicks) and items fill the menu, with the app's
@@ -67,11 +71,19 @@ func Menu(c *ui.Context, key any, style MenuStyle, trigger func(t ui.Element, op
 	st := ui.Local(wrap, "m3.menu", func() menuState { return menuState{} })
 	wrap.Children(func() {
 		m := ui.MenuBase(c, &st.open)
+		if !st.open {
+			st.shown = false
+		}
 		t := m.Trigger.FocusRing(false)
 		trigger(t, st.open)
 		m.Popup(func(panel ui.Element) {
+			list := items()
 			stylePanel(panel)
-			switch style {
+			var fade func(int) float32
+			if style&Popup != 0 {
+				fade = popupMotion(panel, &st.shown, len(list))
+			}
+			switch style &^ Popup {
 			case Over:
 				panel.AttachTo(t, ui.AnchorTopRight, ui.AnchorTopRight)
 			case BelowEnd:
@@ -79,7 +91,7 @@ func Menu(c *ui.Context, key any, style MenuStyle, trigger func(t ui.Element, op
 			default:
 				panel.AttachTo(t, ui.AnchorBottomLeft, ui.AnchorTopLeft)
 			}
-			buildItems(c, m, items())
+			buildItems(c, m, list, fade)
 		})
 	})
 	return wrap
@@ -87,27 +99,63 @@ func Menu(c *ui.Context, key any, style MenuStyle, trigger func(t ui.Element, op
 
 func stylePanel(panel ui.Element) {
 	panel = panel.MinWidth(112).MaxWidth(320).PaddingY(8).Radius(design.CornerMD).
-		Background(cs().SurfaceContainer).AttachedOrigin().
-		Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, ExitDuration: 100 * time.Millisecond,
-			Ease: design.EaseOutCubic, Enter: &ui.Motion{Opacity: 0, Scale: .95, Y: -4, Flip: true},
-			Exit: &ui.Motion{Opacity: 0}, Shadows: true})
+		Background(cs().SurfaceContainer)
 	Elevation(panel, 3)
 }
 
-func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
+const popupDuration = 300 * time.Millisecond
+
+// popupMotion animates a menu's panel as _PopupMenu does over 300 ms: the
+// panel fades in over the first third while it unfolds from its top end,
+// its width over the first unit of the time and its height over n units,
+// a unit being 1/(n+1.5), and its items fade in one after another, each
+// over 1.5 units. It returns each item's opacity, or nil once open.
+func popupMotion(panel ui.Element, shown *bool, n int) func(int) float32 {
+	if !*shown {
+		panel.Jump("m3.popup", 0)
+		*shown = true
+	}
+	panel.Transition(ui.ElementTransition{Duration: popupDuration, ExitEase: popupClose, Exit: &ui.Motion{Opacity: 0}})
+	t := panel.AnimateTo("m3.popup", 1, design.T().Motion(popupDuration, ui.Linear))
+	if t >= 1 {
+		return nil
+	}
+	unit := 1 / (float32(n) + 1.5)
+	w, h := clamp01(t/unit), clamp01(t/(unit*float32(max(n, 1))))
+	// The clip reaches past the edges by about the shadow, as Material's
+	// shadow follows its box while it unfolds.
+	const reach = 16
+	r := panel.LayoutBounds()
+	panel.Opacity(clamp01(3*t)).ClipInset(-reach, -reach, (1-h)*r.H-reach*h, (1-w)*r.W-reach*w, design.CornerMD)
+	return func(i int) float32 { return clamp01((t - float32(i+1)*unit) / (1.5 * unit)) }
+}
+
+// popupClose is how far a closing popup menu has gone at t of its Exit.
+// The route runs back through Interval(0, 2/3): the panel folds up over
+// the last 45% of the 300 ms and fades over its last 67. The Exit's copy
+// takes no clip, so it fades as much as the folding panel shows less.
+func popupClose(t float32) float32 { return clamp01((t - .6) / .4) }
+
+func clamp01(v float32) float32 { return min(max(v, 0), 1) }
+
+func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem, fade func(int) float32) {
 	s := cs()
 	for i, it := range items {
 		it := it
+		op := float32(1)
+		if fade != nil {
+			op = fade(i)
+		}
 		if it.Divider {
-			ui.Box(c.Key(i)).Height(1).Margin(8, 0).Background(s.OutlineVariant).Shrink(0)
+			ui.Box(c.Key(i)).Height(1).Margin(8, 0).Background(s.OutlineVariant).Shrink(0).Opacity(op)
 			continue
 		}
 		if it.Header {
-			Text(c.Key(i), it.Label, tt().LabelLarge.C(s.OnSurfaceVariant)).Padding(8, 12)
+			Text(c.Key(i), it.Label, tt().LabelLarge.C(s.OnSurfaceVariant)).Padding(8, 12).Opacity(op)
 			continue
 		}
 		if it.Panel != nil {
-			ui.Column(c.Key(i)).Shrink(0).Children(func() { it.Panel(c) })
+			ui.Column(c.Key(i)).Shrink(0).Opacity(op).Children(func() { it.Panel(c) })
 			continue
 		}
 		var e ui.Element
@@ -124,6 +172,9 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 		}
 		e = e.Disabled(it.Disabled).DimDisabled(false).Row().AlignItems(ui.Center).
 			MinHeight(48+Density()*4).Padding(0, 12).Gap(12)
+		if op < 1 {
+			e = e.Opacity(op)
+		}
 		fg, ic := s.OnSurface, s.OnSurfaceVariant
 		if it.Danger {
 			fg, ic = s.Error, s.Error
@@ -180,7 +231,7 @@ func buildItems(c *ui.Context, m ui.MenuParts, items []MenuItem) {
 		if len(it.Sub) > 0 {
 			m.Submenu(e, func(panel ui.Element) {
 				stylePanel(panel)
-				buildItems(c, m, it.Sub)
+				buildItems(c, m, it.Sub, nil)
 			})
 			continue
 		}
@@ -210,16 +261,21 @@ func MenuButton(c *ui.Context, key any, ic icons.Icon, tooltip string, style Men
 	}, items)
 }
 
-type ctxMenu struct{ open bool }
+type ctxMenu struct{ open, shown bool }
 
 // ContextMenu gives target a menu on a right click or a long press, with
 // the app's menu look.
 func ContextMenu(c *ui.Context, target ui.Element, items func() []MenuItem) ui.Element {
 	st := ui.Local(target, "m3.ctx", func() ctxMenu { return ctxMenu{} })
 	m := ui.ContextMenuBase(c, target, &st.open)
+	if !st.open {
+		st.shown = false
+	}
 	m.Popup(func(panel ui.Element) {
+		// The menu is showMenu's.
+		list := items()
 		stylePanel(panel)
-		buildItems(c, m, items())
+		buildItems(c, m, list, popupMotion(panel, &st.shown, len(list)))
 	})
 	return target
 }

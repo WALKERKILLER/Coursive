@@ -207,7 +207,7 @@ func (s *StudyCanvas) canvasActions(c *ui.Context) []func() {
 	}
 	return []func(){
 		func() {
-			m3.Menu(c, "study-add", m3.Over, func(t ui.Element, open bool) { menuTrigger(t, icons.Add, "添加模块") }, func() []m3.MenuItem {
+			m3.Menu(c, "study-add", m3.Over|m3.Popup, func(t ui.Element, open bool) { menuTrigger(t, icons.Add, "添加模块") }, func() []m3.MenuItem {
 				return []m3.MenuItem{
 					{Label: "视频", OnTap: s.videoModules},
 					{Label: "文件", OnTap: func() { s.importMaterial("", false, nil) }},
@@ -236,7 +236,7 @@ func (s *StudyCanvas) canvasActions(c *ui.Context) []func() {
 			if l := s.ctl.Lecture; l != nil {
 				title = l.ShortTitle()
 			}
-			m3.Menu(c, "study-menu", m3.Over, func(t ui.Element, open bool) { menuTrigger(t, icons.MoreHoriz, title) }, func() []m3.MenuItem {
+			m3.Menu(c, "study-menu", m3.Over|m3.Popup, func(t ui.Element, open bool) { menuTrigger(t, icons.MoreHoriz, title) }, func() []m3.MenuItem {
 				header := "学习画布"
 				if l := s.ctl.Lecture; l != nil {
 					header = l.ShortTitle()

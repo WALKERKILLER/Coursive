@@ -681,7 +681,7 @@ func (s *StudyCanvas) selectionBar(c *ui.Context) {
 				// pixels.
 				s.snapshotDragHandle(c)
 				if ink {
-					m3.MenuButton(c, "study-selection-color", icons.PaletteOutlined, "选区改色", m3.Below, func() []m3.MenuItem {
+					m3.MenuButton(c, "study-selection-color", icons.PaletteOutlined, "选区改色", m3.Below|m3.Popup, func() []m3.MenuItem {
 						var items []m3.MenuItem
 						for _, col := range penPalette[:20] {
 							col := col
@@ -694,7 +694,7 @@ func (s *StudyCanvas) selectionBar(c *ui.Context) {
 						}
 						return items
 					})
-					m3.MenuButton(c, "study-selection-width", icons.LineWeight, "选区粗细", m3.Below, func() []m3.MenuItem {
+					m3.MenuButton(c, "study-selection-width", icons.LineWeight, "选区粗细", m3.Below|m3.Popup, func() []m3.MenuItem {
 						var items []m3.MenuItem
 						for _, w := range []float64{1, 2, 3, 5, 8, 12} {
 							w := w

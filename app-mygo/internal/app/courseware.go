@@ -197,7 +197,7 @@ func coursewareCard(c *ui.Context, lectureID string, f core.CoursewareFile, pars
 			if !f.Parsed() && !parsing && m3.IconBtn(c, icons.DocumentScannerOutlined, l10n.CoursewareParseTooltip).Clicked() {
 				parse()
 			}
-			m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.Over, func() []m3.MenuItem {
+			m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.Over|m3.Popup, func() []m3.MenuItem {
 				var items []m3.MenuItem
 				if f.Parsed() {
 					items = append(items, m3.MenuItem{Label: l10n.CoursewareReadParsed, OnTap: func() { OpenCoursewareReader(f, lectureID, "") }})

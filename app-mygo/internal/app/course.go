@@ -290,7 +290,7 @@ func (p *CoursePage) View(c *ui.Context) {
 				if course != nil {
 					PluginMenuButton(c, "course.menu", core.J{"course_id": p.id}, false, "course")
 					co := *course
-					m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.Over, func() []m3.MenuItem { return courseMenu(co) })
+					m3.MenuButton(c, "more", icons.MoreVertRounded, l10n.CommonMore, m3.Over|m3.Popup, func() []m3.MenuItem { return courseMenu(co) })
 				}
 				m3.HGap(c, design.SpaceSM)
 			},

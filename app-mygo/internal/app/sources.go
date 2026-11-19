@@ -286,7 +286,7 @@ func sourcePluginCard(c *ui.Context, p core.SourcePlugin) {
 				}
 				m3.Text(c, line, tt.BodySmall.C(cs.OnSurfaceVariant))
 			})
-			m3.MenuButton(c, "more", 0, l10n.CommonMore, m3.Over, func() []m3.MenuItem {
+			m3.MenuButton(c, "more", 0, l10n.CommonMore, m3.Over|m3.Popup, func() []m3.MenuItem {
 				toggle := l10n.CommonEnable
 				if p.Enabled() {
 					toggle = l10n.CommonDisable

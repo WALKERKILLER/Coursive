@@ -140,7 +140,7 @@ func Dropdown[T comparable](c *ui.Context, key any, o DropdownOpts, entries []Dr
 				}
 				items = append(items, it)
 			}
-			ui.Scroll(c).FillWidth().Shrink(1).Children(func() { buildItems(c, m, items) })
+			ui.Scroll(c).FillWidth().Shrink(1).Children(func() { buildItems(c, m, items, nil) })
 		})
 		if o.Helper != "" {
 			Text(c, o.Helper, t.BodySmall.C(s.OnSurfaceVariant)).Padding(4, 16, 0, 16)
