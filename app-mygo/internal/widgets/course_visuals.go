@@ -64,27 +64,54 @@ func hsl(h, s, l float64) ui.Color {
 	return ui.RGB(to(r), to(g), to(b))
 }
 
-// dartRandom is dart:math's Random, a 48-bit linear congruential
-// generator, so the draws land on the Flutter client's numbers.
+// dartRandom is dart:math's Random as the Dart VM implements it
+// (math_patch.dart): multiply-with-carry on a 64-bit state, seeded through
+// Thomas Wang's 64-bit mix, so the draws land on the Flutter client's
+// numbers.
 type dartRandom struct{ state uint64 }
 
-const lcgMask = (1 << 48) - 1
-
 func newDartRandom(seed uint32) *dartRandom {
-	return &dartRandom{state: (uint64(seed) ^ 0x5DEECE66D) & lcgMask}
+	n := uint64(seed)
+	n = ^n + n<<21
+	n ^= n >> 24
+	n *= 265
+	n ^= n >> 14
+	n *= 21
+	n ^= n >> 28
+	n += n << 31
+	if n == 0 {
+		n = 0x5a17
+	}
+	r := &dartRandom{state: n}
+	// Cranked a couple of times to spread the seed's bits, as Random(seed).
+	for range 4 {
+		r.next()
+	}
+	return r
 }
 
-func (r *dartRandom) next() uint64 {
-	r.state = (r.state*0x5DEECE66D + 0xB) & lcgMask
-	return r.state
+func (r *dartRandom) next() {
+	r.state = 0xffffda61*(r.state&0xffffffff) + r.state>>32
 }
 
-func (r *dartRandom) intn(max int) int { return int((r.next() >> 16) % uint64(max)) }
+func (r *dartRandom) intn(max int) int {
+	m := uint64(max)
+	if m&(m-1) == 0 {
+		r.next()
+		return int(r.state & 0xffffffff & (m - 1))
+	}
+	for {
+		r.next()
+		rnd := r.state & 0xffffffff
+		res := rnd % m
+		if rnd-res+m <= 1<<32 {
+			return int(res)
+		}
+	}
+}
 
 func (r *dartRandom) float() float64 {
-	a := r.next() >> 5
-	b := r.next() >> 6
-	return (float64(a)*67108864.0 + float64(b)) / 9007199254740992.0
+	return (float64(r.intn(1<<26))*(1<<27) + float64(r.intn(1<<27))) / (1 << 53)
 }
 
 // The shapes that read well as a hero form, and the softer accents.
@@ -207,32 +234,35 @@ func CourseGlyph(c *ui.Context, course core.Course, size float32, hover bool) ui
 	})
 }
 
-// CourseArt fills e with the course's cover. t morphs the hero shape
-// (hover, press); spin turns it slowly, in turns; layout < 0 uses the
-// recipe's.
-func CourseArt(e ui.Element, course core.Course, t, spin float64, layout int) ui.Element {
+// CourseArt fills e with the course's cover, rounded by radius as by a
+// ClipRRect: what an element draws is not clipped by its own Clip, which
+// clips its children. t morphs the hero shape (hover, press); spin turns it
+// slowly, in turns; layout < 0 uses the recipe's.
+func CourseArt(e ui.Element, course core.Course, t, spin float64, layout int, radius float32) ui.Element {
 	s := CourseScheme(course)
 	spec := CourseArtSpec(artKey(course))
 	if layout < 0 {
 		layout = spec.layout
 	}
-	return e.Clip().Draw(func(p *ui.Painter, r ui.Rect) { PaintCourseArt(p, r, spec, s, t, spin, layout) })
+	return e.Radius(radius).Clip().Draw(func(p *ui.Painter, r ui.Rect) {
+		p.Clip(r, radius, func() { PaintCourseArt(p, r, spec, s, t, spin, layout) })
+	})
 }
 
 // CourseArtTurning is CourseArt turning once every period from start, as a
 // repeating AnimationController does; reduced motion holds it still. It
 // repaints at 15 fps, which is smooth at so slow a turn.
-func CourseArtTurning(e ui.Element, course core.Course, t float64, start time.Time, period time.Duration) ui.Element {
+func CourseArtTurning(e ui.Element, course core.Course, t float64, start time.Time, period time.Duration, radius float32) ui.Element {
 	s := CourseScheme(course)
 	spec := CourseArtSpec(artKey(course))
 	still := design.T().ReduceMotion
-	return e.Clip().Draw(func(p *ui.Painter, r ui.Rect) {
+	return e.Radius(radius).Clip().Draw(func(p *ui.Painter, r ui.Rect) {
 		spin := 0.0
 		if !still {
 			spin = math.Mod(float64(p.Now().Sub(start))/float64(period), 1)
 			p.AnimationFrameRate(15)
 		}
-		PaintCourseArt(p, r, spec, s, t, spin, spec.layout)
+		p.Clip(r, radius, func() { PaintCourseArt(p, r, spec, s, t, spin, spec.layout) })
 	})
 }
 

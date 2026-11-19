@@ -459,7 +459,7 @@ func continueCard(c *ui.Context, l core.Lecture, co core.Course, ok bool, width 
 			fallback := func() {
 				f := ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(scheme.PrimaryContainer)
 				if ok {
-					widgets.CourseArt(f, co, 0, 0, 3)
+					widgets.CourseArt(f, co, 0, 0, 3, 0)
 				}
 			}
 			if l.Thumb() != "" {

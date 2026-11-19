@@ -34,7 +34,7 @@ func FirstCoursePanel(c *ui.Context, width float32) {
 		}
 		p.FillRadialGradient(r, ui.RadialGradient{Center: center, Radius: rad, Stops: []ui.GradientStop{
 			{Color: design.WithOpacity(cs.PrimaryContainer, .55), At: 0}, {Color: cs.SurfaceContainerLow, At: 1},
-		}}, 0)
+		}}, design.CornerXL)
 	})
 	text := func() {
 		align := ui.Start

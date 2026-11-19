@@ -40,8 +40,9 @@ type navEntry struct {
 	then func()
 }
 
-// pageDuration is FadeForwardsPageTransitionsBuilder.kTransitionMilliseconds.
-const pageDuration = 450 * time.Millisecond
+// PageDuration is FadeForwardsPageTransitionsBuilder.kTransitionMilliseconds,
+// which the Heroes of a page fly over too.
+const PageDuration = 450 * time.Millisecond
 
 // NewNavigator is a navigator showing root.
 func NewNavigator(root Page) *Navigator {
@@ -196,9 +197,9 @@ func (n *Navigator) View(c *ui.Context) ui.Element {
 	defer func() { navStack = navStack[:len(navStack)-1] }()
 	el := time.Since(n.changedAt)
 	if design.T().ReduceMotion {
-		el = pageDuration
+		el = PageDuration
 	}
-	t := float32(el) / float32(pageDuration)
+	t := float32(el) / float32(PageDuration)
 	if t >= 1 {
 		n.leaving = nil
 	}
