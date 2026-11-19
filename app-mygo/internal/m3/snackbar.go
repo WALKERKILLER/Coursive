@@ -29,6 +29,10 @@ var (
 	snackNext int
 )
 
+// snackKey keys a bar apart from the dialogs beside it in the overlay,
+// whose keys are route numbers too.
+type snackKey int
+
 // ShowSnackBar is ScaffoldMessenger.showSnackBar: it queues the bar behind
 // the one showing.
 func ShowSnackBar(s SnackBar) {
@@ -84,7 +88,7 @@ func buildSnackBars(c *ui.Context) {
 	w, _ := c.Size()
 	width := min(float32(480), w-16)
 	ui.Overlay(c, func() {
-		bar := ui.Row(c.Key(s.id)).Absolute().Bottom(10).Left((w-width)/2).Width(width).
+		bar := ui.Row(c.Key(snackKey(s.id))).Absolute().Bottom(10).Left((w-width)/2).Width(width).
 			MinHeight(48).AlignItems(ui.Center).Padding(0, 8, 0, 16).Gap(8).
 			Radius(design.CornerXS).Background(sch.InverseSurface)
 		bar = Elevation(bar, 6).Transition(ui.ElementTransition{Duration: 250 * time.Millisecond,
