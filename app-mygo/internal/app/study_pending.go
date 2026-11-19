@@ -71,11 +71,4 @@ const (
 	shelfThreads
 )
 
-func (s *StudyCanvas) activePlugins() map[string]bool { return nil }
-func (s *StudyCanvas) canvasToolContributions() []any { return nil }
-func (s *StudyCanvas) pluginsOffered() bool           { return false }
-func (s *StudyCanvas) plugins()                       {}
-func (s *StudyCanvas) pluginObject(c *ui.Context, o *study.PluginObject, stage study.Rect, active bool) {
-}
-
 func (s *StudyCanvas) exportOutlinePdf(turn core.J) {}

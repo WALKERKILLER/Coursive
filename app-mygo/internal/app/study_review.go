@@ -42,7 +42,7 @@ type outlineReview struct {
 	// pendingFocus is a row to select, giving the panel the keys.
 	pendingFocus string
 	wantKeys     bool
-	editFocused      bool
+	editFocused  bool
 }
 
 type reviewParts struct{ outline *outlineReview }

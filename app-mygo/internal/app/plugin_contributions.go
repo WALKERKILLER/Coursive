@@ -110,15 +110,25 @@ func pluginPageByRoute(route string) (pluginPage, bool) {
 // UiSlotOutlet renders one slot target; an empty slot renders nothing, so
 // adding a slot never changes a page no plugin contributes to.
 func UiSlotOutlet(c *ui.Context, target string, ctx core.J) {
+	list := slotContributions(target)
+	if len(list) == 0 {
+		return
+	}
+	ui.Column(c).FillWidth().Children(func() {
+		for _, s := range list {
+			PluginDeclarativeView(c, PluginDeclarative{PluginID: s.Entry.PluginID(), ViewID: s.Entry.ID, Document: s.Document, HostContext: ctx})
+		}
+	})
+}
+
+// slotContributions are the contributions to target in display order.
+func slotContributions(target string) []slotContribution {
 	_, all := pluginContributions()
 	var list []slotContribution
 	for _, s := range all {
 		if s.Target == target {
 			list = append(list, s)
 		}
-	}
-	if len(list) == 0 {
-		return
 	}
 	sort.SliceStable(list, func(i, j int) bool {
 		a, b := list[i].Entry, list[j].Entry
@@ -133,11 +143,7 @@ func UiSlotOutlet(c *ui.Context, target string, ctx core.J) {
 		}
 		return a.ID < b.ID
 	})
-	ui.Column(c).FillWidth().Children(func() {
-		for _, s := range list {
-			PluginDeclarativeView(c, PluginDeclarative{PluginID: s.Entry.PluginID(), ViewID: s.Entry.ID, Document: s.Document, HostContext: ctx})
-		}
-	})
+	return list
 }
 
 // PluginDeclarative is a plugin's declarative document bound to its view
