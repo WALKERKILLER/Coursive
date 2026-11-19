@@ -158,7 +158,7 @@ func (d Dock) bar(c *ui.Context) int {
 					col = s.OnSecondaryContainer
 				}
 				dest := ui.Column(c.Key(i)).Grow(1).Basis(0).FillHeight().Justify(ui.Center).AlignItems(ui.Center).
-					Role(ui.RoleTab).Selected(i == d.Selected).Label(it.Label).Cursor(ui.CursorPointer)
+					Role(ui.RoleTab).Checked(i == d.Selected).Label(it.Label).Cursor(ui.CursorPointer)
 				dest = m3.InkWell(dest, DockLens)
 				dest.Children(func() {
 					navIcon(c, it, lit, col)

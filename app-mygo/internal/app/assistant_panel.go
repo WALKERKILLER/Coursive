@@ -332,7 +332,8 @@ func (p *AssistantPanel) header(c *ui.Context) {
 // panel the segments become icons with tooltips rather than cutting the
 // name off. It reports a new choice.
 func AssistantViewSwitch(c *ui.Context, botName, view string, disabled bool) (string, bool) {
-	box := ui.Box(c).FillWidth()
+	// Align(centerStart): the switch keeps its own width.
+	box := ui.Row(c).FillWidth().AlignItems(ui.Center)
 	st := design.TT().LabelLarge
 	w1, _ := c.MeasureText(0, st.Span(botName))
 	w2, _ := c.MeasureText(0, st.Span(l10n.ChatSessions))

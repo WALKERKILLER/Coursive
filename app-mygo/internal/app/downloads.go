@@ -428,7 +428,7 @@ func jobTile(c *ui.Context, job core.Job, selecting, picked bool, pick func()) {
 	}
 	card := m3.Tappable(c, design.CornerMD).FillWidth().Background(bg)
 	if pickMode {
-		card = card.Selected(picked)
+		card = card.Checked(picked)
 	}
 	// While picking, a tap only picks; finished jobs ignore it.
 	if card.Clicked() {

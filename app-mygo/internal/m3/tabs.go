@@ -69,7 +69,7 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 							fg = s.OnSecondaryContainer
 						}
 						b := ui.ButtonBase(c.Key(i)).FocusRing(false).Row().AlignItems(ui.Center).
-							FillHeight().Padding(0, 14).Cursor(ui.CursorPointer).Selected(on).Role(ui.RoleTab)
+							FillHeight().Padding(0, 14).Cursor(ui.CursorPointer).Checked(on).Role(ui.RoleTab)
 						b.Children(func() {
 							if on {
 								ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).Radius(design.CornerFull).Background(s.SecondaryContainer).
@@ -89,7 +89,7 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 						continue
 					}
 					b := ui.ButtonBase(c.Key(i)).FocusRing(false).Column().AlignItems(ui.Center).Justify(ui.Center).
-						FillHeight().Padding(0, 16).Cursor(ui.CursorPointer).Selected(on).Role(ui.RoleTab)
+						FillHeight().Padding(0, 16).Cursor(ui.CursorPointer).Checked(on).Role(ui.RoleTab)
 					if !o.Scrollable {
 						b = b.Grow(1).Basis(0)
 					}

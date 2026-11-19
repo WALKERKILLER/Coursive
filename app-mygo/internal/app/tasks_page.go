@@ -643,7 +643,7 @@ func taskRow(c *ui.Context, task core.J, now time.Time, selected bool, onTap fun
 	if selected {
 		bg = cs.SecondaryContainer
 	}
-	t := m3.Tappable(c, radius).FillWidth().Background(bg).Selected(selected)
+	t := m3.Tappable(c, radius).FillWidth().Background(bg).Checked(selected)
 	t.Children(func() {
 		right := float32(design.SpaceMD)
 		if card {

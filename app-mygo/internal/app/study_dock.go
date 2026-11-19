@@ -448,7 +448,7 @@ func (s *StudyCanvas) palettePen(c *ui.Context, key, label string, vertical, sel
 	if vertical {
 		w, h = 36, 24
 	}
-	e := ui.Box(c.Key(key)).Size(w, h).Role(ui.RoleButton).Label(label).Selected(selected).Cursor(ui.CursorPointer)
+	e := ui.Box(c.Key(key)).Size(w, h).Role(ui.RoleButton).Label(label).Checked(selected).Cursor(ui.CursorPointer)
 	m3.Tip(c, e, label)
 	if e.Clicked() {
 		pick()

@@ -210,14 +210,15 @@ func (s *Shell) View(c *ui.Context) {
 			for i := range dests {
 				items = append(items, s.icon(c, i, false))
 			}
+			// Docked, the rail has no leading control and no gap for one.
+			var leading func()
+			if !docked {
+				leading = func() { assistantFab(c) }
+			}
 			tapped := widgets.Rail{
 				Items: items, Selected: s.index,
-				Brand: func() { brandMark(c) },
-				Leading: func() {
-					if !docked {
-						assistantFab(c)
-					}
-				},
+				Brand:   func() { brandMark(c) },
+				Leading: leading,
 				Trailing: func() {
 					ui.Column(c).AlignItems(ui.Center).Children(func() {
 						NotificationBell(c)

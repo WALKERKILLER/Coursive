@@ -752,7 +752,7 @@ func installedRow(c *ui.Context, pl core.J, card, update, selected bool, onTap f
 	if selected {
 		bg = cs.SecondaryContainer
 	}
-	t := m3.Tappable(c, radius).FillWidth().Background(bg).Selected(selected)
+	t := m3.Tappable(c, radius).FillWidth().Background(bg).Checked(selected)
 	t.Children(func() {
 		right := float32(design.SpaceMD)
 		if card {
@@ -887,7 +887,7 @@ func marketCard(c *ui.Context, l core.J, installed, selected bool, onTap, onInst
 	if selected {
 		bg = cs.SurfaceContainer
 	}
-	card := m3.Tappable(c, design.CornerXL).FillWidth().Background(bg).Selected(selected)
+	card := m3.Tappable(c, design.CornerXL).FillWidth().Background(bg).Checked(selected)
 	if selected {
 		card = card.Border(2, cs.Primary)
 	}

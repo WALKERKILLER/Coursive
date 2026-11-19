@@ -131,7 +131,7 @@ func (s *StudyCanvas) shelf(c *ui.Context) {
 		ui.Row(c).Padding(design.SpaceMD, design.SpaceMD, design.SpaceSM, design.SpaceMD).Children(func() {
 			for _, t := range shelfTabs {
 				on := tab == t.tab
-				b := ui.ButtonBase(c.Key("study-shelf-" + t.name)).Column().Grow(1).Basis(0).AlignItems(ui.Center).Selected(on).Label(t.label).Cursor(ui.CursorPointer)
+				b := ui.ButtonBase(c.Key("study-shelf-" + t.name)).Column().Grow(1).Basis(0).AlignItems(ui.Center).Checked(on).Label(t.label).Cursor(ui.CursorPointer)
 				m3.Ink(b, cs.OnSurface, design.CornerMD)
 				b.Children(func() {
 					pill := ui.Box(c).Size(48, 30).Radius(15).Center()

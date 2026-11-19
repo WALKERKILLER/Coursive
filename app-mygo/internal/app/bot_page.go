@@ -297,7 +297,7 @@ func shapeOption(c *ui.Context, s BotShape, color string, selected bool) bool {
 		bg, fg, r = cs.SecondaryContainer, cs.OnSecondaryContainer, design.CornerXL
 	}
 	b := m3.Tappable(c.Key("shape-"+s.Key), design.CornerLG).Width(80).PaddingY(design.SpaceSM).Background(bg).
-		Label(s.Label).Selected(selected).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Colors: true})
+		Label(s.Label).Checked(selected).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Colors: true})
 	b = b.Radius(b.AnimateTo("shape.radius", r, design.T().Motion(design.Medium2, design.Emphasized)))
 	b.Children(func() {
 		ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {

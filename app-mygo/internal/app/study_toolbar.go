@@ -267,7 +267,7 @@ func (s *StudyCanvas) paperSettings() {
 						border = ch.accent
 					}
 					e := ui.Column(c.Key("paper/"+st.key)).Width(126).Padding(8).Radius(10).Border(1.5, border).AlignItems(ui.Center).
-						Cursor(ui.CursorPointer).Selected(s.paperStyle == st.key)
+						Cursor(ui.CursorPointer).Checked(s.paperStyle == st.key)
 					m3.Ink(e, ch.ink, 10)
 					if e.Clicked() {
 						s.paperStyle = st.key

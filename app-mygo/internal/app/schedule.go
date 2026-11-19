@@ -134,7 +134,7 @@ var easeOutBack = ui.CubicBezier(.175, .885, .32, 1.275)
 func DoneCheck(c *ui.Context, key any, done bool, color ui.Color) bool {
 	cs := design.S()
 	b := ui.ButtonBase(c.Key(key)).FocusRing(false).Size(40, 40).Center().Shrink(0).Cursor(ui.CursorPointer).
-		Role(ui.RoleCheckBox).Selected(done)
+		Role(ui.RoleCheckBox).Checked(done)
 	m3.Ink(b, cs.OnSurface, 22)
 	t := b.AnimateTo("done", map[bool]float32{true: 1, false: 0}[done], design.T().Motion(design.Medium2, easeOutBack))
 	k := min(max(t, 0), 1)
@@ -743,7 +743,7 @@ func (p *SchedulePage) dayCell(c *ui.Context, day time.Time, inMonth, today, sel
 		count = l10n.ScheduleDayItems(len(items))
 	}
 	cell := ui.ButtonBase(c.Key(IsoDate(day))).FocusRing(false).FillWidth().Height(height).Cursor(ui.CursorPointer).
-		Column().AlignItems(ui.Center).Justify(ui.Center).Label(l10n.ScheduleDayLabel(int(day.Month()), day.Day(), count)).Selected(selected)
+		Column().AlignItems(ui.Center).Justify(ui.Center).Label(l10n.ScheduleDayLabel(int(day.Month()), day.Day(), count)).Checked(selected)
 	cell.Children(func() {
 		anim := design.T().Motion(design.Medium1, design.Emphasized)
 		circle := ui.Box(c).Size(34, 34).Radius(17).Center().Background(fill).

@@ -299,7 +299,7 @@ func (b IconButton) Show(c *ui.Context) ui.Element {
 		e = e.Border(1, side)
 	}
 	if b.Toggle {
-		e = e.Selected(b.Selected)
+		e = e.Checked(b.Selected)
 	}
 	if b.Tooltip != "" {
 		e = Tip(c, e.Label(b.Tooltip), b.Tooltip)

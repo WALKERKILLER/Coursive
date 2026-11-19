@@ -131,7 +131,7 @@ func (r Rail) destinations(c *ui.Context, st *railState) int {
 				for i, it := range r.Items {
 					sel := i == r.Selected
 					tile := ui.Column(c.Key(i)).Height(h).Width(RailWidth - 8).MarginX(design.SpaceXS).AlignItems(ui.Center).
-						Role(ui.RoleTab).Selected(sel).Label(it.Label).Cursor(ui.CursorPointer)
+						Role(ui.RoleTab).Checked(sel).Label(it.Label).Cursor(ui.CursorPointer)
 					tile = m3.InkWell(tile, design.CornerLG)
 					tile.Children(func() {
 						m3.VGap(c, top)

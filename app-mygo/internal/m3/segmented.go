@@ -100,7 +100,7 @@ func segmentedRow[T comparable](c *ui.Context, n int, o SegOpts, seg func(int) (
 			}
 			b := ui.ButtonBase(c.Key(i)).Disabled(sg.Disabled).DimDisabled(false).FocusRing(false).
 				Row().AlignItems(ui.Center).Justify(ui.Center).Gap(8).Padding(0, 12).FillHeight().
-				Background(bg).Selected(on).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Colors: true})
+				Background(bg).Checked(on).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Colors: true})
 			if !sg.Disabled {
 				b = b.Cursor(ui.CursorPointer)
 			}
