@@ -2910,6 +2910,10 @@ const PlayerFullscreen = "全屏 (F)"
 
 const PlayerLocalSuffix = "（本地）"
 
+func PlayerMissingGstPlugins(packages any) string {
+	return "系统的 GStreamer 缺少插件包 " + fmt.Sprint(packages) + "，用系统的包管理器装上后重启 Coursive 即可播放"
+}
+
 const PlayerMute = "静音 (M)"
 
 const PlayerNoLectureAtTime = "这个时间点没有对应的课次"

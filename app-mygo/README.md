@@ -15,6 +15,10 @@ COURSIVE_DATA=/tmp/coursive-proto/data COURSIVE_LIBRARY=/tmp/coursive-proto/libr
 
 Without `COURSIVE_DATA` and `COURSIVE_LIBRARY` the daemon uses its own defaults, which is the same library the installed app reads. Point both somewhere else when trying the prototype.
 
+### Video on Linux
+
+The Flutter client brought its own decoders (libmpv through media_kit); MyGo plays through the system's GStreamer, so lectures need its plugin packages: `gst-plugins-base`, `gst-plugins-good` (MP4 and Matroska), `gst-plugins-bad` (HLS and MPEG-TS) and `gst-libav` (H.264 and AAC), or a hardware decoder such as `gst-plugin-va`. The names are Arch's; Debian and Ubuntu call them `gstreamer1.0-plugins-good` and so on. When a video fails, the player names the packages it found missing. GStreamer reads its plugins as it starts, so restart Coursive after installing one.
+
 ## Test it
 
 ```sh

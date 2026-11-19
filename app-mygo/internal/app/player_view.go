@@ -400,6 +400,9 @@ func (v *PlayerView) subtitle(c *ui.Context, scale float32) {
 
 func (v *PlayerView) errorBox(c *ui.Context, text string) {
 	tt := design.TT()
+	if pk := missingGstPackages(); len(pk) > 0 {
+		text = l10n.PlayerMissingGstPlugins(strings.Join(pk, " "))
+	}
 	ui.Column(c).MaxWidth(420).AlignItems(ui.Center).Padding(design.SpaceXL).Radius(design.CornerXL).Background(ui.RGBA(0, 0, 0, .7)).Children(func() {
 		m3.Icon(c, icons.ErrorOutlineRounded, 36, pWhite)
 		m3.VGap(c, design.SpaceMD)

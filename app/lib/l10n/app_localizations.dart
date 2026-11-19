@@ -1522,6 +1522,12 @@ abstract class AppLocalizations {
   /// **'重新加载'**
   String get playerReload;
 
+  /// No description provided for @playerMissingGstPlugins.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统的 GStreamer 缺少插件包 {packages}，用系统的包管理器装上后重启 Coursive 即可播放'**
+  String playerMissingGstPlugins(Object packages);
+
   /// No description provided for @playerNoLectureAtTime.
   ///
   /// In zh, this message translates to:

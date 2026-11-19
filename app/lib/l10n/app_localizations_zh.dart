@@ -845,6 +845,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playerReload => '重新加载';
 
   @override
+  String playerMissingGstPlugins(Object packages) {
+    return '系统的 GStreamer 缺少插件包 $packages，用系统的包管理器装上后重启 Coursive 即可播放';
+  }
+
+  @override
   String get playerNoLectureAtTime => '这个时间点没有对应的课次';
 
   @override

@@ -547,6 +547,12 @@
   "playerPlayTooltip": "播放 (空格)",
   "playerError": "播放出错",
   "playerReload": "重新加载",
+  "playerMissingGstPlugins": "系统的 GStreamer 缺少插件包 {packages}，用系统的包管理器装上后重启 Coursive 即可播放",
+  "@playerMissingGstPlugins": {
+    "placeholders": {
+      "packages": {}
+    }
+  },
   "playerNoLectureAtTime": "这个时间点没有对应的课次",
   "playerPreparing": "正在准备播放",
   "screenPlayer": "播放器",
