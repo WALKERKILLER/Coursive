@@ -196,6 +196,8 @@ var TaskTemplates = []TaskTemplate{
 // wide windows, a list with pushed detail pages otherwise, and runs of
 // every task.
 type TasksPage struct {
+	// width is the root's last width (PageWidth).
+	width    float32
 	tasks    []core.J
 	loaded   bool
 	runs     []core.J
@@ -281,7 +283,7 @@ func (p *TasksPage) View(c *ui.Context) {
 	// The page's own width, as LayoutBuilder gives it, not the window's:
 	// the docked assistant takes part of the window.
 	root := ui.Column(c).Fill().Background(design.S().Surface)
-	w := widgets.Width(root, WindowWidth)
+	w := widgets.PageWidth(root, &p.width, WindowWidth)
 	compact := w < 600
 	pad := float32(design.SpaceXL)
 	if compact {

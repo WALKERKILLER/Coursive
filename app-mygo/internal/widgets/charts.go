@@ -22,6 +22,18 @@ func Width(e ui.Element, fallback float32) float32 {
 	return fallback
 }
 
+// PageWidth is Width for a page's root, which keeps its last width in
+// *last: built anew as a page above it pops, the root is not laid out yet,
+// and the window's width would lay its first frame out wider than the
+// page is.
+func PageWidth(e ui.Element, last *float32, window float32) float32 {
+	if *last == 0 {
+		*last = window
+	}
+	*last = Width(e, *last)
+	return *last
+}
+
 // StatTile is a headline number with a label and an optional note.
 type StatTile struct {
 	Icon         icons.Icon

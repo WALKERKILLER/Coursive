@@ -89,10 +89,17 @@ type SettingsPage struct {
 	query    string
 	selected string
 	twoPane  bool
+	// width is the root's last width (PageWidth).
+	width float32
 	// nav is the settings tab's navigator, where categories open.
 	nav *m3.Navigator
 	// pending is a deep-linked category waiting for the first layout.
 	pending string
+	// pageBuilt is set as a pushed category builds. The navigator builds
+	// a page popping before the one under it, in the same frame: grown wide
+	// meanwhile, the tab's root leaves that pane empty rather than build it
+	// again beside it, which binds its state twice.
+	pageBuilt bool
 
 	list   ui.ScrollState
 	panes  map[string]*ui.ScrollState
@@ -148,6 +155,7 @@ func (p *SettingsPage) open(id string) {
 	cat := p.category(id)
 	var page m3.Page
 	page = m3.PageFunc(func(c *ui.Context) {
+		p.pageBuilt = true
 		m3.Scaffold{AppBar: &m3.AppBar{Title: cat.title}, Body: func() { p.pane(c, cat, false) }}.Show(c)
 	})
 	p.nav.Push(page)
@@ -157,6 +165,8 @@ func (p *SettingsPage) open(id string) {
 func (p *SettingsPage) View(c *ui.Context) {
 	ReportScreen(map[string]string{"screen": l10n.CommonSettings})
 	p.nav = m3.Nav()
+	covered := p.pageBuilt
+	p.pageBuilt = false
 	if s := settingsSection; s != "" {
 		settingsSection = ""
 		if id, ok := settingsAliases[s]; ok {
@@ -164,7 +174,7 @@ func (p *SettingsPage) View(c *ui.Context) {
 		}
 	}
 	root := ui.Row(c).Fill().AlignItems(ui.Stretch)
-	w := widgets.Width(root, WindowWidth)
+	w := widgets.PageWidth(root, &p.width, WindowWidth)
 	p.twoPane = w >= settingsTwoPaneWidth
 	// A deep link opens its category once the page is laid out, so that it
 	// knows whether to push it or show it beside the list.
@@ -192,7 +202,11 @@ func (p *SettingsPage) View(c *ui.Context) {
 			d = 0
 		}
 		ui.Column(c).Grow(1).Basis(0).FillHeight().Key(cat.id).Transition(ui.ElementTransition{Duration: d, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, Y: 12}}).Children(func() { p.pane(c, cat, true) })
+			Enter: &ui.Motion{Opacity: 0, Y: 12}}).Children(func() {
+			if !covered {
+				p.pane(c, cat, true)
+			}
+		})
 	})
 }
 

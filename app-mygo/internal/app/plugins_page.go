@@ -159,6 +159,8 @@ func PluginSettingsSection(c *ui.Context) {
 // plugin in a side pane; 已安装 lists installed plugins beside the
 // selected one's detail. Narrow windows push the detail instead.
 type PluginsPage struct {
+	// width is the root's last width (PageWidth).
+	width      float32
 	catalog    core.J
 	catalogErr error
 	fetching   bool
@@ -285,7 +287,7 @@ func (p *PluginsPage) View(c *ui.Context) {
 	// The page's own width, as LayoutBuilder gives it, not the window's:
 	// the docked assistant takes part of the window.
 	root := ui.Column(c).Fill().Background(design.S().Surface)
-	w := widgets.Width(root, WindowWidth)
+	w := widgets.PageWidth(root, &p.width, WindowWidth)
 	compact := w < 600
 	wide := w >= 880
 	pad := float32(design.SpaceXL)
