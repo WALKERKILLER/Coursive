@@ -54,7 +54,6 @@ type datePickerState struct {
 	text, err       string
 	yearScroll      ui.ScrollState
 	yearPlaced      bool
-	dir             int
 }
 
 // ShowDatePicker is showDatePicker in Material 3: the calendar with a month
@@ -71,7 +70,7 @@ func ShowDatePicker(o DatePicker, done func(time.Time)) {
 	if o.Initial.IsZero() {
 		init = midnight(time.Now())
 	}
-	st := &datePickerState{selected: init, month: time.Date(init.Year(), init.Month(), 1, 0, 0, 0, 0, time.Local), dir: 1}
+	st := &datePickerState{selected: init, month: time.Date(init.Year(), init.Month(), 1, 0, 0, 0, 0, time.Local)}
 	help := o.Help
 	if help == "" {
 		help = datePickerHelp
@@ -183,7 +182,8 @@ func datePickerCalendar(c *ui.Context, st *datePickerState, first, last time.Tim
 		yb.Children(func() {
 			ui.Row(c).AlignItems(ui.Center).FillHeight().Children(func() {
 				Text(c, fmt.Sprintf("%d年%d月", m.Year(), int(m.Month())), t.TitleSmall.C(s.OnSurfaceVariant))
-				turn := yb.AnimateTo("turn", map[bool]float32{true: 180, false: 0}[st.years], design.T().Motion(200*time.Millisecond, design.EaseInOut))
+				// _DatePickerModeToggleButton turns its arrow linearly.
+				turn := yb.AnimateTo("turn", map[bool]float32{true: 180, false: 0}[st.years], design.T().Motion(200*time.Millisecond, ui.Linear))
 				Icon(c, icons.ArrowDropDown, 24, s.OnSurfaceVariant).Rotate(turn)
 			})
 		})
@@ -197,10 +197,10 @@ func datePickerCalendar(c *ui.Context, st *datePickerState, first, last time.Tim
 			prev := m.AddDate(0, -1, 0)
 			next := m.AddDate(0, 1, 0)
 			if (IconButton{Icon: icons.ChevronLeft, Tooltip: prevMonthTooltip, Disabled: prev.AddDate(0, 1, -1).Before(first)}).Show(c).Clicked() {
-				st.month, st.dir = prev, -1
+				st.month = prev
 			}
 			if (IconButton{Icon: icons.ChevronRight, Tooltip: nextMonthTooltip, Disabled: next.After(last)}).Show(c).Clicked() {
-				st.month, st.dir = next, 1
+				st.month = next
 			}
 		}
 	})
@@ -252,40 +252,61 @@ func datePickerCalendar(c *ui.Context, st *datePickerState, first, last time.Tim
 				ui.Box(c).Height(42).Center().Children(func() { Text(c, w, t.BodyLarge.C(s.OnSurface)) })
 			}
 		})
-		lead := int(m.Weekday())
-		days := m.AddDate(0, 1, -1).Day()
-		grid := ui.Grid(c.Key(m.Format("2006-01"))).FillWidth().Columns(7).Height(42 * 6).AlignContent(ui.Start).
-			Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Ease: design.EaseOut,
-				Enter: &ui.Motion{Opacity: 0, XPercent: 10 * float32(st.dir)}, Shadows: true})
-		grid.Children(func() {
-			for range lead {
-				ui.Box(c).Height(42)
-			}
-			for d := 1; d <= days; d++ {
-				day := time.Date(m.Year(), m.Month(), d, 0, 0, 0, 0, time.Local)
-				disabled := day.Before(first) || day.After(last)
-				sel := day.Equal(st.selected)
-				ui.Box(c.Key(d)).Height(42).Center().Children(func() {
-					b := Tappable(c, design.CornerFull).Size(40, 40).Center().Disabled(disabled)
-					fg := s.OnSurface
-					switch {
-					case disabled:
-						fg = DisabledContent()
-					case sel:
-						fg = s.OnPrimary
-						b = b.Background(s.Primary)
-					case day.Equal(today):
-						fg = s.Primary
-						b = b.Border(1, s.Primary)
-					}
-					b.Children(func() { Text(c, strconv.Itoa(d), t.BodyLarge.C(fg)) })
-					if b.Clicked() && !disabled {
-						st.selected = day
-					}
-				})
+		// The months slide as CalendarDatePicker's PageView does, over
+		// 200 ms as Curves.ease goes; a year picked shows its month at once.
+		page := m.Year()*12 + int(m.Month()) - 1
+		area := ui.Box(c).FillWidth().Height(42 * 6).ClipX()
+		shown := ui.Local(area, "m3.date.page", func() int { return page })
+		if d := page - *shown; d > 1 || d < -1 {
+			area.Jump("month", float32(page))
+		}
+		*shown = page
+		off := area.AnimateTo("month", float32(page), design.T().Motion(200*time.Millisecond, design.Ease))
+		area.Children(func() {
+			for p := int(math.Floor(float64(off))); float32(p) < off+1; p++ {
+				monthGrid(c, st, time.Date(p/12, time.Month(p%12+1), 1, 0, 0, 0, 0, time.Local), today, first, last).
+					Absolute().Top(0).Left(0).Right(0).TranslatePercent((float32(p)-off)*100, 0)
 			}
 		})
 	})
+}
+
+// monthGrid is the days of the month m.
+func monthGrid(c *ui.Context, st *datePickerState, m, today, first, last time.Time) ui.Element {
+	s := cs()
+	t := tt()
+	lead := int(m.Weekday())
+	days := m.AddDate(0, 1, -1).Day()
+	grid := ui.Grid(c.Key(m.Format("2006-01"))).FillWidth().Columns(7).Height(42 * 6).AlignContent(ui.Start)
+	grid.Children(func() {
+		for range lead {
+			ui.Box(c).Height(42)
+		}
+		for d := 1; d <= days; d++ {
+			day := time.Date(m.Year(), m.Month(), d, 0, 0, 0, 0, time.Local)
+			disabled := day.Before(first) || day.After(last)
+			sel := day.Equal(st.selected)
+			ui.Box(c.Key(d)).Height(42).Center().Children(func() {
+				b := Tappable(c, design.CornerFull).Size(40, 40).Center().Disabled(disabled)
+				fg := s.OnSurface
+				switch {
+				case disabled:
+					fg = DisabledContent()
+				case sel:
+					fg = s.OnPrimary
+					b = b.Background(s.Primary)
+				case day.Equal(today):
+					fg = s.Primary
+					b = b.Border(1, s.Primary)
+				}
+				b.Children(func() { Text(c, strconv.Itoa(d), t.BodyLarge.C(fg)) })
+				if b.Clicked() && !disabled {
+					st.selected = day
+				}
+			})
+		}
+	})
+	return grid
 }
 
 // TimeOfDay is an hour and a minute.
@@ -466,7 +487,17 @@ func timeDial(c *ui.Context, st *timePickerState) {
 		}
 		selAngle = float64(st.t.Hour%12) / 12 * 2 * math.Pi
 	}
-	anim := design.T().Motion(200*time.Millisecond, design.EaseInOut)
+	// _Dial moves its hand over 200 ms as standardEasing goes, the short
+	// way round (_nearest).
+	anim := design.T().Motion(200*time.Millisecond, design.FastOutSlowIn)
+	turned := ui.Local(e, "m3.dial.angle", func() float64 { return selAngle })
+	for selAngle-*turned > math.Pi {
+		selAngle -= 2 * math.Pi
+	}
+	for *turned-selAngle > math.Pi {
+		selAngle += 2 * math.Pi
+	}
+	*turned = selAngle
 	sa := e.AnimateTo("angle", float32(selAngle), anim)
 	sr := e.AnimateTo("radius", selR, anim)
 	e.Draw(func(p *ui.Painter, rc ui.Rect) {

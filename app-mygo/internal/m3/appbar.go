@@ -1,10 +1,7 @@
 package m3
 
 import (
-	"time"
-
 	"github.com/egoist/mygo/ui"
-	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 	"github.com/walkerkiller/coursive/app-mygo/internal/icons"
 )
 
@@ -43,13 +40,11 @@ func (a AppBar) Show(c *ui.Context) ui.Element {
 	if a.BG.A != 0 {
 		bg = a.BG
 	}
-	lvl := float32(0)
+	// The bar is a canvas Material: its tint for scrolledUnderElevation
+	// changes at once (AnimatedPhysicalModel without animateColor), and
+	// its shadow is transparent.
 	if a.Scrolled {
-		lvl = 3
-	}
-	lvl = ui.Box(c).Size(0, 0).AnimateTo("m3.appbar.lvl", lvl, design.T().Motion(200*time.Millisecond, ui.Linear))
-	if lvl > 0 {
-		bg = Tinted(bg, lvl)
+		bg = Tinted(bg, 3)
 	}
 	h := a.Height
 	if h == 0 {

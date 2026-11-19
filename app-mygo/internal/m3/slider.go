@@ -2,15 +2,15 @@ package m3
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/walkerkiller/coursive/app-mygo/internal/design"
 )
 
 // Slider is Slider (year2023: false) with the app's SliderTheme: a 12 DIP
-// track, its inactive part in secondaryContainer, a 4×44 handle with a 6
-// DIP gap on each side, and a stop dot at the end.
+// track, its inactive part in secondaryContainer, a 4×44 handle with the
+// track 6 DIPs from its centre on each side (trackGap), and a stop dot at
+// the end.
 type Slider struct {
 	Min, Max  float64
 	Divisions int
@@ -68,11 +68,12 @@ func (sl Slider) Show(c *ui.Context, value *float64) SliderResult {
 	}
 	frac := float32((*value - sl.Min) / (sl.Max - sl.Min))
 	frac = min(max(frac, 0), 1)
+	// The handle narrows to 2 at once while pressed, and the track's gap,
+	// 6 from its centre, narrows with it: 4 from the handle either way.
 	hw := float32(4)
 	if pressed {
 		hw = 2
 	}
-	hw = e.AnimateTo("m3.slider.hw", hw, design.T().Motion(100*time.Millisecond, ui.Linear))
 	label := sl.Label
 	divs := sl.Divisions
 	focus := e.FocusVisible()
@@ -81,7 +82,7 @@ func (sl Slider) Show(c *ui.Context, value *float64) SliderResult {
 		w := x1 - x0
 		cy := r.Y + r.H/2
 		hx := x0 + w*frac
-		const gap = 6
+		const gap = 4
 		outer, inner := th/2, float32(2)
 		top := cy - th/2
 		if a := hx - gap - hw/2 - x0; a > 0 {

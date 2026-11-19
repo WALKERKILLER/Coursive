@@ -285,28 +285,34 @@ func (x Expansion) Show(c *ui.Context, key any) ui.Element {
 	wrap.Children(func() {
 		t := x.Tile
 		t.Tap = true
-		turn := wrap.AnimateTo("m3.exp.turn", map[bool]float32{false: 0, true: 180}[*open], design.T().Motion(200*time.Millisecond, design.EaseInOut))
+		// ExpansionTile drives it all from one linear 200 ms controller
+		// through easeIn: the arrow's half turn, the icons going to primary
+		// (M3's title stays onSurface both ways) and the body's height,
+		// which Align(heightFactor:) opens from its middle, clipped.
+		k := design.EaseIn(controller(wrap, "m3.exp.open", *open, 200*time.Millisecond).v)
+		ic := design.Lerp(cs().OnSurfaceVariant, cs().Primary, k)
 		if t.Trailing == nil {
-			t.Trailing = func() {
-				col := cs().OnSurfaceVariant
-				if *open {
-					col = cs().Primary
-				}
-				Icon(c, icons.ExpandMore, 24, col).Rotate(turn)
-			}
+			t.Trailing = func() { Icon(c, icons.ExpandMore, 24, ic).Rotate(180 * k) }
 		}
-		if *open {
-			t.TextColor = cs().Primary
-			t.IconColor = cs().Primary
+		if t.IconColor.A == 0 {
+			t.IconColor = ic
 		}
 		t.NoRadius = true
 		if t.Show(c).Clicked() {
 			*open = !*open
 		}
-		if *open && x.Children != nil {
+		if k > 0 && x.Children != nil {
 			p := x.ChildPad
-			ui.Column(c).Padding(p[0], p[1], p[2], p[3]).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond,
-				Enter: &ui.Motion{Collapse: true, Opacity: 0}, Exit: &ui.Motion{Collapse: true, Opacity: 0}, Shadows: true}).Children(x.Children)
+			body := ui.Column(c.Key("m3.exp.body")).FillWidth().ClipY()
+			var inner ui.Element
+			body.Children(func() {
+				inner = ui.Column(c).FillWidth().Shrink(0).Padding(p[0], p[1], p[2], p[3]).Children(x.Children)
+			})
+			if k < 1 {
+				h := inner.LayoutBounds().H
+				body.Height(h * k)
+				inner.Translate(0, -h*(1-k)/2)
+			}
 		}
 	})
 	return wrap
