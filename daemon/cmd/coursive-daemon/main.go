@@ -196,6 +196,10 @@ func run(dataDir, libRoot, addr, node, agentScript string, watchStdin bool) erro
 	market := &sources.Market{Index: os.Getenv("COURSIVE_PLUGIN_INDEX"), IndexURL: sources.OfficialIndex, Keys: sources.OfficialKeys,
 		Cache: filepath.Join(dataDir, "plugins", ".index"), Staging: filepath.Join(dataDir, "plugins", ".staging"),
 		Registry: reg, HTTP: &http.Client{Transport: transport, Timeout: 5 * time.Minute}}
+	market.Config = func(ctx context.Context) sources.MirrorConfig {
+		kv, _ := st.Settings(ctx)
+		return sources.ParseMirrorConfig(kv[sources.MirrorSetting])
+	}
 	os.RemoveAll(market.Staging)
 	mgr := jobs.New(st, lib, nil, eng, asr.NewPool(filepath.Join(dataDir, "asr-usage.json")), bus)
 

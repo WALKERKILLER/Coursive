@@ -105,12 +105,23 @@ func (m *SourceMarket) Show(c *ui.Context, query, category string) {
 			}
 		})
 		if notice != "" {
-			marketNote(c, icons.GppMaybeOutlined, notice, false, retry)
+			marketNote(c, icons.GppMaybeOutlined, notice, false, func() {
+				if m.notice == "stale" && m3.TextButton(c, l10n.SourcesMirrorsSwitch).Clicked() {
+					OpenMirrors(m.load)
+				}
+				retry()
+			})
 			m3.VGap(c, design.SpaceMD)
 		}
 		switch {
 		case m.err != nil:
-			marketNote(c, icons.CloudOffRounded, l10n.SourcesMarketFailed(apiMessage(m.err)), true, retry)
+			// The index is on GitHub; another route may reach it.
+			marketNote(c, icons.CloudOffRounded, l10n.SourcesMarketFailed(apiMessage(m.err)), true, func() {
+				if m3.TextButton(c, l10n.SourcesMirrorsSwitch).Clicked() {
+					OpenMirrors(m.load)
+				}
+				retry()
+			})
 		case !m.loaded:
 			ui.Box(c).FillWidth().Padding(design.SpaceLG).Center().Children(func() { m3.Circular(c, m3.Progress{}) })
 		case len(m.listings) == 0 && notice != "":

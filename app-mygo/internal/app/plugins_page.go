@@ -409,6 +409,7 @@ func (p *PluginsPage) sourcesMenu(c *ui.Context, compact bool) {
 			{Icon: icons.LibraryAddOutlined, IconSize: 20, Label: l10n.PluginsCatalogs, Disabled: !third, OnTap: func() { showCatalogsDialog(p.refresh) }},
 			{Icon: icons.DriveFolderUploadOutlined, IconSize: 20, Label: l10n.PluginsInstallFrom, Disabled: !third, OnTap: showSourceDialog},
 			{Divider: true},
+			{Icon: icons.RouteOutlined, IconSize: 20, Label: l10n.SourcesMirrors, Disabled: !State.Connected(), OnTap: func() { OpenMirrors(p.market.load) }},
 			{Icon: icons.RefreshRounded, IconSize: 20, Label: l10n.CommonRefresh, Disabled: !ready, OnTap: p.refresh},
 		}
 	})

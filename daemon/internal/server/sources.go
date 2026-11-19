@@ -46,6 +46,38 @@ func (s *Server) sourceRoutes(h func(string, func(http.ResponseWriter, *http.Req
 		}
 		return map[string]any{"plugins": ls, "notice": notice, "configured": s.Market.Configured(), "platform": sources.Platform()}, nil
 	})
+	// Download routes: the GitHub mirrors the market fetches through, and
+	// their last speed test.
+	h("GET /api/sources/market/mirrors", func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		return s.Market.Mirrors(r.Context()), nil
+	})
+	h("POST /api/sources/market/mirrors/test", func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		s.Market.SpeedTest(r.Context())
+		s.Market.Forget()
+		return s.Market.Mirrors(r.Context()), nil
+	})
+	h("PUT /api/sources/market/mirrors", func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		var in sources.MirrorConfig
+		if err := decode(r, &in); err != nil {
+			return nil, err
+		}
+		if in.Mode == "" {
+			in.Mode = sources.MirrorAuto
+		}
+		for i := range in.Custom {
+			in.Custom[i].Custom = false
+		}
+		if err := s.Market.CheckMirrorConfig(in); err != nil {
+			return nil, err
+		}
+		raw, _ := json.Marshal(in)
+		if err := s.St.PutSettings(r.Context(), map[string]json.RawMessage{sources.MirrorSetting: raw}); err != nil {
+			return nil, err
+		}
+		s.Market.Forget()
+		s.Bus.Publish("settings_changed", map[string]json.RawMessage{sources.MirrorSetting: raw})
+		return s.Market.Mirrors(r.Context()), nil
+	})
 	h("POST /api/sources/market/{plugin}/stage", func(_ http.ResponseWriter, r *http.Request) (any, error) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 		defer cancel()

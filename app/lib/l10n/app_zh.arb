@@ -4458,6 +4458,51 @@
     }
   },
   "sourcesMarketVerifying": "正在下载并校验…",
+  "sourcesMirrors": "下载线路…",
+  "sourcesMirrorsTitle": "下载线路",
+  "sourcesMirrorsBody": "插件目录和安装包从 GitHub 下载。直连不畅时可以经镜像线路下载；线路只转发文件，目录的签名和安装包的校验值照常核对，线路无法改动内容。",
+  "sourcesMirrorsChoice": "线路选择",
+  "sourcesMirrorsAuto": "自动",
+  "sourcesMirrorsAutoBody": "按测速结果最快的优先，失败时依次换下一条",
+  "sourcesMirrorsUsing": "正在使用 {name}",
+  "@sourcesMirrorsUsing": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "sourcesMirrorsTest": "测速",
+  "sourcesMirrorsTesting": "测速中…",
+  "sourcesMirrorsTestedAt": "上次测速 {time}",
+  "@sourcesMirrorsTestedAt": {
+    "placeholders": {
+      "time": {}
+    }
+  },
+  "sourcesMirrorsUntested": "未测速",
+  "sourcesMirrorsResult": "{latency} ms · {speed}",
+  "@sourcesMirrorsResult": {
+    "placeholders": {
+      "latency": {},
+      "speed": {}
+    }
+  },
+  "sourcesMirrorsFailed": "不可用：{error}",
+  "@sourcesMirrorsFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "sourcesMirrorsCustom": "自定义",
+  "sourcesMirrorsAdd": "添加线路",
+  "sourcesMirrorsName": "名称",
+  "sourcesMirrorsTemplate": "地址",
+  "sourcesMirrorsTemplateHelper": "以 https 开头，GitHub 原地址处写 {example}",
+  "@sourcesMirrorsTemplateHelper": {
+    "placeholders": {
+      "example": {}
+    }
+  },
+  "sourcesMirrorsSwitch": "换线路",
   "sourcesDisabled": "已停用",
   "sourcesNone": "未安装来源插件",
   "sourcesSummary": "{count} 个来源 · {signed} 个已登录",

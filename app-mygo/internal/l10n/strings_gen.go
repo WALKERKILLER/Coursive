@@ -4306,6 +4306,54 @@ func SourcesMarketUpdate(version any) string {
 
 const SourcesMarketVerifying = "正在下载并校验…"
 
+const SourcesMirrors = "下载线路…"
+
+const SourcesMirrorsAdd = "添加线路"
+
+const SourcesMirrorsAuto = "自动"
+
+const SourcesMirrorsAutoBody = "按测速结果最快的优先，失败时依次换下一条"
+
+const SourcesMirrorsBody = "插件目录和安装包从 GitHub 下载。直连不畅时可以经镜像线路下载；线路只转发文件，目录的签名和安装包的校验值照常核对，线路无法改动内容。"
+
+const SourcesMirrorsChoice = "线路选择"
+
+const SourcesMirrorsCustom = "自定义"
+
+func SourcesMirrorsFailed(error any) string {
+	return "不可用：" + fmt.Sprint(error)
+}
+
+const SourcesMirrorsName = "名称"
+
+func SourcesMirrorsResult(latency any, speed any) string {
+	return fmt.Sprint(latency) + " ms · " + fmt.Sprint(speed)
+}
+
+const SourcesMirrorsSwitch = "换线路"
+
+const SourcesMirrorsTemplate = "地址"
+
+func SourcesMirrorsTemplateHelper(example any) string {
+	return "以 https 开头，GitHub 原地址处写 " + fmt.Sprint(example)
+}
+
+const SourcesMirrorsTest = "测速"
+
+func SourcesMirrorsTestedAt(time any) string {
+	return "上次测速 " + fmt.Sprint(time)
+}
+
+const SourcesMirrorsTesting = "测速中…"
+
+const SourcesMirrorsTitle = "下载线路"
+
+const SourcesMirrorsUntested = "未测速"
+
+func SourcesMirrorsUsing(name any) string {
+	return "正在使用 " + fmt.Sprint(name)
+}
+
 const SourcesNone = "未安装来源插件"
 
 const SourcesRemoveBody = "插件和它保存的登录信息会被删除。已同步的课程和课次留在本机，但不能再刷新。"

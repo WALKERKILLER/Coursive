@@ -7157,6 +7157,74 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sourcesMarketVerifying => '正在下载并校验…';
 
   @override
+  String get sourcesMirrors => '下载线路…';
+
+  @override
+  String get sourcesMirrorsTitle => '下载线路';
+
+  @override
+  String get sourcesMirrorsBody =>
+      '插件目录和安装包从 GitHub 下载。直连不畅时可以经镜像线路下载；线路只转发文件，目录的签名和安装包的校验值照常核对，线路无法改动内容。';
+
+  @override
+  String get sourcesMirrorsChoice => '线路选择';
+
+  @override
+  String get sourcesMirrorsAuto => '自动';
+
+  @override
+  String get sourcesMirrorsAutoBody => '按测速结果最快的优先，失败时依次换下一条';
+
+  @override
+  String sourcesMirrorsUsing(Object name) {
+    return '正在使用 $name';
+  }
+
+  @override
+  String get sourcesMirrorsTest => '测速';
+
+  @override
+  String get sourcesMirrorsTesting => '测速中…';
+
+  @override
+  String sourcesMirrorsTestedAt(Object time) {
+    return '上次测速 $time';
+  }
+
+  @override
+  String get sourcesMirrorsUntested => '未测速';
+
+  @override
+  String sourcesMirrorsResult(Object latency, Object speed) {
+    return '$latency ms · $speed';
+  }
+
+  @override
+  String sourcesMirrorsFailed(Object error) {
+    return '不可用：$error';
+  }
+
+  @override
+  String get sourcesMirrorsCustom => '自定义';
+
+  @override
+  String get sourcesMirrorsAdd => '添加线路';
+
+  @override
+  String get sourcesMirrorsName => '名称';
+
+  @override
+  String get sourcesMirrorsTemplate => '地址';
+
+  @override
+  String sourcesMirrorsTemplateHelper(Object example) {
+    return '以 https 开头，GitHub 原地址处写 $example';
+  }
+
+  @override
+  String get sourcesMirrorsSwitch => '换线路';
+
+  @override
   String get sourcesDisabled => '已停用';
 
   @override

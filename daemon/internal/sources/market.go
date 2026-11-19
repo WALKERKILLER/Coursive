@@ -127,7 +127,9 @@ type staged struct {
 // path of a local, unsigned index.json whose artifact URLs may be paths
 // relative to it. Otherwise IndexURL names a remote index whose detached
 // signature (IndexURL + ".sig") must verify against Keys, and Cache keeps
-// the last verified copy. With neither, the market lists nothing.
+// the last verified copy. With neither, the market lists nothing. GitHub
+// files take the routes of mirrors.go: Config reads the user's choice
+// (auto when nil), Builtin stands in for BuiltinMirrors in tests.
 type Market struct {
 	Index    string
 	IndexURL string
@@ -136,6 +138,10 @@ type Market struct {
 	Staging  string
 	Registry *Registry
 	HTTP     *http.Client
+	Config   func(context.Context) MirrorConfig
+	Builtin  []Mirror
+
+	tests mirrorTests
 
 	mu     sync.Mutex
 	staged map[string]staged
@@ -188,25 +194,21 @@ func parseIndex(b []byte) (*Index, error) {
 	return &ix, nil
 }
 
-// refresh fetches and verifies the remote index. A verified index replaces
-// the cached copy unless it is older; when the fetch or its signature
-// fails, the cached copy is shown with a notice.
+// refresh fetches and verifies the remote index, along the routes until
+// one brings a copy that verifies. A verified index replaces the cached
+// copy unless it is older; when every route fails to fetch it or brings
+// one whose signature fails, the cached copy is shown with a notice.
 func (m *Market) refresh(ctx context.Context) (*Index, string, error) {
 	cached := m.cached()
-	body, err := m.get(ctx, m.IndexURL)
-	var sig []byte
-	if err == nil {
-		sig, err = m.get(ctx, m.IndexURL+".sig")
-	}
-	if err != nil {
+	ix, body, sig, fetched, err := m.fetchIndex(ctx)
+	switch {
+	case err != nil && !fetched:
 		slog.Warn("plugin index", "err", err)
 		if cached != nil {
 			return cached, NoticeStale, nil
 		}
 		return nil, "", errorf(KindUnavailable, "无法读取插件目录：%v", err)
-	}
-	ix, err := m.verify(body, sig)
-	if err != nil {
+	case err != nil:
 		slog.Warn("plugin index", "err", err)
 		if cached == nil {
 			cached = &Index{SchemaVersion: 1}
@@ -221,6 +223,41 @@ func (m *Market) refresh(ctx context.Context) (*Index, string, error) {
 		slog.Warn("plugin index cache", "err", err)
 	}
 	return ix, "", nil
+}
+
+// fetchIndex tries the routes for the index and its signature in turn;
+// fetched tells that some route brought both, which did not verify.
+func (m *Market) fetchIndex(ctx context.Context) (ix *Index, body, sig []byte, fetched bool, err error) {
+	ixURL, perr := url.Parse(m.IndexURL)
+	sigURL, _ := url.Parse(m.IndexURL + ".sig")
+	routes := []Mirror{{ID: DirectMirror, Kinds: allKinds}}
+	if perr == nil && githubKind(ixURL) == KindRaw {
+		routes = m.routes(ctx, KindRaw)
+	}
+	err = errors.New("没有可用的下载线路")
+	for _, r := range routes {
+		a, b := m.IndexURL, m.IndexURL+".sig"
+		if perr == nil && githubKind(ixURL) == KindRaw {
+			a, _ = r.rewrite(ixURL)
+			b, _ = r.rewrite(sigURL)
+		}
+		var e error
+		if body, e = m.get(ctx, a); e == nil {
+			sig, e = m.get(ctx, b)
+		}
+		if e != nil {
+			if !fetched {
+				err = e
+			}
+			continue
+		}
+		if ix, e = m.verify(body, sig); e != nil {
+			fetched, err = true, e
+			continue
+		}
+		return ix, body, sig, true, nil
+	}
+	return nil, nil, nil, fetched, err
 }
 
 func (m *Market) verify(body, sig []byte) (*Index, error) {
@@ -472,23 +509,50 @@ func (m *Market) fetch(ctx context.Context, a Artifact) ([]byte, error) {
 		}
 		r = f
 	case u.Scheme == "https" && artifactHost(u):
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.URL, nil)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := m.client().Do(req)
-		if err != nil {
-			return nil, errorf(KindUnavailable, "无法下载插件包：%v", err)
-		}
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			return nil, errorf(KindUnavailable, "无法下载插件包：HTTP %d", resp.StatusCode)
-		}
-		r = resp.Body
+		return m.download(ctx, a, u)
 	default:
 		return nil, errorf(KindInvalid, "插件包地址不是 GitHub 发布文件：%s", u.Host)
 	}
 	defer r.Close()
+	return readArtifact(r, a)
+}
+
+// download reads a GitHub artifact along the routes, passing over one that
+// fails or brings other content.
+func (m *Market) download(ctx context.Context, a Artifact, u *url.URL) ([]byte, error) {
+	var err error = errorf(KindUnavailable, "无法下载插件包：没有可用的下载线路")
+	for _, route := range m.routes(ctx, githubKind(u)) {
+		via, _ := route.rewrite(u)
+		req, e := http.NewRequestWithContext(ctx, http.MethodGet, via, nil)
+		if e != nil {
+			continue
+		}
+		resp, e := m.client().Do(req)
+		if e != nil {
+			err = errorf(KindUnavailable, "无法下载插件包：%v", e)
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			err = errorf(KindUnavailable, "无法下载插件包：HTTP %d", resp.StatusCode)
+			continue
+		}
+		b, e := readArtifact(resp.Body, a)
+		resp.Body.Close()
+		if e != nil {
+			err = e
+			if ctx.Err() != nil {
+				break
+			}
+			continue
+		}
+		return b, nil
+	}
+	return nil, err
+}
+
+// readArtifact reads an artifact and checks its size and SHA-256.
+func readArtifact(r io.Reader, a Artifact) ([]byte, error) {
 	b, err := io.ReadAll(io.LimitReader(r, a.Size+1))
 	if err != nil {
 		return nil, errorf(KindUnavailable, "无法下载插件包：%v", err)
@@ -501,11 +565,8 @@ func (m *Market) fetch(ctx context.Context, a Artifact) ([]byte, error) {
 }
 
 func artifactHost(u *url.URL) bool {
-	if u.Host == "raw.githubusercontent.com" {
-		return true
-	}
-	parts := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
-	return u.Host == "github.com" && len(parts) > 4 && parts[2] == "releases" && parts[3] == "download"
+	k := githubKind(u)
+	return k == KindRaw || k == KindRelease
 }
 
 // untar unpacks a gzipped tar into dir, refusing absolute paths, "..",

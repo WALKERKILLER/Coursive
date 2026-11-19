@@ -12411,6 +12411,120 @@ abstract class AppLocalizations {
   /// **'正在下载并校验…'**
   String get sourcesMarketVerifying;
 
+  /// No description provided for @sourcesMirrors.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载线路…'**
+  String get sourcesMirrors;
+
+  /// No description provided for @sourcesMirrorsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'下载线路'**
+  String get sourcesMirrorsTitle;
+
+  /// No description provided for @sourcesMirrorsBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'插件目录和安装包从 GitHub 下载。直连不畅时可以经镜像线路下载；线路只转发文件，目录的签名和安装包的校验值照常核对，线路无法改动内容。'**
+  String get sourcesMirrorsBody;
+
+  /// No description provided for @sourcesMirrorsChoice.
+  ///
+  /// In zh, this message translates to:
+  /// **'线路选择'**
+  String get sourcesMirrorsChoice;
+
+  /// No description provided for @sourcesMirrorsAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动'**
+  String get sourcesMirrorsAuto;
+
+  /// No description provided for @sourcesMirrorsAutoBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'按测速结果最快的优先，失败时依次换下一条'**
+  String get sourcesMirrorsAutoBody;
+
+  /// No description provided for @sourcesMirrorsUsing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在使用 {name}'**
+  String sourcesMirrorsUsing(Object name);
+
+  /// No description provided for @sourcesMirrorsTest.
+  ///
+  /// In zh, this message translates to:
+  /// **'测速'**
+  String get sourcesMirrorsTest;
+
+  /// No description provided for @sourcesMirrorsTesting.
+  ///
+  /// In zh, this message translates to:
+  /// **'测速中…'**
+  String get sourcesMirrorsTesting;
+
+  /// No description provided for @sourcesMirrorsTestedAt.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次测速 {time}'**
+  String sourcesMirrorsTestedAt(Object time);
+
+  /// No description provided for @sourcesMirrorsUntested.
+  ///
+  /// In zh, this message translates to:
+  /// **'未测速'**
+  String get sourcesMirrorsUntested;
+
+  /// No description provided for @sourcesMirrorsResult.
+  ///
+  /// In zh, this message translates to:
+  /// **'{latency} ms · {speed}'**
+  String sourcesMirrorsResult(Object latency, Object speed);
+
+  /// No description provided for @sourcesMirrorsFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'不可用：{error}'**
+  String sourcesMirrorsFailed(Object error);
+
+  /// No description provided for @sourcesMirrorsCustom.
+  ///
+  /// In zh, this message translates to:
+  /// **'自定义'**
+  String get sourcesMirrorsCustom;
+
+  /// No description provided for @sourcesMirrorsAdd.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加线路'**
+  String get sourcesMirrorsAdd;
+
+  /// No description provided for @sourcesMirrorsName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get sourcesMirrorsName;
+
+  /// No description provided for @sourcesMirrorsTemplate.
+  ///
+  /// In zh, this message translates to:
+  /// **'地址'**
+  String get sourcesMirrorsTemplate;
+
+  /// No description provided for @sourcesMirrorsTemplateHelper.
+  ///
+  /// In zh, this message translates to:
+  /// **'以 https 开头，GitHub 原地址处写 {example}'**
+  String sourcesMirrorsTemplateHelper(Object example);
+
+  /// No description provided for @sourcesMirrorsSwitch.
+  ///
+  /// In zh, this message translates to:
+  /// **'换线路'**
+  String get sourcesMirrorsSwitch;
+
   /// No description provided for @sourcesDisabled.
   ///
   /// In zh, this message translates to:
