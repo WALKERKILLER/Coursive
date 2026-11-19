@@ -42,3 +42,26 @@ func TestFontTables(t *testing.T) {
 		t.Errorf("italics %d accents %d", len(f.italics), len(f.accents))
 	}
 }
+
+// Glyphs draw as text from the font's copy, whose characters are glyph
+// ids, at their own advance; thin rules sit on whole device pixels.
+func TestGlyphsDrawAsTextAndRulesSnap(t *testing.T) {
+	if !registerGlyphs() {
+		t.Fatal("the glyph font did not register")
+	}
+	g, _ := font().glyph('x')
+	run := glyphRun(g, 20)
+	w, _, _ := font().metrics(g)
+	if len(run) != 1 || run[0].Advance < w*20-1 || run[0].Advance > w*20+1 {
+		t.Fatalf("x shaped to %+v, its advance is %v", run, w*20)
+	}
+	for _, sc := range []float32{1, 1.25, 2} {
+		y, h := rule(10.3, .6, sc)
+		if dy := y*sc - round(y*sc); h*sc != 1 || dy > 1e-3 || dy < -1e-3 {
+			t.Fatalf("a rule at scale %v: %v, %v", sc, y, h)
+		}
+	}
+	if y, h := rule(10.3, 8, 2); y != 10.3 || h != 8 {
+		t.Fatalf("a thick rule moved: %v, %v", y, h)
+	}
+}

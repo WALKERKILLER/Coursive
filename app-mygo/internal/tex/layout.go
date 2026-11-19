@@ -27,6 +27,9 @@ type drawOp struct {
 	size   float32
 	glyphs []ui.Glyph
 	color  string
+	// part marks a glyph of an assembly, whose parts overlap: they fill
+	// as one path, so that the overlaps show no seams.
+	part bool
 }
 
 // box is laid-out math: its width, height above and depth below the

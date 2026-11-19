@@ -15,11 +15,13 @@ import (
 	"github.com/walkerkiller/coursive/app-mygo/internal/app"
 	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 	"github.com/walkerkiller/coursive/app-mygo/internal/icons"
+	"github.com/walkerkiller/coursive/app-mygo/internal/tex"
 	"github.com/walkerkiller/coursive/app-mygo/internal/widgets"
 )
 
 func main() {
 	icons.Register()
+	tex.Register()
 	core.Prefs = core.OpenStore(core.DefaultStorePath())
 	core.LoadUiPrefs()
 	d := core.NewDaemon()

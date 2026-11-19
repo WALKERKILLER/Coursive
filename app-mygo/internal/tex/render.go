@@ -1,6 +1,7 @@
 package tex
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,25 +68,109 @@ func typeset(tex string, size float32, display bool) *Formula {
 }
 
 // Draw draws the formula with its baseline's left end at (x, y), in color
-// where the TeX sets none.
+// where the TeX sets none. As the Flutter client's val_latex, it draws
+// the glyphs as text, which the text engine renders more finely than a
+// path fill, and puts its origin and its thin rules (fraction bars,
+// overbars, table lines) on the device pixels, so that a rule shows as
+// one crisp line rather than a grey smear over two.
 func (f *Formula) Draw(p *ui.Painter, x, y float32, color ui.Color) {
 	if f.paths == nil {
 		f.build()
+	}
+	s := p.Scale()
+	if s > 0 {
+		x, y = round(x*s)/s, round(y*s)/s
 	}
 	p.Transform(ui.Translation(x, y), 0, 0, func() {
 		for name, path := range f.paths {
 			p.FillPath(path, colorOf(name, color))
 		}
-		for _, o := range f.ops {
-			if o.kind == opText {
-				p.Glyphs(o.glyphs, o.x, o.y, colorOf(o.color, color))
-			}
-		}
 	})
+	text := registerGlyphs()
+	for _, o := range f.ops {
+		c := colorOf(o.color, color)
+		switch {
+		case o.kind == opText:
+			p.Glyphs(o.glyphs, x+o.x, y+o.y, c)
+		case o.kind == opRect:
+			rx, rw := rule(x+o.x, o.w, s)
+			ry, rh := rule(y+o.y, o.h, s)
+			p.Fill(ui.Rect{X: rx, Y: ry, W: rw, H: rh}, c, 0)
+		case o.kind == opGlyph && !o.part && text:
+			p.Glyphs(glyphRun(o.g, o.size), x+o.x, y+o.y, c)
+		}
+	}
 }
 
+// rule is one axis of a rule, from start for length DIPs, on the device
+// pixels when it is thin (under four of them): its length rounds to
+// whole pixels, at least one, about its centre. Longer ones stay, so
+// that a bar still meets the glyph it joins exactly.
+func rule(start, length, scale float32) (float32, float32) {
+	dev := length * scale
+	if scale <= 0 || dev <= 0 || dev >= 4 {
+		return start, length
+	}
+	thick := max(1, round(dev))
+	top := round((start+length/2)*scale - thick/2)
+	return top / scale, thick / scale
+}
+
+func round(v float32) float32 { return float32(math.Round(float64(v))) }
+
+// glyphFamily is the family the font's copy that draws glyphs by id is
+// registered under (glyphFont).
+const glyphFamily = "Coursive TeX Glyphs"
+
+var (
+	glyphOnce  sync.Once
+	glyphReady bool
+	glyphMu    sync.Mutex
+	glyphRuns  = map[glyphKey][]ui.Glyph{}
+)
+
+type glyphKey struct {
+	g    gid
+	size float32
+}
+
+// Register adds the font that draws the glyphs of formulas as text; call
+// it before the first frame. Without it, Draw fills their outlines.
+func Register() { registerGlyphs() }
+
+func registerGlyphs() bool {
+	glyphOnce.Do(func() {
+		data, _, err := glyphFont(fontData)
+		glyphReady = err == nil && ui.RegisterFont(data, glyphFamily) == nil
+	})
+	return glyphReady
+}
+
+// glyphRun is glyph g at size DIPs per em, shaped once.
+func glyphRun(g gid, size float32) []ui.Glyph {
+	k := glyphKey{g, size}
+	glyphMu.Lock()
+	run, ok := glyphRuns[k]
+	glyphMu.Unlock()
+	if ok {
+		return run
+	}
+	run = ui.Shape(string(rune(privateUse+int(g))), ui.Font{Family: glyphFamily, Size: size})
+	glyphMu.Lock()
+	if len(glyphRuns) > 8192 {
+		clear(glyphRuns)
+	}
+	glyphRuns[k] = run
+	glyphMu.Unlock()
+	return run
+}
+
+// build gathers what fills as paths, by colour: the quadrilaterals, the
+// parts of assemblies, and every glyph when the font that draws them as
+// text did not register.
 func (f *Formula) build() {
 	fnt := font()
+	text := registerGlyphs()
 	f.paths = map[string]*ui.Path{}
 	path := func(name string) *ui.Path {
 		p := f.paths[name]
@@ -97,12 +182,13 @@ func (f *Formula) build() {
 	}
 	for _, o := range f.ops {
 		switch o.kind {
-		case opRect:
-			path(o.color).MoveTo(o.x, o.y).LineTo(o.x+o.w, o.y).LineTo(o.x+o.w, o.y+o.h).LineTo(o.x, o.y+o.h).Close()
 		case opQuad:
 			q := o.quad
 			path(o.color).MoveTo(q[0], q[1]).LineTo(q[2], q[3]).LineTo(q[4], q[5]).LineTo(q[6], q[7]).Close()
 		case opGlyph:
+			if text && !o.part {
+				continue
+			}
 			p := path(o.color)
 			k := o.size / fnt.upem
 			pt := func(s ot.SegmentPoint) (float32, float32) { return o.x + s.X*k, o.y - s.Y*k }

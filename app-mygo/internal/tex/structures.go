@@ -170,6 +170,9 @@ func (l *layout) assemble(parts []part, size float32, st style, horizontal bool)
 	pos := float32(0)
 	for _, p := range seq {
 		b := l.glyphBox(p.g, st)
+		for i := range b.ops {
+			b.ops[i].part = true
+		}
 		if horizontal {
 			out.place(b, pos*em, 0)
 			out.h, out.d = max(out.h, b.h), max(out.d, b.d)
