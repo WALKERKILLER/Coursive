@@ -11,6 +11,7 @@
 - Android 首次运行的工作区安装（[`WorkspaceSetupPage`](../app/lib/features/setup/workspace_setup_page.dart)）随 Android 构建移植。桌面不会进入这一步。
 - MyGo 客户端还没有桥接的系统 WebView。插件的 web-ui 页面在 macOS 和 Android 上回退为原生说明页，Flutter 客户端在这两个平台上会渲染它。Linux 和 Windows 上 daemon 本身就不放行，两个客户端都回退。
 - Linux 视频经系统 GStreamer 播放，需要 `gst-plugins-good` 等插件包，清单见 [app-mygo/README.md](../app-mygo/README.md#video-on-linux)。Flutter 客户端自带 libmpv，没有这项系统依赖。
+- 动效按 Flutter 对照：`AnimatedSwitcher` 统一走 `design.Switcher`（新旧内容同时进出，出场曲线反向），`TabBarView` 走 `m3.TabView`（横向滑动），隐式动画缺省为线性。MyGo v0.10.0 还缺三处：课程封面的 Hero 沿直线飞，Flutter 的 `MaterialRectArcTween` 沿弧线；`ListState.ScrollTo` 不能带动画，`Scrollable.ensureVisible` 的滚动在这里是跳转；`m3.TabView` 还不能手势滑动换页。
 
 ## 0．先验证四条高风险路径
 
