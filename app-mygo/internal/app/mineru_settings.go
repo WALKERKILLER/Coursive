@@ -159,7 +159,7 @@ func (m *MinerUSettings) Show(c *ui.Context) {
 			}
 			if !configured || m.editing {
 				ui.Column(c.Key("edit")).FillWidth().Padding(design.SpaceMD, 0, 0, 0).
-					Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -8}}).Children(func() {
+					Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -8}, Shadows: true}).Children(func() {
 					f := (m3.Field{Label: "API Token", Hint: l10n.MineruTokenHint, Password: m.obscure, SuffixFn: func() {
 						ic := icons.VisibilityOutlined
 						if !m.obscure {

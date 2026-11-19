@@ -441,7 +441,7 @@ func (p *ProviderSetupPage) connect(c *ui.Context) {
 		p.adv = !p.adv
 	}
 	if p.adv {
-		ui.Column(c.Key("adv")).FillWidth().Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}}).Children(func() {
+		ui.Column(c.Key("adv")).FillWidth().Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}, Shadows: true}).Children(func() {
 			m3.Dropdown(c, "api", m3.DropdownOpts{Label: l10n.ProviderApi}, apiKinds, &p.api)
 			m3.VGap(c, design.SpaceSM)
 			m3.Field{Label: l10n.ProviderId, Helper: l10n.ProviderIdHelper, Disabled: !p.isNew}.Show(c.Key("id"), &p.id)

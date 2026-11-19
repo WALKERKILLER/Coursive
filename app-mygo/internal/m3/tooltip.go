@@ -21,7 +21,7 @@ func Tip(c *ui.Context, anchor ui.Element, text string) ui.Element {
 			MinHeight(24).Padding(4, 8).Radius(design.CornerXS).Background(s.InverseSurface).
 			MaxWidth(360).Justify(ui.Center).AttachedOrigin().
 			Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, ExitDuration: 75 * time.Millisecond,
-				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		tip.Children(func() { Text(c, text, tt().BodySmall.C(s.OnInverseSurface)) })
 	})
 	return anchor

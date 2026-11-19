@@ -249,7 +249,7 @@ func (d *DataSettings) Show(c *ui.Context) {
 			}
 			if busy {
 				ui.Column(c.Key("task")).FillWidth().Padding(design.SpaceMD, 0).
-					Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}}).Children(func() {
+					Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}, Shadows: true}).Children(func() {
 					p := m3.Progress{}
 					if d.total > 0 {
 						p.Value = m3.Of(min(max(float64(d.done)/float64(d.total), 0), 1))

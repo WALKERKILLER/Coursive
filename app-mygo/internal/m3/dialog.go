@@ -124,7 +124,7 @@ func buildDialog(c *ui.Context, r *Route) {
 		// The barrier is Colors.black54; the route fades in over 150 ms.
 		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).Padding(24, 40).
 			Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, Ease: design.EaseOut,
-				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		panel.Background(ui.Transparent).MaxHeightPercent(100)
 		r.Build(c, r)
 	})
@@ -147,7 +147,7 @@ func buildGeneral(c *ui.Context, r *Route) {
 	ui.DialogBase(c.Key(r.id), &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).
 			Transition(ui.ElementTransition{Duration: design.Medium4, Ease: design.EmphasizedDecelerate,
-				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+				Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		panel.Background(ui.Transparent).Fill().Children(func() {
 			barrier := ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0)
 			if barrier.Clicked() && r.Dismissible {

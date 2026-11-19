@@ -103,11 +103,11 @@ func (s *StudyCanvas) shelf(c *ui.Context) {
 	if side {
 		e = e.Left(design.SpaceMD).Top(f32(top)).Bottom(design.SpaceXXXL + design.SpaceLG).Width(340).
 			Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, ExitDuration: design.Medium2, ExitEase: design.Emphasized,
-				Enter: &ui.Motion{Opacity: 1, X: -360}, Exit: &ui.Motion{Opacity: 1, X: -360}})
+				Enter: &ui.Motion{Opacity: 1, X: -360}, Exit: &ui.Motion{Opacity: 1, X: -360}, Shadows: true})
 	} else {
 		e = e.Left(design.SpaceSM).Right(design.SpaceSM).Bottom(design.SpaceSM).Height(f32(math.Min(480, s.viewport.Y*.62))).
 			Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, ExitDuration: design.Medium2, ExitEase: design.Emphasized,
-				Enter: &ui.Motion{Opacity: 1, YPercent: 110}, Exit: &ui.Motion{Opacity: 1, YPercent: 110}})
+				Enter: &ui.Motion{Opacity: 1, YPercent: 110}, Exit: &ui.Motion{Opacity: 1, YPercent: 110}, Shadows: true})
 	}
 	widgets.Glass{Radius: design.CornerXL, Depth: design.GlassPanel}.Apply(e)
 	s.recordControl(e)

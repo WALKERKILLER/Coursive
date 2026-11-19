@@ -453,7 +453,7 @@ func (p *LocalAsrPage) modelCard(c *ui.Context, m core.J, focused, active bool, 
 		m3.Text(c, strings.Join(facts, " · "), tt.LabelMedium.C(cs.OnSurfaceVariant))
 		if focused || running || failed {
 			ui.Column(c.Key("more")).FillWidth().Padding(design.SpaceSM, 0, 0, 0).
-				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}}).Children(func() {
+				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -6}, Shadows: true}).Children(func() {
 				if note := bench.S("note"); note != "" {
 					m3.Text(c, note, tt.BodySmall.C(cs.OnSurfaceVariant))
 				}

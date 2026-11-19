@@ -88,7 +88,7 @@ func ShowNotificationCenter(c *ui.Context) {
 			panel := ui.Column(c).Width(400).FillHeight().Margin(design.SpaceLG).Background(design.S().SurfaceContainerLow).
 				Radius(design.CornerXL).Clip().
 				Transition(ui.ElementTransition{Duration: design.T().Motion(design.Medium4, nil).Duration, Ease: design.EmphasizedDecelerate,
-					ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{XPercent: 25, Opacity: 0}, Exit: &ui.Motion{XPercent: 25, Opacity: 0}})
+					ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{XPercent: 25, Opacity: 0}, Exit: &ui.Motion{XPercent: 25, Opacity: 0}, Shadows: true})
 			m3.Elevation(panel, 1)
 			panel.Children(func() { list.view(c, r.Close) })
 		})

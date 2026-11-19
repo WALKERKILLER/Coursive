@@ -1035,7 +1035,7 @@ func showSlideViewer(ctl *LecturePlayer, list []core.Slide, start int) {
 				return
 			}
 			img := ui.Image(c, bmp).Key(cur).Fit(ui.Contain).MaxWidthPercent(100).MaxHeightPercent(100).
-				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0}})
+				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0}, Shadows: true})
 			if dx, dy, ok := img.Dragged(); ok && v.scale > 1 {
 				v.x, v.y = v.x+dx, v.y+dy
 			}

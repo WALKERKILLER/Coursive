@@ -232,7 +232,7 @@ func (p *NotePage) View(c *ui.Context) {
 				}
 				ui.Column(c).Grow(1).Basis(0).FillHeight().Children(func() {
 					if p.search {
-						ui.Box(c).FillWidth().Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -12}}).Children(func() {
+						ui.Box(c).FillWidth().Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, Y: -12}, Shadows: true}).Children(func() {
 							p.reader.ShowSearchBar(c, func() { p.search = false; p.reader.CloseSearch() })
 						})
 					}
@@ -240,7 +240,7 @@ func (p *NotePage) View(c *ui.Context) {
 				})
 				if sidePane && p.ref != nil {
 					ui.Box(c).Width(400).Shrink(0).FillHeight().Padding(design.SpaceSM, design.SpaceLG, design.SpaceLG, 0).
-						Transition(ui.ElementTransition{Duration: design.Medium4, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, X: 40}}).Children(func() {
+						Transition(ui.ElementTransition{Duration: design.Medium4, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0, X: 40}, Shadows: true}).Children(func() {
 						ui.Column(c).Fill().Background(cs.SurfaceContainerLow).Radius(design.CornerXL).Clip().Children(func() {
 							p.pane.Show(c, func() { p.ref, p.pane = nil, nil })
 						})

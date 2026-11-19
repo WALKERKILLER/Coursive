@@ -256,7 +256,7 @@ func datePickerCalendar(c *ui.Context, st *datePickerState, first, last time.Tim
 		days := m.AddDate(0, 1, -1).Day()
 		grid := ui.Grid(c.Key(m.Format("2006-01"))).FillWidth().Columns(7).Height(42 * 6).AlignContent(ui.Start).
 			Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Ease: design.EaseOut,
-				Enter: &ui.Motion{Opacity: 0, XPercent: 10 * float32(st.dir)}})
+				Enter: &ui.Motion{Opacity: 0, XPercent: 10 * float32(st.dir)}, Shadows: true})
 		grid.Children(func() {
 			for range lead {
 				ui.Box(c).Height(42)

@@ -611,7 +611,7 @@ func (s *StudyCanvas) floating(c *ui.Context, key string, anchor study.Rect, bui
 // appear is _Appear: a short scale and fade as a floating control appears.
 func appear(e ui.Element) ui.Element {
 	return e.Transition(ui.ElementTransition{Duration: design.Short4, Ease: design.EmphasizedDecelerate,
-		Enter: &ui.Motion{Opacity: 0, Scale: .96}})
+		Enter: &ui.Motion{Opacity: 0, Scale: .96}, Shadows: true})
 }
 
 func (s *StudyCanvas) selectionToolbar(c *ui.Context, docked bool) {

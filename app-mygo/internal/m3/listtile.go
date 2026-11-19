@@ -305,7 +305,7 @@ func (x Expansion) Show(c *ui.Context, key any) ui.Element {
 		if *open && x.Children != nil {
 			p := x.ChildPad
 			ui.Column(c).Padding(p[0], p[1], p[2], p[3]).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond,
-				Enter: &ui.Motion{Collapse: true, Opacity: 0}, Exit: &ui.Motion{Collapse: true, Opacity: 0}}).Children(x.Children)
+				Enter: &ui.Motion{Collapse: true, Opacity: 0}, Exit: &ui.Motion{Collapse: true, Opacity: 0}, Shadows: true}).Children(x.Children)
 		}
 	})
 	return wrap

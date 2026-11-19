@@ -137,7 +137,7 @@ func ShowProfileDialog() {
 					}
 					if toned {
 						ui.Column(c.Key("tones")).FillWidth().Padding(design.SpaceLG, 0, 0, 0).
-							Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Collapse: true, Opacity: 0}, Exit: &ui.Motion{Collapse: true, Opacity: 0}}).
+							Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Collapse: true, Opacity: 0}, Exit: &ui.Motion{Collapse: true, Opacity: 0}, Shadows: true}).
 							Children(func() {
 								m3.Text(c, l10n.ProfileBackground, tt.TitleSmall.C(s.OnSurface))
 								m3.VGap(c, design.SpaceSM)

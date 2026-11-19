@@ -90,7 +90,7 @@ func stylePanel(panel ui.Element) {
 		Background(cs().SurfaceContainer).AttachedOrigin().
 		Transition(ui.ElementTransition{Duration: 150 * time.Millisecond, ExitDuration: 100 * time.Millisecond,
 			Ease: design.EaseOutCubic, Enter: &ui.Motion{Opacity: 0, Scale: .95, Y: -4, Flip: true},
-			Exit: &ui.Motion{Opacity: 0}})
+			Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 	Elevation(panel, 3)
 }
 

@@ -279,9 +279,9 @@ func (b BotAvatar) Show(c *ui.Context) ui.Element {
 				}
 			}
 			p.settle(mood, dt, still)
-			// The mascot breathes, glances and blinks slowly: half the
-			// display's rate is enough for it.
-			pt.AnimationFrameRate(30)
+			// Every frame, as the ticker runs: the springs of its toppers
+			// and its gaze after the pointer stutter at a lower rate.
+			pt.AnimationFrame()
 		} else {
 			p.settle(mood, 0, true)
 		}

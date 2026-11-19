@@ -48,9 +48,12 @@ func (k CourseCard) Show(c *ui.Context) bool {
 	e.Children(func() {
 		ui.Column(c).FillWidth().Children(func() {
 			ui.Box(c).FillWidth().Padding(design.SpaceXS, design.SpaceXS, 0, design.SpaceXS).Children(func() {
-				art := ui.Box(c).FillWidth().Height(108).Transition(courseHero(co.ID()))
-				t := art.AnimateTo("morph", map[bool]float32{true: 1, false: 0}[hover], design.T().Motion(design.Long4, design.Emphasized))
-				widgets.CourseArt(art, co, float64(t), 0, -1, design.CornerXL-design.SpaceXS).Children(func() {
+				ui.Box(c).FillWidth().Height(108).Children(func() {
+					// The tags sit over the Hero, so they stay on the card as
+					// the cover flies.
+					art := ui.Box(c).Fill().Transition(courseHero(co.ID()))
+					t := art.AnimateTo("morph", map[bool]float32{true: 1, false: 0}[hover], design.T().Motion(design.Long4, design.Emphasized))
+					widgets.CourseArt(art, co, float64(t), 0, -1, design.CornerXL-design.SpaceXS)
 					ui.Row(c).Absolute().Top(design.SpaceSM).Right(design.SpaceSM).Children(func() {
 						if co.Pinned() {
 							courseTag(c, s, icons.PushPinRounded, "")

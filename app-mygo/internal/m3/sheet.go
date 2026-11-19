@@ -57,7 +57,7 @@ func buildSheet(c *ui.Context, r *Route) {
 	}
 	ui.DialogBase(c.Key(r.id), &open, func(backdrop, panel ui.Element) {
 		backdrop.Background(ui.RGBA(0, 0, 0, 0x8A/255.0)).Justify(ui.End).
-			Transition(ui.ElementTransition{Duration: 250 * time.Millisecond, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+			Transition(ui.ElementTransition{Duration: 250 * time.Millisecond, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		w := float32(640)
 		if o.MaxWidth > 0 {
 			w = o.MaxWidth
@@ -68,7 +68,7 @@ func buildSheet(c *ui.Context, r *Route) {
 		panel.Width(w).MaxWidthPercent(100).MaxHeight(maxH).Radius(design.CornerXL, design.CornerXL, 0, 0).
 			Background(cs().SurfaceContainerLow).Clip().
 			Transition(ui.ElementTransition{Duration: 250 * time.Millisecond, ExitDuration: 200 * time.Millisecond,
-				Ease: design.EaseOutCubic, Enter: &ui.Motion{YPercent: 100}, Exit: &ui.Motion{YPercent: 100}})
+				Ease: design.EaseOutCubic, Enter: &ui.Motion{YPercent: 100}, Exit: &ui.Motion{YPercent: 100}, Shadows: true})
 		if !o.NoHandle {
 			ui.Row(c).Justify(ui.Center).Height(48).AlignItems(ui.Center).Shrink(0).Children(func() {
 				ui.Box(c).Size(32, 4).Radius(2).Background(design.WithOpacity(cs().OnSurfaceVariant, .4))

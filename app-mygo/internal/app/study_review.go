@@ -698,7 +698,7 @@ func (s *StudyCanvas) reviewPanel(c *ui.Context) {
 	panel := ui.Column(c.Key("study-outline-review")).Absolute().Left(f32(rect.L)).Top(f32(rect.T)).Size(f32(rect.W()), f32(rect.H())).
 		Padding(design.SpaceMD, design.SpaceSM, design.SpaceMD, design.SpaceLG).AlignItems(ui.Stretch).
 		Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate, ExitDuration: design.Short4,
-			ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{Opacity: 0, XPercent: from}, Exit: &ui.Motion{Opacity: 0, XPercent: from}})
+			ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{Opacity: 0, XPercent: from}, Exit: &ui.Motion{Opacity: 0, XPercent: from}, Shadows: true})
 	widgets.Glass{Radius: design.CornerXL, Depth: design.GlassPanel}.Apply(panel)
 	s.recordControl(panel)
 	panel = panel.Focusable()
@@ -1418,7 +1418,7 @@ func (x reviewCtx) footer(c *ui.Context, narrow bool) {
 	ui.Column(c).FillWidth().Padding(design.SpaceSM, design.SpaceSM, 0, 0).AlignItems(ui.Stretch).Children(func() {
 		if status != "" {
 			ui.Row(c.Key("outline-status")).FillWidth().AlignItems(ui.Center).Padding(0, 0, design.SpaceSM, 0).
-				Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Collapse: true}, Exit: &ui.Motion{Opacity: 0, Collapse: true}}).
+				Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Collapse: true}, Exit: &ui.Motion{Opacity: 0, Collapse: true}, Shadows: true}).
 				Children(func() {
 					ic, col := icons.CheckCircleOutlineRounded, cs.OnSurfaceVariant
 					switch {

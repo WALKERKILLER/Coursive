@@ -92,7 +92,7 @@ func buildSnackBars(c *ui.Context) {
 			MinHeight(48).AlignItems(ui.Center).Padding(0, 8, 0, 16).Gap(8).
 			Radius(design.CornerXS).Background(sch.InverseSurface)
 		bar = Elevation(bar, 6).Transition(ui.ElementTransition{Duration: 250 * time.Millisecond,
-			Ease: design.FastOutSlowIn, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+			Ease: design.FastOutSlowIn, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}, Shadows: true})
 		bar.Children(func() {
 			ui.Column(c).Grow(1).PaddingY(14).Children(func() {
 				if s.Content != nil {

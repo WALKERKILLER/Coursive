@@ -511,7 +511,8 @@ func appearanceSettings(c *ui.Context) {
 		if hasSystem && p.DynamicColor {
 			op = .4
 		}
-		ui.Column(c).FillWidth().Opacity(op).Transition(ui.ElementTransition{Duration: design.Medium1}).Children(func() {
+		themeColors := ui.Column(c).FillWidth()
+		themeColors.Opacity(themeColors.AnimateTo("opacity", op, design.T().Motion(design.Medium1, ui.Linear))).Children(func() {
 			m3.Text(c, l10n.SettingsThemeColor, tt.TitleSmall)
 			m3.VGap(c, design.SpaceSM)
 			ui.Row(c).FillWidth().Wrap().Gap(design.SpaceMD).Children(func() {

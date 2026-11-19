@@ -698,7 +698,7 @@ func (s *StudyCanvas) stageView(c *ui.Context, cv *studyConversation, thread *st
 	panel := ui.Column(c.Key("study-stage-panel")).Absolute().Top(f32(top)).Bottom(80).Width(f32(width)).
 		Padding(sidebarInset).AlignItems(ui.Stretch).
 		Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate, ExitDuration: design.Short4,
-			ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{Opacity: 0, XPercent: from}, Exit: &ui.Motion{Opacity: 0, XPercent: from}})
+			ExitEase: design.EmphasizedAccelerate, Enter: &ui.Motion{Opacity: 0, XPercent: from}, Exit: &ui.Motion{Opacity: 0, XPercent: from}, Shadows: true})
 	if left {
 		panel = panel.Left(8)
 	} else {
@@ -1329,7 +1329,7 @@ func (s *StudyCanvas) sourceTray(c *ui.Context, p stageProps, scope string, canS
 		if p.view.trayOpen && folded {
 			ui.Scroll(c.Key("study-source-list")).FillWidth().MaxHeight(4.5*40).Margin(design.SpaceXS, 0, 0, 0).
 				Background(cs.OnSurface.Alpha(.04)).Radius(design.CornerMD).Padding(design.SpaceXS, 0).
-				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0}}).
+				Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Enter: &ui.Motion{Opacity: 0}, Shadows: true}).
 				Children(func() {
 					ui.Column(c).FillWidth().Children(func() {
 						for _, src := range p.sources {
