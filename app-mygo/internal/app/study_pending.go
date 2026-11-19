@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/walkerkiller/coursive/app-mygo/internal/core"
 	"github.com/walkerkiller/coursive/app-mygo/internal/study"
 )
 
@@ -12,6 +13,7 @@ type studyParts struct {
 	stageParts
 	evidenceParts
 	shelfParts
+	reviewParts
 	ctx            *ui.Context
 	docks          map[string]*dockState
 	penItems       map[string]ui.Rect
@@ -69,13 +71,11 @@ const (
 	shelfThreads
 )
 
-func (s *StudyCanvas) openReview(cardID, turnID string) {}
-func (s *StudyCanvas) reviewRect() *study.Rect          { return nil }
-func (s *StudyCanvas) reviewNarrow() bool               { return false }
-func (s *StudyCanvas) reviewPanel(c *ui.Context)        {}
-func (s *StudyCanvas) activePlugins() map[string]bool   { return nil }
-func (s *StudyCanvas) canvasToolContributions() []any   { return nil }
-func (s *StudyCanvas) pluginsOffered() bool             { return false }
-func (s *StudyCanvas) plugins()                         {}
+func (s *StudyCanvas) activePlugins() map[string]bool { return nil }
+func (s *StudyCanvas) canvasToolContributions() []any { return nil }
+func (s *StudyCanvas) pluginsOffered() bool           { return false }
+func (s *StudyCanvas) plugins()                       {}
 func (s *StudyCanvas) pluginObject(c *ui.Context, o *study.PluginObject, stage study.Rect, active bool) {
 }
+
+func (s *StudyCanvas) exportOutlinePdf(turn core.J) {}
