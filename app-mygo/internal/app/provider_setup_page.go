@@ -457,7 +457,7 @@ func (p *ProviderSetupPage) bottomBar(c *ui.Context) {
 		if p.test != "" {
 			key = p.test
 		}
-		ui.Box(c.Key("status:" + key)).Grow(1).Basis(0).Transition(ui.ElementTransition{Duration: design.Medium1, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+		ui.Box(c.Key("status:" + key)).Grow(1).Basis(0).Transition(design.Switcher(design.Medium1, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 			if p.test == "" {
 				hint := l10n.ProviderChosenModels(len(p.chosen))
 				if p.builtin {

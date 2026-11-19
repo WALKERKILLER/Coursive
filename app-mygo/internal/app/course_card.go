@@ -116,3 +116,7 @@ func courseTag(c *ui.Context, s *design.Scheme, ic icons.Icon, text string) {
 		}
 	})
 }
+
+// scaleZero is ScaleTransition's scale of 0 as a Motion: a Motion's Scale
+// of 0 keeps the size, so a thousandth stands for nothing.
+const scaleZero = .001

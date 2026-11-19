@@ -679,7 +679,7 @@ func (p *AssistantPanel) composer(c *ui.Context) {
 					return false
 				})
 				m3.HGap(c, design.SpaceSM)
-				enter := ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Scale: .2, Opacity: 0}}
+				enter := design.Switcher(design.Short4, nil, nil, ui.Motion{Scale: scaleZero})
 				if a.Busy() {
 					ui.Box(c.Key("stop")).Transition(enter).Children(func() {
 						if (m3.IconButton{Kind: m3.TonalIcon, Icon: icons.StopRounded, Tooltip: l10n.CommonStop}).Show(c).Clicked() {
@@ -749,8 +749,8 @@ func ApprovalModeChip(c *ui.Context, mode string, onChanged func(string)) {
 		t.Children(func() {
 			// The icon swaps in from a quarter size, so a switch by
 			// Shift+Tab is noticed without moving the composer.
-			ui.Box(c.Key(mode)).Transition(ui.ElementTransition{Duration: design.Short4, Ease: design.EmphasizedDecelerate,
-				Enter: &ui.Motion{Opacity: 0, Scale: .25}}).Children(func() { m3.Icon(c, approvalIcons[mode], 16, fg) })
+			ui.Box(c.Key(mode)).
+				Transition(design.Switcher(design.Short4, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, Scale: .25})).Children(func() { m3.Icon(c, approvalIcons[mode], 16, fg) })
 			m3.HGap(c, design.SpaceXS)
 			m3.Text(c, approvalName(mode), tt.LabelMedium.C(fg)).NoWrap()
 			m3.HGap(c, design.SpaceXXS)

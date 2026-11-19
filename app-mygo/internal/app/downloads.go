@@ -233,7 +233,7 @@ func (p *DownloadsPage) View(c *ui.Context) {
 				if running > 0 {
 					key = "running"
 				}
-				ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+				ui.Box(c.Key(key)).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					m3.Text(c, summary, tt.BodyLarge.C(tone))
 				})
 				m3.VGap(c, design.SpaceLG)
@@ -452,7 +452,7 @@ func jobTile(c *ui.Context, job core.Job, selecting, picked bool, pick func()) {
 			if pickMode {
 				key = "pick"
 			}
-			ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Scale: .8}}).Children(func() {
+			ui.Box(c.Key(key)).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 				if pickMode {
 					b := ui.Box(c).Size(44, 44).Center()
 					anim := design.T().Motion(design.Short4, nil)

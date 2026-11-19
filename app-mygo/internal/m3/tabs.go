@@ -30,6 +30,9 @@ type TabOpts struct {
 	Pill bool
 }
 
+// tabScroll is kTabScrollDuration, how long a tab change takes.
+const tabScroll = 300 * time.Millisecond
+
 // TabBar is Material 3's primary TabBar: labels in titleSmall, primary
 // when selected, a 3 DIP indicator as wide as the label with rounded top
 // corners, and a divider below. It returns whether the tab changed.
@@ -73,7 +76,7 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 						b.Children(func() {
 							if on {
 								ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).Radius(design.CornerFull).Background(s.SecondaryContainer).
-									Transition(ui.ElementTransition{Duration: 300 * time.Millisecond, Ease: design.FastOutSlowIn,
+									Transition(ui.ElementTransition{Duration: tabScroll, Ease: design.Ease,
 										Position: true, Size: true, Match: selected, Fly: true})
 							}
 							hover := ui.Box(c).Absolute().Top(6).Bottom(6).Left(0).Right(0).PassThrough()
@@ -112,8 +115,8 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 							} else {
 								ind = ind.Left(16).Right(16)
 							}
-							ind.Background(col).Transition(ui.ElementTransition{Duration: 300 * time.Millisecond,
-								Ease: design.FastOutSlowIn, Position: true, Size: true, Match: selected, Fly: true})
+							ind.Background(col).Transition(ui.ElementTransition{Duration: tabScroll,
+								Ease: design.Ease, Position: true, Size: true, Match: selected, Fly: true})
 						}
 					})
 					if b.Clicked() && !on {
@@ -128,4 +131,33 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 		}
 	})
 	return changed
+}
+
+type tabView struct{ last int }
+
+// TabView is TabBarView: the pages of the tabs side by side in e, which it
+// clips, sliding to the selected one over kTabScrollDuration along
+// Curves.ease as TabBar's indicator moves. A change of more than one tab
+// starts from the page next to the new one, as TabBarView does, so only
+// two pages show on the way. page builds page i.
+func TabView(c *ui.Context, e ui.Element, selected int, page func(i int)) ui.Element {
+	st := ui.Local(e, "tabview", func() tabView { return tabView{last: selected} })
+	if d := selected - st.last; d > 1 || d < -1 {
+		from := selected - 1
+		if d < 0 {
+			from = selected + 1
+		}
+		e.Jump("page", float32(from))
+	}
+	st.last = selected
+	off := e.AnimateTo("page", float32(selected), design.T().Motion(tabScroll, design.Ease))
+	return e.Clip().Children(func() {
+		for i := int(off) - 1; i <= int(off)+1; i++ {
+			pos := float32(i) - off
+			if i < 0 || pos <= -1 || pos >= 1 {
+				continue
+			}
+			ui.Column(c.Key(i)).Absolute().Top(0).Bottom(0).Left(0).Right(0).TranslatePercent(pos*100, 0).Children(func() { page(i) })
+		}
+	})
 }

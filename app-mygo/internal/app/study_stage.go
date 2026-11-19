@@ -839,16 +839,19 @@ func (s *StudyCanvas) stageTurn(c *ui.Context, p stageProps, raw core.J, newest 
 			return
 		}
 		pinned := s.pinnedCard(raw, conversation, p.turns)
-		ui.Box(c.Key("study-pin-answer-" + raw.S("id"))).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Scale: .92}}).
-			Children(func() {
-				if pinned == nil {
-					if (m3.Button{Kind: m3.TextKind, Icon: icons.PushPinOutlined, Label: "留在画布"}).Show(c.Key("pin")).Clicked() {
-						s.pinAnswer(raw, conversation, "", "")
+		ui.Box(c.Key("study-pin-answer-" + raw.S("id"))).Children(func() {
+			ui.Box(c.Key(pinned == nil)).
+				Transition(design.Switcher(design.Short4, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, Scale: .92})).
+				Children(func() {
+					if pinned == nil {
+						if (m3.Button{Kind: m3.TextKind, Icon: icons.PushPinOutlined, Label: "留在画布"}).Show(c.Key("pin")).Clicked() {
+							s.pinAnswer(raw, conversation, "", "")
+						}
+					} else if (m3.Button{Kind: m3.TextKind, Icon: icons.CheckRounded, Label: "已在画布 · 查看"}).Show(c.Key("pinned")).Clicked() {
+						s.revealCard(pinned)
 					}
-				} else if (m3.Button{Kind: m3.TextKind, Icon: icons.CheckRounded, Label: "已在画布 · 查看"}).Show(c.Key("pinned")).Clicked() {
-					s.revealCard(pinned)
-				}
-			})
+				})
+		})
 	}
 	maxW := float32(460)
 	if s.viewport.X < 600 {
@@ -1213,7 +1216,7 @@ func (s *StudyCanvas) composerPane(c *ui.Context, p stageProps) {
 				return false
 			})
 			ui.Box(c).Width(design.SpaceXS)
-			enter := ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Scale: .25, Opacity: 0}}
+			enter := design.Switcher(design.Short4, nil, nil, ui.Motion{Scale: .25, Opacity: 0})
 			if p.busy {
 				ui.Box(c.Key("stop")).Transition(enter).Children(func() {
 					if (m3.IconButton{Kind: m3.TonalIcon, Icon: icons.StopRounded, Tooltip: l10n.StudyStop}).Show(c).Clicked() && cv != nil {

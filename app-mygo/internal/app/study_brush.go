@@ -286,92 +286,94 @@ func (s *StudyCanvas) advancedPenSettings(eraser bool, tab int) {
 					brushPreview(c, 100, s.color, s.penWidth, s.brush)
 					m3.Text(c, "实时笔迹预览", design.TextStyle{Size: 10, Color: cs.OnSurfaceVariant}).Absolute().Right(8).Bottom(8)
 				})
-				ui.Scroll(c).FillWidth().Grow(1).Basis(0).Children(func() {
-					ui.Column(c).FillWidth().Padding(24).Children(func() {
-						switch tab {
-						case 0:
-							ui.Row(c).Wrap().Gap(8).Children(func() {
-								for _, f := range brushFamilies {
-									if (m3.Chip{Kind: m3.ChoiceChip, Label: brushNames[f], Selected: s.brush.Family == f}).Show(c).Clicked() {
-										s.brush.Family = f
-										s.brush.Opacity = 1
-										s.tool = toolPen
-										if f == "highlighter" {
-											s.brush.Opacity, s.tool = .35, toolHighlighter
-										}
-										changed = true
-									}
-								}
-							})
-							ui.Box(c).Height(20)
-							change(m3.SwitchTile(c, m3.Tile{Title: "一笔成形", Subtitle: "画完停住约 0.7 秒；继续按住可调整", Pad: true}, &s.presets[s.presetIndex].ShapeAssist))
-							change(brushSlider(c, "不透明度", &s.brush.Opacity, .05, 1, true))
-							change(brushSlider(c, "压感响应", &s.brush.Pressure, 0, 1, true))
-							change(brushSlider(c, "平滑程度", &s.brush.Smoothing, 0, 1, true))
-							if s.brush.Family == "highlighter" {
-								change(m3.Segmented(c, []m3.Segment[bool]{{Value: false, Label: "圆头"}, {Value: true, Label: "平头"}}, &s.brush.SquareTip, m3.SegOpts{}))
-							}
-							ui.Box(c).Height(12)
-							m3.Text(c, "圆珠笔与荧光笔保持均匀宽度；钢笔、铅笔与软笔响应压力。鼠标使用固定压力。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
-						case 1:
-							ui.Row(c).Wrap().Gap(12).Children(func() {
-								for _, col := range penPalette {
-									col := col
-									sel := s.color == col
-									bw, bc := float32(1), ch.line
-									if sel {
-										bw, bc = 3, ch.accent
-									}
-									e := ui.Box(c.Key(fmt.Sprintf("pen-color-%x", col))).Size(38, 38).Radius(19).Background(design.ARGB(col)).
-										Border(bw, bc).Center().Cursor(ui.CursorPointer)
-									if e.Clicked() {
-										s.color = col
-										hex = strings.ToUpper(fmt.Sprintf("%06x", col&0xffffff))
-										changed = true
-									}
-									e.Children(func() {
-										if sel {
-											fg := ui.RGB(255, 255, 255)
-											if design.Luminance(design.ARGB(col)) > .5 {
-												fg = ui.RGB(0, 0, 0)
+				m3.TabView(c, ui.Box(c).FillWidth().Grow(1).Basis(0), tab, func(tab int) {
+					ui.Scroll(c).Fill().Children(func() {
+						ui.Column(c).FillWidth().Padding(24).Children(func() {
+							switch tab {
+							case 0:
+								ui.Row(c).Wrap().Gap(8).Children(func() {
+									for _, f := range brushFamilies {
+										if (m3.Chip{Kind: m3.ChoiceChip, Label: brushNames[f], Selected: s.brush.Family == f}).Show(c).Clicked() {
+											s.brush.Family = f
+											s.brush.Opacity = 1
+											s.tool = toolPen
+											if f == "highlighter" {
+												s.brush.Opacity, s.tool = .35, toolHighlighter
 											}
-											m3.Icon(c, icons.Check, 18, fg)
+											changed = true
 										}
-									})
-								}
-							})
-							ui.Box(c).Height(24)
-							if (m3.Field{Label: "自定义 HEX 颜色", PrefixText: "#", MaxLength: 6, Counter: true}).Show(c, &hex).Changed() && hexColor.MatchString(hex) {
-								v, _ := strconv.ParseUint(hex, 16, 32)
-								s.color = 0xff000000 | uint32(v)
-								changed = true
-							}
-						case 2:
-							ui.Row(c).Wrap().Gap(8).Children(func() {
-								for _, w := range []float64{1, 2, 3, 5, 8, 12, 20, 32} {
-									if (m3.Chip{Kind: m3.ChoiceChip, Label: fmt.Sprint(int(w)), Selected: math.Abs(s.penWidth-w) < .05}).Show(c).Clicked() {
-										s.penWidth = w
-										changed = true
 									}
+								})
+								ui.Box(c).Height(20)
+								change(m3.SwitchTile(c, m3.Tile{Title: "一笔成形", Subtitle: "画完停住约 0.7 秒；继续按住可调整", Pad: true}, &s.presets[s.presetIndex].ShapeAssist))
+								change(brushSlider(c, "不透明度", &s.brush.Opacity, .05, 1, true))
+								change(brushSlider(c, "压感响应", &s.brush.Pressure, 0, 1, true))
+								change(brushSlider(c, "平滑程度", &s.brush.Smoothing, 0, 1, true))
+								if s.brush.Family == "highlighter" {
+									change(m3.Segmented(c, []m3.Segment[bool]{{Value: false, Label: "圆头"}, {Value: true, Label: "平头"}}, &s.brush.SquareTip, m3.SegOpts{}))
 								}
-							})
-							ui.Box(c).Height(24)
-							change(brushSlider(c, "笔刷粗细", &s.penWidth, .2, 80, true))
-							m3.Text(c, "宽度使用画布坐标；缩放画布时已有笔迹保持比例。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
-						default:
-							if m3.Segmented(c, []m3.Segment[string]{{Value: "partial", Label: "局部擦除"}, {Value: "stroke", Label: "整笔擦除"}, {Value: "lasso", Label: "圈选整笔"}}, &s.eraserMode, m3.SegOpts{}) {
-								s.tool = toolEraser
-								changed = true
+								ui.Box(c).Height(12)
+								m3.Text(c, "圆珠笔与荧光笔保持均匀宽度；钢笔、铅笔与软笔响应压力。鼠标使用固定压力。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
+							case 1:
+								ui.Row(c).Wrap().Gap(12).Children(func() {
+									for _, col := range penPalette {
+										col := col
+										sel := s.color == col
+										bw, bc := float32(1), ch.line
+										if sel {
+											bw, bc = 3, ch.accent
+										}
+										e := ui.Box(c.Key(fmt.Sprintf("pen-color-%x", col))).Size(38, 38).Radius(19).Background(design.ARGB(col)).
+											Border(bw, bc).Center().Cursor(ui.CursorPointer)
+										if e.Clicked() {
+											s.color = col
+											hex = strings.ToUpper(fmt.Sprintf("%06x", col&0xffffff))
+											changed = true
+										}
+										e.Children(func() {
+											if sel {
+												fg := ui.RGB(255, 255, 255)
+												if design.Luminance(design.ARGB(col)) > .5 {
+													fg = ui.RGB(0, 0, 0)
+												}
+												m3.Icon(c, icons.Check, 18, fg)
+											}
+										})
+									}
+								})
+								ui.Box(c).Height(24)
+								if (m3.Field{Label: "自定义 HEX 颜色", PrefixText: "#", MaxLength: 6, Counter: true}).Show(c, &hex).Changed() && hexColor.MatchString(hex) {
+									v, _ := strconv.ParseUint(hex, 16, 32)
+									s.color = 0xff000000 | uint32(v)
+									changed = true
+								}
+							case 2:
+								ui.Row(c).Wrap().Gap(8).Children(func() {
+									for _, w := range []float64{1, 2, 3, 5, 8, 12, 20, 32} {
+										if (m3.Chip{Kind: m3.ChoiceChip, Label: fmt.Sprint(int(w)), Selected: math.Abs(s.penWidth-w) < .05}).Show(c).Clicked() {
+											s.penWidth = w
+											changed = true
+										}
+									}
+								})
+								ui.Box(c).Height(24)
+								change(brushSlider(c, "笔刷粗细", &s.penWidth, .2, 80, true))
+								m3.Text(c, "宽度使用画布坐标；缩放画布时已有笔迹保持比例。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
+							default:
+								if m3.Segmented(c, []m3.Segment[string]{{Value: "partial", Label: "局部擦除"}, {Value: "stroke", Label: "整笔擦除"}, {Value: "lasso", Label: "圈选整笔"}}, &s.eraserMode, m3.SegOpts{}) {
+									s.tool = toolEraser
+									changed = true
+								}
+								ui.Box(c).Height(16)
+								change(m3.SwitchTile(c, m3.Tile{Title: "压感橡皮", Subtitle: "落笔时原地重压停留，临时擦除；画出笔迹后停留用于成形", Pad: true}, &s.pressureEraser))
+								if s.pressureEraser {
+									change(brushSlider(c, "触发压力（越小越灵敏）", &s.pressureThreshold, .55, .98, true))
+								}
+								ui.Box(c).Height(16)
+								change(brushSlider(c, "橡皮半径", &s.eraserSize, 3, 100, true))
+								m3.Text(c, "整笔模式会移除同一次落笔的全部分段；圈选模式在抬笔后擦除圈内笔画。锁定或隐藏图层保持不变。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
 							}
-							ui.Box(c).Height(16)
-							change(m3.SwitchTile(c, m3.Tile{Title: "压感橡皮", Subtitle: "落笔时原地重压停留，临时擦除；画出笔迹后停留用于成形", Pad: true}, &s.pressureEraser))
-							if s.pressureEraser {
-								change(brushSlider(c, "触发压力（越小越灵敏）", &s.pressureThreshold, .55, .98, true))
-							}
-							ui.Box(c).Height(16)
-							change(brushSlider(c, "橡皮半径", &s.eraserSize, 3, 100, true))
-							m3.Text(c, "整笔模式会移除同一次落笔的全部分段；圈选模式在抬笔后擦除圈内笔画。锁定或隐藏图层保持不变。", design.TextStyle{Size: 12, Color: cs.OnSurfaceVariant})
-						}
+						})
 					})
 				})
 			})

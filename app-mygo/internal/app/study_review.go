@@ -1218,8 +1218,8 @@ func (x reviewCtx) reviewTick(c *ui.Context, review string, item study.M) {
 	e := ui.ButtonBase(c.Key("tick")).Size(28, 28).Radius(14).Tooltip(tip).Cursor(ui.CursorPointer)
 	m3.Ink(e, col, 14)
 	e.Children(func() {
-		m3.Icon(c, ic, 20, col).Key(review).Transition(ui.ElementTransition{Duration: design.Short4, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, Scale: .6}})
+		m3.Icon(c, ic, 20, col).Key(review).
+			Transition(design.Switcher(design.Short4, design.EmphasizedDecelerate, nil, ui.Motion{Opacity: 0, Scale: .6}))
 	})
 	if e.Clicked() {
 		x.toggleConfirm(item)

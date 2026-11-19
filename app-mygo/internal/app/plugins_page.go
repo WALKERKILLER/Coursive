@@ -297,8 +297,8 @@ func (p *PluginsPage) View(c *ui.Context) {
 	view := pluginsView
 	root.Children(func() {
 		p.header(c, pad, compact)
-		ui.Column(c).FillWidth().Grow(1).Basis(0).Key(view).Transition(ui.ElementTransition{Duration: design.Medium2,
-			Ease: design.EmphasizedDecelerate, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+		ui.Column(c).FillWidth().Grow(1).Basis(0).Key(view).
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0})).Children(func() {
 			switch {
 			case !Plugins.Ready() && view == 0:
 				// Source plugins run in the daemon, so they install without
@@ -419,8 +419,8 @@ func (p *PluginsPage) sourcesMenu(c *ui.Context, compact bool) {
 // plugins.
 func (p *PluginsPage) pane(c *ui.Context, e ui.Element, entry core.J, onClose func()) {
 	e.Background(design.S().SurfaceContainerLow).Radius(design.CornerXL).Clip().Children(func() {
-		ui.Column(c).Fill().Key(entry.S("id")).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, X: 8}}).Children(func() {
+		ui.Column(c).Fill().Key(entry.S("id")).
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, XPercent: 2})).Children(func() {
 			p.detail(entry, true, onClose).Show(c)
 		})
 	})

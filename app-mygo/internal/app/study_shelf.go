@@ -154,7 +154,7 @@ func (s *StudyCanvas) shelf(c *ui.Context) {
 			}
 		})
 		ui.Box(c.Key(int(tab))).FillWidth().Grow(1).Basis(0).
-			Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+			Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 			switch tab {
 			case shelfTranscript:
 				s.transcriptList(c)

@@ -74,7 +74,7 @@ func (d Dock) collapsed(c *ui.Context) bool {
 	s := design.S()
 	it := d.Items[d.Selected]
 	pill := ui.Row(c.Key("dock-min")).Height(DockHeight).Padding(DockInset).Cursor(ui.CursorPointer).Label(it.Label).
-		Transition(dockSwitch())
+		TransformOrigin(0, .5).Transition(dockSwitch())
 	pill = Glass{Radius: design.CornerFull}.Apply(pill)
 	pill = m3.InkWell(pill, DockHeight/2)
 	pill.Children(func() {
@@ -93,7 +93,7 @@ func (d Dock) bar(c *ui.Context) int {
 	n := len(d.Items)
 	chosen := -1
 	pill := ui.Box(c.Key("dock-bar")).FillWidth().Height(DockHeight).Padding(DockInset).
-		Transition(dockSwitch())
+		TransformOrigin(0, .5).Transition(dockSwitch())
 	pill = Glass{Radius: design.CornerFull}.Apply(pill)
 	st := ui.Local(pill, "dock", func() dockState { return dockState{} })
 	w := pill.Bounds().W - 2*DockInset
@@ -212,8 +212,7 @@ func abs32(x float32) float32 {
 }
 
 // dockSwitch is the AnimatedSwitcher between the bar and its minimized
-// form: a fade and a scale from 92%.
+// form: a fade and a scale from 92% about the start edge.
 func dockSwitch() ui.ElementTransition {
-	return ui.ElementTransition{Duration: design.T().Motion(design.Medium2, nil).Duration, Ease: design.EmphasizedDecelerate,
-		Enter: &ui.Motion{Opacity: 0, Scale: .92}, ExitEase: design.EmphasizedAccelerate}
+	return design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, Scale: .92})
 }

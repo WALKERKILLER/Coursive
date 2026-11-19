@@ -525,7 +525,7 @@ func downloadOption(c *ui.Context, k downloadKind, hint string, selected, enable
 			if on {
 				key = "on"
 			}
-			ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Scale: 0}}).Children(func() {
+			ui.Box(c.Key(key)).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Scale: scaleZero})).Children(func() {
 				if on {
 					m3.Icon(c, icons.CheckCircleRounded, 24, cs.Primary)
 				} else {

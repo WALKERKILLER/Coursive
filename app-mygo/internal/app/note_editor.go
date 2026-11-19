@@ -208,7 +208,7 @@ func (e *NoteEditor) Show(c *ui.Context) {
 				st := tt.BodyMedium.H(1.7)
 				lecture := e.lectureID()
 				ui.Scroll(c.Key("p")).Fill().TrackScroll(&e.scroll).Padding(design.SpaceLG).Background(cs.SurfaceContainerLow).Radius(design.CornerLG).
-					Transition(ui.ElementTransition{Duration: design.Medium1, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+					Transition(design.Switcher(design.Medium1, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					CoursiveMarkdown{Data: data, Style: &st, LectureID: lecture, BaseDir: baseDir,
 						OnRef: func(r CoursiveRef) { OpenRef(r, lecture, e.o.OnSeek) }}.Show(c)
 				})
@@ -223,7 +223,8 @@ func (e *NoteEditor) Show(c *ui.Context) {
 				hint = l10n.NoteEditorHintTimestamp
 			}
 			st := tt.BodyMedium.H(1.6)
-			in := m3.Field{Hint: l10n.NoteEditorHint(hint), Multiline: true, Height: h, Style: &st}.Show(c.Key("e"), &e.body)
+			in := m3.Field{Hint: l10n.NoteEditorHint(hint), Multiline: true, Height: h, Style: &st}.Show(c.Key("e"), &e.body).
+				Transition(design.Switcher(design.Medium1, nil, nil, ui.Motion{Opacity: 0}))
 			if in.Changed() {
 				e.dirty = true
 			}

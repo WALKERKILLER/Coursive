@@ -545,8 +545,8 @@ func (p *PracticePage) View(c *ui.Context) {
 		default:
 			key = "q" + strconv.Itoa(p.current())
 		}
-		body := ui.Column(c.Key(key)).Fill().Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, X: 16}})
+		body := ui.Column(c.Key(key)).Fill().
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, XPercent: 4}))
 		p.activity.Show(c, body, "practice", lecture, p.pos)
 		body.Children(func() {
 			switch {

@@ -702,8 +702,7 @@ func (p *SchedulePage) calendar(c *ui.Context, collapsed, toggle bool) {
 		holder.Children(func() {
 			key := strconv.FormatBool(collapsed) + IsoDate(days[0])
 			ui.Grid(c.Key(key)).FillWidth().Columns(7).
-				Transition(ui.ElementTransition{Duration: design.T().Motion(design.Medium2, nil).Duration, Ease: design.EmphasizedDecelerate,
-					Enter: &ui.Motion{Opacity: 0, XPercent: 8 * float32(p.dir)}}).Children(func() {
+				Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, nil, ui.Motion{Opacity: 0, XPercent: 8 * float32(p.dir)})).Children(func() {
 				for _, d := range days {
 					p.dayCell(c, d, collapsed || d.Month() == m.Month(), d.Equal(today), d.Equal(p.selected), cellW/.92)
 				}

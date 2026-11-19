@@ -197,12 +197,8 @@ func (p *SettingsPage) View(c *ui.Context) {
 		}
 		ui.Column(c).Width(lw).FillHeight().Shrink(0).Children(func() { p.listPane(c) })
 		cat := p.category(p.selected)
-		d := design.Medium2
-		if core.UI.ReduceMotion {
-			d = 0
-		}
-		ui.Column(c).Grow(1).Basis(0).FillHeight().Key(cat.id).Transition(ui.ElementTransition{Duration: d, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, Y: 12}}).Children(func() {
+		ui.Column(c).Grow(1).Basis(0).FillHeight().Key(cat.id).
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, YPercent: 2})).Children(func() {
 			if !covered {
 				p.pane(c, cat, true)
 			}

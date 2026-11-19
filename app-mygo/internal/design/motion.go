@@ -21,6 +21,8 @@ var (
 	EaseInOut    = ui.CubicBezier(0.42, 0, 0.58, 1)
 	EaseOutCubic = ui.CubicBezier(0.215, 0.61, 0.355, 1)
 	EaseOut      = ui.CubicBezier(0, 0, 0.58, 1)
+	// Ease is Curves.ease, which TabController.animateTo moves along.
+	Ease = ui.CubicBezier(0.25, 0.1, 0.25, 1)
 )
 
 const (
@@ -71,3 +73,30 @@ func threePointCubic(a1x, a1y, b1x, b1y, mx, my, a2x, a2y, b2x, b2y float32) ui.
 // EaseInOutCubicEmphasized is Curves.easeInOutCubicEmphasized, the curve of
 // Material's page transitions.
 var EaseInOutCubicEmphasized = threePointCubic(0.05, 0, 0.133333, 0.06, 0.166666, 0.4, 0.208333, 0.82, 0.25, 1)
+
+// Flipped is Curve.flipped: the curve run backwards in time.
+func Flipped(e ui.Easing) ui.Easing {
+	return func(t float32) float32 { return 1 - e(1-t) }
+}
+
+// Switcher is AnimatedSwitcher for an element keyed by what it shows: as
+// the key changes, the new element comes from from along in while the old
+// one goes back there at the same time, along out run in reverse as
+// Flutter's reverseCurve is. A nil curve is linear, as AnimatedSwitcher's
+// switchInCurve and switchOutCurve are by default. Only the switch animates: the element
+// does not glide as the layout moves or resizes it, which Flutter never
+// does either.
+func Switcher(d time.Duration, in, out ui.Easing, from ui.Motion) ui.ElementTransition {
+	if in == nil {
+		in = ui.Linear
+	}
+	if out == nil {
+		out = ui.Linear
+	}
+	a := T().Motion(d, in)
+	if a.Duration == time.Nanosecond {
+		a.Duration = -1
+	}
+	enter, exit := from, from
+	return ui.ElementTransition{Duration: a.Duration, Ease: in, ExitEase: Flipped(out), Enter: &enter, Exit: &exit, Shadows: true}
+}

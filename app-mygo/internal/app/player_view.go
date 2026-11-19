@@ -212,26 +212,34 @@ func (v *PlayerView) Show(c *ui.Context, o PlayerViewOpts) ui.Element {
 				widgets.Loader{Size: 56}.Show(c)
 			})
 		}
-		if ctl.Boosting {
-			ui.Row(c).Absolute().Top(72).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
+		ui.Row(c).Absolute().Top(72).Left(0).Right(0).Justify(ui.Center).PassThrough().Children(func() {
+			if ctl.Boosting {
 				pill(c, icons.FastForwardRounded, l10n.PlayerBoosting(SpeedLabel(core.UI.BoostSpeed)), false).
-					Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Scale: .8}})
-			})
-		}
+					Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0, Scale: .8}))
+			}
+		})
 		v.centerPill(c, now)
+		resume := false
 		if v.resumeFrom >= 0 {
 			if now.Sub(v.resumeStart) >= resumeFor {
 				v.dismissResume()
 			} else {
-				bottom := float32(design.SpaceLG)
-				if showUI {
-					bottom = 112
-				}
-				ui.Box(c).Absolute().Left(design.SpaceLG).Bottom(bottom).
-					Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.Emphasized, Position: true,
-						Enter: &ui.Motion{Opacity: 0, X: -40}}).Children(func() { v.resumePrompt(c, now) })
+				resume = true
 			}
 		}
+		// AnimatedPositioned around the AnimatedSwitcher of the prompt.
+		bottom := float32(design.SpaceLG)
+		if showUI {
+			bottom = 112
+		}
+		ui.Box(c).Absolute().Left(design.SpaceLG).Bottom(bottom).
+			Transition(ui.ElementTransition{Duration: design.T().Motion(design.Medium2, nil).Duration, Ease: design.Emphasized, Position: true}).Children(func() {
+			if resume {
+				ui.Box(c.Key(v.resumeFrom)).
+					Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, XPercent: -15})).
+					Children(func() { v.resumePrompt(c, now) })
+			}
+		})
 		if chrome > 0.01 {
 			ui.Box(c).Absolute().Top(0).Left(0).Right(0).Opacity(chrome).Children(func() { v.topBar(c, o) })
 			ui.Box(c).Absolute().Bottom(0).Left(0).Right(0).Opacity(chrome).Children(func() { v.bottomBar(c, o) })
@@ -366,21 +374,25 @@ func abs32(f float32) float32 {
 func (v *PlayerView) centerPill(c *ui.Context, now time.Time) {
 	ctl := v.ctl
 	var build func() ui.Element
+	key := ""
 	switch {
 	case v.dragSeek >= 0:
+		key = "ds"
 		build = func() ui.Element {
 			return pill(c, icons.SwapHorizRounded, core.FmtClock(int(v.dragSeek))+" / "+core.FmtClock(ctl.DurationMs()), true)
 		}
 	case v.dragVol >= 0:
+		key = "dv"
 		build = func() ui.Element { return pill(c, icons.VolumeUpRounded, strconv.Itoa(int(v.dragVol+.5))+"%", true) }
 	case v.toast != "" && now.Before(v.toastUntil):
 		c.After(time.Until(v.toastUntil))
+		key = "t" + v.toast
 		build = func() ui.Element { return pill(c, v.toastIcon, v.toast, true) }
-	default:
-		return
 	}
 	ui.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().PassThrough().Children(func() {
-		build().Transition(ui.ElementTransition{Duration: design.Short3, Enter: &ui.Motion{Opacity: 0}})
+		if build != nil {
+			ui.Box(c.Key(key)).Transition(design.Switcher(design.Short3, nil, nil, ui.Motion{Opacity: 0})).Children(func() { build() })
+		}
 	})
 }
 
@@ -393,7 +405,7 @@ func (v *PlayerView) subtitle(c *ui.Context, scale float32) {
 	}
 	seg := ctl.Segments[i]
 	ui.Box(c).Key(seg.Idx()).Padding(5, 12).Radius(design.CornerSM).Background(ui.RGBA(0, 0, 0, .62)).
-		Transition(ui.ElementTransition{Duration: design.Short3, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+		Transition(design.Switcher(design.Short3, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 		m3.Text(c, seg.Text(), design.TextStyle{Size: 17 * scale, Height: 1.35, Weight: 500, Color: pWhite}).TextAlign(ui.Center)
 	})
 }
@@ -600,8 +612,8 @@ func (v *PlayerView) chapterChip(c *ui.Context, o PlayerViewOpts) {
 	ch := ctl.Chapters[i]
 	b := m3.Tappable(c, design.CornerSM).Row().AlignItems(ui.Center).Height(30).Padding(0, 8, 0, 4).MaxWidth(420).Margin(0, 0, 2, 0).AlignSelf(ui.Start)
 	b.Children(func() {
-		ui.Row(c).Key(i).AlignItems(ui.Center).Shrink(1).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, Y: 12}}).Children(func() {
+		ui.Row(c).Key(i).AlignItems(ui.Center).Shrink(1).
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, nil, ui.Motion{Opacity: 0, YPercent: 40})).Children(func() {
 			m3.Text(c, strconv.Itoa(i+1)+"/"+strconv.Itoa(len(ctl.Chapters)), tt.LabelMedium.C(pWhite60)).FontFeatures("tnum").NoWrap()
 			m3.HGap(c, design.SpaceSM)
 			m3.Text(c, ch.Title(), tt.LabelLarge.C(pWhite)).MaxLines(1).Shrink(1)
@@ -635,7 +647,7 @@ func (v *PlayerView) playButton(c *ui.Context) {
 	m3.Ink(b, ui.RGB(0, 0, 0), r)
 	m3.Tip(c, b.Label(tip), tip)
 	b.Children(func() {
-		ui.Box(c).Key(playing).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0, Scale: .6}}).Children(func() {
+		ui.Box(c).Key(playing).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0, Scale: .6})).Children(func() {
 			m3.Icon(c, ic, 28, ui.RGBA(0, 0, 0, .87))
 		})
 	})

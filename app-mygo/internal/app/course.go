@@ -245,7 +245,7 @@ func (p *CoursePage) View(c *ui.Context) {
 				if selecting {
 					key = "count"
 				}
-				ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}}).Children(func() {
+				ui.Box(c.Key(key)).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					if selecting {
 						m3.Text(c, l10n.CourseSelectedCount(len(p.sel)), tt.TitleLarge)
 					}
@@ -550,7 +550,7 @@ func (p *CoursePage) lectureCard(c *ui.Context, l core.Lecture, ordinal int, sel
 			if selecting {
 				key = "cb"
 			}
-			ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Short4, Enter: &ui.Motion{Scale: 0}}).Children(func() {
+			ui.Box(c.Key(key)).Transition(design.Switcher(design.Short4, nil, nil, ui.Motion{Scale: scaleZero})).Children(func() {
 				if selecting {
 					ui.Box(c).Width(52).Center().Children(func() {
 						v := selected

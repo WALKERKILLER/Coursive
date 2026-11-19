@@ -105,9 +105,8 @@ func (p *PlayerSidePanel) Show(c *ui.Context) {
 			}
 			PluginMenuButton(c, "lecture.menu", pctx, false, "")
 		})
-		ui.Column(c).FillWidth().Grow(1).Basis(0).Key(p.tab).Transition(ui.ElementTransition{Duration: design.Medium2,
-			Ease: design.EmphasizedDecelerate, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
-			switch p.tab {
+		m3.TabView(c, ui.Column(c).FillWidth().Grow(1).Basis(0), p.tab, func(tab int) {
+			switch tab {
 			case 0:
 				p.outline.show(c, ctl)
 			case 1:
@@ -268,11 +267,11 @@ func (o *outlineTab) show(c *ui.Context, ctl *LecturePlayer) {
 			}
 		})
 	})
-	if ctl.OutlineBusy {
-		m3.Linear(c, m3.Progress{Height: 2})
-	} else {
-		m3.VGap(c, 2)
-	}
+	ui.Box(c.Key(ctl.OutlineBusy)).FillWidth().Height(2).Transition(design.Switcher(design.Medium2, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
+		if ctl.OutlineBusy {
+			m3.Linear(c, m3.Progress{Height: 2})
+		}
+	})
 	list := ui.List(c, &o.list, len(ctl.Chapters), func(i int) {
 		state := 1
 		if i < o.current {
@@ -876,8 +875,8 @@ func (m *materialsTab) show(c *ui.Context, ctl *LecturePlayer) {
 			m.picked = &v
 		}
 	})
-	ui.Column(c).FillWidth().Grow(1).Basis(0).Key(slides).Transition(ui.ElementTransition{Duration: design.Medium2,
-		Ease: design.EmphasizedDecelerate, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
+	ui.Column(c).FillWidth().Grow(1).Basis(0).Key(slides).
+		Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, nil, ui.Motion{Opacity: 0})).Children(func() {
 		if slides {
 			m.slides.show(c, ctl)
 		} else {

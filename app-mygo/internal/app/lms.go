@@ -283,8 +283,8 @@ func (v *lmsCourseView) view(c *ui.Context, r *m3.Route) {
 			widgets.CenteredLoader(c, "")
 			return
 		}
-		ui.Box(c.Key(v.tab)).Fill().Transition(ui.ElementTransition{Duration: design.Medium2, Enter: &ui.Motion{Opacity: 0}}).Children(func() {
-			switch v.tab {
+		m3.TabView(c, ui.Box(c).Fill(), v.tab, func(tab int) {
+			switch tab {
 			case 0:
 				v.assignments(c, d)
 			case 1:

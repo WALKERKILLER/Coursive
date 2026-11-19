@@ -600,8 +600,8 @@ func (s *StudyCanvas) returnPill(c *ui.Context) {
 	cs, tt := design.S(), design.TT()
 	e := ui.ButtonBase(c.Key("study-return")).Absolute().Top(f32(s.topBarsBottom())+design.SpaceSM).Height(44).
 		Padding(design.SpaceXS, design.SpaceLG, design.SpaceXS, design.SpaceMD).AlignItems(ui.Center).Cursor(ui.CursorPointer).
-		Label(l10n.StudyReturn).Transition(ui.ElementTransition{Duration: design.Medium1, Ease: design.EmphasizedDecelerate,
-		Enter: &ui.Motion{Opacity: 0, Y: -16}})
+		Label(l10n.StudyReturn).
+		Transition(design.Switcher(design.Medium1, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, YPercent: -40}))
 	// Centred by its width in the last frame.
 	if b := e.Bounds(); b.W > 0 {
 		e = e.Left(f32(s.viewport.X/2) - b.W/2)

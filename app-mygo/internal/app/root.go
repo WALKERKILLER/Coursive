@@ -86,15 +86,9 @@ func Root(c *ui.Context) {
 			Post(linksReady)
 		}
 	}
-	dur := t.Motion(design.Long2, nil).Duration
 	ui.Box(c).Fill().Background(design.S().Surface).Children(func() {
 		ui.Column(c.Key(key)).Absolute().Top(0).Left(0).Right(0).Bottom(0).
-			Transition(ui.ElementTransition{
-				Duration: dur, Ease: design.EmphasizedDecelerate,
-				ExitDuration: dur, ExitEase: design.EmphasizedAccelerate,
-				Enter: &ui.Motion{Opacity: 0, Scale: .96},
-				Exit:  &ui.Motion{Opacity: 0, Scale: .96},
-			}).Children(func() {
+			Transition(design.Switcher(design.Long2, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, Scale: .96})).Children(func() {
 			switch key {
 			case "setup":
 				workspaceSetup(c)

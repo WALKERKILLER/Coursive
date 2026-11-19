@@ -392,9 +392,8 @@ func (l *quoteLine) show(c *ui.Context, lead, gap float32) {
 			if q != nil {
 				key = q.Text
 			}
-			col := ui.Column(c.Key("q" + key)).FillWidth().Transition(ui.ElementTransition{
-				Duration: design.T().Motion(design.Medium4, nil).Duration, Ease: design.EmphasizedDecelerate,
-				Enter: &ui.Motion{Opacity: 0, YPercent: 12}})
+			col := ui.Column(c.Key("q" + key)).FillWidth().
+				Transition(design.Switcher(design.Medium4, design.EmphasizedDecelerate, design.EmphasizedAccelerate, ui.Motion{Opacity: 0, YPercent: 12}))
 			col.Children(func() {
 				if q == nil {
 					m3.VGap(c, 40)

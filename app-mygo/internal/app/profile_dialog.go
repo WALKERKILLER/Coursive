@@ -103,7 +103,7 @@ func ShowProfileDialog() {
 					})
 					m3.VGap(c, design.SpaceXS)
 					row := ui.Row(c.Key(ideas[0])).FillWidth().Justify(ui.SpaceBetween).
-						Transition(ui.ElementTransition{Duration: design.Medium2, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}})
+						Transition(design.Switcher(design.Medium2, nil, nil, ui.Motion{Opacity: 0}))
 					bw := row.Bounds().W
 					size := float32(52)
 					if bw > 0 {
@@ -176,8 +176,8 @@ func editableAvatar(c *ui.Context, t ui.Element) {
 	sc := t.AnimateTo("hover", map[bool]float32{true: 1.04, false: 1}[t.Hovered()], design.T().Motion(design.Medium2, design.Emphasized))
 	t.Scale(sc, sc).Children(func() {
 		key := string(Profile.Kind) + "|" + Profile.Value + "|" + string(Profile.Frame)
-		ui.Box(c.Key(key)).Transition(ui.ElementTransition{Duration: design.Medium2, Ease: design.EmphasizedDecelerate,
-			Enter: &ui.Motion{Opacity: 0, Scale: .85}, Exit: &ui.Motion{Opacity: 0}}).Children(func() { UserAvatar(c, 104) })
+		ui.Box(c.Key(key)).
+			Transition(design.Switcher(design.Medium2, design.EmphasizedDecelerate, nil, ui.Motion{Opacity: 0, Scale: .85})).Children(func() { UserAvatar(c, 104) })
 		ui.Box(c).Absolute().Right(-2).Bottom(-2).Size(32, 32).Radius(16).Background(s.Primary).Border(3, s.SurfaceContainerHigh).
 			Center().Children(func() { m3.Icon(c, icons.EditRounded, 16, s.OnPrimary) })
 	})
@@ -231,7 +231,7 @@ func showLinkDialog(qq bool, use func(string)) {
 		}
 		m3.AlertDialog(c, m3.Alert{Icon: ic, Title: title, Width: 360, Content: func() {
 			ui.Column(c).FillWidth().AlignItems(ui.Center).Children(func() {
-				ui.Box(c.Key(preview)).Transition(ui.ElementTransition{Duration: design.Medium2, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}}).Children(func() {
+				ui.Box(c.Key(preview)).Transition(design.Switcher(design.Medium2, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					if preview == "" {
 						widgets.CircleAvatar(c, 88, s.SurfaceContainerHighest, func() { m3.Icon(c, icons.ImageSearchRounded, 24, s.OnSurfaceVariant) })
 					} else {
@@ -354,7 +354,7 @@ func ShowEmojiPicker(initial string, pick func(string)) {
 					}
 				})
 				m3.VGap(c, design.SpaceMD)
-				ui.Scroll(c.Key(group)).FillWidth().Height(200).Transition(ui.ElementTransition{Duration: design.Medium1, Enter: &ui.Motion{Opacity: 0}, Exit: &ui.Motion{Opacity: 0}}).Children(func() {
+				ui.Scroll(c.Key(group)).FillWidth().Height(200).Transition(design.Switcher(design.Medium1, nil, nil, ui.Motion{Opacity: 0})).Children(func() {
 					ui.Row(c).Wrap().Gap(4).FillWidth().Children(func() {
 						for i, e := range list {
 							cell := ui.Box(c.Key(i)).Size(44, 44).Radius(design.CornerMD).Center().Cursor(ui.CursorPointer)

@@ -62,7 +62,7 @@ func ThinkingControl(c *ui.Context, value string, onChanged func(string), onCont
 		}
 		m3.VGap(c, design.SpaceSM)
 		m3.Text(c.Key(value), thinkingHints[value], tt.BodySmall.C(muted)).
-			Transition(ui.ElementTransition{Duration: design.Short3, Enter: &ui.Motion{Opacity: 0}})
+			Transition(design.Switcher(design.Short3, nil, nil, ui.Motion{Opacity: 0}))
 	})
 }
 
