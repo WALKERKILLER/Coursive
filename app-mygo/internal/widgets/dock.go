@@ -147,7 +147,7 @@ func (d Dock) bar(c *ui.Context) int {
 			lens := ui.Box(c).Absolute().Top(0).Bottom(0).Left(a).Width(b-a).Radius(DockLens).
 				Background(design.WithOpacity(s.SecondaryContainer, 1-.28*lift)).Scale(1+.06*lift, 1+.06*lift)
 			if lift > 0 {
-				lens.Shadow(0, 2, 24, 0, design.WithOpacity(s.Shadow, .16*lift))
+				lens.Shadow(0, 2, design.BoxShadowBlur(12), 0, design.WithOpacity(s.Shadow, .16*lift))
 			}
 		}
 		ui.Row(c).Fill().Children(func() {

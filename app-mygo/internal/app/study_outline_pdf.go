@@ -281,7 +281,7 @@ func (d *outlinePdfDialog) preview(c *ui.Context) {
 				pr.H = r.W / aspect
 				pr.Y += (r.H - pr.H) / 2
 			}
-			p.Shadow(pr, 2, 0, 6, 18, 0, ui.RGBA(0, 0, 0, .12))
+			p.Shadow(pr, 2, 0, 6, design.BoxShadowBlur(18), 0, ui.RGBA(0, 0, 0, .12))
 			p.Fill(pr, ui.RGB(255, 255, 255), 2)
 			if d.page != nil {
 				p.Image(d.page, pr, ui.Contain)

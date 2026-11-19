@@ -100,3 +100,8 @@ func GlassShadow(e ui.Element, depth GlassDepth) ui.Element {
 	// MaskFilter.blur takes a sigma; CSS's blur radius is twice it.
 	return e.Shadow(0, y, blur*2, 0, ui.RGBA(0, 0, 0, a)).Shadow(0, 1, 4, 0, ui.RGBA(0, 0, 0, a*.6))
 }
+
+// BoxShadowBlur is the blur of a shadow for Flutter's BoxShadow of
+// blurRadius radius: Flutter blurs with a sigma of 0.57735 radius + 0.5,
+// and CSS's blur, which Shadow takes, is twice the sigma.
+func BoxShadowBlur(radius float32) float32 { return 2 * (radius*0.57735 + 0.5) }

@@ -125,7 +125,7 @@ func (s *StudyCanvas) card(c *ui.Context, card *study.Card) {
 	e := ui.Column(c).Fill().Background(ch.paper).Radius(design.CornerLG).Border(sideW, side).Clip()
 	// Dark cards separate by a tonal step; a shadow would only muddy.
 	if !dark {
-		e = e.Shadow(0, 6, 24, 0, ch.shadow)
+		e = e.Shadow(0, 6, design.BoxShadowBlur(24), 0, ch.shadow)
 	}
 	ignoring := s.writing() || s.tool == toolHand || !d.Editable(card.Layer)
 	e.Children(func() {

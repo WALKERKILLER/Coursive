@@ -677,7 +677,7 @@ func (s *StudyCanvas) paintEvidence(p *ui.Painter, size ui.Rect) {
 	if len(view.rects) == 0 {
 		// A whole card, or a page the card is not showing yet.
 		r := ui.Rect{X: bounds.X - 4, Y: bounds.Y - 4, W: bounds.W + 8, H: bounds.H + 8}
-		p.Shadow(r, design.CornerMD, 0, 0, 10, 0, accent.Alpha(a(.18)))
+		p.Shadow(r, design.CornerMD, 0, 0, 20, 0, accent.Alpha(a(.18)))
 		p.Stroke(r, accent.Alpha(a(.8)), design.CornerMD, 2)
 		if view.page > 0 {
 			evidenceLabel(p, bounds.X+bounds.W-design.SpaceSM, bounds.Y+design.SpaceSM, s.evidenceLocator(evidence), accent, ch.paper, fade, true, false)

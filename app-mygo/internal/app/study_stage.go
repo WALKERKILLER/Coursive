@@ -1688,14 +1688,14 @@ func (s *StudyCanvas) paintFlow(p *ui.Painter, size ui.Rect, view *stageViewStat
 			if busy {
 				glow = .35 + .3*math.Abs(math.Sin(flow*math.Pi*2))
 			}
-			p.Shadow(ui.Rect{X: r.X - 4, Y: r.Y - 4, W: r.W + 8, H: r.H + 8}, radius+1, 0, 0, 4, 0, cs.Primary.Alpha(f32(glow)))
+			p.Shadow(ui.Rect{X: r.X - 4, Y: r.Y - 4, W: r.W + 8, H: r.H + 8}, radius+1, 0, 0, 8, 0, cs.Primary.Alpha(f32(glow)))
 		}
 		// After an answer: a light runs once from each cited card to the
 		// chat.
 		if pass >= 0 && cited[c.ID] {
 			t := float32(easeInOut(pass))
 			x, y := cubicAt(sx, sy, sx, sy+lift, ex, ey-lift, ex, ey, t)
-			p.Shadow(ui.Rect{X: x - 5, Y: y - 5, W: 10, H: 10}, 5, 0, 0, 3, 0, cs.Primary)
+			p.Shadow(ui.Rect{X: x - 5, Y: y - 5, W: 10, H: 10}, 5, 0, 0, 6, 0, cs.Primary)
 			p.FillPath((&ui.Path{}).Circle(x, y, 5), cs.Primary)
 		}
 	}

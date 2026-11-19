@@ -141,7 +141,9 @@ func (b Button) Show(c *ui.Context) ui.Element {
 			e = Elevation(e, 1)
 		}
 	}
-	e = e.Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Colors: true, Shadows: true})
+	// Material changes its colour at once and animates its elevation and
+	// shape, the outline's side with it, over 200 ms.
+	e = e.Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Ease: design.FastOutSlowIn, Colors: b.Kind == Outlined, Shadows: true})
 	if b.Tooltip != "" {
 		e = Tip(c, e, b.Tooltip)
 	}
@@ -366,7 +368,7 @@ func (f FAB) Show(c *ui.Context) ui.Element {
 	if f.Flat {
 		lvl = 0
 	}
-	e = Elevation(e, lvl).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Shadows: true})
+	e = Elevation(e, lvl).Transition(ui.ElementTransition{Duration: 200 * time.Millisecond, Ease: design.FastOutSlowIn, Shadows: true})
 	if f.Tooltip != "" {
 		e = Tip(c, e, f.Tooltip)
 	}

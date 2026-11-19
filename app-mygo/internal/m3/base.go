@@ -26,24 +26,66 @@ func Density() float32 {
 	return 0
 }
 
-// Elevation adds Material 3's shadow for a level in DIPs (0, 1, 3, 6, 8, 12).
+// Elevation adds the shadow of a Material at level DIPs: Flutter's
+// physical shadow (Skia's ambient and spot shadows of a directional
+// light), as two box shadows fitted to it at the levels Material uses,
+// and in between from the neighbouring ones.
 func Elevation(e ui.Element, level float32) ui.Element {
+	for _, s := range elevationShadows(level) {
+		e = e.Shadow(0, s[0], s[1], s[2], ui.RGBA(0, 0, 0, s[3]))
+	}
+	return e
+}
+
+// PaintElevation paints Elevation's shadows of a rounded rectangle, for a
+// drawing of its own Material (Canvas.drawShadow).
+func PaintElevation(p *ui.Painter, r ui.Rect, radius, level float32) {
+	for _, s := range elevationShadows(level) {
+		p.Shadow(r, radius, 0, s[0], s[1], s[2], ui.RGBA(0, 0, 0, s[3]))
+	}
+}
+
+// elevationShadows are the shadows at level, between the fitted ones.
+func elevationShadows(level float32) [][4]float32 {
 	if level <= 0 {
-		return e
+		return nil
 	}
-	k := ui.RGBA(0, 0, 0, .15)
-	a := ui.RGBA(0, 0, 0, .3)
-	switch {
-	case level <= 1:
-		return e.Shadow(0, 1, 3, 1, k).Shadow(0, 1, 2, 0, a)
-	case level <= 3:
-		return e.Shadow(0, 2, 6, 2, k).Shadow(0, 1, 2, 0, a)
-	case level <= 6:
-		return e.Shadow(0, 4, 8, 3, k).Shadow(0, 1, 3, 0, a)
-	case level <= 8:
-		return e.Shadow(0, 6, 10, 4, k).Shadow(0, 2, 3, 0, a)
+	lo, hi := elevations[len(elevations)-1], elevations[len(elevations)-1]
+	for i := 1; i < len(elevations); i++ {
+		if level <= elevations[i].level {
+			lo, hi = elevations[i-1], elevations[i]
+			break
+		}
 	}
-	return e.Shadow(0, 8, 12, 6, k).Shadow(0, 4, 4, 0, a)
+	t := float32(1)
+	if hi.level > lo.level {
+		t = min(max((level-lo.level)/(hi.level-lo.level), 0), 1)
+	}
+	if level < elevations[0].level {
+		lo, hi, t = elevation{}, elevations[0], level/elevations[0].level
+	}
+	out := make([][4]float32, 2)
+	for i := range out {
+		a, b := lo.shadows[i], hi.shadows[i]
+		out[i] = [4]float32{lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t), lerp(a[3], b[3], t)}
+	}
+	return out
+}
+
+// elevation is a level's shadows: each y offset, blur, spread and opacity.
+type elevation struct {
+	level   float32
+	shadows [2][4]float32
+}
+
+var elevations = []elevation{
+	{1, [2][4]float32{{1.5, 1.7, 0, .165}, {.25, .625, .125, .115}}},
+	{2, [2][4]float32{{2, 3.775, -.25, .265}, {-.25, 1.5, -1, .17}}},
+	{3, [2][4]float32{{4, 4.85, .25, .18}, {.25, 1.9375, 0, .12}}},
+	{4, [2][4]float32{{5.5, 7.05, -.1875, .2}, {1, 3, -.9375, .19}}},
+	{6, [2][4]float32{{6.5, 10.3875, .25, .235}, {.5, 2.1875, -1.1875, .155}}},
+	{8, [2][4]float32{{9.5, 14.5375, -.25, .24}, {2.5, 3.375, -1.8125, .07}}},
+	{12, [2][4]float32{{15, 22.275, -.6875, .235}, {4.8125, 4.8125, -2.9375, .055}}},
 }
 
 // TintOpacity is ElevationOverlay's surface tint for an elevation.

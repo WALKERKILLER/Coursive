@@ -514,7 +514,7 @@ func fileTile(c *ui.Context, f core.J) {
 		body := (&ui.Path{}).MoveTo(x+rad, y).LineTo(x+w-corner, y).LineTo(x+w, y+corner).LineTo(x+w, y+h-rad).
 			QuadTo(x+w, y+h, x+w-rad, y+h).LineTo(x+rad, y+h).QuadTo(x, y+h, x, y+h-rad).LineTo(x, y+rad).QuadTo(x, y, x+rad, y).Close()
 		if !dark {
-			p.Shadow(r, rad, 0, 1, 2, 0, ui.RGB(0, 0, 0).Alpha(.2))
+			m3.PaintElevation(p, r, rad, 2)
 		}
 		p.FillPath(body, paper)
 		p.StrokePath(body, .8, edge)
