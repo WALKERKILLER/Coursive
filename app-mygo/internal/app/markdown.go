@@ -369,6 +369,45 @@ func chipLinks(md string, lectureID string) string {
 	return out.String()
 }
 
+var evidenceMd = regexp.MustCompile(`\[(\d+)\]\(coursive-evidence:([A-Za-z0-9_-]{1,12})\)`)
+
+// evidenceLinks marks numbered citations so the view draws them as raised
+// numbers, struck through when stale says the material no longer holds.
+func evidenceLinks(md string, stale func(string) bool) string {
+	return evidenceMd.ReplaceAllStringFunc(md, func(m string) string {
+		sub := evidenceMd.FindStringSubmatch(m)
+		kind := "e"
+		if stale != nil && stale(sub[2]) {
+			kind = "E"
+		}
+		return "[$" + chipTeX + kind + " " + sub[1] + "$](coursive-evidence:" + sub[2] + ")"
+	})
+}
+
+// evidenceChip is _CitationMark's number: a small pill raised above the
+// line.
+func evidenceChip(label string, size float32, stale bool) markdown.InlineObject {
+	cs := design.S()
+	bg, fg := cs.Primary.Alpha(.1), cs.Primary
+	if stale {
+		bg, fg = cs.OnSurface.Alpha(.06), cs.Outline
+	}
+	span := ui.Span{Text: label, Size: size * .68, Weight: 700, Color: fg, Features: "tnum"}
+	l := ui.ShapeRichText([]ui.Span{span}, ui.Font{Size: size * .68, Weight: 700}, 0)
+	tw, th := l.Size()
+	w := max(size*1.05, tw+7) + 3
+	h := th + 1
+	lift := size * .32
+	return markdown.InlineObject{Width: w, Height: h + lift, Depth: 0, Draw: func(p *ui.Painter, r ui.Rect) {
+		box := ui.Rect{X: r.X + 1.5, Y: r.Y, W: r.W - 3, H: h}
+		p.Fill(box, bg, box.H/2)
+		p.RichText(box.X+(box.W-tw)/2, box.Y+(box.H-th)/2, 0, span)
+		if stale {
+			p.Line(box.X+3, box.Y+box.H/2, box.X+box.W-3, box.Y+box.H/2, 1, fg)
+		}
+	}}
+}
+
 // drawChip makes the inline object of a chip: a timestamp in a pill, a
 // reference in a tonal square.
 func chipObject(tex string, size float32) (markdown.InlineObject, bool) {
@@ -377,6 +416,9 @@ func chipObject(tex string, size float32) (markdown.InlineObject, bool) {
 	}
 	kind, label := tex[len(chipTeX)], tex[len(chipTeX)+2:]
 	cs := design.S()
+	if kind == 'e' || kind == 'E' {
+		return evidenceChip(label, size, kind == 'E'), true
+	}
 	bg, fg := cs.SecondaryContainer, cs.OnSecondaryContainer
 	radius := size
 	ic, icSize := icons.PlayArrowRounded, size*1.1
@@ -424,6 +466,11 @@ type CoursiveMarkdown struct {
 	// ShareSelection leaves the selection to a Selectable container
 	// around, as one across a chat's messages.
 	ShareSelection bool
+	// OnEvidence follows a numbered citation, a link to
+	// coursive-evidence:<id>; Stale tells the citations whose material
+	// no longer holds.
+	OnEvidence func(id string)
+	Stale      func(id string) bool
 }
 
 // Show builds the Markdown in its parent's width.
@@ -458,7 +505,10 @@ func (m CoursiveMarkdown) Show(c *ui.Context) ui.Element {
 	o.ShareSelection = m.ShareSelection
 	onRef := m.OnRef
 	o.OnLink = func(u string) {
-		if strings.HasPrefix(u, "coursive-evidence:") {
+		if id, ok := strings.CutPrefix(u, "coursive-evidence:"); ok {
+			if m.OnEvidence != nil {
+				m.OnEvidence(id)
+			}
 			return
 		}
 		if ref, ok := ParseRef(u); ok && onRef != nil {
@@ -487,6 +537,9 @@ func (m CoursiveMarkdown) Show(c *ui.Context) ui.Element {
 	src := PrepareMarkdown(m.Data, m.LectureID)
 	if onRef != nil {
 		src = chipLinks(src, m.LectureID)
+	}
+	if m.OnEvidence != nil {
+		src = evidenceLinks(src, m.Stale)
 	}
 	w.Children(func() {
 		if m.Streaming {
