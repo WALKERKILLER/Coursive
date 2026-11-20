@@ -86,9 +86,19 @@ class DaemonService extends ChangeNotifier {
         ? [p.join(Platform.environment['ProgramFiles'] ?? r'C:\Program Files', 'nodejs', 'node.exe')]
         : ['/usr/bin/node', '/usr/local/bin/node', '/opt/homebrew/bin/node']);
     for (final c in candidates) {
-      if (File(c).existsSync()) return c;
+      if (File(c).existsSync() && (win || _nodeRuns(c))) return c;
     }
     return null;
+  }
+
+  /// Off Windows, rules out a node that cannot start, such as one a partial
+  /// system upgrade left without its shared libraries.
+  bool _nodeRuns(String node) {
+    try {
+      return Process.runSync(node, ['--version']).exitCode == 0;
+    } on ProcessException {
+      return false;
+    }
   }
 
   Future<void> start() async {

@@ -2,6 +2,7 @@ package core
 
 import (
 	"bufio"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -161,7 +162,9 @@ func find(envKey string, bundled, devRel []string) string {
 }
 
 // FindNode is _findNode: COURSIVE_NODE, PATH, mise's installs, then the
-// usual places, as apps started from a launcher get a minimal PATH.
+// usual places, as apps started from a launcher get a minimal PATH. Off
+// Windows it skips a node that cannot start, such as one a partial system
+// upgrade left without its shared libraries.
 func FindNode() string {
 	if env := os.Getenv("COURSIVE_NODE"); env != "" && isFile(env) {
 		return env
@@ -204,11 +207,17 @@ func FindNode() string {
 		candidates = append(candidates, "/usr/bin/node", "/usr/local/bin/node", "/opt/homebrew/bin/node")
 	}
 	for _, c := range candidates {
-		if isFile(c) {
+		if isFile(c) && (win || nodeRuns(c)) {
 			return c
 		}
 	}
 	return ""
+}
+
+func nodeRuns(node string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, node, "--version").Run() == nil
 }
 
 // MacOSDaemonPath keeps the inherited PATH first and adds the package

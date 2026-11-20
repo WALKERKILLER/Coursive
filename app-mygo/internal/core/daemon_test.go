@@ -3,9 +3,36 @@ package core
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
+
+// TestFindNodeSkipsABrokenNode: a node first on PATH that cannot start, as
+// after a partial system upgrade, gives way to a working one further on.
+func TestFindNodeSkipsABrokenNode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows takes the first node.exe")
+	}
+	dir := t.TempDir()
+	broken, working := filepath.Join(dir, "broken"), filepath.Join(dir, "working")
+	for d, script := range map[string]string{
+		broken:  "#!/bin/sh\nexit 127\n",
+		working: "#!/bin/sh\necho v24.0.0\n",
+	} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(d, "node"), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("COURSIVE_NODE", "")
+	t.Setenv("PATH", broken+":"+working)
+	if got, want := FindNode(), filepath.Join(working, "node"); got != want {
+		t.Fatalf("FindNode() = %q, want %q", got, want)
+	}
+}
 
 // TestDaemonHandshakeAndCourses is P01's acceptance path without a display: the
 // client starts the real daemon, reads the port from its handshake, mints the
