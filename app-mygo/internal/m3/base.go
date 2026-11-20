@@ -6,7 +6,6 @@
 package m3
 
 import (
-	"math"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -113,6 +112,7 @@ func DisabledContent() ui.Color   { return design.WithOpacity(cs().OnSurface, .3
 // it and is done once it has run its course.
 type splash struct {
 	x, y  float32
+	seed  float64
 	start time.Time
 	done  bool
 }
@@ -128,18 +128,6 @@ const (
 	sparkle      = 617 * time.Millisecond
 	sparkleReach = 2.3
 )
-
-// sparkleStops are InkSparkle's soft circle out to 1.5 times its radius:
-// solid to half of it, then a smoothstep to nothing.
-var sparkleStops = func() []float32 {
-	a := make([]float32, 9)
-	for i := range a {
-		x := .5 + float32(i)/8
-		s := x - .5
-		a[i] = 1 - s*s*(3-2*s)
-	}
-	return a
-}()
 
 // Ink gives e Material's state layer and press sparkle in overlay, the
 // content colour: 8% while hovered, 10% while focused or pressed. radius
@@ -182,7 +170,7 @@ func InkColors(e ui.Element, radius float32, hover, focus, press, splashC ui.Col
 			b := e.Bounds()
 			x, y = b.W/2, b.H/2
 		}
-		st.splashes = append(st.splashes, splash{x: x, y: y})
+		st.splashes = append(st.splashes, splash{x: x, y: y, seed: sparkleSeed()})
 	}
 	st.pressed = pressed
 	on := func(b bool) float32 {
@@ -217,7 +205,6 @@ func InkColors(e ui.Element, radius float32, hover, focus, press, splashC ui.Col
 			}
 		}
 		t := p.Now()
-		reach := sparkleReach * float32(math.Hypot(float64(r.W), float64(r.H))) / 2
 		moving := false
 		for i := range st.splashes {
 			s := &st.splashes[i]
@@ -233,32 +220,7 @@ func InkColors(e ui.Element, radius float32, hover, focus, press, splashC ui.Col
 			if r.W <= 0 || r.H <= 0 {
 				continue
 			}
-			grow := design.FastOutSlowIn(min(k/.75, 1))
-			a := float32(1)
-			switch {
-			case k < .13:
-				a = k / .13
-			case k > .4:
-				a = 1 - (k-.4)/.6
-			}
-			rad := reach * grow
-			if a <= 0 || rad <= 0 {
-				continue
-			}
-			// The wave drifts from the press to the middle as it grows.
-			drift := min(grow*2, 1)
-			cx := (s.x + (r.W/2-s.x)*drift) / r.W
-			cy := (s.y + (r.H/2-s.y)*drift) / r.H
-			if cx == 0 && cy == 0 {
-				cx = 1e-6
-			}
-			stops := make([]ui.GradientStop, len(sparkleStops))
-			for i, f := range sparkleStops {
-				c := splashC
-				c.A = uint8(float32(c.A)*a*f + .5)
-				stops[i] = ui.GradientStop{Color: c, At: (.5 + float32(i)/8) / 1.5}
-			}
-			p.FillRadialGradient(r, ui.RadialGradient{Center: ui.Point{X: cx, Y: cy}, Radius: 1.5 * rad, Stops: stops}, radius)
+			paintSparkle(p, r, radius, s, k, splashC)
 		}
 		if moving {
 			p.AnimationFrame()

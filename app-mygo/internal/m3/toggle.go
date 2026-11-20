@@ -65,6 +65,19 @@ func controller(e ui.Element, key string, on bool, d time.Duration) ctl {
 	return c
 }
 
+// setController sets a controller's value, as dragging a toggle sets
+// AnimationController.value: it runs on from there as its flag says.
+func setController(e ui.Element, key string, v float32) {
+	st := ui.Local(e, key+"/ctl", func() ctlState { return ctlState{last: v, dir: ctlDismissed} })
+	e.Jump(key, v)
+	st.last = v
+}
+
+// controllerValue is a controller's value as of the last frame.
+func controllerValue(e ui.Element, key string, init float32) float32 {
+	return ui.Local(e, key+"/ctl", func() ctlState { return ctlState{last: init, dir: ctlDismissed} }).last
+}
+
 // curved is CurvedAnimation(curve:, reverseCurve:) of the controller; a
 // nil reverse runs curve both ways.
 func (c ctl) curved(curve, reverse ui.Easing) float32 {

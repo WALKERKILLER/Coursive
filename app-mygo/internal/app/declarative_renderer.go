@@ -345,7 +345,7 @@ func (n *nodeRenderer) tabsNode(c *ui.Context, node core.J, depth int, path stri
 	}
 	ui.Column(c).FillWidth().Children(func() {
 		m3.TabBar(c, tabs, sel, m3.TabOpts{})
-		m3.TabView(c, ui.Box(c).FillWidth().Height(240), *sel, func(tab int) {
+		m3.TabView(c, ui.Box(c).FillWidth().Height(240), sel, len(views), func(tab int) {
 			ui.Scroll(c).Fill().Children(func() {
 				ui.Column(c).FillWidth().Children(func() {
 					for i, k := range core.Objs(views[tab]["children"]) {

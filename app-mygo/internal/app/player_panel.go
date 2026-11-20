@@ -105,7 +105,7 @@ func (p *PlayerSidePanel) Show(c *ui.Context) {
 			}
 			PluginMenuButton(c, "lecture.menu", pctx, false, "")
 		})
-		m3.TabView(c, ui.Column(c).FillWidth().Grow(1).Basis(0), p.tab, func(tab int) {
+		m3.TabView(c, ui.Column(c).FillWidth().Grow(1).Basis(0), &p.tab, len(tabs), func(tab int) {
 			switch tab {
 			case 0:
 				p.outline.show(c, ctl)
@@ -145,6 +145,7 @@ func skillClock(ms int) string {
 
 type outlineTab struct {
 	list     ui.ListState
+	reveal   listReveal
 	current  int
 	scrolled time.Time
 }
@@ -235,8 +236,11 @@ func (o *outlineTab) show(c *ui.Context, ctl *LecturePlayer) {
 	pos := ctl.PositionMs()
 	if i := ctl.ChapterAt(pos); i != o.current {
 		o.current = i
+		// _onPos's ensureVisible: alignment 0.3 over long2 along
+		// emphasized.
 		if i >= 0 && time.Since(o.scrolled) > 5*time.Second {
-			o.list.ScrollTo(i, ui.Center)
+			glide := design.T().Motion(design.Long2, design.Emphasized)
+			o.reveal.Show(i, .3, &glide, &glide)
 		}
 	}
 	total := ctl.Chapters[len(ctl.Chapters)-1].EndMs()
@@ -272,7 +276,7 @@ func (o *outlineTab) show(c *ui.Context, ctl *LecturePlayer) {
 			m3.Linear(c, m3.Progress{Height: 2})
 		}
 	})
-	list := ui.List(c, &o.list, len(ctl.Chapters), func(i int) {
+	list := ui.List(c, &o.list, len(ctl.Chapters), o.reveal.Rows(c, func(i int) {
 		state := 1
 		if i < o.current {
 			state = 0
@@ -280,7 +284,8 @@ func (o *outlineTab) show(c *ui.Context, ctl *LecturePlayer) {
 			state = 2
 		}
 		chapterRow(c, ctl, ctl.Chapters[i], i+1, state, i == 0, i == len(ctl.Chapters)-1, pos)
-	}).FillWidth().Grow(1).Basis(0).Padding(design.SpaceSM, design.SpaceSM, design.SpaceXXL, design.SpaceSM)
+	})).FillWidth().Grow(1).Basis(0).Padding(design.SpaceSM, design.SpaceSM, design.SpaceXXL, design.SpaceSM)
+	list = o.reveal.Track(c, list, &o.list)
 	userScroll(list, &o.scrolled)
 }
 
@@ -406,12 +411,12 @@ func outlineDrafting(c *ui.Context) {
 
 type transcriptTab struct {
 	list     ui.ListState
+	reveal   listReveal
 	query    string
 	current  int
 	follow   bool
 	scrolled time.Time
 	review   transcriptReview
-	reveal   int
 }
 
 func (t *transcriptTab) show(c *ui.Context, ctl *LecturePlayer, onAsk func(string)) {
@@ -460,7 +465,7 @@ func (t *transcriptTab) show(c *ui.Context, ctl *LecturePlayer, onAsk func(strin
 	if i := ctl.SegmentAt(ctl.PositionMs()); i != t.current {
 		t.current = i
 		if t.follow && i >= 0 && q == "" && time.Since(t.scrolled) >= 5*time.Second {
-			t.list.ScrollTo(i, ui.Center)
+			t.revealSegment(i)
 		}
 	}
 	suggestions := map[int][]core.J{}
@@ -491,7 +496,7 @@ func (t *transcriptTab) show(c *ui.Context, ctl *LecturePlayer, onAsk func(strin
 			t.follow = !t.follow
 			if t.follow && t.current >= 0 {
 				t.scrolled = time.Time{}
-				t.list.ScrollTo(t.current, ui.Center)
+				t.revealSegment(t.current)
 			}
 		}
 		m3.MenuButton(c, "transcript-more", icons.MoreVertRounded, "", m3.Below, func() []m3.MenuItem {
@@ -513,7 +518,7 @@ func (t *transcriptTab) show(c *ui.Context, ctl *LecturePlayer, onAsk func(strin
 			return items
 		})
 	})
-	list := ui.List(c, &t.list, len(idx), func(k int) {
+	list := ui.List(c, &t.list, len(idx), t.reveal.Rows(c, func(k int) {
 		i := idx[k]
 		s := ctl.Segments[i]
 		ui.Column(c).FillWidth().Children(func() {
@@ -548,8 +553,17 @@ func (t *transcriptTab) show(c *ui.Context, ctl *LecturePlayer, onAsk func(strin
 				ctl.SeekTo(s.StartMs())
 			}
 		})
-	}).FillWidth().Grow(1).Basis(0).Padding(design.SpaceSM, design.SpaceSM, design.SpaceXXL, design.SpaceSM).Selectable()
+	})).FillWidth().Grow(1).Basis(0).Padding(design.SpaceSM, design.SpaceSM, design.SpaceXXL, design.SpaceSM).Selectable()
+	list = t.reveal.Track(c, list, &t.list)
 	userScroll(list, &t.scrolled)
+}
+
+// revealSegment is _reveal: segment i glides a third of the way down over
+// long2 along emphasized when built, else the list jumps near it and it
+// lines up at once.
+func (t *transcriptTab) revealSegment(i int) {
+	glide := design.T().Motion(design.Long2, design.Emphasized)
+	t.reveal.Show(i, .3, &glide, nil)
 }
 
 // transcriptChapterHeader is a chapter title woven into the transcript.
@@ -889,6 +903,7 @@ func (m *materialsTab) show(c *ui.Context, ctl *LecturePlayer) {
 
 type slidesTab struct {
 	list     ui.ListState
+	reveal   listReveal
 	keyOnly  bool
 	current  int
 	scrolled time.Time
@@ -927,8 +942,11 @@ func (s *slidesTab) show(c *ui.Context, ctl *LecturePlayer) {
 	}
 	if i != s.current {
 		s.current = i
+		// The slide's top a third of the way down, over long2 along
+		// emphasized, as the side panel's animateTo.
 		if core.UI.SlideFollow && i >= 0 && time.Since(s.scrolled) > 4*time.Second {
-			s.list.ScrollTo(i, ui.Center)
+			glide := design.T().Motion(design.Long2, design.Emphasized)
+			s.reveal.ShowTop(i, .3, &glide, &glide)
 		}
 	}
 	hasKey, hasPath := false, false
@@ -953,7 +971,7 @@ func (s *slidesTab) show(c *ui.Context, ctl *LecturePlayer) {
 			ShowDownloadSheet([]string{ctl.LectureID()}, title, nil, nil)
 		}
 	})
-	l := ui.List(c, &s.list, len(list), func(k int) {
+	l := ui.List(c, &s.list, len(list), s.reveal.Rows(c, func(k int) {
 		sl := list[k]
 		on := k == s.current
 		b := m3.Tappable(c, design.CornerLG).FillWidth().Column().Margin(0, 0, design.SpaceMD, 0)
@@ -988,7 +1006,8 @@ func (s *slidesTab) show(c *ui.Context, ctl *LecturePlayer) {
 		} else if b.Clicked() {
 			ctl.SeekTo(sl.TSec() * 1000)
 		}
-	}).FillWidth().Grow(1).Basis(0).Padding(design.SpaceMD)
+	})).FillWidth().Grow(1).Basis(0).Padding(design.SpaceMD)
+	l = s.reveal.Track(c, l, &s.list)
 	userScroll(l, &s.scrolled)
 }
 

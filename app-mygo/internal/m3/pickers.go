@@ -205,12 +205,15 @@ func datePickerCalendar(c *ui.Context, st *datePickerState, first, last time.Tim
 		}
 	})
 	if st.years {
-		years := ui.Scroll(c).FillWidth().Height(42*6 + 12).TrackScroll(&st.yearScroll)
+		// The year picker opens at the selected year, as its controller's
+		// initialScrollOffset: in place, before the container takes the
+		// offset.
 		if st.yearScroll.MaxY > 0 && !st.yearPlaced {
 			st.yearPlaced = true
 			row := (m.Year() - first.Year()) / 3
-			st.yearScroll.ScrollTo(0, max(0, float32(row)*52-2*52), ui.Animation{})
+			st.yearScroll.Y = max(0, float32(row)*52-2*52)
 		}
+		years := ui.Scroll(c).FillWidth().Height(42*6 + 12).TrackScroll(&st.yearScroll)
 		years.Children(func() {
 			ui.Grid(c).FillWidth().Columns(3).GapY(0).Padding(0, 12).Children(func() {
 				for y := first.Year(); y <= last.Year(); y++ {

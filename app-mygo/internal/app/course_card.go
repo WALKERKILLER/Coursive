@@ -51,9 +51,11 @@ func (k CourseCard) Show(c *ui.Context) bool {
 				ui.Box(c).FillWidth().Height(108).Children(func() {
 					// The tags sit over the Hero, so they stay on the card as
 					// the cover flies.
-					art := ui.Box(c).Fill().Transition(courseHero(co.ID()))
+					art := ui.Box(c).Fill()
 					t := art.AnimateTo("morph", map[bool]float32{true: 1, false: 0}[hover], design.T().Motion(design.Long4, design.Emphasized))
-					widgets.CourseArt(art, co, float64(t), 0, -1, design.CornerXL-design.SpaceXS)
+					m3.Hero(c, art, courseHero(co.ID()), func(e ui.Element) {
+						widgets.CourseArt(e, co, float64(t), 0, -1, design.CornerXL-design.SpaceXS)
+					})
 					ui.Row(c).Absolute().Top(design.SpaceSM).Right(design.SpaceSM).Children(func() {
 						if co.Pinned() {
 							courseTag(c, s, icons.PushPinRounded, "")
@@ -96,13 +98,9 @@ type heroTag struct {
 	nav    *m3.Navigator
 }
 
-// courseHero is the Hero of a course's cover, which flies between its card
-// and its page as the page is pushed or popped. Only the flight moves it:
-// it does not animate its own resizes.
-func courseHero(id string) ui.ElementTransition {
-	anim := design.T().Motion(m3.PageDuration, design.FastOutSlowIn)
-	return ui.ElementTransition{Duration: anim.Duration, Ease: anim.Ease, Match: heroTag{id, m3.Nav()}, Fly: true, Shadows: true}
-}
+// courseHero is the tag of a course's cover's Hero, which flies between
+// its card and its page as the page is pushed or popped.
+func courseHero(id string) heroTag { return heroTag{id, m3.Nav()} }
 
 // courseTag is a small pill over the cover.
 func courseTag(c *ui.Context, s *design.Scheme, ic icons.Icon, text string) {

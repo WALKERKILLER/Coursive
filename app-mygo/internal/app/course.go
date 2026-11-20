@@ -420,10 +420,11 @@ func (p *CoursePage) header(c *ui.Context, course core.Course, scheme *design.Sc
 		teachers = strings.Join(ts, l10n.ListSeparator)
 	}
 	art := func(e ui.Element) {
-		e = e.Transition(courseHero(course.ID()))
 		hover := e.Hovered()
 		t := e.AnimateTo("morph", map[bool]float32{true: 1, false: 0}[hover], design.T().Motion(design.Long4, design.Emphasized))
-		widgets.CourseArtTurning(e, course, float64(t), p.spinStart, 90*time.Second, design.CornerXL)
+		m3.Hero(c, e, courseHero(course.ID()), func(e ui.Element) {
+			widgets.CourseArtTurning(e, course, float64(t), p.spinStart, 90*time.Second, design.CornerXL)
+		})
 	}
 	info := func() {
 		ui.Column(c).Children(func() {

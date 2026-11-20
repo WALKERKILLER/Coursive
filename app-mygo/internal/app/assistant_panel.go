@@ -79,6 +79,7 @@ type AssistantPanel struct {
 	Leave func()
 
 	list       ui.ListState
+	reveal     listReveal
 	session    string
 	input      string
 	history    bool
@@ -121,7 +122,11 @@ func (p *AssistantPanel) send() {
 	p.toBottom()
 }
 
-func (p *AssistantPanel) toBottom() { p.list.ScrollToEnd() }
+// toBottom is _toBottom: the list glides to its end over medium2 along
+// emphasized.
+func (p *AssistantPanel) toBottom() {
+	p.reveal.End(design.T().Motion(design.Medium2, design.Emphasized))
+}
 
 func (p *AssistantPanel) leaveFullscreen() {
 	if !p.Docked && !p.Embedded && p.Leave != nil {
@@ -486,7 +491,7 @@ func (p *AssistantPanel) body(c *ui.Context) {
 	}
 	msgs := a.Messages
 	p.list.Key = func(i int) any { return msgs[i] }
-	ui.List(c, &p.list, len(msgs), func(i int) {
+	list := ui.List(c, &p.list, len(msgs), func(i int) {
 		m := msgs[i]
 		last := i == len(msgs)-1
 		ui.Column(c).FillWidth().Padding(0, design.SpaceLG).Children(func() {
@@ -503,6 +508,7 @@ func (p *AssistantPanel) body(c *ui.Context) {
 			}
 		})
 	}).Fill()
+	p.reveal.Track(c, list, &p.list)
 }
 
 func (p *AssistantPanel) welcomeView(c *ui.Context) {

@@ -286,7 +286,7 @@ func (s *StudyCanvas) advancedPenSettings(eraser bool, tab int) {
 					brushPreview(c, 100, s.color, s.penWidth, s.brush)
 					m3.Text(c, "实时笔迹预览", design.TextStyle{Size: 10, Color: cs.OnSurfaceVariant}).Absolute().Right(8).Bottom(8)
 				})
-				m3.TabView(c, ui.Box(c).FillWidth().Grow(1).Basis(0), tab, func(tab int) {
+				m3.TabView(c, ui.Box(c).FillWidth().Grow(1).Basis(0), &tab, 4, func(tab int) {
 					ui.Scroll(c).Fill().Children(func() {
 						ui.Column(c).FillWidth().Padding(24).Children(func() {
 							switch tab {

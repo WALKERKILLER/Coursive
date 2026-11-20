@@ -807,7 +807,8 @@ func (p *SchedulePage) agenda(c *ui.Context) {
 	sortStrings(days)
 	reveal := p.reveal
 	p.reveal = false
-	ui.Scroll(c).Fill().TrackScroll(&p.scroll).Children(func() {
+	view := ui.Scroll(c).Fill().TrackScroll(&p.scroll)
+	view.Children(func() {
 		ui.Column(c).FillWidth().Padding(0, design.SpaceLG, 96+BottomInset, design.SpaceMD).Children(func() {
 			if len(overdue) > 0 {
 				ui.Row(c).AlignItems(ui.Center).Padding(design.SpaceSM, 0, design.SpaceSM, design.SpaceSM).Children(func() {
@@ -834,8 +835,11 @@ func (p *SchedulePage) agenda(c *ui.Context) {
 					m3.Text(c.Key("m"+month), label, tt.TitleSmall.C(cs.Primary)).Padding(design.SpaceLG, 0, design.SpaceSM, design.SpaceSM)
 				}
 				row := ui.Box(c.Key("d" + k)).FillWidth()
-				if reveal && k == sel {
-					row.ScrollIntoView(ui.ScrollIntoViewOptions{Block: ui.ScrollStart, Animation: &ui.Animation{Duration: design.Long2, Ease: design.Emphasized}})
+				// ensureVisible: alignment 0.05 over long2 along emphasized,
+				// once the row is laid out.
+				if reveal && k == sel && !ensureVisible(&p.scroll, view, row, .05, design.T().Motion(design.Long2, design.Emphasized)) {
+					p.reveal = true
+					c.AnimationFrame()
 				}
 				row.Children(func() { p.dayRow(c, d, byDay[k], k == today, k == sel) })
 			}

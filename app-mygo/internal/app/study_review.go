@@ -38,6 +38,7 @@ type outlineReview struct {
 	err, notice      string
 	persist          *studyTimer
 	list             ui.ListState
+	reveal           listReveal
 	focus, hover     string
 	// pendingFocus is a row to select, giving the panel the keys.
 	pendingFocus string
@@ -552,7 +553,9 @@ func (x reviewCtx) jump(needs func(study.M) bool) {
 		return
 	}
 	target := hits[(focused+1)%len(hits)]
-	x.r.list.ScrollTo(target, ui.Center)
+	// _jump's ensureVisible: alignment 0.3 over medium2 along emphasized.
+	glide := design.T().Motion(design.Medium2, design.Emphasized)
+	x.r.reveal.Show(target, .3, &glide, &glide)
 	x.r.pendingFocus = rows[target].id()
 }
 
@@ -769,7 +772,7 @@ func (s *StudyCanvas) reviewPanel(c *ui.Context) {
 				x.reorder(from, to)
 			}
 			hovered := ""
-			ui.List(c, &r.list, len(rows)+1, func(i int) {
+			list := ui.List(c, &r.list, len(rows)+1, r.reveal.Rows(c, func(i int) {
 				if i == len(rows) {
 					x.appendix(c, byID, numbers)
 					return
@@ -782,7 +785,8 @@ func (s *StudyCanvas) reviewPanel(c *ui.Context) {
 				if x.itemRow(c, row.item, byID, numbers, stale) {
 					hovered = row.id()
 				}
-			}).Fill().Padding(0, design.SpaceSM, design.SpaceMD, 0)
+			})).Fill().Padding(0, design.SpaceSM, design.SpaceMD, 0)
+			r.reveal.Track(c, list, &r.list)
 			// The hovered row previews its first live citation, or a mark's ink.
 			if hovered != r.hover {
 				r.hover = hovered
@@ -931,7 +935,8 @@ func (x reviewCtx) sectionRow(c *ui.Context, section study.M, index int) {
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Padding(top, 0, design.SpaceXS, 0).Children(func() {
 		m3.Icon(c, icons.DragIndicatorRounded, 18, cs.Outline).Cursor(ui.CursorGrab)
 		ui.Box(c).Width(design.SpaceXS)
-		lv := ui.ButtonBase(c.Key("level")).Radius(design.CornerXS).Padding(design.SpaceXXS, design.SpaceXS).Tooltip(l10n.OutlineLevel).Cursor(ui.CursorPointer)
+		lv := ui.ButtonBase(c.Key("level")).Radius(design.CornerXS).Padding(design.SpaceXXS, design.SpaceXS).Cursor(ui.CursorPointer)
+		lv = m3.Tip(c, lv, l10n.OutlineLevel)
 		m3.Ink(lv, cs.OnSurface, design.CornerXS)
 		lv.Children(func() { m3.Text(c, "H"+strconv.Itoa(level), tt.LabelSmall.C(cs.Primary)).FontFeatures("tnum") })
 		if lv.Clicked() {
@@ -1151,7 +1156,10 @@ func (x reviewCtx) rowKeys(row ui.Element, item study.M) {
 			}
 		}
 		if next := at + by; at >= 0 && next >= 0 && next < len(ids) {
-			x.r.list.ScrollIntoView(ids[next])
+			// ensureVisible over short4 along Curves.ease, as little as
+			// shows the row.
+			step := design.T().Motion(design.Short4, design.Ease)
+			x.r.reveal.Show(ids[next], revealNearest, &step, &step)
 			x.r.pendingFocus = rows[ids[next]].id()
 		}
 	}
@@ -1215,7 +1223,7 @@ func (x reviewCtx) reviewTick(c *ui.Context, review string, item study.M) {
 	case "to_check":
 		ic, col = icons.FlagCircleRounded, outlineAmber()
 	}
-	e := ui.ButtonBase(c.Key("tick")).Size(28, 28).Radius(14).Tooltip(tip).Cursor(ui.CursorPointer)
+	e := m3.Tip(c, ui.ButtonBase(c.Key("tick")).Size(28, 28).Radius(14).Cursor(ui.CursorPointer), tip)
 	m3.Ink(e, col, 14)
 	e.Children(func() {
 		m3.Icon(c, ic, 20, col).Key(review).
@@ -1236,7 +1244,8 @@ func (x reviewCtx) inkThumb(c *ui.Context, item study.M) {
 		tip = l10n.OutlineNoInk
 	}
 	e := ui.ButtonBase(c.Key("ink")).Size(44, 44).Radius(design.CornerSM).Background(design.ARGB(0xfffdfcf8)).
-		Border(1, cs.OutlineVariant).Tooltip(tip).Disabled(len(strokes) == 0).DimDisabled(false)
+		Border(1, cs.OutlineVariant).Disabled(len(strokes) == 0).DimDisabled(false)
+	e = m3.Tip(c, e, tip)
 	if len(strokes) == 0 {
 		e.Children(func() { m3.Icon(c, icons.GestureRounded, 18, cs.Outline) })
 	} else {

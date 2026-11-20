@@ -50,6 +50,7 @@ type shelfState struct {
 	filesBusy, quizBus bool
 	openGroup          string
 	transcript         ui.ListState
+	transcriptReveal   listReveal
 	fanOpen            map[string]bool
 	fanLift            map[string]int
 }
@@ -270,7 +271,7 @@ func (s *StudyCanvas) transcriptList(c *ui.Context) {
 		return rows[i].segment
 	}
 	ui.Box(c).Fill().Children(func() {
-		ui.List(c, &st.transcript, len(rows), func(i int) {
+		list := ui.List(c, &st.transcript, len(rows), st.transcriptReveal.Rows(c, func(i int) {
 			row := rows[i]
 			ui.Box(c).Padding(0, design.SpaceSM).FillWidth().Children(func() {
 				if ch := row.chapter; ch != nil {
@@ -315,14 +316,18 @@ func (s *StudyCanvas) transcriptList(c *ui.Context) {
 					s.ctl.SeekTo(seg.StartMs())
 				}
 			})
-		}).Fill()
+		})).Fill()
+		st.transcriptReveal.Track(c, list, &st.transcript)
 		fab := ui.Box(c).Absolute().Right(design.SpaceMD).Bottom(design.SpaceMD)
 		fab.Children(func() {
 			if (m3.FAB{Icon: icons.MyLocationRounded, Small: true, Tooltip: l10n.StudyShelfNow}).Show(c).Clicked() {
 				at := s.ctl.SegmentAt(s.ctl.PositionMs())
 				for i, r := range rows {
 					if r.chapter == nil && r.segment == max(0, at) {
-						st.transcript.ScrollTo(i, ui.Center)
+						// ensureVisible: alignment 0.3 over medium2 along
+						// emphasized.
+						glide := design.T().Motion(design.Medium2, design.Emphasized)
+						st.transcriptReveal.Show(i, .3, &glide, nil)
 						break
 					}
 				}
@@ -396,9 +401,9 @@ func fileAsset(f core.J) *studyAsset {
 }
 
 // fileDrag makes e drag f, or dims it with why it cannot.
-func (s *StudyCanvas) fileDrag(e ui.Element, f core.J) ui.Element {
+func (s *StudyCanvas) fileDrag(c *ui.Context, e ui.Element, f core.J) ui.Element {
 	if !studyImportable(f) {
-		return e.Opacity(.45).Tooltip(l10n.StudyShelfUnsupported)
+		return m3.Tip(c, e.Opacity(.45), l10n.StudyShelfUnsupported)
 	}
 	return s.shelfDrag(e, fileAsset(f))
 }
@@ -420,7 +425,7 @@ func (s *StudyCanvas) openStack(c *ui.Context, label string, files []core.J) {
 				for _, f := range files {
 					e := ui.ButtonBase(c.Key(f.S("path"))).Column().AlignItems(ui.Center).Radius(design.CornerMD)
 					m3.Ink(e, cs.OnSurface, design.CornerMD)
-					s.fileDrag(e, f).Children(func() {
+					s.fileDrag(c, e, f).Children(func() {
 						fileTile(c, f)
 						ui.Box(c).Height(design.SpaceXS)
 						m3.Text(c, f.S("name"), tt.LabelSmall.C(cs.OnSurface)).MaxLines(2).TextAlign(ui.Center)
@@ -471,7 +476,7 @@ func (s *StudyCanvas) fileFan(c *ui.Context, label string, files []core.J) {
 				if sheet.Hovered() && st.fanLift[label] != i {
 					st.fanLift[label] = i
 				}
-				s.fileDrag(sheet, f).Children(func() { fileTile(c, f) })
+				s.fileDrag(c, sheet, f).Children(func() { fileTile(c, f) })
 			}
 		})
 		ui.Box(c).Height(design.SpaceSM)

@@ -103,6 +103,7 @@ type MdReader struct {
 	Progress float32
 
 	list    ui.ListState
+	reveal  listReveal
 	flash   int
 	flashed time.Time
 	search  readerSearch
@@ -131,9 +132,12 @@ func (r *MdReader) offset() int {
 	return 0
 }
 
-// JumpToSection scrolls section i to the top; flash marks it a moment.
+// JumpToSection scrolls section i to the top, as _jump's ensureVisible
+// with alignment 0.02 over long2 along emphasized; flash marks it a
+// moment.
 func (r *MdReader) JumpToSection(i int, flash bool) {
-	r.list.ScrollTo(i+r.offset(), ui.Start)
+	glide := design.T().Motion(design.Long2, design.Emphasized)
+	r.reveal.Show(i+r.offset(), .02, &glide, &glide)
 	if flash {
 		r.flash, r.flashed = i, time.Now()
 		go func() { time.Sleep(1700 * time.Millisecond); core.Post(func() {}) }()
@@ -167,7 +171,7 @@ func (r *MdReader) Show(c *ui.Context) ui.Element {
 		pad = []float32{design.SpaceLG, design.SpaceXL, design.SpaceHuge, design.SpaceXL}
 	}
 	st := tt.BodyLarge.H(1.75)
-	list := ui.List(c, &r.list, n, func(k int) {
+	list := ui.List(c, &r.list, n, r.reveal.Rows(c, func(k int) {
 		ui.Box(c).FillWidth().AlignItems(ui.Center).Children(func() {
 			col := ui.Box(c).FillWidth().MaxWidth(maxW)
 			if r.Header != nil && k == 0 {
@@ -185,7 +189,8 @@ func (r *MdReader) Show(c *ui.Context) ui.Element {
 				CoursiveMarkdown{Data: r.Doc.Sections[i], Style: &st, LectureID: r.LectureID, BaseDir: r.BaseDir, OnRef: r.OnRef}.Show(c)
 			})
 		})
-	}).Grow(1).FillWidth().Padding(pad...)
+	})).Grow(1).FillWidth().Padding(pad...)
+	list = r.reveal.Track(c, list, &r.list)
 	first, last := r.list.Visible()
 	if last >= first {
 		cur := max(first-off, 0)

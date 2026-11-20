@@ -390,7 +390,7 @@ func (p *ActivityPage) body(c *ui.Context) {
 							// reverse: this year opens at today's end.
 							p.heatPlaced = true
 							if p.year == p.today.Year() {
-								p.heat.ScrollTo(p.heat.MaxX, 0, ui.Animation{})
+								p.heat.X = p.heat.MaxX
 							}
 						}
 						widgets.HScroller{State: &p.heat, Buttons: true}.Show(c, func() {

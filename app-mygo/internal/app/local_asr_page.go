@@ -292,7 +292,8 @@ func (p *LocalAsrPage) body(c *ui.Context, st core.J) {
 		}
 	}
 	loc := status.O("location")
-	ui.Scroll(c).Fill().TrackScroll(&p.scroll).Children(func() {
+	page := ui.Scroll(c).Fill().TrackScroll(&p.scroll)
+	page.Children(func() {
 		ui.Column(c).FillWidth().Padding(design.SpaceSM, design.SpaceLG, design.SpaceHuge, design.SpaceLG).Children(func() {
 			widgets.ContentWidth(c, 960, func() {
 				localAsrHero(c, activeModel, install, models)
@@ -317,9 +318,12 @@ func (p *LocalAsrPage) body(c *ui.Context, st core.J) {
 						inst = install
 					}
 					card := ui.Box(c.Key("model:"+id)).FillWidth().Margin(0, 0, design.SpaceSM, 0)
+					// _select's ensureVisible: alignment 0.3 over medium2
+					// along emphasized.
 					if p.focusMoved && p.focus == id {
-						p.focusMoved = false
-						card.ScrollIntoView(ui.ScrollIntoViewOptions{Block: ui.ScrollCenter, Animation: &ui.Smooth})
+						if p.focusMoved = !ensureVisible(&p.scroll, page, card, .3, design.T().Motion(design.Medium2, design.Emphasized)); p.focusMoved {
+							c.AnimationFrame()
+						}
 					}
 					card.Children(func() {
 						p.modelCard(c, m, p.focus == id, active == id, inst, install.S("state") == "running")

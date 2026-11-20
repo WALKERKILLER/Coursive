@@ -16,7 +16,8 @@ var switchTransitional = [2]float32{34, 22}
 // thumb while on. It returns the base, whose Changed reports a toggle.
 // The thumb moves as Flutter's does: over 300ms along easeOutBack, past
 // its end and back, shrinking to the transitional size on the way and
-// growing to 28 DIPs while pressed.
+// growing to 28 DIPs while pressed. Dragged, the thumb follows the
+// pointer and the switch takes the side it is let go on.
 func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 	s := cs()
 	e := ui.SwitchBase(c, on).Disabled(disabled).DimDisabled(false).FocusRing(false).
@@ -24,8 +25,9 @@ func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 	if !disabled {
 		e = e.Cursor(ui.CursorPointer)
 	}
+	dg := switchDragging(e, on, disabled)
 	sel := *on
-	ts := toggleReactions(e, disabled, switchPressed(c, e))
+	ts := toggleReactions(e, disabled, switchPressed(c, e) || dg.dragging)
 	lit := ts.hovered || ts.focused
 	thumb := func(selected, pressed bool) ui.Color {
 		switch {
@@ -62,6 +64,9 @@ func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 
 	pos := controller(e, "m3.switch", sel, 300*time.Millisecond)
 	position := pos.curved(design.EaseOutBack, design.Flipped(design.EaseOutBack))
+	if dg.linear {
+		position = pos.v
+	}
 	colorV := pos.curved(design.EaseOut, design.EaseIn)
 	reaction := ts.press.curved(design.FastOutSlowIn, nil)
 	// The thumb's radii, off and on, grow with the press while the thumb
@@ -115,6 +120,73 @@ func Switch(c *ui.Context, on *bool, disabled bool) ui.Element {
 			IconPaint(p, icons.CheckRounded, cx-8, cy-8, 16, iconC)
 		}
 	})
+}
+
+// switchDrag is _MaterialSwitchState's horizontal drag of the thumb.
+type switchDrag struct {
+	down, dragging bool
+	// linear is the position's curve after a drag, until the value next
+	// changes: a thumb let go on the side it came from goes back linearly.
+	linear   bool
+	x, from  float32
+	held     ui.Point
+	was, now bool
+}
+
+// switchDragging follows a drag of e's thumb: past the pointer's slop
+// (kTouchSlop for a finger or a pen; for a mouse, MyGo's 4 DIP drag
+// start, past which the release clicks nothing) the controller
+// follows the pointer over the 20 DIP inner track, and the switch takes
+// the side it is let go on, which a tap on the way does not change.
+func switchDragging(e ui.Element, on *bool, disabled bool) switchDrag {
+	dg := ui.Local(e, "m3.switch.drag", func() switchDrag { return switchDrag{now: *on} })
+	cur := func() float32 {
+		if *on {
+			return 1
+		}
+		return 0
+	}
+	// The release of a drag is no tap, as the drag wins the gesture
+	// arena: held in place, the base drags nothing, and a press that
+	// moved it past MyGo's 4 DIP drag start clicks nothing.
+	if !disabled {
+		e.Draggable(&dg.held, ui.DraggableOptions{Axis: ui.Horizontal, Bounds: &ui.Rect{}, Rigid: true})
+	}
+	x, _, ok := e.PointerPosition()
+	switch {
+	case e.Pressed() && !disabled && ok:
+		if !dg.down {
+			dg.down, dg.dragging, dg.x, dg.was = true, false, x, *on
+			dg.from = controllerValue(e, "m3.switch", cur())
+		}
+		if !dg.dragging {
+			slop := float32(18)
+			if kind, _, _ := e.PressedPointer(); kind == ui.PointerMouse {
+				slop = 4
+			}
+			if abs32(x-dg.x) > slop {
+				dg.dragging, dg.x = true, x
+			}
+		}
+		if dg.dragging {
+			setController(e, "m3.switch", clamp01(dg.from+(x-dg.x)/20))
+			dg.linear = true
+		}
+	case dg.down:
+		dg.down = false
+		if dg.dragging {
+			dg.dragging = false
+			want := controllerValue(e, "m3.switch", cur()) >= .5
+			*on = want
+			if want != dg.was {
+				e.SetChanged()
+			}
+		}
+	}
+	if *on != dg.now {
+		dg.now, dg.linear = *on, false
+	}
+	return *dg
 }
 
 // switchPressed is whether the switch shows its press: as Flutter's tap

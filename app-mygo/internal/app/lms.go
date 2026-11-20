@@ -283,7 +283,7 @@ func (v *lmsCourseView) view(c *ui.Context, r *m3.Route) {
 			widgets.CenteredLoader(c, "")
 			return
 		}
-		m3.TabView(c, ui.Box(c).Fill(), v.tab, func(tab int) {
+		m3.TabView(c, ui.Box(c).Fill(), &v.tab, 3, func(tab int) {
 			switch tab {
 			case 0:
 				v.assignments(c, d)

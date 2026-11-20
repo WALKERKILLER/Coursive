@@ -31,6 +31,13 @@ type Navigator struct {
 	popping   bool
 	// OnChange runs after the stack changes.
 	OnChange func()
+	// building is the page whose Heroes are being built; flights are the
+	// Heroes flying in the transition, flown once they started, frames
+	// how many frames of it were built.
+	building int
+	flights  map[any]*heroFlight
+	flown    bool
+	frames   int
 }
 
 type navEntry struct {
@@ -78,6 +85,7 @@ func (n *Navigator) Push(p Page) {
 	n.pages = append(n.pages, navEntry{page: p, id: n.next})
 	n.next++
 	n.leaving, n.popping, n.changedAt = &prev, false, time.Now()
+	n.flights, n.flown, n.frames = nil, false, 0
 	n.changed()
 }
 
@@ -96,6 +104,7 @@ func (n *Navigator) Replace(p Page) {
 		d.Dispose()
 	}
 	n.leaving, n.popping, n.changedAt = &top, false, time.Now()
+	n.flights, n.flown, n.frames = nil, false, 0
 	n.changed()
 }
 
@@ -125,6 +134,7 @@ func (n *Navigator) Pop() {
 		d.Dispose()
 	}
 	n.leaving, n.popping, n.changedAt = &top, true, time.Now()
+	n.flights, n.flown, n.frames = nil, false, 0
 	n.changed()
 	if top.then != nil {
 		top.then()
@@ -201,11 +211,12 @@ func (n *Navigator) View(c *ui.Context) ui.Element {
 	}
 	t := float32(el) / float32(PageDuration)
 	if t >= 1 {
-		n.leaving = nil
+		n.leaving, n.flights = nil, nil
 	}
 	top := n.pages[len(n.pages)-1]
 	ease := design.EaseInOutCubicEmphasized
-	return ui.Box(c).Fill().Clip().Children(func() {
+	box := ui.Box(c).Fill().Clip()
+	return box.Children(func() {
 		if n.leaving != nil {
 			c.Invalidate()
 			// What the leaving page does: pushed over, it slides a quarter
@@ -220,6 +231,7 @@ func (n *Navigator) View(c *ui.Context) ui.Element {
 				dx = -25 * ease(t)
 				op = 1 - min(t/.25, 1)
 			}
+			n.building = lv.id
 			ui.Column(c.Key(lv.id)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(cs().Surface).
 				TranslatePercent(dx, 0).Opacity(op).IgnoreInput(true).Children(func() { lv.page.View(c) })
 			var tdx float32
@@ -228,10 +240,13 @@ func (n *Navigator) View(c *ui.Context) ui.Element {
 			} else {
 				tdx = 25 * (1 - ease(t))
 			}
+			n.building = top.id
 			ui.Column(c.Key(top.id)).Absolute().Top(0).Left(0).Right(0).Bottom(0).
 				TranslatePercent(tdx, 0).Opacity(min(t/.75, 1)).Children(func() { top.page.View(c) })
+			n.flyHeroes(c, box, lv.id, top.id, t)
 			return
 		}
+		n.building = top.id
 		ui.Column(c.Key(top.id)).Absolute().Top(0).Left(0).Right(0).Bottom(0).Children(func() { top.page.View(c) })
 	})
 }
