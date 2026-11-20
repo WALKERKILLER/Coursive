@@ -111,6 +111,41 @@ func TestFixedTabsShareTheWidth(t *testing.T) {
 	}
 }
 
+// The pill lies under the selected label, as TabBar paints its indicator
+// before the tabs: the label's ink shows on it.
+func TestPillLiesUnderTheLabel(t *testing.T) {
+	design.Use(design.NewTheme(design.DefaultPrefs(), false, ui.Color{}))
+	sel := 1
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Column(c).Size(400, 44).Background(cs().Surface).Children(func() {
+			TabBar(c, []Tab{{Label: "AAAA"}, {Label: "MMMM"}, {Label: "CCCC"}}, &sel, TabOpts{Scrollable: true, Pill: true})
+		})
+	}, 400, 44)
+	tt.Frame()
+	tt.Frame()
+	r, _ := tt.Find("MMMM")
+	img := tt.Image()
+	pill := cs().SecondaryContainer
+	off := func(x, y int, by float32) bool {
+		p := img.RGBAAt(x, y)
+		return abs32(float32(p.R)-float32(pill.R))+abs32(float32(p.G)-float32(pill.G))+abs32(float32(p.B)-float32(pill.B)) > by
+	}
+	if off(int(r.X)-4, int(r.Y+r.H/2), 3) {
+		t.Fatal("no pill beside the selected label")
+	}
+	ink := 0
+	for y := int(r.Y); y < int(r.Y+r.H); y++ {
+		for x := int(r.X); x < int(r.X+r.W); x++ {
+			if off(x, y, 60) {
+				ink++
+			}
+		}
+	}
+	if ink == 0 {
+		t.Fatal("the pill covers the selected label")
+	}
+}
+
 // The primary indicator stretches as _applyElasticEffect: on a tap to the
 // right its right edge leads and its left edge follows; at rest it lies
 // under the label.

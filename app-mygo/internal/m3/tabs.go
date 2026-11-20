@@ -134,7 +134,9 @@ func TabBar(c *ui.Context, tabs []Tab, selected *int, o TabOpts) bool {
 				ind := ui.Box(c).Absolute().Left(r.X).Width(r.W).PassThrough()
 				switch {
 				case o.Pill:
-					ind.Top(6).Bottom(6).Radius(design.CornerFull).Background(s.SecondaryContainer)
+					// An absolute box paints above the tabs in the flow; the
+					// pill goes under them.
+					ind.Top(6).Bottom(6).Radius(design.CornerFull).Background(s.SecondaryContainer).ZIndex(-1)
 				case o.Secondary:
 					ind.Bottom(0).Height(2).Background(s.Primary)
 				default:
