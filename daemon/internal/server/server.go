@@ -642,7 +642,10 @@ func (s *Server) localVideoStream(r *http.Request, id string) *playStream {
 }
 
 // slides returns downloaded slides, or the remote list (indexed without
-// files) so the player can show slides while streaming.
+// files) so the player can show slides while streaming. A slide whose file
+// is gone from the library, removed outside the app, comes without its
+// path, so the clients load it through slideImage, which streams the
+// remote copy.
 func (s *Server) slides(_ http.ResponseWriter, r *http.Request) (any, error) {
 	ctx, id := r.Context(), r.PathValue("id")
 	sl, err := s.lectureSlides(ctx, id)
@@ -655,6 +658,9 @@ func (s *Server) slides(_ http.ResponseWriter, r *http.Request) (any, error) {
 	}
 	res := make([]out, len(sl))
 	for i, x := range sl {
+		if x.Path != "" && !fileExists(s.Lib.Abs(x.Path)) {
+			x.Path = ""
+		}
 		res[i] = out{Slide: x}
 		if x.Path != "" {
 			res[i].Abs = s.Lib.Abs(x.Path)

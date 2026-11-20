@@ -12,12 +12,17 @@ import (
 )
 
 // The images the app shows from the network and from files, decoded once
-// and kept, as Image.network's and Image.file's cache does.
+// and kept, as Image.network's and Image.file's cache does. As there, a
+// failed load is not kept: an image shown again after pictureRetry loads
+// anew.
 type picture struct {
 	bmp     *ui.Bitmap
 	err     error
+	failed  time.Time
 	loading bool
 }
+
+const pictureRetry = 5 * time.Second
 
 var (
 	pictures   = map[string]*picture{}
@@ -32,7 +37,7 @@ func loadPicture(key string, fetch func() ([]byte, error)) *picture {
 	picturesMu.Lock()
 	defer picturesMu.Unlock()
 	p := pictures[key]
-	if p != nil {
+	if p != nil && (p.err == nil || time.Since(p.failed) < pictureRetry) {
 		return p
 	}
 	p = &picture{loading: true}
@@ -43,7 +48,7 @@ func loadPicture(key string, fetch func() ([]byte, error)) *picture {
 		if err == nil {
 			bmp, err = ui.DecodeBitmap(data)
 		}
-		core.Post(func() { p.bmp, p.err, p.loading = bmp, err, false })
+		core.Post(func() { p.bmp, p.err, p.failed, p.loading = bmp, err, time.Now(), false })
 	}()
 	return p
 }
