@@ -46,6 +46,7 @@ class MainActivity : FlutterActivity() {
     private var dartReady = false
 
     // A "saveAs" waiting for the system's create-document screen.
+    private var configuredTree: String? = null
     private var folderPicking: MethodChannel.Result? = null
     private var saving: Pair<File, MethodChannel.Result>? = null
 
@@ -123,12 +124,13 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "pickSyncFolder" -> {
+                configuredTree = call.argument<String>("configuredTree")
                 folderPicking?.success(null);folderPicking=result
                 val pick=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 try { startActivityForResult(pick, FOLDER_REQUEST) } catch (e:Exception) { folderPicking=null;result.error("folder",e.message,null) }
             }
             "syncFolderBridge" -> {
-                val saved=getSharedPreferences("coursive-folder",MODE_PRIVATE).getString("uri",null)
+                val saved = call.argument<String>("tree")
                 try { result.success(if(saved==null) null else SyncFolderBridge.open(this,android.net.Uri.parse(saved))) } catch(e:Exception) { result.error("folder","文件夹授权已失效，请重新选择",null) }
             }
             "keepAlive" -> {
@@ -154,8 +156,7 @@ class MainActivity : FlutterActivity() {
             if(resultCode!=RESULT_OK || tree==null) { result.success(null);return }
             try {
                 contentResolver.takePersistableUriPermission(tree, (data?.flags ?: 0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
-                getSharedPreferences("coursive-folder",MODE_PRIVATE).edit().putString("uri",tree.toString()).apply()
-                result.success(SyncFolderBridge.open(this,tree))
+                result.success(SyncFolderBridge.open(this, tree, keep = configuredTree))
             } catch(e:Exception) { result.error("folder",e.message,null) };return
         }
         if (requestCode != SAVE_REQUEST) return

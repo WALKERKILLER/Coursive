@@ -76,9 +76,12 @@ class AppState extends ChangeNotifier with WidgetsBindingObserver {
       health = (await api.get('/api/health') as Map).cast<String, dynamic>();
       if (defaultTargetPlatform == TargetPlatform.android) {
         final sync = await api.get('/api/sync') as Map;
-        if (sync['kind'] == 'folder') {
+        final folder = sync['local_folder'];
+        if (sync['kind'] == 'folder' &&
+            folder is String &&
+            folder.startsWith('content:')) {
           try {
-            final bridge = await AndroidBridge.syncFolderBridge();
+            final bridge = await AndroidBridge.syncFolderBridge(folder);
             if (bridge != null &&
                 bridge['local_folder'] == sync['local_folder']) {
               await api.put('/api/sync', {

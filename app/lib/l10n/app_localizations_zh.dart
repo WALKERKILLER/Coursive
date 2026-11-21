@@ -6584,7 +6584,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get folderSyncBody =>
-      '把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。';
+      '通过 NAS WebDAV 或 Syncthing 文件夹同步选中的课程。来源登录、模型密钥和本机设置留在本机；画布以最新保存版本为准，并保留恢复副本。';
+
+  @override
+  String get folderSyncLocalFolder => '选择 Syncthing 同步文件夹';
+
+  @override
+  String get folderSyncLocalHint => '选择专用交换目录，两端由 Syncthing 保持一致。';
+
+  @override
+  String get folderSyncLocalConnected => '已连接同步文件夹';
+
+  @override
+  String get folderSyncUseWebDav => '使用 WebDAV';
 
   @override
   String get folderSyncAccount => 'NAS 账号';

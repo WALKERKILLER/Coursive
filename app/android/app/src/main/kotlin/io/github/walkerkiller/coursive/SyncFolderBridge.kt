@@ -123,11 +123,16 @@ class SyncFolderBridge(private val context: Context, private val tree: Uri) {
         }
     }
     companion object {
-        private var running: SyncFolderBridge? = null
-        private var active: String? = null
-        @Synchronized fun open(context: Context, tree: Uri): Map<String,String> {
-            if (active != tree.toString() || running == null) { running?.close();running=SyncFolderBridge(context.applicationContext,tree);active=tree.toString() }
-            return running!!.descriptor()
+        // A candidate needs a live bridge for preview. Keep the daemon's
+        // configured tree reachable until the user confirms a replacement.
+        private val running = mutableMapOf<String, SyncFolderBridge>()
+        @Synchronized fun open(context: Context, tree: Uri, keep: String? = null): Map<String, String> {
+            val key = tree.toString()
+            for (old in running.keys.toList()) {
+                if (old != key && old != keep) running.remove(old)?.close()
+            }
+            val bridge = running.getOrPut(key) { SyncFolderBridge(context.applicationContext, tree) }
+            return bridge.descriptor()
         }
     }
 }
