@@ -94,6 +94,7 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
       ? _form.value = 1
       : _form.forward(from: 0);
   Offset? _center;
+  final _settledSizes = <bool, Size>{};
   StudyDockPlacement? _target;
 
   @override
@@ -141,13 +142,22 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
         .reduce((a, b) => a.value <= b.value ? a : b)
         .key;
     final vertical = edge == StudyDockEdge.left || edge == StudyDockEdge.right;
+    final dockSize =
+        _settledSizes[vertical] ??
+        _settledSizes[!vertical]?.flipped ??
+        const Size(52, 52);
+    final length = vertical ? dockSize.height : dockSize.width;
+    final screenLength = vertical ? size.height : size.width;
+    final low = vertical ? 64.0 : widget.startInset + 12.0;
+    final high = screenLength - length - (vertical ? 64.0 : 12.0);
+    final along = vertical ? center.dy : center.dx;
     setState(() {
       _center = center;
       _target = StudyDockPlacement(
         edge,
-        ((vertical ? center.dy : center.dx) /
-                math.max(1, vertical ? size.height : size.width))
-            .clamp(0, 1),
+        high <= low
+            ? .5
+            : ((along - length / 2 - low) / (high - low)).clamp(0, 1),
       );
     });
     _group!.relayout.value++;
@@ -407,6 +417,8 @@ class _DockGroupLayout extends MultiChildLayoutDelegate {
     for (final id in ids) {
       final state = group.docks[id]!;
       final child = layoutChild(id, BoxConstraints.loose(size));
+      if (state._center == null)
+        state._settledSizes[state.widget.placement.vertical] = child;
       final placement = state._target ?? state.widget.placement;
       final docked = studyDockRect(
         size,

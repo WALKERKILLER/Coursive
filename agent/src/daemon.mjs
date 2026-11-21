@@ -103,3 +103,19 @@ export async function uploadStudyAttachment(lecture,bytes,selection){
  const response=await fetch(`${BASE}${studyCanvasPath(lecture)}/attachments`,{method:'POST',headers:{Authorization:`Bearer ${TOKEN}`},body:form,signal:AbortSignal.timeout(60000)});
  const result=await response.json();if(!response.ok)throw new Error(result.error??`HTTP ${response.status}`);return result;
 }
+
+// Human-created notebooks are independent of lecture workspaces.
+export const listNotebooks = (courseId = '') => get('/api/notebooks?course_id=' + encodeURIComponent(courseId));
+export const createNotebook = (title, course_id = '') => api('POST', '/api/notebooks', { title, course_id });
+export const readNotebookCanvas = (id) => get('/api/notebooks/' + encodeURIComponent(id) + '/canvas');
+export const saveNotebookCanvas = (id, document) => api('PUT', '/api/notebooks/' + encodeURIComponent(id) + '/canvas', document);
+export const notebookPDFPage = (id, source, page) => get(`/api/notebooks/${encodeURIComponent(id)}/pdf-page?${new URLSearchParams({source, page:String(page)})}`);
+export async function importNotebookAsset(id, name, bytes, {paged = false} = {}) {
+ const response = await fetch(`${BASE}/api/notebooks/${encodeURIComponent(id)}/assets?name=${encodeURIComponent(name)}${paged ? "&paged=1" : ""}`, {method:'POST',headers:{Authorization:`Bearer ${TOKEN}`,'Content-Type':'application/octet-stream'},body:bytes, signal:AbortSignal.timeout(180_000)});
+ const result = await response.json();
+ if (!response.ok) throw new Error(result.error ?? `HTTP ${response.status}`);
+ return result;
+}
+
+// Canvas format 7 carries optional object.content_scale (default 1). Forward
+// complete documents unchanged so uniform layout transforms survive edits.

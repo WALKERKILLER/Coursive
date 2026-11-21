@@ -206,7 +206,7 @@ extension _StudyEvidence on StudyCanvasState {
     if (card == null || !d.visible(card.layer)) {
       return _EvidenceView.invalid(l10n.studyEvidenceMissing);
     }
-    final upright = card.quarterTurns % 4 == 0;
+    final upright = card.rotation == 0 && card.quarterTurns % 4 == 0;
     if (card.type == 'pdfdoc' && a.page > 0 && card.page != a.page) {
       return _EvidenceView(card, const [], page: a.page);
     }

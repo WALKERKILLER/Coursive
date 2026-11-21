@@ -1,40 +1,31 @@
 part of 'study_canvas.dart';
 
 extension _StudyStylus on StudyCanvasState {
-  bool get _touchBlocked =>
-      _stylusPointers.isNotEmpty || (_palmCooldown?.isActive ?? false);
+  bool get _touchBlocked => _stylusPointers.isNotEmpty;
 
   void _trackStylusPresence(PointerEvent e) {
     if (e.kind != PointerDeviceKind.stylus &&
         e.kind != PointerDeviceKind.invertedStylus)
       return;
-    // Hover protects handwriting, but must not cancel deliberate navigation
-    // or moving selected objects. Actual pen contact remains authoritative.
-    if (e is PointerHoverEvent && !_ink && _tool != StudyTool.eraser) return;
-    if (e is PointerDownEvent) _stylusPointers.add(e.pointer);
+    if (e is PointerHoverEvent) return;
     if (e is PointerUpEvent || e is PointerCancelEvent) {
       _stylusPointers.remove(e.pointer);
+      return;
     }
-    // Active contact is authoritative even when the pen stops reporting moves.
-    // Lift/cancel restarts the grace period for a palm still resting nearby.
-    _palmCooldown?.cancel();
-    _palmCooldown = Timer(const Duration(seconds: 1), () {});
-    if (_touchPointers.isEmpty) return;
-    // A palm that touched first cannot resume navigation when the pen lifts.
-    // Only a fresh down after the grace period may start another gesture.
-    for (final pointer in _touchPointers) {
-      _pointers.remove(pointer);
-    }
+    if (e is! PointerDownEvent) return;
+    _stylusPointers.add(e.pointer);
+    _finishTransform();
+    _blockedTouches.addAll(_touchPointers);
+    for (final pointer in _touchPointers) _pointers.remove(pointer);
     _touchPointers.clear();
+    _readingContacts.clear();
+    if (_pdfPinching) _update(() => _pdfPinching = false);
     _cancelCardHold();
     _panCamera = null;
     _pinchDistance = _pinchZoom = null;
     _pinchWorld = null;
     _dragCard = null;
-    _heldCardNeedsCheckpoint = false;
-    _resize = false;
     _start = _last = null;
-    if (_pointers.isEmpty) _gesturing.value = false;
   }
 
   Future<void> _startStylus() async {

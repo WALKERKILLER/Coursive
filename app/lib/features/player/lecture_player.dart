@@ -37,6 +37,9 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
       player.stream.position.listen((p) {
         position.value = p;
         _syncPip(p);
+        if (_recoverableCodecError && playing && !_checkingDecoder) {
+          unawaited(_clearRecoveredCodecError(_openRevision));
+        }
       }),
       player.stream.duration.listen((d) {
         if (d > Duration.zero) duration = d;
@@ -63,8 +66,26 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
         notifyListeners();
       }),
       player.stream.error.listen((e) {
-        error = e;
-        notifyListeners();
+        _codecCheck?.cancel();
+        if (e.trim().toLowerCase() == 'could not open codec.') {
+          // mpv reports each failed decoder candidate, even if the next one works.
+          final revision = _openRevision;
+          final at = player.state.position;
+          _codecCheck = Timer(const Duration(milliseconds: 1600), () async {
+            if (_disposed || revision != _openRevision) return;
+            final recovered = await _hasDecodedTracks();
+            if (_disposed || revision != _openRevision) return;
+            if (recovered && player.state.position != at) return;
+            error = e;
+            _recoverableCodecError = true;
+            notifyListeners();
+          });
+        } else {
+          _openRevision++;
+          _recoverableCodecError = false;
+          error = e;
+          notifyListeners();
+        }
       }),
       player.stream.completed.listen((done) {
         if (done) save();
@@ -94,6 +115,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   VideoController? pipVideo;
 
   final position = ValueNotifier(Duration.zero);
+  final seekEvents = ValueNotifier<int>(0);
   final buffer = ValueNotifier(Duration.zero);
 
   /// Asks the side panel to show a tab ('outline', 'transcript', …).
@@ -302,8 +324,59 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     } catch (_) {}
   }
 
+  Timer? _codecCheck;
+  int _openRevision = 0;
+  bool _recoverableCodecError = false, _checkingDecoder = false;
+
+  Future<bool> _hasDecodedTracks() async {
+    final native = player.platform;
+    if (native is! NativePlayer) return false;
+    try {
+      final tracks = player.state.tracks;
+      final hasVideo = tracks.video.any((t) => t.id != 'auto' && t.id != 'no');
+      final hasAudio = tracks.audio.any((t) => t.id != 'auto' && t.id != 'no');
+      if (!hasVideo && !hasAudio) return false;
+      final videoWidth = hasVideo ? await native.getProperty('video-dec-params/w') : '';
+      final sampleRate = hasAudio ? await native.getProperty('audio-params/samplerate') : '';
+      return (!hasVideo || (int.tryParse(videoWidth) ?? 0) > 0) &&
+          (!hasAudio || (int.tryParse(sampleRate) ?? 0) > 0);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _clearRecoveredCodecError(int revision) async {
+    _checkingDecoder = true;
+    try {
+      if (await _hasDecodedTracks() && !_disposed && revision == _openRevision && _recoverableCodecError) {
+        _recoverableCodecError = false;
+        error = null;
+        notifyListeners();
+      }
+    } finally {
+      _checkingDecoder = false;
+    }
+  }
+
+  Future<void> retryPlayback() async {
+    final current = source;
+    if (current == null) return;
+    try {
+      final previousRate = rate;
+      await _open(current, position.value);
+      await player.setRate(previousRate);
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+    }
+  }
+
   Future<void> _open(Source s, Duration start) async {
+    _codecCheck?.cancel();
+    _openRevision++;
+    _recoverableCodecError = false;
     error = null;
+    notifyListeners();
     // Attach video output before opening a silent video (study canvas).
     await video.platform.future;
     if (_disposed) return;
@@ -376,6 +449,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
       ),
     );
     position.value = d;
+    seekEvents.value++;
     player.seek(d);
     pip?.seek(d);
   }
@@ -508,12 +582,14 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     _watch?.stop();
     await save();
     _disposed = true;
+    _codecCheck?.cancel();
     _saver?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
     await pip?.dispose();
     await player.dispose();
+    seekEvents.dispose();
     position.dispose();
     buffer.dispose();
     panelTab.dispose();

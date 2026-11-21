@@ -1,78 +1,23 @@
 package library
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"github.com/walkerkiller/coursive/daemon/internal/pdftest"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-// A real two-page PDF with independent text streams; no model is used here.
-func writeStudyPDFFixture(t *testing.T, p string) {
-	t.Helper()
-	objects := []string{
-		"<< /Type /Catalog /Pages 2 0 R >>",
-		"<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>",
-		"",
-		"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>",
-		"",
-		"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-	}
-	for i, text := range []string{"Canvas PDF first page", "Second page learning material"} {
-		body := "BT /F1 24 Tf 72 500 Td (" + text + ") Tj ET\n"
-		objects[3+2*i] = fmt.Sprintf("<< /Length %d >>\nstream\n%sendstream", len(body), body)
-	}
-	var b bytes.Buffer
-	b.WriteString("%PDF-1.4\n")
-	offsets := []int{0}
-	for i, obj := range objects {
-		offsets = append(offsets, b.Len())
-		fmt.Fprintf(&b, "%d 0 obj\n%s\nendobj\n", i+1, obj)
-	}
-	xref := b.Len()
-	fmt.Fprintf(&b, "xref\n0 %d\n0000000000 65535 f \n", len(offsets))
-	for _, offset := range offsets[1:] {
-		fmt.Fprintf(&b, "%010d 00000 n \n", offset)
-	}
-	fmt.Fprintf(&b, "trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n", len(offsets), xref)
-	if err := os.WriteFile(p, b.Bytes(), 0600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-// Only absent external dependencies skip integration tests. Strict renderer
-// verification fails instead; conversion errors always remain test failures.
-func studyPDFDependencyMissing(t *testing.T, message string) {
-	t.Helper()
-	if os.Getenv("COURSIVE_REQUIRE_PDF_TESTS") == "1" {
-		t.Fatal(message)
-	}
-	t.Skip(message + "; set COURSIVE_REQUIRE_PDF_TESTS=1 to require renderer coverage")
-}
-
-func requireStudyPoppler(t *testing.T) {
-	t.Helper()
-	for _, tool := range []string{"pdfinfo", "pdftoppm", "pdftotext"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			studyPDFDependencyMissing(t, "Poppler integration requires "+tool+" (install poppler-utils)")
-		}
-	}
-}
-
 func TestStudyPopplerRealPDF(t *testing.T) {
-	requireStudyPoppler(t)
+	pdftest.RequirePoppler(t)
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.pdf")
-	writeStudyPDFFixture(t, source)
+	pdftest.WriteTwoPagePDF(t, source)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	if err := renderStudyPoppler(ctx, source, dir); err != nil {
@@ -137,18 +82,11 @@ func TestStudyPDFPageLimitBeforeRasterization(t *testing.T) {
 }
 
 func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		exe, _ := os.Executable()
-		if _, e := os.Stat(filepath.Join(filepath.Dir(exe), "coursive-study-pdf")); e != nil {
-			studyPDFDependencyMissing(t, "run compiled library.test beside the built PDFKit helper")
-		}
-	} else {
-		requireStudyPoppler(t)
-	}
+	pdftest.RequirePagedRenderer(t)
 	l, _ := reviewFixture(t)
 	ctx := t.Context()
 	source := filepath.Join(t.TempDir(), "two.pdf")
-	writeStudyPDFFixture(t, source)
+	pdftest.WriteTwoPagePDF(t, source)
 	f, e := os.Open(source)
 	if e != nil {
 		t.Fatal(e)
@@ -211,5 +149,65 @@ func TestStudyPagedPDFRealSelectionAndRestore(t *testing.T) {
 	}
 	if _, e = l.StudyPDFPage(ctx, "one", first.Source, 3); e == nil {
 		t.Fatal("accepted out-of-range page")
+	}
+}
+
+func TestNotebookPagedPDFImportSaveAndReopen(t *testing.T) {
+	pdftest.RequirePagedRenderer(t)
+	l, _ := reviewFixture(t)
+	ctx := t.Context()
+	book, e := l.CreateNotebook(ctx, "Notes", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	other, e := l.CreateNotebook(ctx, "Other", "")
+	if e != nil {
+		t.Fatal(e)
+	}
+	source := filepath.Join(t.TempDir(), "sample.pdf")
+	pdftest.WriteTwoPagePDF(t, source)
+	f, e := os.Open(source)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer f.Close()
+	imported, e := l.ImportNotebookAsset(ctx, book.ID, "sample.pdf", f, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if len(imported.Objects) != 1 {
+		t.Fatal(imported)
+	}
+	card := imported.Objects[0]
+	if card.Type != "pdfdoc" || card.PageCount != 2 {
+		t.Fatal(card)
+	}
+	doc, e := l.NotebookCanvas(ctx, book.ID, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	doc.Objects = append(doc.Objects, card)
+	saved, e := l.NotebookCanvas(ctx, book.ID, &doc)
+	if e != nil {
+		t.Fatal(e)
+	}
+	reopened, e := l.NotebookCanvas(ctx, book.ID, nil)
+	if e != nil || reopened.Revision != saved.Revision || len(reopened.Objects) != 1 || reopened.Objects[0].Source != card.Source {
+		t.Fatal(e, reopened)
+	}
+	second, e := l.NotebookPDFPage(ctx, book.ID, card.Source, 2)
+	if e != nil || !strings.Contains(second.Text, "Second") {
+		t.Fatal(e, second)
+	}
+	if _, e = l.NotebookPDFPage(ctx, other.ID, card.Source, 2); !errors.Is(e, ErrStudyInvalid) {
+		t.Fatal("cross-notebook read", e)
+	}
+	foreign, e := l.NotebookCanvas(ctx, other.ID, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	foreign.Objects = append(foreign.Objects, card)
+	if _, e = l.NotebookCanvas(ctx, other.ID, &foreign); !errors.Is(e, ErrStudyInvalid) {
+		t.Fatal("cross-notebook save", e)
 	}
 }

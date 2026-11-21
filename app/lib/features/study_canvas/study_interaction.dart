@@ -97,8 +97,7 @@ extension _StudyInteraction on StudyCanvasState {
         d.changed();
       }
       _points = [];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _drawingPointer = null;
       _temporaryEraser = true;
       _startErase(local, _world(local));
@@ -136,12 +135,16 @@ extension _StudyInteraction on StudyCanvasState {
           d.visible(c.layer) &&
           _selectionKinds.contains(studyCardSelectionKind(c)),
     )) {
-      if (!r.contains(c.rect.topLeft) || !r.contains(c.rect.bottomRight))
+      final frame = c.visualBounds;
+      if (frame.left < r.left ||
+          frame.top < r.top ||
+          frame.right > r.right ||
+          frame.bottom > r.bottom)
         continue;
       // A free lasso's bounding rectangle is not its enclosed area.
       final outside = Path.combine(
         PathOperation.difference,
-        Path()..addRect(c.rect),
+        Path()..addPolygon(c.corners, true),
         loop,
       );
       if (outside.getBounds().isEmpty) _selection.add(c.id);
@@ -183,7 +186,7 @@ extension _StudyInteraction on StudyCanvasState {
       for (final s in d.strokes)
         if (_detail.strokeIds.contains(s.id)) s.bounds,
       for (final c in d.cards)
-        if (_selection.contains(c.id)) c.rect,
+        if (_selection.contains(c.id)) c.visualBounds,
     ];
     return bounds.isEmpty
         ? null
@@ -214,7 +217,7 @@ extension _StudyInteraction on StudyCanvasState {
     _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
-    _detail.objectId = '';
+    _detail.objectId = null;
     _cursor.value++;
     _update(() {});
   }
@@ -422,10 +425,9 @@ extension _StudyInteraction on StudyCanvasState {
   Future<void> _setQuickVision(bool on) async {
     _update(() {
       _quickImages = on;
-      _quickSnapshot = null;
       _quickError = null;
     });
-    if (on) await _previewQuickVision();
+    if (on && _quickSnapshot == null) await _previewQuickVision();
   }
 
   /// Takes the screenshot 「看图」 will send, so the learner sees it first.
@@ -558,39 +560,41 @@ extension _StudyInteraction on StudyCanvasState {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _BarAction(
-                  label: l10n.studyAskAI,
-                  icon: Icons.auto_awesome_outlined,
-                  tooltip: l10n.studyAskHint,
-                  primary: true,
-                  onPressed: () => unawaited(_ask()),
-                ),
-                _BarAction(
-                  label: l10n.studyExcerpt,
-                  icon: Icons.crop_rounded,
-                  tooltip: l10n.studyExcerptHint,
-                  compact: compact,
-                  onPressed: _selectionBusy
-                      ? null
-                      : () => unawaited(_captureRegionCard()),
-                ),
-                _BarAction(
-                  label: _linkStart == null
-                      ? l10n.studyRelate
-                      : l10n.studyRelateHere,
-                  icon: _linkStart == null
-                      ? Icons.link_rounded
-                      : Icons.add_link_rounded,
-                  tooltip: _linkStart == null
-                      ? l10n.studyRelateHint
-                      : l10n.studyRelateHereHint,
-                  compact: compact,
-                  onPressed: _selectionBusy
-                      ? null
-                      : () => _selectionJob(_linkSelection),
-                ),
-                // Drag into the conversation, or tap, to attach the region's pixels.
-                _snapshotDragHandle(),
+                if (!widget.standalone) ...[
+                  _BarAction(
+                    label: l10n.studyAskAI,
+                    icon: Icons.auto_awesome_outlined,
+                    tooltip: l10n.studyAskHint,
+                    primary: true,
+                    onPressed: () => unawaited(_ask()),
+                  ),
+                  _BarAction(
+                    label: l10n.studyExcerpt,
+                    icon: Icons.crop_rounded,
+                    tooltip: l10n.studyExcerptHint,
+                    compact: compact,
+                    onPressed: _selectionBusy
+                        ? null
+                        : () => unawaited(_captureRegionCard()),
+                  ),
+                  _BarAction(
+                    label: _linkStart == null
+                        ? l10n.studyRelate
+                        : l10n.studyRelateHere,
+                    icon: _linkStart == null
+                        ? Icons.link_rounded
+                        : Icons.add_link_rounded,
+                    tooltip: _linkStart == null
+                        ? l10n.studyRelateHint
+                        : l10n.studyRelateHereHint,
+                    compact: compact,
+                    onPressed: _selectionBusy
+                        ? null
+                        : () => _selectionJob(_linkSelection),
+                  ),
+                  // Drag into the conversation, or tap, to attach the region's pixels.
+                  _snapshotDragHandle(),
+                ],
                 if (ink) ...[
                   PopupMenuButton<int>(
                     tooltip: '选区改色',

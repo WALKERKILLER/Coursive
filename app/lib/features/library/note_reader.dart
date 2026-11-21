@@ -23,8 +23,9 @@ import '../../l10n/l10n.dart';
 /// column, and the sources a reference points to (recording, slide or
 /// courseware) in a supporting pane — a bottom sheet on narrow windows.
 class NotePage extends StatefulWidget {
-  const NotePage({super.key, this.noteId});
+  const NotePage({super.key, this.noteId, this.courseId = ''});
   final String? noteId;
+  final String courseId;
   @override
   State<NotePage> createState() => _NotePageState();
 }
@@ -192,6 +193,7 @@ class _NotePageState extends State<NotePage> {
                             padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.xl),
                             child: NoteEditor(
                               note: n,
+                              courseId: widget.courseId,
                               edit: true,
                               onSaved: (saved) => _set(saved),
                               onClose: n == null ? null : () => setState(() => _editing = false),

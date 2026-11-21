@@ -158,13 +158,14 @@ extension _StudyToolbars on StudyCanvasState {
   List<Widget> _navigationActions() => [
     _topAction('返回', Icons.arrow_back, widget.onBack),
     _topAction('页面与材料', Icons.view_sidebar_outlined, _pageIndex),
-    _topAction(
-      l10n.studyShelf,
-      Icons.inventory_2_outlined,
-      () => _toggleShelf(),
-      key: const ValueKey('study-open-shelf'),
-      selected: _shelfTab != null,
-    ),
+    if (!widget.standalone)
+      _topAction(
+        l10n.studyShelf,
+        Icons.inventory_2_outlined,
+        () => _toggleShelf(),
+        key: const ValueKey('study-open-shelf'),
+        selected: _shelfTab != null,
+      ),
     _topAction('手写 / 浏览', Icons.draw_outlined, () {
       if (_ink)
         _chooseTool(StudyTool.select);
@@ -180,18 +181,11 @@ extension _StudyToolbars on StudyCanvasState {
       _topAction(l10n.studyRedo, Icons.redo, d.canRedo ? d.redo : null),
       _divider(false, compact: true),
       _topAction(
-        '箭头：选择对象 / 拖动空白或资料页面移动画布',
-        Icons.near_me_outlined,
+        '浏览：拖动画布，长按选择卡片',
+        Icons.pan_tool_outlined,
         () => _chooseTool(StudyTool.select),
         key: const ValueKey('study-tool-select'),
         selected: _tool == StudyTool.select,
-      ),
-      _topAction(
-        l10n.studyHandTool,
-        Icons.pan_tool_outlined,
-        () => _chooseTool(StudyTool.hand),
-        key: const ValueKey('study-tool-hand'),
-        selected: _tool == StudyTool.hand,
       ),
       _topAction(
         '套索 / 框选',
@@ -203,7 +197,8 @@ extension _StudyToolbars on StudyCanvasState {
       _divider(false, compact: true),
       _topAction('插入文字笔记', Icons.text_fields, () => _text()),
       _topAction('插入图片、PDF 或文件', Icons.image_outlined, () => _import()),
-      _topAction('课程资料', Icons.folder_open_outlined, _courseMaterials),
+      if (!widget.standalone)
+        _topAction('课程资料', Icons.folder_open_outlined, _courseMaterials),
       _divider(false, compact: true),
       _topAction(l10n.studyLayers, Icons.layers_outlined, _layers),
       if (_pluginsOffered)
@@ -228,36 +223,37 @@ extension _StudyToolbars on StudyCanvasState {
   }
 
   List<Widget> _canvasActions() => [
-    PopupMenuButton<String>(
-      tooltip: '添加模块',
-      padding: EdgeInsets.zero,
-      style: IconButton.styleFrom(
-        minimumSize: const Size(32, 32),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    if (!widget.standalone)
+      PopupMenuButton<String>(
+        tooltip: '添加模块',
+        padding: EdgeInsets.zero,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(32, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: const Icon(Icons.add, size: 20),
+        onSelected: (v) {
+          switch (v) {
+            case 'video':
+              _videoModules();
+            case 'file':
+              _import();
+            case 'course':
+              _courseMaterials();
+            case 'note':
+              _text();
+            case 'chat':
+              _openConversation(newConversation: true, bind: false);
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'video', child: Text('视频')),
+          PopupMenuItem(value: 'file', child: Text('文件')),
+          PopupMenuItem(value: 'course', child: Text('课程资料')),
+          PopupMenuItem(value: 'note', child: Text('笔记')),
+          PopupMenuItem(value: 'chat', child: Text('AI 对话')),
+        ],
       ),
-      icon: const Icon(Icons.add, size: 20),
-      onSelected: (v) {
-        switch (v) {
-          case 'video':
-            _videoModules();
-          case 'file':
-            _import();
-          case 'course':
-            _courseMaterials();
-          case 'note':
-            _text();
-          case 'chat':
-            _openConversation(newConversation: true, bind: false);
-        }
-      },
-      itemBuilder: (_) => const [
-        PopupMenuItem(value: 'video', child: Text('视频')),
-        PopupMenuItem(value: 'file', child: Text('文件')),
-        PopupMenuItem(value: 'course', child: Text('课程资料')),
-        PopupMenuItem(value: 'note', child: Text('笔记')),
-        PopupMenuItem(value: 'chat', child: Text('AI 对话')),
-      ],
-    ),
     _topAction('显示全部卡片', Icons.open_in_full, _fit),
     _topAction(
       _status,
@@ -265,7 +261,7 @@ extension _StudyToolbars on StudyCanvasState {
       () => flush(),
     ),
     PopupMenuButton<String>(
-      tooltip: widget.ctl.lecture?.shortTitle ?? '画布菜单',
+      tooltip: widget.title ?? widget._player?.lecture?.shortTitle ?? '画布菜单',
       padding: EdgeInsets.zero,
       style: IconButton.styleFrom(
         minimumSize: const Size(32, 32),
@@ -275,7 +271,7 @@ extension _StudyToolbars on StudyCanvasState {
       onSelected: (v) {
         switch (v) {
           case 'classic':
-            widget.onClassic();
+            widget.onClassic?.call();
           case 'links':
             _connectionSettings();
           case 'export':
@@ -291,14 +287,17 @@ extension _StudyToolbars on StudyCanvasState {
       itemBuilder: (_) => [
         PopupMenuItem(
           enabled: false,
-          child: Text(widget.ctl.lecture?.shortTitle ?? '学习画布'),
+          child: Text(
+            widget.title ?? widget._player?.lecture?.shortTitle ?? '学习画布',
+          ),
         ),
         const PopupMenuItem(value: 'fit', child: Text('显示全部材料')),
         const PopupMenuItem(value: 'brush', child: Text('画笔与橡皮设置')),
         const PopupMenuItem(value: 'links', child: Text('管理知识关联')),
         const PopupMenuItem(value: 'export', child: Text('导出画布副本')),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'classic', child: Text(l10n.studyExitCanvas)),
+        if (!widget.standalone) const PopupMenuDivider(),
+        if (!widget.standalone)
+          PopupMenuItem(value: 'classic', child: Text(l10n.studyExitCanvas)),
       ],
     ),
   ];

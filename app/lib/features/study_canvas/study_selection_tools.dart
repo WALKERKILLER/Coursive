@@ -84,15 +84,26 @@ extension _StudySelectionTools on StudyCanvasState {
         const PopupMenuDivider(),
         PopupMenuItem(value: 'rotate', child: Text(l10n.studyRotateSelection)),
         PopupMenuItem(
+          value: 'upright',
+          enabled: _selection.length == 1,
+          child: Text(l10n.studyRestoreUpright),
+        ),
+        CheckedPopupMenuItem(
+          value: 'angle-snap',
+          checked: _angleSnapping,
+          child: Text(l10n.studyAngleSnapping),
+        ),
+        PopupMenuItem(
           value: 'shape',
           enabled: ink,
           child: Text(l10n.studyEditShape),
         ),
-        PopupMenuItem(
-          value: 'recognize',
-          enabled: ink,
-          child: Text(l10n.studyRecognizeInk),
-        ),
+        if (!widget.standalone)
+          PopupMenuItem(
+            value: 'recognize',
+            enabled: ink,
+            child: Text(l10n.studyRecognizeInk),
+          ),
         if (_linkStart != null)
           PopupMenuItem(
             value: 'cancel-link',
@@ -121,6 +132,22 @@ extension _StudySelectionTools on StudyCanvasState {
             _pasteSelection();
           case 'rotate':
             _selectionJob(_rotateSelected);
+          case 'upright':
+            final d = document!;
+            final card = d.cards.where((c) => _selection.contains(c.id)).single;
+            final session = StudyTransformSession(
+              d,
+              Set.of(_selection),
+              {},
+              pivot: card.rect.center,
+            );
+            session.preview(angle: -StudyCardTransform(card).angle);
+            session.commit();
+            _scene.value++;
+            _update(() {});
+          case 'angle-snap':
+            _update(() => _angleSnapping = !_angleSnapping);
+            unawaited(_saveLayout());
           case 'shape':
             _selectionJob(_editSelectedShape);
           case 'recognize':
@@ -328,6 +355,8 @@ extension _StudySelectionTools on StudyCanvasState {
     _linkStartBounds = null;
     await flush();
   }
+
+  Widget _rotationHandle() => _transformFrame();
 
   Future<void> _rotateSelected() async {
     final d = document!;

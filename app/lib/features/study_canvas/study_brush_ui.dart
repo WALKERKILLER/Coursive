@@ -55,6 +55,13 @@ extension _StudyBrushUI on StudyCanvasState {
       ];
       if (values.isEmpty) return;
       for (final pen in values) {
+        if (pen.name == '铅笔' &&
+            pen.brush.family == 'pencil' &&
+            pen.color == 0xff4d5969 &&
+            pen.width == 4 &&
+            pen.brush.opacity == .72) {
+          pen.brush = pen.brush.copyWith(opacity: .9);
+        }
         if (_brushNames.values.contains(pen.name)) {
           pen.name = _brushNames[pen.brush.family]!;
         }
@@ -628,13 +635,16 @@ class _BrushPreview extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, Paint()..color = chrome.surfaceSoft);
+    final paper = Color(color).computeLuminance() > .88 && brush.family != 'highlighter'
+        ? const Color(0xff404348) : Colors.white;
+    canvas.drawRect(Offset.zero & size, Paint()..color = paper);
     final points = [
       for (var i = 0; i < 100; i++)
         InkPoint(
           Offset(
             24 + (size.width - 48) * i / 99,
-            size.height / 2 + math.sin(i / 99 * math.pi * 3) * 22,
+            size.height / 2 +
+                math.sin(i / 99 * math.pi * 3) * math.min(18, size.height * .3),
           ),
           .1 + .9 * math.sin(i / 99 * math.pi),
         ),

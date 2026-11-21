@@ -4414,6 +4414,48 @@ abstract class AppLocalizations {
   /// **'模型'**
   String get commonModel;
 
+  /// No description provided for @gptLogin.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录 ChatGPT'**
+  String get gptLogin;
+
+  /// No description provided for @gptLoginDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'小 C 已连接 GPT'**
+  String get gptLoginDone;
+
+  /// No description provided for @gptLoginRestarted.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手已重启，请重新发起登录。'**
+  String get gptLoginRestarted;
+
+  /// No description provided for @gptLoginPortBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机登录端口 1455 正被占用，请结束其他登录后重试。'**
+  String get gptLoginPortBusy;
+
+  /// No description provided for @gptLoginFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录未完成，请检查网络后重试'**
+  String get gptLoginFailed;
+
+  /// No description provided for @modelPrefsSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型选择未能保存，请重新选择模型后发送'**
+  String get modelPrefsSaveFailed;
+
+  /// No description provided for @modelPrefsRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型设置保存失败，请重试。'**
+  String get modelPrefsRetry;
+
   /// No description provided for @modelsImportPi.
   ///
   /// In zh, this message translates to:
@@ -12816,7 +12858,7 @@ abstract class AppLocalizations {
   /// No description provided for @studyRotateUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象'**
+  /// **'请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转'**
   String get studyRotateUnsupported;
 
   /// No description provided for @studyEditShape.
@@ -14066,6 +14108,168 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'选区截图'**
   String get studyShot;
+
+  /// No description provided for @documentCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建'**
+  String get documentCreate;
+
+  /// No description provided for @documentMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'文字笔记'**
+  String get documentMarkdown;
+
+  /// No description provided for @documentCanvas.
+  ///
+  /// In zh, this message translates to:
+  /// **'无限画布'**
+  String get documentCanvas;
+
+  /// No description provided for @documentCanvasTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'画布名称'**
+  String get documentCanvasTitle;
+
+  /// No description provided for @documentUngrouped.
+  ///
+  /// In zh, this message translates to:
+  /// **'未归入课程'**
+  String get documentUngrouped;
+
+  /// No description provided for @courseDocuments.
+  ///
+  /// In zh, this message translates to:
+  /// **'笔记与画布'**
+  String get courseDocuments;
+
+  /// No description provided for @pdfDockCanvasRead.
+  ///
+  /// In zh, this message translates to:
+  /// **'在卡片内滚动阅读'**
+  String get pdfDockCanvasRead;
+
+  /// No description provided for @pdfDockOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'并排批注 PDF'**
+  String get pdfDockOpen;
+
+  /// No description provided for @pdfDockCropped.
+  ///
+  /// In zh, this message translates to:
+  /// **'此 PDF 已裁剪，可在原页书写'**
+  String get pdfDockCropped;
+
+  /// No description provided for @pdfDockMargin.
+  ///
+  /// In zh, this message translates to:
+  /// **'右侧白边'**
+  String get pdfDockMargin;
+
+  /// No description provided for @pdfDockPen.
+  ///
+  /// In zh, this message translates to:
+  /// **'鼠标书写'**
+  String get pdfDockPen;
+
+  /// No description provided for @pdfDockChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'批注版已发生变化，请重新打开'**
+  String get pdfDockChanged;
+
+  /// No description provided for @pdfDockSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在写入 PDF…'**
+  String get pdfDockSaving;
+
+  /// No description provided for @pdfDockSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到批注版 PDF'**
+  String get pdfDockSaved;
+
+  /// No description provided for @pdfDockHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'笔或鼠标书写，触控或滚轮翻页'**
+  String get pdfDockHint;
+
+  /// No description provided for @pdfDockChoose.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择本机 PDF…'**
+  String get pdfDockChoose;
+
+  /// No description provided for @pdfDockSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' · 批注版'**
+  String get pdfDockSuffix;
+
+  /// No description provided for @pdfCardEraser.
+  ///
+  /// In zh, this message translates to:
+  /// **'橡皮擦'**
+  String get pdfCardEraser;
+
+  /// No description provided for @pdfCardPrevious.
+  ///
+  /// In zh, this message translates to:
+  /// **'上一页'**
+  String get pdfCardPrevious;
+
+  /// No description provided for @pdfCardNext.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一页'**
+  String get pdfCardNext;
+
+  /// No description provided for @pdfCardView.
+  ///
+  /// In zh, this message translates to:
+  /// **'PDF 视图'**
+  String get pdfCardView;
+
+  /// No description provided for @pdfCardColumns.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开为一列'**
+  String get pdfCardColumns;
+
+  /// No description provided for @pdfCardPaged.
+  ///
+  /// In zh, this message translates to:
+  /// **'左右翻页'**
+  String get pdfCardPaged;
+
+  /// No description provided for @pdfCardScroll.
+  ///
+  /// In zh, this message translates to:
+  /// **'上下滚动'**
+  String get pdfCardScroll;
+
+  /// No description provided for @modelsSwitchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型切换未保存，请检查连接后重试'**
+  String get modelsSwitchFailed;
+
+  /// No description provided for @studyRestoreUpright.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复正向'**
+  String get studyRestoreUpright;
+
+  /// No description provided for @studyAngleSnapping.
+  ///
+  /// In zh, this message translates to:
+  /// **'角度吸附'**
+  String get studyAngleSnapping;
 }
 
 class _AppLocalizationsDelegate

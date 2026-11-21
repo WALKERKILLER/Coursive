@@ -6,8 +6,16 @@ import '../../core/api.dart';
 /// A captured raster is independent of the mutable canvas. Failed uploads keep
 /// these exact bytes, so retrying never silently takes a different screenshot.
 class StudySnapshot {
-  StudySnapshot(this.bytes, Map<String, dynamic> selection)
-    : selection = jsonDecode(jsonEncode(selection)) as Map<String, dynamic>;
+  StudySnapshot(
+    this.bytes,
+    Map<String, dynamic> selection, {
+    Map<String, dynamic>? query,
+  }) : selection = jsonDecode(jsonEncode(selection)) as Map<String, dynamic>,
+       query = query == null
+           ? null
+           : jsonDecode(jsonEncode(query)) as Map<String, dynamic>;
+  // Local binding only. The daemon validates provenance in selection.sources.
+  final Map<String, dynamic>? query;
   final Uint8List bytes;
   final Map<String, dynamic> selection;
   Map<String, dynamic>? attachment;

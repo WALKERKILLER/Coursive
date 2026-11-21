@@ -892,24 +892,14 @@ class _ModelChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final providers = jsonProviders(a.models);
     final sel = a.selected;
     return MenuAnchor(
       menuChildren: [
-        for (final p in providers.where((p) => p['configured'] == true))
-          SubmenuButton(
-            leadingIcon: ProviderLogo(providerId: '${p['id']}', name: '${p['name']}', size: 22),
-            menuChildren: [
-              for (final m in (p['models'] as List).cast<Map>().where((m) => m['available'] == true).take(12))
-                MenuItemButton(
-                  leadingIcon: Icon(sel != null && sel['provider'] == p['id'] && sel['model'] == m['id'] ? Icons.check_rounded : null, size: 18),
-                  trailingIcon: m['reasoning'] == true ? const Icon(Icons.psychology_outlined, size: 16) : null,
-                  onPressed: () => a.setPrefs({'provider': p['id'], 'model': m['id']}),
-                  child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 260), child: Text('${m['name']}', overflow: TextOverflow.ellipsis)),
-                ),
-            ],
-            child: Text('${p['name']}'),
-          ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.swap_horiz_rounded, size: 18),
+          onPressed: () => showModelPicker(context),
+          child: Text(l10n.modelsSearchAll),
+        ),
         if (sel?['reasoning'] == true) ...[
           const Divider(),
           if (context.isCompact)

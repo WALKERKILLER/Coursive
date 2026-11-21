@@ -9,57 +9,31 @@ import 'study_handwriting_test.dart' show sheet, close;
 import 'study_pdf_column_test.dart' as pdf;
 
 void main() {
-  for (final phase in ['pending hold', 'held card', 'pan', 'pinch']) {
-    testWidgets('pen hover takes priority over an existing touch $phase', (
+  testWidgets('hover does not block a fresh camera gesture or a title drag', (
+    t,
+  ) async {
+    final key = await fixture.open(
       t,
-    ) async {
-      final key = await fixture.open(
-        t,
-        pdf.PDFApi((sheet()..cards.add(pdf.pdf())).json()),
-      );
-      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
-      await t.pumpAndSettle();
-      final d = key.currentState!.document!;
-      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-      final palm = await t.startGesture(
-        origin + const Offset(300, 350),
-        pointer: 51,
-      );
-      TestGesture? second;
-      if (phase == 'held card') await t.pump(const Duration(milliseconds: 810));
-      if (phase == 'pan') await palm.moveBy(const Offset(30, 20));
-      if (phase == 'pinch') {
-        second = await t.startGesture(
-          origin + const Offset(400, 350),
-          pointer: 52,
-        );
-        await second.moveBy(const Offset(40, 0));
-      }
-      final camera = d.camera, zoom = d.zoom, rect = d.cards.single.rect;
-      await t.sendEventToBinding(
-        PointerHoverEvent(
-          kind: ui.PointerDeviceKind.stylus,
-          position: origin + const Offset(600, 500),
-        ),
-      );
-      // The same palm must stay rejected even after the cooldown expires.
-      await t.pump(const Duration(milliseconds: 1200));
-      await palm.moveBy(const Offset(80, 40));
-      await second?.moveBy(const Offset(40, 0));
-      await palm.up();
-      await second?.up();
-      await t.pump();
-      expect(d.camera, camera);
-      expect(d.zoom, zoom);
-      expect(d.cards.single.rect, rect);
-      await t.dragFrom(origin + const Offset(800, 650), const Offset(50, 20));
-      expect(
-        (d.camera - camera - const Offset(50, 20)).distance,
-        lessThan(.001),
-      );
-      await close(t);
-    });
-  }
+      pdf.PDFApi((sheet()..cards.add(pdf.pdf())).json()),
+    );
+    final d = key.currentState!.document!,
+        origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
+    await t.sendEventToBinding(
+      PointerHoverEvent(
+        kind: ui.PointerDeviceKind.stylus,
+        position: origin + const Offset(600, 500),
+      ),
+    );
+    await t.dragFrom(origin + const Offset(900, 800), const Offset(60, 20));
+    expect(d.camera, const Offset(60, 20));
+    final before = d.cards.single.rect;
+    await t.dragFrom(
+      origin + d.camera + before.topLeft + const Offset(100, 18),
+      const Offset(40, 20),
+    );
+    expect(d.cards.single.rect, before.shift(const Offset(40, 20)));
+    await close(t);
+  });
 
   for (final end in ['up', 'cancel']) {
     testWidgets(
@@ -95,14 +69,19 @@ void main() {
         );
         await t.pump(const Duration(milliseconds: 1100));
         await palm.moveBy(const Offset(80, 40));
+        expect(d.camera, Offset.zero, reason: 'the old palm remains blocked');
         await latePalm.moveBy(const Offset(100, 20));
         await palm.up();
         await latePalm.up();
-        expect(d.camera, Offset.zero);
+        expect(
+          d.camera,
+          const Offset(100, 20),
+          reason: 'fresh contacts need no cooldown',
+        );
         expect(d.zoom, 1);
         expect(d.cards.single.rect, rect);
         await t.dragFrom(origin + const Offset(800, 650), const Offset(60, 20));
-        expect(d.camera, const Offset(60, 20));
+        expect(d.camera, const Offset(160, 40));
         await close(t);
       },
     );

@@ -153,23 +153,30 @@ extension _StudyPenPalette on StudyCanvasState {
             selected: _lassoRectangle && !_captureLasso,
             compact: true,
           ),
-          _action(
-            l10n.studyCaptureLasso,
-            Icons.screenshot,
-            () => _update(() {
-              _lassoRectangle = true;
-              _captureLasso = true;
-            }),
-            selected: _captureLasso,
-            compact: true,
-          ),
+          if (!widget.standalone)
+            _action(
+              l10n.studyCaptureLasso,
+              Icons.screenshot,
+              () => _update(() {
+                _lassoRectangle = true;
+                _captureLasso = true;
+              }),
+              selected: _captureLasso,
+              compact: true,
+            ),
           _action(
             l10n.studySelectionFilters,
             Icons.filter_alt_outlined,
             _editSelectionFilters,
             compact: true,
           ),
-          _action('所选区域问 AI', Icons.auto_awesome_outlined, _ask, compact: true),
+          if (!widget.standalone)
+            _action(
+              '所选区域问 AI',
+              Icons.auto_awesome_outlined,
+              _ask,
+              compact: true,
+            ),
         ] else ...[
           SizedBox(
             width: vertical ? 34 : 92,
@@ -222,52 +229,54 @@ extension _StudyPenPalette on StudyCanvasState {
               height: vertical ? 30 : 34,
               child: InkWell(
                 onLongPress: _penSettings,
-                child: Flex(
-                  direction: Axis.horizontal,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      tooltip: '笔宽 ${width.toInt()}',
-                      isSelected: _ink && (_penWidth - width).abs() < .05,
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(24, 24),
-                        padding: EdgeInsets.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _quickPen(width: width),
-                      icon: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: _ink && (_penWidth - width).abs() < .05
-                                ? StudyChrome.of(context).accent
-                                : StudyChrome.of(context).line,
-                            width: 1.5,
+                child: IconButton(
+                  tooltip: '笔宽 ${width.toInt()}',
+                  isSelected: _ink && (_penWidth - width).abs() < .05,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(24, 24),
+                    padding: EdgeInsets.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => _quickPen(width: width),
+                  icon: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _ink && (_penWidth - width).abs() < .05
+                                  ? StudyChrome.of(context).accent
+                                  : StudyChrome.of(context).line,
+                              width: 1.5,
+                            ),
                           ),
-                        ),
-                        child: Transform.rotate(
-                          angle: -.65,
-                          child: Center(
-                            child: Container(
-                              width: 17,
-                              height: math.min(9, width + 1),
-                              color: StudyChrome.of(context).ink,
+                          child: Transform.rotate(
+                            angle: -.65,
+                            child: Center(
+                              child: Container(
+                                width: 17,
+                                height: math.min(9, width + 1),
+                                color: StudyChrome.of(context).ink,
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                        Text(
+                          '${width.toInt()}',
+                          style: TextStyle(
+                            fontSize: 9,
+                            height: 1.1,
+                            color: StudyChrome.of(context).inkSoft,
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '${width.toInt()}',
-                      style: TextStyle(
-                        fontSize: 9,
-                        height: 1.1,
-                        color: StudyChrome.of(context).inkSoft,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -474,10 +483,7 @@ extension _StudyPenPalette on StudyCanvasState {
                         ] else ...[
                           Text(
                             '实时笔迹预览',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: chrome.inkFaint,
-                            ),
+                            style: TextStyle(fontSize: 12, color: chrome.ink),
                           ),
                           SizedBox(
                             height: 42,

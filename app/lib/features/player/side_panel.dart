@@ -290,10 +290,13 @@ class _SlidesTabState extends State<_SlidesTab>
   void initState() {
     super.initState();
     widget.ctl.position.addListener(_onPos);
+    widget.ctl.seekEvents.addListener(_onSeek);
+    WidgetsBinding.instance.addPostFrameCallback((_){if(mounted) _onPos();});
   }
 
   @override
   void dispose() {
+    widget.ctl.seekEvents.removeListener(_onSeek);
     widget.ctl.position.removeListener(_onPos);
     _scroll.dispose();
     super.dispose();
@@ -316,9 +319,10 @@ class _SlidesTabState extends State<_SlidesTab>
     return ans;
   }
 
-  void _onPos() {
+  void _onSeek(){ _userScrolled=DateTime(0); _onPos(force:true); }
+  void _onPos({bool force=false}) {
     final i = _indexAt(widget.ctl.positionMs);
-    if (i == _current) return;
+    if (!force && i == _current) return;
     setState(() => _current = i);
     final follow = context.read<UiPrefs>().slideFollow;
     if (follow &&

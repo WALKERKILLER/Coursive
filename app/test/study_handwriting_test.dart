@@ -318,7 +318,6 @@ void main() {
         );
       final key = await fixture.open(t, fixture.FixtureApi(d.json()));
       final cardFinder = find.byKey(const ValueKey('study-card/text'));
-      final element = t.element(cardFinder), widget = t.widget(cardFinder);
       final g1 = await t.startGesture(
         const Offset(350, 600),
         pointer: 31,
@@ -329,6 +328,8 @@ void main() {
         pointer: 32,
         kind: ui.PointerDeviceKind.touch,
       );
+      await t.pump(); // Reader scrolling freezes once when the second finger joins.
+      final element = t.element(cardFinder), widget = t.widget(cardFinder);
       for (var i = 1; i <= 10; i++) {
         await g2.moveTo(Offset(550 + i * 10, 600));
         await t.pump(const Duration(milliseconds: 16));

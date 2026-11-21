@@ -1,3 +1,4 @@
+import 'dart:ui' show PointerDeviceKind;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -67,11 +68,31 @@ class PlayerViewState extends State<PlayerView> {
   @override
   void initState() {
     super.initState();
+    _wasPlaying=ctl.playing;
+    ctl.addListener(_playState);
     _bump();
+  }
+  bool _wasPlaying=false;
+  final _controlPointers=<int>{};
+  void _playState(){
+    if (_wasPlaying==ctl.playing) return;
+    _wasPlaying=ctl.playing;
+    _bump();
+  }
+  @override
+  void didUpdateWidget(PlayerView old){
+    super.didUpdateWidget(old);
+    if(old.ctl!=ctl){
+      old.ctl.removeListener(_playState);
+      ctl.addListener(_playState);
+      _wasPlaying=ctl.playing;
+      _bump();
+    }
   }
 
   @override
   void dispose() {
+    ctl.removeListener(_playState);
     _hide?.cancel();
     _toastTimer?.cancel();
     _resumeTimer?.cancel();
@@ -82,6 +103,7 @@ class PlayerViewState extends State<PlayerView> {
   void _bump() {
     _hide?.cancel();
     if (!_controls) setState(() => _controls = true);
+    if (!ctl.playing || _menuOpen || _controlPointers.isNotEmpty) return;
     _hide = Timer(const Duration(seconds: 3), () {
       if (mounted && ctl.playing && !_menuOpen) setState(() => _controls = false);
     });
@@ -146,7 +168,8 @@ class PlayerViewState extends State<PlayerView> {
             VideoCardHoldRegion(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () {
+                onTapUp: (details) {
+                  if (cardHold?.writing == true && (details.kind == PointerDeviceKind.stylus || details.kind == PointerDeviceKind.invertedStylus)) return;
                   if (mobile) {
                     setState(() => _controls = !_controls);
                     if (_controls) _bump();
@@ -230,7 +253,7 @@ class PlayerViewState extends State<PlayerView> {
             // Buffering
             if (ctl.buffering && ctl.error == null)
               const Center(child: IgnorePointer(child: ExpressiveLoader(size: 56))),
-            if (ctl.error != null) Center(child: _ErrorBox(text: ctl.error!, onRetry: () => ctl.switchSource(ctl.sourceIdx))),
+            if (ctl.error != null) Center(child: _ErrorBox(text: ctl.error!, onRetry: ctl.retryPlayback)),
             // Boost pill
             Positioned(
               top: 72,
@@ -290,8 +313,12 @@ class PlayerViewState extends State<PlayerView> {
               ),
             ),
             // Chrome
-            _fade(showUi, Align(alignment: Alignment.topCenter, child: _topBar(context))),
-            _fade(showUi, Align(alignment: Alignment.bottomCenter, child: _bottomBar(context, prefs))),
+            _fade(showUi, Align(alignment: Alignment.topCenter, child: VideoCardControls(child: _topBar(context)))),
+            _fade(showUi, Align(alignment: Alignment.bottomCenter, child:Listener(
+              onPointerDown:(e){_controlPointers.add(e.pointer);_bump();},
+              onPointerUp:(e){_controlPointers.remove(e.pointer);_bump();},
+              onPointerCancel:(e){_controlPointers.remove(e.pointer);_bump();},
+              child:VideoCardControls(child: _bottomBar(context, prefs))))),
           ]),
         );
       },

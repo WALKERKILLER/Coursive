@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/features/study_canvas/study_document.dart';
@@ -153,6 +154,48 @@ StudyDocument document() => StudyDocument()
   ];
 
 void main() {
+  testWidgets(
+    'image opt-in restores an IME-obscured selection without losing the question',
+    (t) async {
+      final api = SelectionApi(document().json());
+      await fixture.open(t, api);
+      await enclose(t, const Rect.fromLTRB(180, 180, 620, 640));
+      // The original rectangle extends below the resized viewport.
+      t.view.viewInsets = const FakeViewPadding(bottom: 600);
+      await t.pumpAndSettle();
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.textInput, (
+        call,
+      ) async {
+        if (call.method == 'TextInput.hide')
+          t.view.viewInsets = const FakeViewPadding();
+        return null;
+      });
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(SystemChannels.textInput, null);
+        t.testTextInput.register();
+      });
+      await allowImages(t);
+      expect(find.byKey(const ValueKey('study-quick-shot')), findsOneWidget);
+      expect(
+        t
+            .widget<TextField>(
+              find.byKey(const ValueKey('study-quick-question')),
+            )
+            .controller!
+            .text,
+        'Explain this page',
+      );
+      await send(t, api);
+      expect(api.uploads, hasLength(1));
+      expect(api.metadata.single['bounds'], [180.0, 180.0, 440.0, 460.0]);
+      expect(api.request?['question'], 'Explain this page');
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+    },
+  );
+
   for (final images in [false, true]) {
     testWidgets('whole PDF card quick question sends with images=$images', (
       t,

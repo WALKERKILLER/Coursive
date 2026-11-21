@@ -145,24 +145,44 @@ func renderStudyPage(ctx context.Context, source, output string, page int, files
 	return out, nil
 }
 func (l *Library) StudyPDFPage(ctx context.Context, lecture, source string, page int) (StudyPDFPage, error) {
+	return l.canvasPDFPage(ctx, lecture, source, page, false)
+}
+
+func (l *Library) NotebookPDFPage(ctx context.Context, id, source string, page int) (StudyPDFPage, error) {
+	return l.canvasPDFPage(ctx, id, source, page, true)
+}
+
+func (l *Library) canvasPDFPage(ctx context.Context, id, source string, page int, notebook bool) (StudyPDFPage, error) {
 	var out StudyPDFPage
 	if page < 1 || page > 5000 || path.Base(source) != "source.pdf" {
 		return out, ErrStudyInvalid
 	}
-	f, e := l.StudySource(ctx, lecture, source)
-	if e != nil {
-		return out, e
+	var root *os.Root
+	var canvasDir string
+	var e error
+	if notebook {
+		root, canvasDir, e = l.notebookRoot(id)
+	} else {
+		l.studyMu.Lock()
+		root, canvasDir, e = l.studyRoot(ctx, id)
+		l.studyMu.Unlock()
 	}
-	defer f.Close()
-	root, e := os.OpenRoot(l.Root)
 	if e != nil {
 		return out, e
 	}
 	defer root.Close()
+	if !strings.HasPrefix(source, canvasDir+"/study-assets/") {
+		return out, ErrStudyInvalid
+	}
+	f, e := openStudySource(root, canvasDir, source)
+	if e != nil {
+		return out, e
+	}
+	defer f.Close()
 	dir := path.Dir(source)
 	cached := dir + "/page-" + strconv.Itoa(page) + ".json"
 	if b, e := root.ReadFile(cached); e == nil && len(b) < 2<<20 {
-		if json.Unmarshal(b, &out) == nil {
+		if json.Unmarshal(b, &out) == nil && out.File == dir+"/page-"+strconv.Itoa(page)+".png" {
 			if _, e = root.Stat(out.File); e == nil {
 				return out, nil
 			}
@@ -203,11 +223,9 @@ func (l *Library) StudyPDFPage(ctx context.Context, lecture, source string, page
 	}
 	var candidates []cachedPage
 	pinned := map[string]bool{out.File: true}
-	if lec, err := l.Store.Lecture(ctx, lecture); err == nil {
-		if doc, err := readStudy(root, lec.Dir+"/study-canvas.json"); err == nil {
-			for _, o := range doc.Objects {
-				pinned[o.Path] = true
-			}
+	if doc, err := readStudy(root, canvasDir+"/study-canvas.json"); err == nil {
+		for _, o := range doc.Objects {
+			pinned[o.Path] = true
 		}
 	}
 	for _, entry := range entries {

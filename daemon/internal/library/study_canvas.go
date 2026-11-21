@@ -38,6 +38,8 @@ type StudyCamera struct {
 	Z float64 `json:"z"`
 }
 type StudyObject struct {
+	ContentScale    float64           `json:"content_scale,omitempty"`
+	Rotation        float64           `json:"rotation,omitempty"`
 	QuarterTurns    int               `json:"quarter_turns,omitempty"`
 	ID              string            `json:"id"`
 	Type            string            `json:"type"`
@@ -64,6 +66,7 @@ type StudyObject struct {
 	ExpandedH       float64           `json:"expanded_h,omitempty"`
 	SourceLectureID string            `json:"source_lecture_id,omitempty"`
 	OriginalPath    string            `json:"original_path,omitempty"`
+	PDFPaged        bool              `json:"pdf_paged,omitempty"`
 	PDFColumn       string            `json:"pdf_column,omitempty"`
 }
 type StudyStroke struct {
@@ -114,7 +117,7 @@ func validStudyID(v string) bool {
 
 // checkedStudyDir rejects symlinks, including those that remain inside the root.
 func checkedStudyDir(root *os.Root, rel string, create bool) error {
-	if rel == "" || path.Clean(rel) != rel || strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") || !strings.HasPrefix(rel, "courses/") {
+	if rel == "" || path.Clean(rel) != rel || strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") || (!strings.HasPrefix(rel, "courses/") && !strings.HasPrefix(rel, "notebooks/")) {
 		return ErrStudyInvalid
 	}
 	parts := strings.Split(rel, "/")
@@ -263,7 +266,7 @@ func (l *Library) StudyCanvas(ctx context.Context, id string) (StudyDocument, er
 	defer r.Close()
 	return readStudy(r, dir+"/study-canvas.json")
 }
-func validateStudy(d StudyDocument, root *os.Root, dir string) error {
+func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) error {
 	invalid := func(s string) error { return fmt.Errorf("%w：%s", ErrStudyInvalid, s) }
 	if len(d.AppliedRuns) > 256 {
 		return ErrStudyLimit
@@ -273,7 +276,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 			return ErrStudyInvalid
 		}
 	}
-	if (d.Version < 1 || d.Version > 5) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
+	if (d.Version < 1 || d.Version > 7) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
 		return invalid("版本或视图")
 	}
 	if len(d.Layers) < 1 || len(d.Layers) > 32 || len(d.Objects) > 2000 || len(d.Strokes) > 30000 {
@@ -303,7 +306,10 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 		return e == nil && st.Mode().IsRegular()
 	}
 	for _, a := range d.Objects {
-		if a.QuarterTurns < 0 || a.QuarterTurns > 3 || (a.QuarterTurns != 0 && (d.Version < 4 || a.Type != "image")) {
+		if a.ContentScale != 0 && (d.Version < 7 || !finite(a.ContentScale) || a.ContentScale < 0.05 || a.ContentScale > 20) {
+			return invalid("卡片比例或画布版本")
+		}
+		if a.QuarterTurns < 0 || a.QuarterTurns > 3 || (a.QuarterTurns != 0 && (d.Version < 4 || (d.Version < 6 && a.Type != "image"))) || !finite(a.Rotation) || math.Abs(a.Rotation) > math.Pi || (a.Rotation != 0 && d.Version < 6) {
 			return invalid("旋转角度或画布版本")
 		}
 		if a.PDFColumn != "" && !validStudyID(a.PDFColumn) {
@@ -344,7 +350,10 @@ func validateStudy(d StudyDocument, root *os.Root, dir string) error {
 			return e
 		}
 	}
-	if lectures != 1 {
+	if standalone && lectures != 0 {
+		return invalid("独立画布包含录课")
+	}
+	if !standalone && lectures != 1 {
 		return invalid("须保留一张课次视频卡片")
 	}
 	n := 0
@@ -414,6 +423,10 @@ func (l *Library) SaveStudyCanvas(ctx context.Context, id string, d StudyDocumen
 		return d, e
 	}
 	defer r.Close()
+	return l.saveStudy(ctx, r, dir, id, d)
+}
+
+func (l *Library) saveStudy(ctx context.Context, r *os.Root, dir, id string, d StudyDocument) (StudyDocument, error) {
 	old, e := readStudy(r, dir+"/study-canvas.json")
 	if e != nil {
 		return d, e
@@ -422,6 +435,9 @@ func (l *Library) SaveStudyCanvas(ctx context.Context, id string, d StudyDocumen
 		return d, ErrStudyConflict
 	}
 	for _, object := range d.Objects {
+		if id == "" && ((object.Type != "text" && object.Type != "pdf" && object.Type != "pdfdoc" && object.Type != "image" && object.Type != "video") || object.OriginalPath != "" || object.SourceLectureID != "" || len(object.Sources) > 0) {
+			return d, ErrStudyInvalid
+		}
 		if object.Type == "video" && object.OriginalPath != "" && object.Path == "" {
 			f, err := l.StudyCourseSource(ctx, id, object.OriginalPath)
 			if err != nil {
@@ -430,7 +446,7 @@ func (l *Library) SaveStudyCanvas(ctx context.Context, id string, d StudyDocumen
 			f.Close()
 		}
 	}
-	if e = validateStudy(d, r, dir); e != nil {
+	if e = validateStudy(d, r, dir, id == ""); e != nil {
 		return d, e
 	}
 	if old.Version > d.Version {
@@ -490,12 +506,15 @@ type StudyImport struct {
 
 // ImportStudyAsset converts in a private temporary directory and publishes the entire asset set with one rename.
 func (l *Library) ImportStudyAsset(ctx context.Context, id, name string, reader io.Reader) (StudyImport, error) {
-	return l.importStudyAsset(ctx, id, name, reader, false)
+	return l.importStudyAsset(ctx, id, name, reader, false, false)
 }
 func (l *Library) ImportStudyModule(ctx context.Context, id, name string, reader io.Reader) (StudyImport, error) {
-	return l.importStudyAsset(ctx, id, name, reader, true)
+	return l.importStudyAsset(ctx, id, name, reader, true, false)
 }
-func (l *Library) importStudyAsset(ctx context.Context, id, name string, reader io.Reader, paged bool) (StudyImport, error) {
+func (l *Library) ImportNotebookAsset(ctx context.Context, id, name string, reader io.Reader, paged bool) (StudyImport, error) {
+	return l.importStudyAsset(ctx, id, name, reader, paged, true)
+}
+func (l *Library) importStudyAsset(ctx context.Context, id, name string, reader io.Reader, paged, standalone bool) (StudyImport, error) {
 	var out StudyImport
 	ext := strings.ToLower(filepath.Ext(name))
 	kind := ""
@@ -512,7 +531,14 @@ func (l *Library) importStudyAsset(ctx context.Context, id, name string, reader 
 		return out, fmt.Errorf("%w：支持 PDF、图片、TXT/Markdown 和视频", ErrStudyInvalid)
 	}
 	l.studyMu.Lock()
-	r, dir, e := l.studyRoot(ctx, id)
+	var r *os.Root
+	var dir string
+	var e error
+	if standalone {
+		r, dir, e = l.notebookRoot(id)
+	} else {
+		r, dir, e = l.studyRoot(ctx, id)
+	}
 	l.studyMu.Unlock()
 	if e != nil {
 		return out, e
@@ -686,6 +712,10 @@ func (l *Library) StudySource(ctx context.Context, id, rel string) (*os.File, er
 		return nil, e
 	}
 	defer r.Close()
+	return openStudySource(r, dir, rel)
+}
+
+func openStudySource(r *os.Root, dir, rel string) (*os.File, error) {
 	if path.Clean(rel) != rel || !strings.HasPrefix(rel, dir+"/") || checkedStudyDir(r, path.Dir(rel), false) != nil {
 		return nil, ErrStudyInvalid
 	}

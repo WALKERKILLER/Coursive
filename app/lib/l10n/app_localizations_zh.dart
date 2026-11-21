@@ -2471,6 +2471,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonModel => '模型';
 
   @override
+  String get gptLogin => '登录 ChatGPT';
+
+  @override
+  String get gptLoginDone => '小 C 已连接 GPT';
+
+  @override
+  String get gptLoginRestarted => '助手已重启，请重新发起登录。';
+
+  @override
+  String get gptLoginPortBusy => '本机登录端口 1455 正被占用，请结束其他登录后重试。';
+
+  @override
+  String get gptLoginFailed => '登录未完成，请检查网络后重试';
+
+  @override
+  String get modelPrefsSaveFailed => '模型选择未能保存，请重新选择模型后发送';
+
+  @override
+  String get modelPrefsRetry => '模型设置保存失败，请重试。';
+
+  @override
   String get modelsImportPi => '导入 Pi CLI 配置';
 
   @override
@@ -7387,7 +7408,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyRotateSelection => '顺时针旋转 90°';
 
   @override
-  String get studyRotateUnsupported => '旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象';
+  String get studyRotateUnsupported => '请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转';
 
   @override
   String get studyEditShape => '编辑形状锚点';
@@ -8072,4 +8093,85 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyShot => '选区截图';
+
+  @override
+  String get documentCreate => '新建';
+
+  @override
+  String get documentMarkdown => '文字笔记';
+
+  @override
+  String get documentCanvas => '无限画布';
+
+  @override
+  String get documentCanvasTitle => '画布名称';
+
+  @override
+  String get documentUngrouped => '未归入课程';
+
+  @override
+  String get courseDocuments => '笔记与画布';
+
+  @override
+  String get pdfDockCanvasRead => '在卡片内滚动阅读';
+
+  @override
+  String get pdfDockOpen => '并排批注 PDF';
+
+  @override
+  String get pdfDockCropped => '此 PDF 已裁剪，可在原页书写';
+
+  @override
+  String get pdfDockMargin => '右侧白边';
+
+  @override
+  String get pdfDockPen => '鼠标书写';
+
+  @override
+  String get pdfDockChanged => '批注版已发生变化，请重新打开';
+
+  @override
+  String get pdfDockSaving => '正在写入 PDF…';
+
+  @override
+  String get pdfDockSaved => '已保存到批注版 PDF';
+
+  @override
+  String get pdfDockHint => '笔或鼠标书写，触控或滚轮翻页';
+
+  @override
+  String get pdfDockChoose => '选择本机 PDF…';
+
+  @override
+  String get pdfDockSuffix => ' · 批注版';
+
+  @override
+  String get pdfCardEraser => '橡皮擦';
+
+  @override
+  String get pdfCardPrevious => '上一页';
+
+  @override
+  String get pdfCardNext => '下一页';
+
+  @override
+  String get pdfCardView => 'PDF 视图';
+
+  @override
+  String get pdfCardColumns => '展开为一列';
+
+  @override
+  String get pdfCardPaged => '左右翻页';
+
+  @override
+  String get pdfCardScroll => '上下滚动';
+
+  @override
+  String get modelsSwitchFailed => '模型切换未保存，请检查连接后重试';
+
+  @override
+  String get studyRestoreUpright => '恢复正向';
+
+  @override
+  String get studyAngleSnapping => '角度吸附';
 }

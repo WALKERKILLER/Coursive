@@ -241,6 +241,19 @@ export function assembleOutline(raw,scope,{lecture_id="",conversation_id="",turn
 }
 
 const PUBLIC_ERROR="模型请求失败，请检查模型服务与网络后重试";
+class CanvasModelFailure extends Error {}
+// Never return raw SDK errors: provider payloads may contain credentials.
+export function canvasModelError(error) {
+ const status=Number(error?.status??error?.statusCode);
+ const text=String(error?.message??error??'');
+ if(/country|unsupported.{0,8}region|region.{0,8}(not|unsupported)/i.test(text))return '当前网络地区不支持此模型服务，请检查代理或更换网络';
+ if(status===403||/\b403\b/.test(text))return '模型访问被拒绝，请检查网络出口及账号的模型访问权限';
+ if(status===401||/\b401\b|unauthorized|authentication/i.test(text))return '模型授权失效，请在设置中重新登录或更新 API Key';
+ if(status===429||/\b429\b|rate.?limit|quota/i.test(text))return '模型额度或请求频率受限，请稍后重试或切换模型';
+ if(/timeout|timed out|ECONN|ENOTFOUND|fetch failed|network/i.test(text))return '模型连接超时或网络不可达，请检查代理后重试';
+ return PUBLIC_ERROR;
+}
+
 function cancellable(work,signal){
  signal.throwIfAborted();
  return new Promise((resolve,reject)=>{
@@ -281,7 +294,9 @@ export class CanvasRunner {
    const context=await cancellable(this.call("POST",`/api/lectures/${encodeURIComponent(request.lecture_id)}/study-canvas/context`,request.selection),signal);
    signal.throwIfAborted();
    if(!Array.isArray(context.sources)||context.sources.length>24||JSON.stringify(context).length>180000)throw new Error("画布上下文超过限制");
-   const model=await cancellable(this.pipeline.currentModel(),signal);if(!model)throw new Error("尚未配置模型，请到 设置 → 模型 添加模型服务；识别手写/扫描件需图像能力或识图模型");
+   const model=await cancellable(this.pipeline.currentModel(),signal);if(!model)throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
+   if(request.model_choice && (model.provider!==request.model_choice.provider || model.id!==request.model_choice.model))throw new CanvasModelFailure('模型选择已变化，请重新选择后重试');
+   view.model={provider:model.provider,model:model.id};
    const visualAttachments=new Map((request.visuals??[]).map(i=>[i.source_id,i]));
    for(const id of visualAttachments.keys())if(!context.sources.some(s=>s.id===id))throw new Error("视觉附件不属于本次选择");
    let inspected=0;
@@ -373,9 +388,9 @@ export class CanvasRunner {
     signal.throwIfAborted();
     let res;
     try{res=await cancellable(this.pipeline.runtime.completeSimple(model,{systemPrompt:outline?OUTLINE_SYSTEM:SYSTEM,messages,tools:course&&!outline?[...CANVAS_TOOLS,...COURSE_TOOLS]:CANVAS_TOOLS},{signal,maxTokens:outline?12000:6000}),signal);}
-    catch(e){signal.throwIfAborted();throw new Error(PUBLIC_ERROR);}
+    catch(e){signal.throwIfAborted();throw new CanvasModelFailure(canvasModelError(e));}
     this.pipeline.usage?.record(entryFrom(res,{purpose:"canvas"}));signal.throwIfAborted();
-    if(["error","aborted"].includes(res.stopReason))throw new Error(PUBLIC_ERROR);
+    if(["error","aborted"].includes(res.stopReason))throw new CanvasModelFailure(canvasModelError({message:res.errorMessage}));
     if(JSON.stringify(res.content).length>120000)throw new Error("模型输出超过限制");
     messages.push(res);const toolCalls=res.content.filter(c=>c.type==="toolCall");
     if(!toolCalls.length&&outline){
@@ -410,7 +425,7 @@ export class CanvasRunner {
    throw new Error("模型未在限定轮数内完成，请缩小任务后重试");
   }catch(e){
    view.operations=[];view.state=ac.signal.aborted?"cancelled":"error";
-   view.error=ac.signal.aborted?"已取消，本轮未产生回答":signal.aborted?"任务超时，请重试":String(e.message).includes("尚未配置模型")?e.message:
+   view.error=e instanceof CanvasModelFailure?e.message:ac.signal.aborted?"已取消，本轮未产生回答":signal.aborted?"任务超时，请重试":String(e.message).includes("尚未配置模型")?e.message:
     /上下文|选择|来源|画布|工具|图像|限定|未在|超过|提纲/.test(e.message)?String(e.message).slice(0,200):PUBLIC_ERROR;
   }
  }

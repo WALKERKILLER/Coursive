@@ -20,6 +20,7 @@ type CatalogItem struct {
 	LectureID string `json:"lecture_id,omitempty"`
 	Lecture   string `json:"lecture,omitempty"`
 	Pinned    bool   `json:"pinned"`
+	CanvasID  string `json:"canvas_id,omitempty"`
 	NoteID    string `json:"note_id,omitempty"`
 	Category  string `json:"category"`
 	FileType  string `json:"file_type"`
@@ -157,6 +158,25 @@ func (l *Library) CourseCatalog(ctx context.Context, courseID string) ([]Catalog
 		if err != nil {
 			return nil, err
 		}
+	}
+	// Global Markdown notes live outside indexed course directories.
+	if courseID == "" {
+		for _, n := range notes {
+			if n.CourseID == "" && n.LectureID == "" && strings.HasPrefix(n.Path, "notes/") {
+				out = append(out, CatalogItem{NoteID: n.ID, Category: "notes", FileType: "md", Name: n.Title, Path: n.Path, Pinned: n.Pinned})
+			}
+		}
+	}
+	notebooks, err := l.Notebooks(courseID)
+	if err != nil {
+		return nil, err
+	}
+	titles := map[string]string{}
+	for _, c := range courses {
+		titles[c.ID] = c.Title
+	}
+	for _, n := range notebooks {
+		out = append(out, CatalogItem{CanvasID: n.ID, CourseID: n.CourseID, Course: titles[n.CourseID], Name: n.Title, Category: "notes", FileType: "canvas", Path: "notebooks/" + n.ID + "/study-canvas.json"})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]

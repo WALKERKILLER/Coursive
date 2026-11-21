@@ -101,7 +101,7 @@ extension _StudyStage on StudyCanvasState {
   }) async {
     final d = document;
     if (d == null || !d.editable(d.activeLayer)) return;
-    final query = bind
+    var query = bind
         ? _selectedQuery()
         : <String, dynamic>{
             'objects': <String>[],
@@ -113,6 +113,7 @@ extension _StudyStage on StudyCanvasState {
     snapshot ??= bind && allowImages && _regionSelection != null
         ? await _prepareSelectionSnapshot()
         : null;
+    if (snapshot?.query != null) query = Map<String, dynamic>.from(snapshot!.query!);
     final draft = _idleInput.text;
     if (!mounted) return;
     final card = StudyCard(
@@ -811,6 +812,7 @@ class _StageViewState extends State<_StageView>
             ),
           ),
           const Spacer(),
+          Flexible(child: AssistantModelButton(enabled: !widget.busy)),
           IconButton(
             key: const ValueKey('study-ai-close'),
             tooltip: '收起 AI 对话',

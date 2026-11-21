@@ -89,7 +89,7 @@ export async function generateTimeline(pipeline, lectureId, signal, detail = "co
 		slideTimes = sl.filter((s) => s.is_key).map((s) => mmss(s.t_sec * 1000)).slice(0, 80).join(", ");
 	} catch {}
 	const model = await pipeline.currentModel();
-	if (!model) throw new Error("还没有可用的模型。请在 设置 → 模型 中添加 API Key。");
+	if (!model) throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
 	const sys = prompt({ course: r.course.title, lecture: r.lecture.title, date: r.lecture.date }, durMs, slideTimes, detail);
 	const body = transcriptDigest(segs);
 	const deadline = AbortSignal.timeout(180_000);

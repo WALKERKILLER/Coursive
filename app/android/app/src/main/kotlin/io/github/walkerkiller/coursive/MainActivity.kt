@@ -12,10 +12,16 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class MainActivity : FlutterActivity() {
     private var stylus: StylusBridge? = null
+    // Bound live PDF parsers and raster buffers across all canvas readers.
+    private val pdfNotesExecutor = Executors.newSingleThreadExecutor()
+
+    // Accessed only on the platform thread, including completion callbacks.
+    private val pdfJobs = mutableMapOf<Int, Pair<java.util.concurrent.Future<*>, MethodChannel.Result>>()
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         val handled = super.dispatchTouchEvent(event)
@@ -34,6 +40,9 @@ class MainActivity : FlutterActivity() {
     override fun onPause() { stylus?.reset(); super.onPause() }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pdfJobs.values.forEach { (job, _) -> job.cancel(true) }
+        pdfJobs.clear()
+        pdfNotesExecutor.shutdownNow()
         stylus?.dispose(); stylus = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -71,6 +80,25 @@ class MainActivity : FlutterActivity() {
 
     private fun onAndroid(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "cancelPDFNotes" -> {
+                pdfJobs.remove(call.argument<Int>("requestId"))?.let { (job, pending) ->
+                    job.cancel(true)
+                    pending.error("cancelled", "PDF operation cancelled", null)
+                }
+                result.success(null)
+            }
+            "pdfNotes" -> {
+                val id = call.argument<Int>("requestId")!!
+                val job = pdfNotesExecutor.submit {
+                    try {
+                        val value = AndroidPdfNotes.run(this, call)
+                        runOnUiThread { pdfJobs.remove(id)?.second?.success(value) }
+                    } catch (e: Exception) {
+                        runOnUiThread { pdfJobs.remove(id)?.second?.error("pdf", e.message, null) }
+                    }
+                }
+                pdfJobs[id] = job to result
+            }
             "info" -> result.success(
                 mapOf(
                     "nativeLibraryDir" to applicationInfo.nativeLibraryDir,
