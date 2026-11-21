@@ -36,4 +36,6 @@ Direct database sync cannot merge SQLite transactions. Mutable files can race a 
 
 ## Amendment: direct WebDAV, no second sync client
 
+Transport policy superseded by [Two transports for a course exchange](0041-course-exchange-transports.md).
+
 On 2026-11-03 the user rejected running a second synchronisation client next to Studio. The NAS folder is now read and written directly over WebDAV by `datasync.Client`: the settings page takes the address, account, app password and folder, `List` is a `PROPFIND` with `Depth: 1`, and the object/manifest protocol above is unchanged. The local-folder and Android SAF paths stay as fallbacks. A device's sync identity is the address plus folder, so pointing it elsewhere starts from an empty baseline rather than inheriting agreed state. The device-manifest guarantees, including the known cross-process writer blocker on `sessions-meta.json`, are unaffected.

@@ -38,10 +38,12 @@ abstract final class AndroidBridge {
       }) ??
       false;
 
-  static Future<Map<String, dynamic>?> pickSyncFolder() =>
-      _ch.invokeMapMethod<String, dynamic>('pickSyncFolder');
-  static Future<Map<String, dynamic>?> syncFolderBridge() =>
-      _ch.invokeMapMethod<String, dynamic>('syncFolderBridge');
+  static Future<Map<String, dynamic>?> pickSyncFolder(String? configuredTree) =>
+      _ch.invokeMapMethod<String, dynamic>('pickSyncFolder', {
+        'configuredTree': configuredTree,
+      });
+  static Future<Map<String, dynamic>?> syncFolderBridge(String tree) =>
+      _ch.invokeMapMethod<String, dynamic>('syncFolderBridge', {'tree': tree});
 
   /// Keeps the app running in the background with a notification.
   static Future<void> keepAlive(bool on, {String? text}) =>
