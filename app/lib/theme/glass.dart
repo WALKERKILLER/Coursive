@@ -36,6 +36,24 @@ class GlassStyle extends ThemeExtension<GlassStyle> {
       t < .5 ? this : (other ?? this);
 }
 
+/// High-frequency pen input can retain the pane tint and rim without sampling
+/// the canvas underneath every floating control on every frame.
+class GlassBackdropScope extends InheritedWidget {
+  const GlassBackdropScope({
+    super.key,
+    required this.enabled,
+    required super.child,
+  });
+  final bool enabled;
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<GlassBackdropScope>()
+          ?.enabled ??
+      true;
+  @override
+  bool updateShouldNotify(GlassBackdropScope old) => old.enabled != enabled;
+}
+
 /// How much a pane lifts off what is under it.
 enum GlassDepth {
   /// Toolbars and docks: thin frost, light tint.
@@ -127,7 +145,7 @@ class GlassSurface extends StatelessWidget {
         ),
       ),
     );
-    if (on) {
+    if (on && GlassBackdropScope.of(context)) {
       final sigma = switch (depth) {
         GlassDepth.bar => 16.0,
         GlassDepth.panel => 22.0,

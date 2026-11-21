@@ -135,6 +135,7 @@ void main() {
     );
     await t.pump();
     expect(pdf.strokes.length, 1);
+    await t.pump(const Duration(milliseconds: 650));
     expect(pdf.savedCount, 1);
     final mark = pdf.strokes.single;
     expect(mark.marker && mark.square, isTrue);

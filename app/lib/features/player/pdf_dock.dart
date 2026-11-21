@@ -235,11 +235,20 @@ class DockPDF {
   Future<void> _save() async {
     if (!dirty) return;
     final snapshot = List.of(strokes), extension = margin;
+    // Native writers append to the verified working revision. Erasing or
+    // replacing any saved stroke requires rebuilding its managed annotations.
+    var appendOnly = snapshot.length >= _saved.length;
+    for (var i = 0; appendOnly && i < _saved.length; i++) {
+      appendOnly = identical(snapshot[i], _saved[i]);
+    }
+    final start = appendOnly ? _saved.length : 0;
     final update = await command('save', {
       'revision': revision,
       'margin': extension,
-      'replaceInk': true,
-      'strokes': [for (final s in snapshot) s.json()],
+      'replaceInk': !appendOnly,
+      'strokes': [
+        for (var i = start; i < snapshot.length; i++) snapshot[i].json(),
+      ],
     });
     revision = update['revision'] as String;
     _saved = snapshot;
@@ -415,10 +424,11 @@ class PDFDock extends StatefulWidget {
   State<PDFDock> createState() => PDFDockState();
 }
 
-class PDFDockState extends State<PDFDock> {
+class PDFDockState extends State<PDFDock> with WidgetsBindingObserver {
   DockPDF get pdf => widget.pdf;
   Future<bool>? _saving;
-  Timer? _eraseSave;
+  Timer? _saveTimer;
+  bool _disposing = false;
   String? _error;
   bool _mousePen = true, _localErase = false;
   late final PageController _pages = PageController(
@@ -458,8 +468,23 @@ class PDFDockState extends State<PDFDock> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _saveTimer != null) {
+      unawaited(flush());
+    }
+  }
+
+  @override
   void dispose() {
-    if (_eraseSave != null) unawaited(flush());
+    _disposing = true;
+    WidgetsBinding.instance.removeObserver(this);
+    if (_saveTimer != null) unawaited(flush());
     _vertical.dispose();
     _pages.dispose();
     super.dispose();
@@ -485,38 +510,50 @@ class PDFDockState extends State<PDFDock> {
     onChanged: _changed,
   );
 
-  Future<bool> flush() {
-    _eraseSave?.cancel();
-    _eraseSave = null;
-    return _saving ??= _drain().whenComplete(() => _saving = null);
+  @override
+  void didUpdateWidget(covariant PDFDock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.pdf, pdf)) {
+      _saveTimer?.cancel();
+      _saveTimer = null;
+      if (_saving == null && oldWidget.pdf.dirty)
+        unawaited(_drain(oldWidget.pdf));
+      _saving = null;
+      _error = null;
+    }
   }
 
-  Future<bool> _drain() async {
+  Future<bool> flush() {
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    final model = pdf;
+    return _saving ??= _drain(model).whenComplete(() {
+      if (mounted && !_disposing && identical(model, pdf)) _saving = null;
+    });
+  }
+
+  Future<bool> _drain(DockPDF model) async {
     try {
-      while (pdf.dirty) {
-        await pdf.save();
+      while (model.dirty) {
+        await model.save();
       }
-      _error = null;
+      if (mounted && !_disposing && identical(model, pdf)) _error = null;
       return true;
     } catch (e) {
-      _error = '$e';
+      if (mounted && !_disposing && identical(model, pdf)) _error = '$e';
       return false;
     } finally {
-      if (mounted) setState(() {});
+      if (mounted && !_disposing && identical(model, pdf)) setState(() {});
     }
   }
 
   void _changed({bool erased = false}) {
     setState(() {});
-    if (erased) {
-      _eraseSave?.cancel();
-      _eraseSave = Timer(
-        const Duration(milliseconds: 220),
-        () => unawaited(flush()),
-      );
-    } else {
-      unawaited(flush());
-    }
+    // Start the deadline on the first edit so continuous writing still saves.
+    _saveTimer ??= Timer(
+      Duration(milliseconds: erased ? 220 : 650),
+      () => unawaited(flush()),
+    );
   }
 
   @override
@@ -1032,19 +1069,48 @@ class _PDFSheetState extends State<_PDFSheet> {
                         RepaintBoundary(
                           child: ValueListenableBuilder<int>(
                             valueListenable: _marks,
-                            builder: (_, tick, child) => CustomPaint(
-                              key: const ValueKey('pdf-committed-ink'),
-                              painter: _DockInk(
-                                _preview?.visible ??
-                                    pdf.strokes
-                                        .where((s) => s.page == widget.number)
-                                        .toList(),
-                                w,
-                                h,
-                                null,
-                                0,
-                              ),
-                            ),
+                            builder: (_, tick, child) {
+                              final marks =
+                                  _preview?.visible ??
+                                  pdf.strokes
+                                      .where((s) => s.page == widget.number)
+                                      .toList();
+                              // Keep complete blocks in a retained layer. Appending
+                              // a short stroke normally invalidates just the tail.
+                              final tail = marks.length ~/ 64 * 64;
+                              return Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (tail > 0)
+                                    RepaintBoundary(
+                                      child: CustomPaint(
+                                        isComplex: true,
+                                        painter: _DockInk(
+                                          marks,
+                                          w,
+                                          h,
+                                          null,
+                                          0,
+                                          end: tail,
+                                        ),
+                                      ),
+                                    ),
+                                  RepaintBoundary(
+                                    child: CustomPaint(
+                                      key: const ValueKey('pdf-committed-ink'),
+                                      painter: _DockInk(
+                                        marks,
+                                        w,
+                                        h,
+                                        null,
+                                        0,
+                                        start: tail,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                         RepaintBoundary(
@@ -1098,9 +1164,13 @@ class _DockInk extends CustomPainter {
     this.cursor,
     this.radius, {
     this.live = false,
+    this.start = 0,
+    this.end,
     this.lasso,
   });
   final bool live;
+  final int start;
+  final int? end;
   final List<Offset>? lasso;
   final Offset? cursor;
   final double radius;
@@ -1112,7 +1182,8 @@ class _DockInk extends CustomPainter {
     final paint = Paint()
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
-    for (final mark in lines) {
+    for (var i = start; i < (end ?? lines.length); i++) {
+      final mark = lines[i];
       final line = mark.points;
       paint
         ..strokeWidth = w * mark.width
@@ -1146,6 +1217,17 @@ class _DockInk extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_DockInk old) =>
-      live || old.w != w || old.h != h || !listEquals(lines, old.lines);
+  bool shouldRepaint(_DockInk old) {
+    final limit = end ?? lines.length;
+    if (live ||
+        old.w != w ||
+        old.h != h ||
+        old.start != start ||
+        (old.end ?? old.lines.length) != limit)
+      return true;
+    for (var i = start; i < limit; i++) {
+      if (!identical(lines[i], old.lines[i])) return true;
+    }
+    return false;
+  }
 }

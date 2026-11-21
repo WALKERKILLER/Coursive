@@ -214,7 +214,77 @@ Future<GlobalKey<StudyCanvasState>> open(
   return key;
 }
 
+class CountingStroke extends StudyStroke {
+  CountingStroke(String id)
+    : super(
+        id: id,
+        layer: 'main',
+        points: const [
+          InkPoint(Offset(100, 100), .5),
+          InkPoint(Offset(110, 110), .5),
+        ],
+        color: 0xff000000,
+        width: 3,
+      );
+  int paints = 0;
+  @override
+  void paint(Canvas canvas, {bool dark = false}) {
+    paints++;
+    super.paint(canvas, dark: dark);
+  }
+}
+
 void main() {
+  testWidgets(
+    'a long new stroke retains already painted history through pen-up and undo',
+    (t) async {
+      final key = await open(t, FixtureApi(StudyDocument().json()));
+      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
+      final doc = key.currentState!.document!;
+      final history = List.generate(128, (i) => CountingStroke('test-$i'));
+      doc.strokes.addAll(history);
+      doc.changed();
+      await t.pumpAndSettle();
+      int paints() => history.fold(0, (n, s) => n + s.paints);
+      final count = paints();
+      expect(count, greaterThan(0));
+      final pen = await t.startGesture(
+        const Offset(420, 360),
+        kind: ui.PointerDeviceKind.stylus,
+      );
+      for (var i = 0; i < 100; i++) {
+        await pen.moveTo(Offset(421 + i * 3, i.isEven ? 367 : 360));
+        if (i % 8 == 0) await t.pump();
+      }
+      await pen.up();
+      await t.pumpAndSettle();
+      expect(doc.strokes.length, greaterThan(129));
+      expect(paints(), count);
+      doc.undo();
+      await t.pump();
+      expect(doc.strokes, history);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Android pen mode suspends backdrop sampling until browsing resumes',
+    (t) async {
+      await open(t, FixtureApi(StudyDocument().json()));
+      final filters = find.descendant(
+        of: find.byType(GlassBackdropScope),
+        matching: find.byType(BackdropFilter),
+      );
+      expect(filters, findsWidgets);
+      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
+      await t.pumpAndSettle();
+      expect(filters, findsNothing);
+      await t.tap(find.byKey(const ValueKey('study-tool-select')));
+      await t.pumpAndSettle();
+      expect(filters, findsWidgets);
+      await t.pumpWidget(const SizedBox());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
   for (final scale in [.6, 1.0, 1.2]) {
     testWidgets('video footer fits text at zoom $scale and opens shelf', (
       t,

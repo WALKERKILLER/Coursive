@@ -6,9 +6,12 @@ import (
 	"github.com/walkerkiller/coursive/daemon/internal/agent"
 	"github.com/walkerkiller/coursive/daemon/internal/events"
 	"github.com/walkerkiller/coursive/daemon/internal/library"
+	"github.com/walkerkiller/coursive/daemon/internal/pdftest"
 	"github.com/walkerkiller/coursive/daemon/internal/store"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -133,7 +136,7 @@ func TestStandaloneNotebookRoundTrip(t *testing.T) {
 		return (&Server{Token: "fixture", St: st, Lib: lib, Bus: events.New(), Agent: &agent.Supervisor{}}).Handler()
 	}
 	h := handler()
-	call := func(method, path, body string, code int, out any) {
+	call := func(t *testing.T, method, path, body string, code int, out any) {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer fixture")
@@ -149,39 +152,62 @@ func TestStandaloneNotebookRoundTrip(t *testing.T) {
 		}
 	}
 	var n library.Notebook
-	call("POST", "/api/notebooks", `{"title":"进程与线程","course_id":"os"}`, 200, &n)
+	call(t, "POST", "/api/notebooks", `{"title":"进程与线程","course_id":"os"}`, 200, &n)
 	base := "/api/notebooks/" + n.ID
 	var d library.StudyDocument
-	call("GET", base+"/canvas", "", 200, &d)
+	call(t, "GET", base+"/canvas", "", 200, &d)
 	if len(d.Objects) != 0 {
 		t.Fatal("expected empty canvas")
 	}
 	var imported library.StudyImport
-	call("POST", base+"/assets?name=snippet.md", "class notes", 200, &imported)
+	call(t, "POST", base+"/assets?name=snippet.md", "class notes", 200, &imported)
 	d.Objects = imported.Objects
 	d.Strokes = []library.StudyStroke{{ID: "a", Layer: "main", Tool: "pen", Width: 2, Points: [][3]float64{{1, 2, 1}, {3, 4, 1}}}}
 	d.Camera = library.StudyCamera{X: 95, Y: -23, Z: 1.5}
 	data, _ := json.Marshal(d)
-	call("PUT", base+"/canvas", string(data), 200, nil)
-	call("PUT", base+"/canvas", string(data), 409, nil)
+	call(t, "PUT", base+"/canvas", string(data), 200, nil)
+	call(t, "PUT", base+"/canvas", string(data), 409, nil)
 	h = handler()
 	var reopened library.StudyDocument
-	call("GET", base+"/canvas", "", 200, &reopened)
+	call(t, "GET", base+"/canvas", "", 200, &reopened)
 	if reopened.Camera != d.Camera || len(reopened.Strokes) != 1 || reopened.Objects[0].Text != "class notes" {
 		t.Fatal("lost document state")
 	}
 	var items []library.CatalogItem
-	call("GET", "/api/library/catalog?course_id=os", "", 200, &items)
+	call(t, "GET", "/api/library/catalog?course_id=os", "", 200, &items)
 	if len(items) != 1 || items[0].CanvasID != n.ID {
 		t.Fatal(items)
 	}
 	var docs []library.Notebook
-	call("GET", "/api/notebooks?course_id=os", "", 200, &docs)
+	call(t, "GET", "/api/notebooks?course_id=os", "", 200, &docs)
 	if len(docs) != 1 || docs[0] != n {
 		t.Fatal(docs)
 	}
-	call("GET", "/api/notebooks?course_id=other", "", 200, &docs)
+	call(t, "GET", "/api/notebooks?course_id=other", "", 200, &docs)
 	if len(docs) != 0 {
 		t.Fatal(docs)
 	}
+	t.Run("paged PDF upload and owner-scoped page lookup", func(t *testing.T) {
+		pdftest.RequirePagedRenderer(t)
+		path := filepath.Join(t.TempDir(), "two.pdf")
+		pdftest.WriteTwoPagePDF(t, path)
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var result library.StudyImport
+		call(t, "POST", base+"/assets?name=two.pdf&paged=1", string(payload), 200, &result)
+		if len(result.Objects) != 1 || result.Objects[0].Type != "pdfdoc" {
+			t.Fatalf("expected a single paged PDF card, got %+v", result.Objects)
+		}
+		query := "/pdf-page?page=2&source=" + url.QueryEscape(result.Objects[0].Source)
+		var page library.StudyPDFPage
+		call(t, "GET", base+query, "", 200, &page)
+		if page.Count != 2 || !strings.Contains(page.Text, "Second page") {
+			t.Fatalf("unexpected page: %+v", page)
+		}
+		var other library.Notebook
+		call(t, "POST", "/api/notebooks", `{"title":"Other"}`, 200, &other)
+		call(t, "GET", "/api/notebooks/"+other.ID+query, "", 400, nil)
+	})
 }

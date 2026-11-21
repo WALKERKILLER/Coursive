@@ -10,6 +10,80 @@ import 'package:flutter_test/flutter_test.dart';
 import '../lib/features/player/pdf_dock.dart';
 
 void main() {
+  test(
+    'PDF saves append only new ink and replace after erase or reorder',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('pdf-edit-test-');
+      addTearDown(() => dir.delete(recursive: true));
+      final src = File('${dir.path}/source.pdf')..writeAsStringSync('fixture');
+      final helper = File('${dir.path}/helper')
+        ..writeAsStringSync(r'''#!/bin/sh
+if [ "$1" = info ]; then
+  echo '{"revision":"","canExpand":true,"margin":0,"sizes":[[100,150]]}'
+else
+  cat > "$3.request"
+  echo '{"revision":"saved"}'
+fi
+''');
+      expect((await Process.run('chmod', ['700', helper.path])).exitCode, 0);
+      final pdf = await DockPDF.open(
+        src.path,
+        '${dir.path}/out',
+        executable: helper.path,
+      );
+      addTearDown(pdf.close);
+      Map payload() =>
+          jsonDecode(File('${pdf.output}.request').readAsStringSync()) as Map;
+      final a = DockStroke(1, [const Offset(.1, .2)]);
+      final b = DockStroke(1, [const Offset(.3, .4)]);
+      pdf.strokes.addAll([a, b]);
+      await pdf.save();
+      expect(payload()['strokes'], [a.json(), b.json()]);
+      final c = DockStroke(1, [const Offset(.5, .6)]);
+      pdf.strokes.add(c);
+      await pdf.save();
+      expect(payload()['replaceInk'], false);
+      expect(payload()['strokes'], [c.json()]);
+      pdf.strokes.replaceRange(0, 2, [b, a]);
+      await pdf.save();
+      expect(payload()['replaceInk'], true);
+      expect(payload()['strokes'], [b.json(), a.json(), c.json()]);
+      pdf.strokes.clear();
+      await pdf.save();
+      expect(payload()['replaceInk'], true);
+      expect(payload()['strokes'], isEmpty);
+    },
+    skip: Platform.isWindows,
+  );
+
+  testWidgets(
+    'a burst of PDF strokes is visible immediately and saves together',
+    (t) async {
+      final pdf = TestPDF();
+      addTearDown(() => pdf.cache.delete(recursive: true));
+      await t.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PDFDock(pdf: pdf, singlePage: 1)),
+        ),
+      );
+      await t.pumpAndSettle();
+      final pen = t.getCenter(find.byKey(const ValueKey('pdf-committed-ink')));
+      for (var i = 0; i < 3; i++) {
+        await t.dragFrom(
+          pen,
+          const Offset(40, 10),
+          kind: ui.PointerDeviceKind.stylus,
+        );
+        await t.pump(const Duration(milliseconds: 100));
+      }
+      expect(pdf.strokes.length, 3);
+      expect(pdf.savedCount, 0);
+      await t.pump(const Duration(milliseconds: 400));
+      expect(pdf.savedCount, 3);
+      expect(pdf.saves, 1);
+      await t.pumpWidget(const SizedBox());
+    },
+  );
   test('a timed out or closed reader terminates its native renderer', () async {
     final dir = await Directory.systemTemp.createTemp('pdf-worker-test-');
     addTearDown(() => dir.delete(recursive: true));
@@ -353,10 +427,12 @@ class TestPDF extends Fake implements DockPDF {
   bool get dirty => savedCount != strokes.length;
   @override
   Future<void> save() async {
+    saves++;
     savedCount = strokes.length;
     revision = 'updated';
   }
 
+  int saves = 0;
   final rendered = <int>[];
   @override
   Future<Uint8List> render(int page) async {

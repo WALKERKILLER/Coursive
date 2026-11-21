@@ -28,6 +28,12 @@ export function chatGPTLogin(pipeline, directory) {
 			await pipeline.runtime.login("openai", "oauth", {
 				signal: controller.signal,
 				notify(event) {
+					// The bundled SDK offers a manual paste after a bind failure.
+					// The app only accepts the loopback callback.
+					if (event.type === "info" && event.message?.startsWith("Could not listen on http://127.0.0.1:1455/")) {
+						if (/\bEADDRINUSE\b/.test(event.message)) throw Object.assign(new Error("Callback port busy"), {code: "EADDRINUSE"});
+						throw new Error("Callback listener unavailable");
+					}
 					if (event.type === "progress" && event.message?.startsWith("Exchanging")) exchangeStarted = true;
 					if (event.type === "auth_url") {
 						const url = new URL(event.url);

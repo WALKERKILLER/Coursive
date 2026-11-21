@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { createServer } from "node:net";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chatGPTLogin } from "./chatgpt-login.mjs";
@@ -57,8 +59,28 @@ test("a completed SDK login without a browser URL resolves instead of hanging",a
  assert.deepEqual(await flow.start(),{status:"done"});
 });
 
-test("a busy SDK callback port reports the immediate recovery action",async t=>{
- const {flow}=await fixture(t,async()=>{throw new Error("Port 1455 is in use")});
- await assert.rejects(flow.start(),/1455/);
- assert.equal(flow.status().phase,"callback_busy");
+test("a busy loopback port fails before the bundled SDK opens a browser", {timeout: 8000}, async t => {
+ const directory = await mkdtemp(join(tmpdir(), "coursive-sdk-login-"));
+ t.after(() => rm(directory, { recursive: true, force: true }));
+ const runtime = await ModelRuntime.create({
+  authPath: join(directory, "auth.json"), modelsPath: join(directory, "models.json"),
+  modelsStorePath: join(directory, "store.json"), allowModelNetwork: false, refreshOnCreate: false,
+ });
+ const listener = createServer();
+ try {
+  await new Promise((resolve, reject) => listener.once("error", reject).listen(1455, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => listener.close(resolve)));
+ } catch (error) {
+  if (error.code !== "EADDRINUSE") throw error;
+ }
+ // The standalone SDK throws on bind failure. Its bundled OAuth provider
+ // reports the same failure through notify() before offering manual entry.
+ const chunk = new URL("./chunks/openai-chatgpt.js", import.meta.resolve("@earendil-works/pi-coding-agent/rpc-entry"));
+ const {openaiChatGPTOAuth} = await import(chunk);
+ const bundled = {login: (_provider, _type, interaction, options) => openaiChatGPTOAuth.login(interaction, options)};
+ for (const sdk of [runtime, bundled]) {
+  const flow = chatGPTLogin({runtime: sdk}, directory);
+  await assert.rejects(flow.start(), /1455/);
+  assert.equal(flow.status().phase, "callback_busy");
+ }
 });

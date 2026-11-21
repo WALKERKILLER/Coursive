@@ -365,6 +365,34 @@ void paintInk(
     );
     return;
   }
+  // A constant-width opaque round pen has the same outline along a single
+  // round-joined path. Submit it once, including when replaying legacy ink.
+  final fixedWidth =
+      brush?.family == 'ballpoint' ||
+      brush?.pressure == 0 ||
+      points.every((p) => p.pressure == points.first.pressure);
+  if (fixedWidth &&
+      brush?.family != 'pencil' &&
+      brush?.squareTip != true &&
+      (brush?.opacity ?? 1) == 1 &&
+      points.length > 2) {
+    paint.strokeWidth =
+        width *
+        (brush?.radiusScale(points.first.pressure) ??
+            (.35 + .65 * points.first.pressure));
+    final path = Path()..moveTo(points.first.p.dx, points.first.p.dy);
+    var hasLength = false;
+    for (final p in points.skip(1)) {
+      hasLength |= p.p != points.first.p;
+      path.lineTo(p.p.dx, p.p.dy);
+    }
+    if (hasLength) {
+      canvas.drawPath(path, paint..style = PaintingStyle.stroke);
+    } else {
+      canvas.drawCircle(points.first.p, paint.strokeWidth / 2, paint);
+    }
+    return;
+  }
   for (var i = 1; i < points.length; i++) {
     paint.strokeWidth =
         width *
@@ -503,9 +531,9 @@ class StudyDocument extends ChangeNotifier {
       cards.any((c) => c.contentScale != 1)
           ? 7
           : cards.any(
-            (c) =>
-                c.rotation != 0 || (c.quarterTurns != 0 && c.type != 'image'),
-          )
+              (c) =>
+                  c.rotation != 0 || (c.quarterTurns != 0 && c.type != 'image'),
+            )
           ? 6
           : pluginObjects.isNotEmpty
           ? 5
@@ -919,7 +947,12 @@ class StudyDocument extends ChangeNotifier {
         next.add(s);
         continue;
       }
-      final eraser = InkEraser([a, b], const Size(1, 1), radius + s.width / 2, 'partial');
+      final eraser = InkEraser(
+        [a, b],
+        const Size(1, 1),
+        radius + s.width / 2,
+        'partial',
+      );
       final fragments = eraser.clipSamples(
         s.points,
         position: (sample) => sample.p,

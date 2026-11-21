@@ -97,8 +97,7 @@ extension _StudyInteraction on StudyCanvasState {
         d.changed();
       }
       _points = [];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _drawingPointer = null;
       _temporaryEraser = true;
       _startErase(local, _world(local));

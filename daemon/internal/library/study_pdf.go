@@ -66,6 +66,11 @@ func studyPDFCommandFiles(ctx context.Context, files []*os.File, name string, ar
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("PDF 处理超时或已取消：%w", ctx.Err())
 		}
+		// The bundled PDFKit helper reserves exit 65 for page limits.
+		var exited *exec.ExitError
+		if filepath.Base(name) == "coursive-study-pdf" && errors.As(err, &exited) && exited.ExitCode() == 65 {
+			return nil, ErrStudyLimit
+		}
 		// Tool output can contain the document's text or filesystem paths.
 		return nil, fmt.Errorf("%w：PDF 处理失败，文件可能损坏、加密或超过限制", ErrStudyInvalid)
 	}

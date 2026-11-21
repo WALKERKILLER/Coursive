@@ -346,6 +346,14 @@ class StudyCanvasState extends State<StudyCanvas>
   List<InkPoint> _points = [];
   final List<StudyStroke> _prefix = [];
   int _prefixEnd = 0;
+  final _prefixRevision = ValueNotifier<int>(0);
+  void _clearPrefix() {
+    _prefixEnd = 0;
+    if (_prefix.isEmpty) return;
+    _prefix.clear();
+    _prefixRevision.value++;
+  }
+
   String _anchor = '';
   Offset? _start, _last;
   Offset? _panCamera;
@@ -712,6 +720,7 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     document?.removeListener(_changed);
     document?.dispose();
+    _prefixRevision.dispose();
     _scene.dispose();
     _live.dispose();
     super.dispose();
@@ -897,8 +906,10 @@ class StudyCanvasState extends State<StudyCanvas>
       reading: reading,
       inkTool: _ink || _tool == StudyTool.eraser,
       lasso: _tool == StudyTool.region,
-      selectionHandle: _selectionReady && _selectionBounds != null &&
-        studySelectionHandleAt(_selectionBounds!, point, 16 / d.zoom) != null,
+      selectionHandle:
+          _selectionReady &&
+          _selectionBounds != null &&
+          studySelectionHandleAt(_selectionBounds!, point, 16 / d.zoom) != null,
       pan: pan,
     );
     _start = _last = point;
@@ -994,8 +1005,7 @@ class StudyCanvasState extends State<StudyCanvas>
       _gestureWidth = _penWidth;
       _gestureColor = _color;
       _points = [InkPoint(point, _pressure(e))];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _anchor = card?.id ?? '';
       _watchPressure(e);
       _watchShape(e);
@@ -1115,7 +1125,7 @@ class StudyCanvasState extends State<StudyCanvas>
           ),
         );
         _prefixEnd += 64;
-        _scene.value++;
+        _prefixRevision.value++;
       }
       _live.value++;
       return;
@@ -1225,14 +1235,14 @@ class StudyCanvasState extends State<StudyCanvas>
     if (e is PointerCancelEvent && _drawingPointer == e.pointer) {
       _resetShape();
       _points = [];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _drawingPointer = null;
       _scene.value++;
       _live.value++;
     }
     if (_drawingPointer == e.pointer) {
       final d = document!;
+      final firstNew = d.strokes.length;
       d.addStroke(
         StudyStroke(
           id: studyId(),
@@ -1251,14 +1261,11 @@ class StudyCanvasState extends State<StudyCanvas>
               0,
         ),
       );
-      _commitShape();
-      final added = d.strokes.last;
+      _commitShape(firstNew);
+      final added = d.strokes.getRange(firstNew, d.strokes.length);
       _detail.clear();
-      _detail.strokeIds.addAll(
-        d.strokes.where((s) => s.gesture == added.gesture).map((s) => s.id),
-      );
-      var region = d.strokes
-          .where((s) => _detail.strokeIds.contains(s.id))
+      _detail.strokeIds.addAll(added.map((s) => s.id));
+      var region = added
           .map((s) => s.bounds)
           .reduce((a, b) => a.expandToInclude(b))
           .inflate(16);
@@ -1275,8 +1282,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _detail.region = region;
       }
       _points = [];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _drawingPointer = null;
       _resetShape();
       _scene.value++;
@@ -1415,7 +1421,10 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   Future<dynamic> _loadPDFPage(StudyCard card, int page) => widget.standalone
-      ? widget.api.get('/api/notebooks/${widget.notebookId}/pdf-page', {'source': card.source, 'page': '$page'})
+      ? widget.api.get('/api/notebooks/${widget.notebookId}/pdf-page', {
+          'source': card.source,
+          'page': '$page',
+        })
       : widget.api.studyPDFPage(widget.ctl.lectureId, card.source, page);
 
   Future<Map> _expandedPage(StudyCard root, int page) async {
@@ -1837,7 +1846,14 @@ class StudyCanvasState extends State<StudyCanvas>
         }
         return Column(
           children: [
-            Expanded(child: _canvas(d)),
+            Expanded(
+              child: GlassBackdropScope(
+                enabled:
+                    defaultTargetPlatform != TargetPlatform.android ||
+                    !_writing,
+                child: _canvas(d),
+              ),
+            ),
             if (_selectionToolbarDocked)
               SizedBox(height: 56, child: _selectionToolbar(docked: true)),
           ],
@@ -2038,22 +2054,75 @@ class StudyCanvasState extends State<StudyCanvas>
                                         stage,
                                         _enabledPlugins.contains(o.pluginId),
                                       ),
-                                    Positioned.fill(
-                                      child: IgnorePointer(
-                                        child: RepaintBoundary(
-                                          child: CustomPaint(
-                                            painter: _InkScene(
-                                              inlinePDF: _inlinePDF,
-                                              document: d,
-                                              live: _prefix,
-                                              stage: stage,
-                                              repaint: _scene,
-                                              dark: _dark,
-                                            ),
+                                    for (final preview in [false, true])
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: ValueListenableBuilder<int>(
+                                            valueListenable: preview
+                                                ? _prefixRevision
+                                                : _scene,
+                                            builder: (_, __, ___) {
+                                              final ink = _InkScene.visible(
+                                                d,
+                                                preview ? _prefix : d.strokes,
+                                                stage,
+                                                _inlinePDF,
+                                                _dark,
+                                              );
+                                              final tail = preview
+                                                  ? 0
+                                                  : ink.length ~/ 64 * 64;
+                                              final history = ink
+                                                  .take(tail)
+                                                  .toList();
+                                              Rect? historyBounds;
+                                              for (final (stroke, _)
+                                                  in history) {
+                                                historyBounds =
+                                                    historyBounds
+                                                        ?.expandToInclude(
+                                                          stroke.bounds,
+                                                        ) ??
+                                                    stroke.bounds;
+                                              }
+                                              final area = historyBounds
+                                                  ?.inflate(1)
+                                                  .intersect(stage);
+                                              return Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  if (area != null &&
+                                                      !area.isEmpty)
+                                                    Positioned.fromRect(
+                                                      rect: area.shift(
+                                                        -stage.topLeft,
+                                                      ),
+                                                      child: RepaintBoundary(
+                                                        child: CustomPaint(
+                                                          isComplex: true,
+                                                          painter: _InkScene(
+                                                            history,
+                                                            area,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  RepaintBoundary(
+                                                    child: CustomPaint(
+                                                      painter: _InkScene(
+                                                        tail == 0
+                                                            ? ink
+                                                            : ink.sublist(tail),
+                                                        stage,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
                                           ),
                                         ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -2845,25 +2914,25 @@ class _Paper extends CustomPainter {
 }
 
 class _InkScene extends CustomPainter {
-  _InkScene({
-    this.inlinePDF = false,
-    required this.document,
-    required this.live,
-    required this.stage,
-    required Listenable repaint,
-    this.dark = false,
-  }) : super(repaint: repaint);
-  final StudyDocument document;
-  final bool inlinePDF;
-  final List<StudyStroke> live;
+  _InkScene(this.ink, this.stage);
+  final List<(StudyStroke, bool)> ink;
   final Rect stage;
-  final bool dark;
-  @override
-  void paint(Canvas c, Size s) {
-    final d = document;
-    c.save();
-    c.translate(-stage.left, -stage.top);
-    final viewport = stage;
+
+  // Capture both stroke identity and paper color: card visibility and the
+  // document can change in place between paints, including after undo.
+  static List<(StudyStroke, bool)> visible(
+    StudyDocument d,
+    List<StudyStroke> strokes,
+    Rect viewport,
+    bool inlinePDF,
+    bool dark,
+  ) {
+    if (strokes.isEmpty) return const [];
+    final cards = {for (final card in d.cards) card.id: card};
+    final layers = {
+      for (final l in d.layers)
+        if (l.visible) l.id,
+    };
     final printed = dark
         ? {
             for (final card in d.cards)
@@ -2876,23 +2945,38 @@ class _InkScene extends CustomPainter {
               if ((card.type == 'pdfdoc' && !card.collapsed) ||
                   (card.type == 'pdf' &&
                       card.pdfColumn.isNotEmpty &&
-                      d.cards.any(
-                        (r) => r.id == card.pdfColumn && r.type == 'pdfdoc',
-                      )))
+                      cards[card.pdfColumn]?.type == 'pdfdoc'))
                 card.id,
           }
         : const <String>{};
-    for (final stroke in [...d.strokes, ...live]) {
-      if (inCard.contains(stroke.anchor)) continue;
-      if (d.strokeVisible(stroke) && stroke.bounds.overlaps(viewport))
-        stroke.paint(c, dark: dark && !printed.contains(stroke.anchor));
+    final visible = <(StudyStroke, bool)>[];
+    for (final stroke in strokes) {
+      if (!stroke.bounds.overlaps(viewport) ||
+          !layers.contains(stroke.layer) ||
+          inCard.contains(stroke.anchor))
+        continue;
+      final card = cards[stroke.anchor];
+      if (card != null &&
+          (card.collapsed || (stroke.page != 0 && stroke.page != card.page)))
+        continue;
+      visible.add((stroke, dark && !printed.contains(stroke.anchor)));
+    }
+    return visible;
+  }
+
+  @override
+  void paint(Canvas c, Size s) {
+    c.save();
+    c.translate(-stage.left, -stage.top);
+    for (final (stroke, dark) in ink) {
+      stroke.paint(c, dark: dark);
     }
     c.restore();
   }
 
   @override
   bool shouldRepaint(_InkScene old) =>
-      old.stage != stage || old.document != document || old.dark != dark;
+      old.stage != stage || !listEquals(ink, old.ink);
   @override
   bool shouldRebuildSemantics(_InkScene old) => false;
 }

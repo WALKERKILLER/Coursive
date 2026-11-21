@@ -20,7 +20,7 @@ Opting in to an image attachment dismisses the keyboard to restore the selection
 
 ### Model selection and sign-in
 
-The authenticated local agent starts a single OpenAI browser sign-in with `POST /agent/openai-login`, returning an official authorization URL or a completed status. `GET /agent/openai-login` reports `idle`, `waiting`, `done` or `error`; `idle` after starting indicates the agent restarted. A busy callback port reports `callback_busy`; exchange and authorization failures expose only their phase and a local error message. The SDK checks the callback state and handles the token exchange. The installation’s random UUID is stored in `oauth-device-id` in the private agent directory (mode 0600), outside course sync. Model writes are serialized. A failed model change blocks sending until a model is successfully selected; other preference writes do not change this state.
+The authenticated local agent starts a single OpenAI browser sign-in with `POST /agent/openai-login`, returning an official authorization URL or a completed status. `GET /agent/openai-login` reports `idle`, `waiting`, `done` or `error`; `idle` after starting indicates the agent restarted. If the SDK cannot listen on port 1455 because it is occupied, the start request fails before returning a browser URL and polling reports `callback_busy`; exchange and authorization failures expose only their phase and a local error message. The SDK checks the callback state and handles the token exchange. The installation’s random UUID is stored in `oauth-device-id` in the private agent directory (mode 0600), outside course sync. Model writes are serialized. A failed model change blocks sending until a model is successfully selected; other preference writes do not change this state.
 
 ## Plan
 
@@ -32,4 +32,4 @@ Exercise snap hysteresis and wraparound, rotated scaling, locked groups, old/new
 
 ## Evidence
 
-Regression evidence is added with the owning geometry, document, input, PDF, selection-question and model-picker tests. Device acceptance records remain outside the repository and contain no public course content.
+Regression evidence is added with the owning geometry, document, input, PDF, selection-question and model-picker tests. The [sign-in integration test](../../agent/src/chatgpt-login.test.mjs) holds port 1455 and exercises both the installed model runtime and its bundled OAuth provider with a temporary device identity. Device acceptance records remain outside the repository and contain no public course content.
