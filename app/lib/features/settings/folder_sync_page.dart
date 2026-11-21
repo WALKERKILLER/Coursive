@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -83,12 +83,19 @@ class _FolderSyncPageState extends State<FolderSyncPage>
       final s = Map<String, dynamic>.from(
         await _call('GET', '/api/sync') as Map,
       );
-      final bridge =
-          !_loaded &&
-              Platform.isAndroid &&
-              '${s['local_folder'] ?? ''}'.startsWith('content:')
-          ? await AndroidBridge.syncFolderBridge()
-          : null;
+      Map<String, dynamic>? bridge;
+      String? restoreError;
+      if (!_loaded &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          '${s['local_folder'] ?? ''}'.startsWith('content:')) {
+        try {
+          bridge = await AndroidBridge.syncFolderBridge(
+            s['local_folder'] as String,
+          );
+        } catch (e) {
+          restoreError = '$e';
+        }
+      }
       if (!mounted) return;
       // The page polls while it is open; rebuild only when the daemon actually
       // reported something new so idle polling does not repaint the form.
@@ -97,6 +104,7 @@ class _FolderSyncPageState extends State<FolderSyncPage>
         _status = s;
         if (!_loaded) {
           _loaded = true;
+          _error = restoreError;
           _localFolder = '${s['local_folder'] ?? ''}';
           if (bridge != null) _bridge = bridge;
           _url.text = '${s['url'] ?? ''}';
@@ -109,7 +117,9 @@ class _FolderSyncPageState extends State<FolderSyncPage>
           }
         }
       });
-      if (_courses.isEmpty && _selected.isNotEmpty) await _preview();
+      if (_courses.isEmpty && _selected.isNotEmpty && restoreError == null) {
+        await _preview();
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -144,7 +154,8 @@ class _FolderSyncPageState extends State<FolderSyncPage>
   /// A stored password is reused when the field is left empty, so only a first
   /// connection has to type it.
   bool get _ready => _localFolder.isNotEmpty
-      ? _selected.isNotEmpty
+      ? _selected.isNotEmpty &&
+            (!_localFolder.startsWith('content:') || _bridge.isNotEmpty)
       : _url.text.trim().length > 8 &&
             _user.text.trim().isNotEmpty &&
             (_pass.text.isNotEmpty ||
@@ -156,8 +167,10 @@ class _FolderSyncPageState extends State<FolderSyncPage>
     try {
       Map<String, dynamic> bridge = {};
       String? folder;
-      if (Platform.isAndroid) {
-        final chosen = await AndroidBridge.pickSyncFolder();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final chosen = await AndroidBridge.pickSyncFolder(
+          _status['local_folder'] as String?,
+        );
         if (chosen == null) return;
         bridge = chosen;
         folder = '${chosen['local_folder']}';
@@ -211,7 +224,8 @@ class _FolderSyncPageState extends State<FolderSyncPage>
       if (ok != true) return;
       await _call('PUT', '/api/sync', _settings());
       _pass.clear();
-      await _run();
+      await _call('POST', '/api/sync/run');
+      await _load();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -319,7 +333,20 @@ class _FolderSyncPageState extends State<FolderSyncPage>
     final last = Map<String, dynamic>.from(_status['last'] as Map? ?? {});
     final running = _status['running'] == true;
     final on = _status['configured'] == true && _status['kind'] == 'folder';
-    final host = Uri.tryParse(_url.text.trim())?.host ?? '';
+    final host = Uri.tryParse('${_status['url'] ?? ''}')?.host ?? '';
+    if (!_loaded) {
+      return SettingsSubpage(
+        title: l10n.folderSyncTitle,
+        children: [
+          if (_error == null)
+            const LinearProgressIndicator()
+          else ...[
+            Text(_error!),
+            TextButton(onPressed: _load, child: Text(l10n.commonRetry)),
+          ],
+        ],
+      );
+    }
     return SettingsSubpage(
       title: l10n.folderSyncTitle,
       children: [
@@ -339,7 +366,7 @@ class _FolderSyncPageState extends State<FolderSyncPage>
           ),
           title: l10n.folderSyncTitle,
           on: on,
-          status: on && _localFolder.isNotEmpty
+          status: on && '${_status['local_folder'] ?? ''}'.isNotEmpty
               ? l10n.folderSyncLocalConnected
               : on && host.isNotEmpty
               ? l10n.webdavConnectedTo(host)

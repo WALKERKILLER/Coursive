@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/features/settings/folder_sync_page.dart';
 
@@ -105,6 +109,178 @@ void main() {
     await tester.tap(find.text('使用 WebDAV'));
     await settle(tester);
     expect(find.widgetWithText(TextField, '服务器地址'), findsOneWidget);
+    expect(find.text('已连接同步文件夹'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('the form becomes editable only after loading the saved values', (
+    tester,
+  ) async {
+    final first = Completer<Map>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: FolderSyncPage(api: (m, p, [body]) async => first.future),
+      ),
+    );
+    expect(find.byType(TextField), findsNothing);
+    first.complete({
+      'kind': 'folder',
+      'configured': true,
+      'url': 'https://old.example',
+    });
+    await settle(tester);
+    final field = find.widgetWithText(TextField, '服务器地址');
+    await tester.enterText(field, 'https://new.example');
+    await tester.pump(const Duration(seconds: 6));
+    expect(
+      tester.widget<TextField>(field).controller!.text,
+      'https://new.example',
+    );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'Android reopens the configured tree and retains it while previewing another',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      const channel = MethodChannel('coursive/android');
+      const current = 'content://provider/tree/current';
+      const candidate = 'content://provider/tree/candidate';
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final events = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        events.add(call.method);
+        final restore = call.method == 'syncFolderBridge';
+        expect(call.arguments[restore ? 'tree' : 'configuredTree'], current);
+        return {
+          'local_folder': restore ? current : candidate,
+          'bridge_url': 'http://127.0.0.1:12345',
+          'bridge_token': 'fixture',
+        };
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final previews = <String>[];
+      Future<dynamic> call(String method, String path, [Object? body]) async {
+        expect(method, isNot('PUT'));
+        if (path.endsWith('/preview')) {
+          previews.add((body as Map)['local_folder'] as String);
+          return {
+            'courses': {'test': 'Test course'},
+          };
+        }
+        return {
+          'configured': true,
+          'kind': 'folder',
+          'local_folder': current,
+          'course_ids': ['test'],
+        };
+      }
+
+      try {
+        await tester.pumpWidget(MaterialApp(home: FolderSyncPage(api: call)));
+        await settle(tester);
+        await tester.tap(find.text('选择 Syncthing 同步文件夹'));
+        await settle(tester);
+        expect(events, ['syncFolderBridge', 'pickSyncFolder']);
+        expect(previews, [current, candidate]);
+        expect(find.text('已连接同步文件夹'), findsOneWidget);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
+
+  for (final platform in [TargetPlatform.macOS, TargetPlatform.android]) {
+    testWidgets(
+      'directory picker cancel, rejected preview and confirmed save on ${platform.name}',
+      (tester) async {
+        debugDefaultTargetPlatformOverride = platform;
+        final android = platform == TargetPlatform.android;
+        final channel = MethodChannel(
+          android ? 'coursive/android' : 'plugins.flutter.io/file_selector',
+        );
+        final messenger = tester.binding.defaultBinaryMessenger;
+        final path = android
+            ? 'content://provider/tree/selected'
+            : '/sync/Coursive';
+        Object? choice;
+        var picks = 0;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, android ? 'pickSyncFolder' : 'getDirectoryPath');
+          picks++;
+          return choice;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        tester.view.physicalSize = const Size(1000, 2200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final previews = <Map>[];
+        Map? saved;
+        var reject = true;
+        Future<dynamic> call(
+          String method,
+          String route, [
+          Object? body,
+        ]) async {
+          if (route.endsWith('/preview')) {
+            previews.add(body as Map);
+            if (reject) throw StateError('folder unavailable');
+            return {
+              'courses': {'test': 'Test course'},
+            };
+          }
+          if (method == 'PUT') saved = body as Map;
+          return {
+            'configured': true,
+            'kind': 'folder',
+            'url': 'https://saved.example',
+            'user': 'local',
+          };
+        }
+
+        try {
+          await tester.pumpWidget(MaterialApp(home: FolderSyncPage(api: call)));
+          await settle(tester);
+          final pick = find.text('选择 Syncthing 同步文件夹');
+          await tester.tap(pick);
+          await settle(tester);
+          expect(picks, 1);
+          expect(previews, isEmpty);
+          expect(saved, isNull);
+          choice = android
+              ? {
+                  'local_folder': path,
+                  'bridge_url': 'http://127.0.0.1:12345',
+                  'bridge_token': 'fixture',
+                }
+              : path;
+          await tester.tap(pick);
+          await settle(tester);
+          expect(find.textContaining('folder unavailable'), findsOneWidget);
+          expect(saved, isNull);
+          reject = false;
+          await tester.tap(find.text('刷新课程'));
+          await settle(tester);
+          await tester.tap(find.text('Test course'));
+          await settle(tester);
+          await tester.ensureVisible(find.text('连接并同步'));
+          await tester.tap(find.text('连接并同步'));
+          await settle(tester);
+          expect(saved, isNull);
+          await tester.tap(find.widgetWithText(FilledButton, '连接并同步').last);
+          await settle(tester);
+          expect(saved, previews.last);
+          expect(saved?['local_folder'], path);
+          expect(saved?['course_ids'], ['test']);
+          expect(saved!.keys, isNot(contains('url')));
+          expect(saved!.keys, isNot(contains('password')));
+          if (android) expect(saved?['bridge_token'], 'fixture');
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          debugDefaultTargetPlatformOverride = null;
+        }
+      },
+    );
+  }
 }
