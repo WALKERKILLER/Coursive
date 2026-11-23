@@ -43,7 +43,7 @@ class SaveApi extends fixture.FixtureApi {
 
 Future<void> openConversation(WidgetTester t, SaveApi api) async {
   await fixture.open(t, api);
-  await t.tap(find.byTooltip('添加模块'));
+  await t.tap(find.byTooltip('画布菜单'));
   await t.pumpAndSettle();
   await t.tap(find.widgetWithText(PopupMenuItem<String>, 'AI 对话'));
   await t.pumpAndSettle();

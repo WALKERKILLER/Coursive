@@ -113,6 +113,7 @@ extension _StudyInteraction on StudyCanvasState {
     final polygon = _lassoRectangle
         ? [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft]
         : List<Offset>.of(_lasso);
+    if (polygon.length < 3) return;
     _setRegionSelection(r, polygon);
     _quickAsk = false;
     _quickError = null;
@@ -480,19 +481,26 @@ extension _StudyInteraction on StudyCanvasState {
     final r = _selectionBounds;
     if (r == null) return null;
     final d = document!;
-    return studySelectionMenuRect(
+    final viewport = Rect.fromLTRB(
+      12,
+      _topBarsBottom + 12,
+      math.max(12, _viewport.width - 12),
+      math.max(_topBarsBottom + 12, _viewport.height - 12),
+    );
+    final size = Size(
+      math.min(_barWidth(_selectionButtons().length), viewport.width),
+      44,
+    );
+    final position = studyFloatingPosition(
       Rect.fromPoints(
         r.topLeft * d.zoom + d.camera,
         r.bottomRight * d.zoom + d.camera,
       ),
-      Rect.fromLTRB(
-        12,
-        _topBarsBottom + 8,
-        math.max(12, _viewport.width - 12),
-        math.max(_topBarsBottom + 8, _viewport.height - 12),
-      ),
+      viewport,
       _selectionObstacles,
+      size,
     );
+    return position == null ? null : position & size;
   }
 
   Widget _selectionToolbar({bool docked = false}) {
@@ -529,114 +537,121 @@ extension _StudyInteraction on StudyCanvasState {
     );
   }
 
-  /// Three verbs for a selection, with editing in a menu.
-  Widget _selectionBar(BuildContext context) {
-    final d = document!, r = _selectionBounds!;
+  double _barWidth(int count) => count * 44.0 + (widget.standalone ? 0 : 14);
+
+  List<Widget> _selectionButtons() {
     final ink = _detail.strokeIds.isNotEmpty;
-    // On a phone the secondary verbs keep their tooltips and drop their
-    // labels; anything still too wide scrolls inside the bar.
-    final compact = _viewport.width < 520;
-    return GlassSurface(
-      key: const ValueKey('study-selection-bar'),
-      radius: Corners.full,
-      depth: GlassDepth.float,
-      padding: const EdgeInsets.all(Space.xxs),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.max(0, _viewport.width - 24 - 2 * Space.xxs),
+    final duplicate = _canDuplicateSelection;
+    return [
+      if (!widget.standalone)
+        _BarAction(
+          label: l10n.studyAskAI,
+          icon: Icons.auto_awesome_outlined,
+          tooltip: l10n.studyAskHint,
+          onPressed: () => unawaited(_ask()),
         ),
-        child: IconButtonTheme(
-          // 44 dp keeps the touch target while five icons fit a phone.
-          data: compact
-              ? IconButtonThemeData(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                )
-              : IconButtonTheme.of(context),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!widget.standalone) ...[
-                  _BarAction(
-                    label: l10n.studyAskAI,
-                    icon: Icons.auto_awesome_outlined,
-                    tooltip: l10n.studyAskHint,
-                    primary: true,
-                    onPressed: () => unawaited(_ask()),
-                  ),
-                  _BarAction(
-                    label: l10n.studyExcerpt,
-                    icon: Icons.crop_rounded,
-                    tooltip: l10n.studyExcerptHint,
-                    compact: compact,
-                    onPressed: _selectionBusy
-                        ? null
-                        : () => unawaited(_captureRegionCard()),
-                  ),
-                  _BarAction(
-                    label: _linkStart == null
-                        ? l10n.studyRelate
-                        : l10n.studyRelateHere,
-                    icon: _linkStart == null
-                        ? Icons.link_rounded
-                        : Icons.add_link_rounded,
-                    tooltip: _linkStart == null
-                        ? l10n.studyRelateHint
-                        : l10n.studyRelateHereHint,
-                    compact: compact,
-                    onPressed: _selectionBusy
-                        ? null
-                        : () => _selectionJob(_linkSelection),
-                  ),
-                  // Drag into the conversation, or tap, to attach the region's pixels.
-                  _snapshotDragHandle(),
-                ],
-                if (ink) ...[
-                  PopupMenuButton<int>(
-                    tooltip: '选区改色',
-                    icon: const Icon(Icons.palette_outlined, size: 20),
-                    itemBuilder: (_) => [
-                      for (final c in _penPalette.take(20))
-                        PopupMenuItem(
-                          value: c,
-                          child: Row(
-                            children: [
-                              Icon(Icons.circle, color: Color(c)),
-                              const SizedBox(width: 12),
-                              Text(
-                                '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                    onSelected: (c) {
-                      d.checkpoint();
-                      _transformSelection(r, r, color: c);
-                    },
-                  ),
-                  PopupMenuButton<double>(
-                    tooltip: '选区粗细',
-                    icon: const Icon(Icons.line_weight, size: 20),
-                    itemBuilder: (_) => [
-                      for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
-                        PopupMenuItem(value: w, child: Text('${w.toInt()}')),
-                    ],
-                    onSelected: (w) {
-                      d.checkpoint();
-                      _transformSelection(r, r, width: w);
-                    },
-                  ),
-                ],
-                _selectionActions(),
-              ],
+      if (!widget.standalone && !ink)
+        _BarAction(
+          icon: Icons.crop_rounded,
+          tooltip: l10n.studyExcerptHint,
+          onPressed: _selectionBusy
+              ? null
+              : () => unawaited(_captureRegionCard()),
+        ),
+      if (!widget.standalone && ((!duplicate && !ink) || _linkStart != null))
+        _BarAction(
+          icon: _linkStart == null
+              ? Icons.link_rounded
+              : Icons.add_link_rounded,
+          tooltip: _linkStart == null
+              ? l10n.studyRelateHint
+              : l10n.studyRelateHereHint,
+          onPressed: _selectionBusy
+              ? null
+              : () => _selectionJob(_linkSelection),
+        ),
+      if (ink)
+        PopupMenuButton<int>(
+          tooltip: '选区改色',
+          icon: const Icon(Icons.palette_outlined, size: 16),
+          itemBuilder: (_) => [
+            for (final c in _penPalette.take(20))
+              PopupMenuItem(
+                value: c,
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(c)),
+                    const SizedBox(width: 12),
+                    Text('#${(c & 0xffffff).toRadixString(16)}'),
+                  ],
+                ),
+              ),
+          ],
+          onSelected: (c) {
+            final r = _selectionBounds;
+            if (r == null) return;
+            document!.checkpoint();
+            _transformSelection(r, r, color: c);
+          },
+        ),
+      if (ink && !widget.standalone)
+        _BarAction(
+          icon: Icons.text_fields,
+          tooltip: l10n.studyRecognizeInk,
+          onPressed: _selectionBusy
+              ? null
+              : () => _selectionJob(_recognizeSelectedInk),
+        ),
+      if (duplicate)
+        _BarAction(
+          icon: Icons.copy_all_outlined,
+          tooltip: '创建副本',
+          onPressed: _selectionBusy ? null : _duplicateSelection,
+        ),
+      if (!widget.standalone) _snapshotDragHandle(),
+      _selectionActions(),
+    ];
+  }
+
+  Widget _selectionBar(BuildContext context) {
+    final actions = _selectionButtons();
+    return SizedBox(
+      key: const ValueKey('study-selection-bar'),
+      height: 44,
+      width: math.min(
+        _barWidth(actions.length),
+        math.max(0, _viewport.width - 24),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            height: 32,
+            width: double.infinity,
+            child: Material(
+              elevation: 2,
+              color: StudyChrome.of(context).surfaceStrong,
+              shape: const StadiumBorder(),
             ),
           ),
-        ),
+          Material(
+            type: MaterialType.transparency,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (i, action) in actions.indexed)
+                    SizedBox(
+                      width: i == 0 && !widget.standalone ? 58 : 44,
+                      height: 44,
+                      child: action,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -963,47 +978,42 @@ class _BoundChip extends StatelessWidget {
 /// A selection-bar verb; the primary one is filled.
 class _BarAction extends StatelessWidget {
   const _BarAction({
-    required this.label,
+    this.label,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.primary = false,
-    this.compact = false,
   });
-  final String label, tooltip;
+  final String? label;
+  final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool primary, compact;
 
   @override
-  Widget build(BuildContext context) {
-    const size = Size(44, 44);
-    final shape = const StadiumBorder();
-    return Tooltip(
-      message: tooltip,
-      child: primary
-          ? FilledButton.tonalIcon(
-              onPressed: onPressed,
-              style: FilledButton.styleFrom(minimumSize: size, shape: shape),
-              icon: Icon(icon, size: 18),
-              label: Text(label),
-            )
-          : compact
-          ? IconButton(onPressed: onPressed, icon: Icon(icon, size: 18))
-          : TextButton.icon(
-              onPressed: onPressed,
-              style: TextButton.styleFrom(minimumSize: size, shape: shape),
-              icon: Icon(icon, size: 18),
-              label: Text(label),
-            ),
-    );
-  }
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onPressed,
+      customBorder: const StadiumBorder(),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16),
+              if (label != null) ...[
+                const SizedBox(width: 3),
+                Text(label!, style: Theme.of(context).textTheme.labelSmall),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
-/// Places a floating control 8 dp off the anchor's top-right corner, below it
-/// when the top is covered, and 12 dp inside the window.
-/// After tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
-/// and the M3 floating toolbar guidance (https://m3.material.io/components/toolbars/guidelines).
+/// Keeps selection controls next to the visible selection and clear of other docks.
 class _FloatingLayout extends SingleChildLayoutDelegate {
   _FloatingLayout(this.anchor, this.topInset, this.obstacles);
   final Rect anchor;
@@ -1037,7 +1047,7 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
       gap: gap,
     );
     if (free != null) return free;
-    final x = (anchor.right - child.width).clamp(
+    final x = (anchor.center.dx - child.width / 2).clamp(
       edge,
       math.max(edge, size.width - child.width - edge),
     );
@@ -1112,8 +1122,9 @@ class _InteractionFeedback extends CustomPainter {
 
     final loop = s._erasing ? s._eraserLasso : s._lasso;
     if (loop.length > 1 && !(s._lassoRectangle && !s._erasing)) {
-      final path = Path()..addPolygon(loop.map(screen).toList(), true);
-      canvas.drawPath(path, Paint()..color = state.chrome.accentWash);
+      final path = Path()..addPolygon(loop.map(screen).toList(), s._erasing);
+      if (s._erasing)
+        canvas.drawPath(path, Paint()..color = state.chrome.accentWash);
       dash(path);
     } else {
       final r =

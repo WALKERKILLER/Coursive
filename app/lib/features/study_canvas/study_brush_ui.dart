@@ -67,6 +67,19 @@ extension _StudyBrushUI on StudyCanvasState {
         }
       }
       _update(() {
+        void restoreWidths(String key, List<double> slots, double maximum) {
+          final widths = data[key];
+          if (widths is List && widths.length == slots.length) {
+            for (var i = 0; i < slots.length; i++) {
+              final value = widths[i];
+              if (value is num && value.isFinite)
+                slots[i] = value.toDouble().clamp(.2, maximum);
+            }
+          }
+        }
+
+        restoreWidths('quick_widths', _normalWidths, 20);
+        restoreWidths('highlight_widths', _highlightWidths, 80);
         _presets = values;
         _presetIndex = ((data['selected'] as num? ?? 0).toInt()).clamp(
           0,
@@ -115,6 +128,8 @@ extension _StudyBrushUI on StudyCanvasState {
         jsonEncode({
           'presets': _presets.map((p) => p.json()).toList(),
           'selected': _presetIndex,
+          'quick_widths': _normalWidths,
+          'highlight_widths': _highlightWidths,
           'eraser_size': _eraserSize,
           'eraser_mode': _eraserMode,
           'pressure_eraser': _pressureEraser,
@@ -635,8 +650,10 @@ class _BrushPreview extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.clipRect(Offset.zero & size);
-    final paper = Color(color).computeLuminance() > .88 && brush.family != 'highlighter'
-        ? const Color(0xff404348) : Colors.white;
+    final paper =
+        Color(color).computeLuminance() > .88 && brush.family != 'highlighter'
+        ? const Color(0xff404348)
+        : Colors.white;
     canvas.drawRect(Offset.zero & size, Paint()..color = paper);
     final points = [
       for (var i = 0; i < 100; i++)

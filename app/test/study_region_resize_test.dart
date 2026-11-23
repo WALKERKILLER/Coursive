@@ -47,6 +47,8 @@ void main() {
         );
         await t.tap(find.byKey(const ValueKey('study-tool-region')));
         await t.pumpAndSettle();
+        await t.tap(find.byTooltip('矩形框选'));
+        await t.pumpAndSettle();
         await drag(t, const Offset(180, 200), const Offset(400, 440));
         await t.pump(
           const Duration(seconds: 1),
@@ -95,6 +97,8 @@ void main() {
       await fixture.open(t, api);
       await t.tap(find.byKey(const ValueKey('study-tool-region')));
       await t.pumpAndSettle();
+      await t.tap(find.byTooltip('矩形框选'));
+      await t.pumpAndSettle();
       // Cover the top gap too: with narrower fonts a menu can legitimately
       // fit there. Start below the fixed controls so the canvas owns the drag.
       await drag(t, const Offset(20, 1080), const Offset(1580, 20));
@@ -115,6 +119,8 @@ void main() {
       final api = SelectionApi(document().json());
       await fixture.open(t, api);
       await t.tap(find.byKey(const ValueKey('study-tool-region')));
+      await t.pumpAndSettle();
+      await t.tap(find.byTooltip('矩形框选'));
       await t.pumpAndSettle();
       const selection = Rect.fromLTRB(180, 100, 700, 440);
       await drag(t, selection.topLeft, selection.bottomRight);

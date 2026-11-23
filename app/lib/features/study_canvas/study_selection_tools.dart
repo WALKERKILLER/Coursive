@@ -60,6 +60,37 @@ extension _StudySelectionTools on StudyCanvasState {
     );
   }
 
+  bool get _canDuplicateSelection =>
+      _detail.strokeIds.isNotEmpty ||
+      document!.cards.any(
+        (c) => _selection.contains(c.id) && c.type != 'lecture',
+      );
+
+  void _duplicateSelection() {
+    _copySelection();
+    _pasteSelection();
+  }
+
+  Future<void> _setSelectionWidth() async {
+    final w = await showDialog<double>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选区粗细'),
+        children: [
+          for (final width in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, width),
+              child: Text('${width.toInt()}'),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || w == null || _selectionBounds == null) return;
+    final r = _selectionBounds!;
+    document!.checkpoint();
+    _transformSelection(r, r, width: w);
+  }
+
   /// Editing actions for a selection, behind the bar's 「…」.
   Widget _selectionActions() {
     final content = _selection.isNotEmpty || _detail.strokeIds.isNotEmpty;
@@ -68,8 +99,16 @@ extension _StudySelectionTools on StudyCanvasState {
       key: const ValueKey('study-selection-actions'),
       tooltip: l10n.studySelectionMore,
       enabled: !_selectionBusy,
-      icon: Icon(_selectionBusy ? Icons.hourglass_top : Icons.more_horiz),
+      icon: Icon(
+        _selectionBusy ? Icons.hourglass_top : Icons.more_horiz,
+        size: 17,
+      ),
       itemBuilder: (_) => [
+        if (ink && !widget.standalone)
+          PopupMenuItem(value: 'excerpt', child: Text(l10n.studyExcerpt)),
+        if (_canDuplicateSelection && !widget.standalone && _linkStart == null)
+          PopupMenuItem(value: 'relate', child: Text(l10n.studyRelate)),
+        if (ink) const PopupMenuItem(value: 'width', child: Text('选区粗细')),
         PopupMenuItem(value: 'copy', enabled: content, child: const Text('复制')),
         PopupMenuItem(
           value: 'paste',
@@ -78,7 +117,7 @@ extension _StudySelectionTools on StudyCanvasState {
         ),
         PopupMenuItem(
           value: 'duplicate',
-          enabled: content,
+          enabled: _canDuplicateSelection,
           child: const Text('副本'),
         ),
         const PopupMenuDivider(),
@@ -98,12 +137,6 @@ extension _StudySelectionTools on StudyCanvasState {
           enabled: ink,
           child: Text(l10n.studyEditShape),
         ),
-        if (!widget.standalone)
-          PopupMenuItem(
-            value: 'recognize',
-            enabled: ink,
-            child: Text(l10n.studyRecognizeInk),
-          ),
         if (_linkStart != null)
           PopupMenuItem(
             value: 'cancel-link',
@@ -128,8 +161,7 @@ extension _StudySelectionTools on StudyCanvasState {
           case 'paste':
             _pasteSelection();
           case 'duplicate':
-            _copySelection();
-            _pasteSelection();
+            _duplicateSelection();
           case 'rotate':
             _selectionJob(_rotateSelected);
           case 'upright':
@@ -150,8 +182,12 @@ extension _StudySelectionTools on StudyCanvasState {
             unawaited(_saveLayout());
           case 'shape':
             _selectionJob(_editSelectedShape);
-          case 'recognize':
-            _selectionJob(_recognizeSelectedInk);
+          case 'excerpt':
+            unawaited(_captureRegionCard());
+          case 'relate':
+            _selectionJob(_linkSelection);
+          case 'width':
+            unawaited(_setSelectionWidth());
           case 'cancel-link':
             _update(() {
               _linkStart = null;

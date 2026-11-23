@@ -1,3 +1,5 @@
+import '../lib/l10n/l10n.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -103,8 +105,7 @@ StudyDocument doc() => StudyDocument()
 Future<void> select(WidgetTester t, Rect r) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
   await t.pumpAndSettle();
-  await t.tap(find.byTooltip('自由套索'));
-  await t.pumpAndSettle();
+  // Exercise the default freehand mode.
   final o = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(o + r.topLeft, kind: PointerDeviceKind.stylus);
   for (final p in [r.topRight, r.bottomRight, r.bottomLeft, r.topLeft]) {
@@ -163,7 +164,7 @@ void main() {
       key.currentState!.document!.strokes.map((s) => s.json()).toList(),
     );
     await select(t, const Rect.fromLTRB(180, 180, 620, 520));
-    await t.tap(find.text('摘录'));
+    await menu(t, '摘录');
     await settleAsync(t);
     expect(api.uploaded?.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     final d = key.currentState!.document!;
@@ -181,7 +182,7 @@ void main() {
       final api = ToolsApi(doc().json());
       final key = await fixture.open(t, api);
       await select(t, const Rect.fromLTRB(240, 280, 400, 320));
-      await menu(t, '手写转文字');
+      await t.tap(find.byTooltip(l10n.studyRecognizeInk));
       await t.pump(const Duration(milliseconds: 350));
       expect(api.starts, 0);
       await t.tap(find.text('开始识别'));
@@ -217,10 +218,10 @@ void main() {
     final api = ToolsApi(original.json());
     final key = await fixture.open(t, api);
     await select(t, const Rect.fromLTRB(220, 220, 450, 400));
-    await t.tap(find.text('关联'));
+    await menu(t, '关联');
     await settleAsync(t);
     await select(t, const Rect.fromLTRB(820, 220, 1100, 400));
-    await t.tap(find.text('连到这里'));
+    await t.tap(find.byTooltip(l10n.studyRelateHereHint));
     await settleAsync(t);
     final d = key.currentState!.document!;
     expect(d.cards.length, 4);

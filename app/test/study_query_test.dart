@@ -151,7 +151,7 @@ void main() {
         }
         final api = StaleLectureApi(d.json());
         await fixture.open(t, api);
-        await t.tap(find.byTooltip('添加模块'));
+        await t.tap(find.byTooltip('画布菜单'));
         await t.pumpAndSettle();
         await t.tap(find.widgetWithText(PopupMenuItem<String>, 'AI 对话'));
         await t.pumpAndSettle();
@@ -243,7 +243,7 @@ void main() {
         );
       final api = StaleConversationApi(d.json());
       final key = await fixture.open(t, api);
-      await t.tap(find.byTooltip('添加模块'));
+      await t.tap(find.byTooltip('画布菜单'));
       await t.pumpAndSettle();
       await t.tap(find.widgetWithText(PopupMenuItem<String>, 'AI 对话'));
       await t.pumpAndSettle();

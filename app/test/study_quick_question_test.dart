@@ -61,7 +61,7 @@ class SelectionApi extends fixture.FixtureApi {
   }
 }
 
-/// A free lasso through [points]; the region tool draws rectangles by default.
+/// A free lasso through [points]; the region tool starts freehand.
 Future<void> selectPolygon(WidgetTester t, List<Offset> points) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
   await t.pumpAndSettle();
@@ -80,9 +80,11 @@ Future<void> selectPolygon(WidgetTester t, List<Offset> points) async {
   await t.pumpAndSettle();
 }
 
-/// The default rectangle from [a] to [b].
+/// A rectangle from [a] to [b].
 Future<void> selectRect(WidgetTester t, Offset a, Offset b) async {
   await t.tap(find.byKey(const ValueKey('study-tool-region')));
+  await t.pumpAndSettle();
+  await t.tap(find.byTooltip('矩形框选'));
   await t.pumpAndSettle();
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(origin + a, kind: PointerDeviceKind.stylus);

@@ -151,6 +151,10 @@ class StudyCanvasState extends State<StudyCanvas>
   StudyTool _tool = StudyTool.select;
   int _color = 0xff25344a;
   double _penWidth = 3;
+  final _normalWidths = <double>[1, 3, 6];
+  final _highlightWidths = <double>[12, 22, 32];
+  List<double> get _widthSlots =>
+      _brush.family == 'highlighter' ? _highlightWidths : _normalWidths;
   StudyBrush _brush = const StudyBrush(), _gestureBrush = const StudyBrush();
   double _gestureWidth = 3, _eraserSize = 18;
   int _gestureColor = 0xff25344a, _presetIndex = 0;
@@ -189,7 +193,7 @@ class StudyCanvasState extends State<StudyCanvas>
   StudySelectionHandle? _selectionHandle;
   Rect? _selectionResizeStart;
   List<Offset> _selectionResizePolygon = [];
-  bool _lassoRectangle = true, _captureLasso = false;
+  bool _lassoRectangle = false, _captureLasso = false;
   final _selectionKinds = StudySelectionKind.values.toSet();
   bool _selectionBusy = false;
   List<StudyAnchor>? _linkStart;
@@ -2240,7 +2244,7 @@ class StudyCanvasState extends State<StudyCanvas>
             if (!widget.standalone) _returnPill(),
             if (!_selectionToolbarDocked) _selectionToolbar(),
             if (!widget.standalone) _shelf(),
-            if (_viewport.width >= 600)
+            if (_showZoomControls)
               Positioned(
                 right: studyZoomInset,
                 bottom: studyZoomInset,

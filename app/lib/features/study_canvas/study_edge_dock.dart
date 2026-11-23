@@ -178,6 +178,8 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
     _group?.relayout.value++;
   }
 
+  static const double _gripInset = 8;
+
   Widget _handle(bool vertical, {bool centered = false}) => Tooltip(
     message: '拖动${widget.label}，松手贴边',
     child: MouseRegion(
@@ -185,31 +187,25 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
       child: SizedBox(
         key: ValueKey('study-dock-handle-${widget.id}'),
         width: centered
-            ? 96
+            ? double.infinity
             : vertical
             ? widget.thickness
             : 24,
         height: centered
-            ? 16
+            ? _gripInset
             : vertical
             ? 24
             : widget.thickness,
-        child: Center(
-          child: centered
-              ? Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: StudyChrome.of(context).inkFaint,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                )
-              : Icon(
+        // In a horizontal pen dock only the empty top margin is a grip.
+        child: centered
+            ? null
+            : Center(
+                child: Icon(
                   vertical ? Icons.drag_handle : Icons.more_vert,
                   size: 16,
                   color: StudyChrome.of(context).inkFaint,
                 ),
-        ),
+              ),
       ),
     ),
   );
@@ -325,7 +321,7 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
                                         children: [
                                           Padding(
                                             padding: const EdgeInsets.only(
-                                              top: 8,
+                                              top: _gripInset,
                                             ),
                                             child: strip,
                                           ),
@@ -333,11 +329,9 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
                                             top: 0,
                                             left: 0,
                                             right: 0,
-                                            child: Center(
-                                              child: _handle(
-                                                vertical,
-                                                centered: true,
-                                              ),
+                                            child: _handle(
+                                              vertical,
+                                              centered: true,
                                             ),
                                           ),
                                         ],

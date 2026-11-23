@@ -54,6 +54,36 @@ void main() {
       );
     },
   );
+  test('compact toolbar follows the visible midpoint and flips below before using a side', () {
+    const viewport = Rect.fromLTRB(12, 80, 1100, 820);
+    const size = Size(234, 44);
+    expect(
+      studyFloatingPosition(
+        const Rect.fromLTRB(-300, 250, 400, 480),
+        viewport,
+        [],
+        size,
+      ),
+      const Offset(89, 198),
+    );
+    expect(
+      studyFloatingPosition(
+        const Rect.fromLTRB(430, 85, 690, 360),
+        viewport,
+        [],
+        size,
+      ),
+      const Offset(443, 368),
+    );
+    expect(
+      studyFloatingPosition(const Rect.fromLTRB(430, 250, 690, 460), viewport, [
+        const Rect.fromLTRB(400, 180, 700, 245),
+      ], size),
+      const Offset(443, 468),
+    );
+    expect(studyFloatingPosition(viewport, viewport, [], size), isNull);
+  });
+
   test(
     'toolbar never overlaps the crop, fixed controls or sidebar at any edge',
     () {

@@ -43,7 +43,7 @@ void main() {
     },
   );
 
-  testWidgets('显示全部卡片 carries the view there and a touch stops it', (t) async {
+  testWidgets('显示全部材料 carries the view there and a touch stops it', (t) async {
     final d = sheet()
       ..cards.add(
         StudyCard(
@@ -57,7 +57,7 @@ void main() {
     final key = await fixture.open(t, fixture.FixtureApi(d.json()));
     final actual = key.currentState!.document!;
     final start = actual.camera;
-    await t.tap(find.byTooltip('显示全部卡片'));
+    await t.tap(find.byTooltip('显示全部材料'));
     await t.pump();
     await t.pump(const Duration(milliseconds: 120));
     final mid = actual.camera;
@@ -70,7 +70,7 @@ void main() {
     actual
       ..camera = start
       ..zoom = 1;
-    await t.tap(find.byTooltip('显示全部卡片'));
+    await t.tap(find.byTooltip('显示全部材料'));
     await t.pump();
     await t.pump(const Duration(milliseconds: 120));
     final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
@@ -79,6 +79,20 @@ void main() {
     await t.pump(const Duration(milliseconds: 300));
     expect(actual.camera, stopped);
     await g.up();
+    await close(t);
+  });
+
+  testWidgets('narrow canvas offers fit in the overflow menu', (t) async {
+    await fixture.open(t, fixture.FixtureApi(sheet().json()));
+    t.view.physicalSize = const Size(550, 900);
+    await t.pumpAndSettle();
+    expect(find.byTooltip('显示全部材料'), findsNothing);
+    await t.tap(find.byTooltip('画布菜单'));
+    await t.pumpAndSettle();
+    expect(
+      find.widgetWithText(PopupMenuItem<String>, '显示全部材料'),
+      findsOneWidget,
+    );
     await close(t);
   });
 

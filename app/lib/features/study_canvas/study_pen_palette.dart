@@ -126,6 +126,7 @@ extension _StudyPenPalette on StudyCanvasState {
         ),
         _palettePen(
           vertical: vertical,
+          key: const ValueKey('study-tool-region'),
           label: '套索',
           selected: _tool == StudyTool.region,
           pick: () => _chooseTool(StudyTool.region),
@@ -170,13 +171,6 @@ extension _StudyPenPalette on StudyCanvasState {
             _editSelectionFilters,
             compact: true,
           ),
-          if (!widget.standalone)
-            _action(
-              '所选区域问 AI',
-              Icons.auto_awesome_outlined,
-              _ask,
-              compact: true,
-            ),
         ] else ...[
           SizedBox(
             width: vertical ? 34 : 92,
@@ -220,70 +214,182 @@ extension _StudyPenPalette on StudyCanvasState {
               ],
             ),
           ),
-          for (final width
-              in (_brush.family == 'highlighter'
-                  ? [12.0, 22.0, 32.0]
-                  : [1.0, 3.0, 6.0]))
-            SizedBox(
-              width: 36,
-              height: vertical ? 30 : 34,
-              child: InkWell(
-                onLongPress: _penSettings,
-                child: IconButton(
-                  tooltip: '笔宽 ${width.toInt()}',
-                  isSelected: _ink && (_penWidth - width).abs() < .05,
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(24, 24),
-                    padding: EdgeInsets.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () => _quickPen(width: width),
-                  icon: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _ink && (_penWidth - width).abs() < .05
-                                  ? StudyChrome.of(context).accent
-                                  : StudyChrome.of(context).line,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Transform.rotate(
-                            angle: -.65,
-                            child: Center(
-                              child: Container(
-                                width: 17,
-                                height: math.min(9, width + 1),
-                                color: StudyChrome.of(context).ink,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${width.toInt()}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            height: 1.1,
-                            color: StudyChrome.of(context).inkSoft,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          for (var i = 0; i < _widthSlots.length; i++)
+            _widthButton(i, vertical),
         ],
       ],
     ],
   );
+
+  String _widthLabel(double value) => value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toStringAsFixed(1);
+
+  Widget _widthButton(int slot, bool vertical) {
+    final width = _widthSlots[slot];
+    return SizedBox(
+      width: 36,
+      height: vertical ? 30 : 34,
+      child: Builder(
+        builder: (anchor) => IconButton(
+          tooltip: '笔宽 ${_widthLabel(width)}',
+          isSelected: _ink && (_penWidth - width).abs() < .05,
+          style: IconButton.styleFrom(
+            minimumSize: const Size(24, 24),
+            padding: EdgeInsets.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () => _editWidthSlot(anchor, slot),
+          icon: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _ink && (_penWidth - width).abs() < .05
+                          ? StudyChrome.of(context).accent
+                          : StudyChrome.of(context).line,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Transform.rotate(
+                    angle: -.65,
+                    child: Center(
+                      child: Container(
+                        width: 17,
+                        height: math.min(9, width + 1),
+                        color: StudyChrome.of(context).ink,
+                      ),
+                    ),
+                  ),
+                ),
+                Text(
+                  _widthLabel(width),
+                  style: TextStyle(
+                    fontSize: 9,
+                    height: 1.1,
+                    color: StudyChrome.of(context).inkSoft,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editWidthSlot(BuildContext anchor, int slot) async {
+    final box = anchor.findRenderObject() as RenderBox;
+    final rect = MatrixUtils.transformRect(
+      box.getTransformTo(null),
+      Offset.zero & box.size,
+    );
+    final slots = _widthSlots;
+    final maxWidth = _brush.family == 'highlighter' ? 80.0 : 20.0;
+    _quickPen(width: slots[slot]);
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.transparent,
+      useSafeArea: false,
+      builder: (popup) => StatefulBuilder(
+        builder: (popup, refresh) {
+          final size = MediaQuery.sizeOf(popup);
+          final pad = MediaQuery.paddingOf(popup);
+          final width = math.min(230.0, size.width - pad.horizontal - 16);
+          final left = (rect.center.dx - width / 2).clamp(
+            pad.left + 8,
+            size.width - pad.right - width - 8,
+          );
+          final top =
+              (rect.top >= pad.top + 64 ? rect.top - 56 : rect.bottom + 8)
+                  .clamp(
+                    pad.top,
+                    math.max(pad.top, size.height - pad.bottom - 48),
+                  );
+          return Stack(
+            children: [
+              Positioned(
+                left: left,
+                top: top.toDouble(),
+                width: width,
+                height: 48,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        height: 32,
+                        width: double.infinity,
+                        child: Material(
+                          color: Theme.of(popup)
+                              .colorScheme
+                              .surfaceContainerHigh,
+                          elevation: 2,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SliderTheme(
+                              data: SliderTheme.of(popup).copyWith(
+                                trackHeight: 2,
+                                trackShape: const RoundedRectSliderTrackShape(),
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 4,
+                                  elevation: 0,
+                                  pressedElevation: 0,
+                                ),
+                                overlayShape: const RoundSliderOverlayShape(
+                                  overlayRadius: 12,
+                                ),
+                              ),
+                              child: Slider(
+                                key: const ValueKey('study-width-slider'),
+                                min: .2,
+                                max: maxWidth,
+                                value: slots[slot],
+                                semanticFormatterCallback: _widthLabel,
+                                onChanged: (value) {
+                                  _update(
+                                    () => _penWidth = slots[slot] =
+                                        (value * 10).round() / 10,
+                                  );
+                                  refresh(() {});
+                                },
+                                onChangeEnd: (_) =>
+                                    unawaited(_saveBrushSettings()),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(
+                            width: 36,
+                            child: Text(
+                              _widthLabel(slots[slot]),
+                              style: Theme.of(popup).textTheme.labelMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (mounted) await _saveBrushSettings();
+  }
 
   Future<void> _penSettings({bool eraser = false}) async {
     final box =

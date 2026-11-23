@@ -196,7 +196,7 @@ extension _StudySnapshotCapture on StudyCanvasState {
               }),
         icon: _snapshotPreparing
             ? const ReadingOrb()
-            : const Icon(Icons.add_photo_alternate_outlined, size: 20),
+            : const Icon(Icons.add_photo_alternate_outlined, size: 16),
       ),
     );
   }

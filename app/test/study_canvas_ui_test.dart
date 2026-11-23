@@ -400,6 +400,12 @@ void main() {
     expect(stage.top, 0);
     expect(find.textContaining('拖动卡片标题'), findsNothing);
     final handle = find.byKey(const ValueKey('study-dock-handle-pens'));
+    expect(t.widget<SizedBox>(handle).child, isNull);
+    final swatch = find.byKey(const ValueKey('study-pen-color-4293284709'));
+    expect(
+      t.getRect(handle).bottom,
+      lessThanOrEqualTo(t.getRect(swatch).top + .01),
+    );
     Future<void> dragDock(Offset target) async {
       final start = t.getCenter(handle);
       final gesture = await t.startGesture(start);
@@ -414,7 +420,26 @@ void main() {
     // Navigation stays at the top and dragging its background never pans ink.
     final modules = find.byKey(const ValueKey('study-top-navigation'));
     final original = t.getRect(modules);
-    final tools = t.getRect(find.byKey(const ValueKey('study-top-tools')));
+    final toolbar = find.byKey(const ValueKey('study-top-tools'));
+    final tools = t.getRect(toolbar);
+    expect(find.byTooltip('手写 / 浏览'), findsNothing);
+    expect(find.byTooltip('课程资料'), findsNothing);
+    final actions = find.byKey(const ValueKey('study-top-actions'));
+    expect(
+      t
+          .widgetList<Icon>(
+            find.descendant(of: actions, matching: find.byType(Icon)),
+          )
+          .map((icon) => icon.icon),
+      [Icons.more_horiz],
+    );
+    expect(
+      find.descendant(
+        of: toolbar,
+        matching: find.byIcon(Icons.near_me_outlined),
+      ),
+      findsOneWidget,
+    );
     expect(tools.height, 36);
     expect(tools.width, lessThan(stage.width * .6));
     expect((tools.center.dx - stage.center.dx).abs(), lessThan(1));
@@ -571,6 +596,37 @@ void main() {
   );
 
   testWidgets(
+    'width slider edits one slot above the dock and survives reopening',
+    (t) async {
+      final api = FixtureApi(StudyDocument().json());
+      await open(t, api);
+      final button = find.byTooltip('笔宽 3');
+      final buttonTop = t.getTopLeft(button).dy;
+      await t.tap(button);
+      await t.pumpAndSettle();
+      final slider = find.byKey(const ValueKey('study-width-slider'));
+      expect(t.getBottomLeft(slider).dy, lessThanOrEqualTo(buttonTop));
+      await t.tapAt(t.getCenter(slider));
+      await t.pumpAndSettle();
+      final value = t.widget<Slider>(slider).value;
+      expect(value, greaterThan(3));
+      final label = value == value.roundToDouble()
+          ? value.toInt().toString()
+          : value.toStringAsFixed(1);
+      await t.tapAt(const Offset(60, 120));
+      await t.pumpAndSettle();
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+      await open(t, api, resetPreferences: false);
+      expect(find.byTooltip('笔宽 $label'), findsOneWidget);
+      expect(find.byTooltip('笔宽 1'), findsOneWidget);
+      expect(find.byTooltip('笔宽 6'), findsOneWidget);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
     'pen selection recalls its settings and second tap opens settings',
     (t) async {
       final api = FixtureApi(StudyDocument().json());
@@ -581,6 +637,10 @@ void main() {
       await t.pumpAndSettle();
       expect(find.text('实时笔迹预览'), findsNothing);
       await t.tap(find.byTooltip('笔宽 6'));
+      await t.pumpAndSettle();
+      expect(find.byKey(const ValueKey('study-width-slider')), findsOneWidget);
+      await t.tapAt(const Offset(60, 120));
+      await t.pumpAndSettle();
       await t.tap(second);
       await t.pumpAndSettle();
       expect(
@@ -681,8 +741,8 @@ void main() {
       readable(find.byKey(const ValueKey('study-tool-select')), 3);
       expect(find.byKey(const ValueKey('study-tool-hand')), findsNothing);
       readable(find.byTooltip('画笔与橡皮设置'), 3);
-      readable(find.byTooltip('添加模块'), 3);
-      readable(find.byTooltip('课程资料'), 3);
+      readable(find.byTooltip('画布菜单'), 3);
+      readable(find.byTooltip('插入图片、PDF 或文件'), 3);
       readable(find.byKey(const ValueKey('study-ai-tab')), 3);
       expect(
         t
@@ -744,7 +804,7 @@ void main() {
       await t.pumpAndSettle();
       expect(api.doc['objects'].single['text'], '本机未保存');
       expect(api.savedDraft!['objects'].single['text'], '另一端再次修改');
-      expect(find.byTooltip('已保存到本机'), findsOneWidget);
+      expect(find.byTooltip('已保存到本机'), findsNothing);
       final next = StudyDocument.fromJson(api.doc)..baseHash = 'next';
       next.cards.clear();
       api.doc = next.json();

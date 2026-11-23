@@ -64,7 +64,7 @@ class SourcesPage extends StatelessWidget {
                         ),
                         const SizedBox(height: Space.xl),
                         for (final p in app.plugins) ...[
-                          _PluginCard(plugin: p),
+                          SourcePluginCard(plugin: p),
                           const SizedBox(height: Space.lg),
                         ],
                         Align(
@@ -310,8 +310,8 @@ class _Consent extends StatelessWidget {
   }
 }
 
-class _PluginCard extends StatelessWidget {
-  const _PluginCard({required this.plugin});
+class SourcePluginCard extends StatelessWidget {
+  const SourcePluginCard({super.key, required this.plugin});
   final SourcePlugin plugin;
 
   Future<void> _menu(BuildContext context, String v) async {

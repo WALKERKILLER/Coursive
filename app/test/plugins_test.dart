@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/core/app_state.dart';
 import 'package:coursive/core/daemon_service.dart';
+import 'package:coursive/core/models.dart';
 import 'package:coursive/core/plugins.dart';
 import 'package:coursive/features/plugins/plugin_views.dart';
 import 'package:coursive/features/plugins/plugins_page.dart';
+import 'package:coursive/features/sources/sources_page.dart';
 import 'package:provider/provider.dart';
 
 Map<String, dynamic> _plugin(String id, {String state = 'enabled', Map<String, dynamic> contributes = const {}}) => {
@@ -22,12 +24,12 @@ Map<String, dynamic> _plugin(String id, {String state = 'enabled', Map<String, d
 
 /// A store whose host calls stay in memory.
 class _FakeStore extends PluginStore {
-  _FakeStore(super.app, this.listings);
+  _FakeStore(super.app, this.listings, {this.ready = true});
   final List<Map<String, dynamic>> listings;
   final updates = <(String, Map<String, dynamic>)>[];
 
   @override
-  bool get ready => true;
+  final bool ready;
 
   @override
   Future<void> load() async {
@@ -47,6 +49,15 @@ class _FakeStore extends PluginStore {
     p['state'] = body['enabled'] == true ? 'enabled' : 'disabled';
     notifyListeners();
     return p;
+  }
+}
+
+class _SourcesApp extends AppState {
+  _SourcesApp() : super(DaemonService());
+
+  void setSources(List<SourcePlugin> sources) {
+    plugins = sources;
+    notifyListeners();
   }
 }
 
@@ -206,11 +217,37 @@ void main() {
           'author': official ? null : '某人',
         };
 
-    Future<_FakeStore> pumpTab(WidgetTester tester, Size size, {int view = 0}) async {
+    final campus = SourcePlugin({
+      'id': 'mindmap',
+      'title': '课程平台',
+      'version': '1.0.0',
+      'enabled': true,
+      'sources': [
+        {
+          'id': 'mindmap/main',
+          'title': '校园账号',
+          'auth': {'state': 'signed_in'},
+        },
+      ],
+    });
+
+    Future<_FakeStore> pumpTab(
+      WidgetTester tester,
+      Size size, {
+      int view = 0,
+      bool agentReady = true,
+      List<SourcePlugin> sources = const [],
+    }) async {
       await tester.binding.setSurfaceSize(size);
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final store = _FakeStore(AppState(DaemonService()), [listing('mindmap', '思维导图'), listing('anki', '闪卡导出', official: false)])
-        ..installed = [_plugin('mindmap'), _plugin('cards', state: 'needs_consent')];
+      final app = _SourcesApp()..setSources(sources);
+      final store = _FakeStore(app, [
+        listing('mindmap', '思维导图'),
+        listing('anki', '闪卡导出', official: false),
+      ], ready: agentReady);
+      if (agentReady) {
+        store.installed = [_plugin('mindmap'), _plugin('cards', state: 'needs_consent')];
+      }
       pluginsView.value = view;
       await tester.pumpWidget(MultiProvider(providers: [
         ChangeNotifierProvider<AppState>.value(value: store.app),
@@ -259,6 +296,54 @@ void main() {
       expect(find.byType(BackButton), findsOneWidget);
       expect(find.byType(PluginDetailView), findsOneWidget);
       expect(find.text('MINDMAP'), findsOneWidget); // the installed manifest wins over the listing
+    });
+
+    testWidgets('wide: source and assistant plugins with the same ID have separate details', (tester) async {
+      final store = await pumpTab(
+        tester,
+        const Size(1400, 900),
+        view: 1,
+        sources: [campus],
+      );
+      expect(find.text('已安装 3'), findsOneWidget);
+      expect(find.text('3 个已安装 · 2 个启用 · 1 个需要处理'), findsOneWidget);
+      expect(find.text('来源插件 · 1'), findsOneWidget);
+      await tester.tap(find.text('课程平台'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SourcePluginCard), findsOneWidget);
+      expect(find.text('校园账号'), findsOneWidget);
+      expect(find.byType(PluginDetailView), findsNothing);
+      await tester.tap(find.text('MINDMAP'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PluginDetailView), findsOneWidget);
+      expect(find.byType(SourcePluginCard), findsNothing);
+
+      await tester.tap(find.text('课程平台'));
+      await tester.pumpAndSettle();
+      (store.app as _SourcesApp).setSources([]);
+      await tester.pumpAndSettle();
+      expect(find.text('已安装 2'), findsOneWidget);
+      expect(find.text('课程平台'), findsNothing);
+      expect(find.byType(PluginDetailView), findsOneWidget);
+    });
+
+    testWidgets('narrow: installed sources can be managed without the assistant', (tester) async {
+      await pumpTab(
+        tester,
+        const Size(500, 900),
+        view: 1,
+        agentReady: false,
+        sources: [campus],
+      );
+      expect(find.text('已安装 1'), findsOneWidget);
+      expect(find.byType(SourcePluginCard), findsOneWidget);
+      expect(find.text('校园账号'), findsOneWidget);
+      await tester.tap(find.descendant(
+        of: find.byType(SourcePluginCard),
+        matching: find.byType(PopupMenuButton<String>),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('卸载插件'), findsOneWidget);
     });
   });
 }
