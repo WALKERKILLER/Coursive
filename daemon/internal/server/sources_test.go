@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -26,17 +27,21 @@ import (
 func TestSourcePluginRoutes(t *testing.T) {
 	ctx := context.Background()
 	tmp := t.TempDir()
-	exe := filepath.Join(tmp, "provider")
+	name := "provider"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	exe := filepath.Join(tmp, name)
 	if out, err := exec.Command("go", "build", "-o", exe, "../sources/testdata/fakeprovider").CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
 	plugin := filepath.Join(tmp, "plugin")
 	os.MkdirAll(filepath.Join(plugin, "bin"), 0o755)
 	b, _ := os.ReadFile(exe)
-	os.WriteFile(filepath.Join(plugin, "bin", "provider"), b, 0o755)
+	os.WriteFile(filepath.Join(plugin, "bin", name), b, 0o755)
 	os.WriteFile(filepath.Join(plugin, "package.json"), []byte(`{"name":"fake","version":"1.0.0","coursive":{"id":"fake","title":"Fake",
 "permissions":["source"],"contributes":{"sources":[{"id":"main","title":"Fake Lectures","protocol":"1",
-"executable":{"`+sources.Platform()+`":"bin/provider"},"hosts":["media.example"]}]}}}`), 0o644)
+"executable":{"`+sources.Platform()+`":"bin/`+name+`"},"hosts":["media.example"]}]}}}`), 0o644)
 
 	data := filepath.Join(tmp, "data")
 	vault.KeyPath = filepath.Join(data, "seal.key")

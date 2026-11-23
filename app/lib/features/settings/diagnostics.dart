@@ -208,7 +208,7 @@ class _DiagnosticsState extends State<Diagnostics> {
         _Health.attention,
       );
     }
-    final nativePdf = pdf && _pdfBackend == 'pdfkit';
+    final nativePdf = pdf && const {'pdfkit', 'pdfium'}.contains(_pdfBackend);
     final names = pdf
         ? (nativePdf ? ['study_pdf'] : ['pdfinfo', 'pdftoppm', 'pdftotext'])
         : ['ffmpeg', 'ffprobe'];

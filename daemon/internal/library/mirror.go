@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -199,5 +200,10 @@ func syncDir(dir string) error {
 		return err
 	}
 	defer f.Close()
+	if runtime.GOOS == "windows" {
+		// FlushFileBuffers rejects directory handles. The journal and
+		// mirrored files themselves are flushed before replacement.
+		return nil
+	}
 	return f.Sync()
 }

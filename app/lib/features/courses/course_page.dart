@@ -287,10 +287,17 @@ class _CoursePageState extends State<CoursePage> {
                   ),
                 ),
               if (course != null)
-                SliverToBoxAdapter(child: ContentWidth(child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: pad),
-                  child: CourseDocuments(key: ValueKey(widget.courseId), courseId: widget.courseId),
-                ))),
+                SliverToBoxAdapter(
+                  child: ContentWidth(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: pad),
+                      child: CourseDocuments(
+                        key: ValueKey(widget.courseId),
+                        courseId: widget.courseId,
+                      ),
+                    ),
+                  ),
+                ),
               SliverToBoxAdapter(
                 child: ContentWidth(
                   child: Padding(
@@ -814,7 +821,7 @@ class _LectureTileState extends State<_LectureTile> {
                             Text(
                               [
                                 l10n.lectureOrdinal(widget.ordinal),
-                                fmtLectureDate(d),
+                                if (d != null) fmtLectureDate(d),
                                 if (l.durationS > 0) fmtDuration(l.durationS),
                                 if (l.room.isNotEmpty) l.room,
                                 if (disabled)
@@ -905,7 +912,7 @@ class _DateBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(Corners.md),
       ),
       child: date == null
-          ? Icon(Icons.event_outlined, color: cs.onPrimaryContainer)
+          ? Icon(Icons.play_circle_outline, color: cs.onPrimaryContainer)
           : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

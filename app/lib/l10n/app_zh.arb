@@ -4685,7 +4685,7 @@
   "setupAsrMissing": "没有启用的识别渠道，请选择云端渠道或安装本地模型",
   "setupAsrConfigured": "已有启用的识别渠道；还需音频提取组件，网络、配额和模型运行状态请在转写设置查看",
   "setupConfigure": "配置",
-  "setupPdfHelperMissing": "内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件",
+  "setupPdfHelperMissing": "内置 PDF 组件缺失，请更新或重新安装 Coursive",
   "setupPdfUnsupported": "当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看",
   "studyEvidenceStale": "来源已失效：原文已修改或删除",
   "studyEvidenceOtherLecture": "此来源属于其他课次，请先打开对应课次",

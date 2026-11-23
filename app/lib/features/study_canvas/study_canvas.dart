@@ -246,6 +246,7 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _inlinePDF =>
       widget.pdfLibraryRoot != null &&
       (Platform.isMacOS ||
+          Platform.isWindows ||
           Platform.isAndroid ||
           widget.openCanvasPDF != DockPDF.open);
   final _pdfBodies = <String, GlobalKey<_CanvasPdfState>>{};

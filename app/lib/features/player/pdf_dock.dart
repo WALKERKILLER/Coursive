@@ -49,14 +49,17 @@ class DockPDF {
     String? executable,
     Duration helperTimeout = const Duration(seconds: 45),
   }) async {
+    final executableDir = path.dirname(Platform.resolvedExecutable);
     final helper =
         executable ??
-        path.join(
-          path.dirname(path.dirname(Platform.resolvedExecutable)),
-          'Resources',
-          'pdf-notes',
-          'coursive-pdf-notes',
-        );
+        (Platform.isWindows
+            ? path.join(executableDir, 'pdf-notes', 'coursive-pdf-notes.exe')
+            : path.join(
+                path.dirname(executableDir),
+                'Resources',
+                'pdf-notes',
+                'coursive-pdf-notes',
+              ));
     final cache = await Directory.systemTemp.createTemp('coursive-pdf-view-');
     final pdf = DockPDF._(source, output, cache, helper, helperTimeout);
     try {
@@ -387,6 +390,7 @@ class PDFDock extends StatefulWidget {
     this.legacyInk,
     this.onEraseLegacy,
     this.allowMouseInk = true,
+    this.embedded = false,
     this.freezeScroll = false,
     this.shapeAssist = false,
     this.pressureThreshold,
@@ -406,7 +410,7 @@ class PDFDock extends StatefulWidget {
   });
   final DockPDF pdf;
   final VoidCallback? onClose;
-  final bool freezeScroll, shapeAssist;
+  final bool freezeScroll, shapeAssist, embedded;
   final double? pressureThreshold;
   final double canvasZoom;
   final bool horizontal, erasing, allowMouseInk, squareTip, marker;
@@ -568,20 +572,33 @@ class PDFDockState extends State<PDFDock> with WidgetsBindingObserver {
             children: [
               const SizedBox(width: 8),
               Expanded(
-                child: Tooltip(
-                  message: pdf.output,
-                  child: Text(
-                    path
-                            .basenameWithoutExtension(pdf.output)
-                            .replaceFirst(
-                              RegExp('${RegExp.escape(l10n.pdfDockSuffix)}\$'),
-                              '',
-                            ) +
-                        '.pdf',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                child: widget.embedded
+                    ? Text(
+                        pdf.dirty
+                            ? l10n.pdfDockSaving
+                            : pdf.revision.isEmpty
+                            ? l10n.pdfDockHint
+                            : l10n.pdfDockSaved,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      )
+                    : Tooltip(
+                        message: pdf.output,
+                        child: Text(
+                          path
+                                  .basenameWithoutExtension(pdf.output)
+                                  .replaceFirst(
+                                    RegExp(
+                                      '${RegExp.escape(l10n.pdfDockSuffix)}\$',
+                                    ),
+                                    '',
+                                  ) +
+                              '.pdf',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
               ),
               IconButton(
                 tooltip: l10n.pdfDockPen,
@@ -650,7 +667,7 @@ class PDFDockState extends State<PDFDock> with WidgetsBindingObserver {
                 TextButton(onPressed: flush, child: Text(l10n.commonRetry)),
               ],
             )
-          else
+          else if (!widget.embedded)
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(

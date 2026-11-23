@@ -58,7 +58,7 @@ class _SeekBarState extends State<SeekBar> {
             if (_durMs > 0) ctl.seekTo((_frac(d.localPosition.dx) * _durMs).round());
           },
           child: SizedBox(
-            height: 28,
+            height: 32,
             child: Stack(clipBehavior: Clip.none, children: [
               Positioned.fill(
                 child: ValueListenableBuilder(
@@ -105,7 +105,7 @@ class _SeekBarState extends State<SeekBar> {
     final tt = Theme.of(context).textTheme;
     return Positioned(
       left: left,
-      bottom: 30,
+      bottom: 34,
       width: w,
       child: IgnorePointer(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -201,12 +201,11 @@ class _BarPainter extends CustomPainter {
       canvas.drawRRect(r, Paint()..color = Colors.black.withValues(alpha: 0.5));
       canvas.drawRRect(r.deflate(1), Paint()..color = c);
     }
-    // Thumb: an M3 Expressive vertical handle.
-    final tw = thick ? 6.0 : 4.0, th = thick ? 22.0 : 16.0;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(px, y), width: tw, height: th), Radius.circular(tw / 2)),
-      fill,
-    );
+    // Keep the playhead visible against both parts of the track.
+    final radius = thick ? 7.0 : 5.0;
+    final center = Offset(px.clamp(radius, (w - radius).clamp(radius, double.infinity)), y);
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white);
+
   }
 
   @override

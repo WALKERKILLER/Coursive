@@ -175,6 +175,10 @@ jobs:
           channel: stable
           cache: true
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
       - name: Build
         run: |
           (cd daemon && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X github.com/walkerkiller/coursive/daemon/internal/server.Version=$VERSION" -o bin/coursive-daemon.exe ./cmd/coursive-daemon)
@@ -189,6 +193,12 @@ jobs:
           (cd "$stage/agent" && npm ci --omit=dev)
           daemon/bin/coursive-daemon.exe prune "$stage/agent/node_modules"
           cp LICENSE "$stage/"
+
+      - name: Package PDF reader
+        shell: pwsh
+        run: |
+          $stage = Resolve-Path app/build/windows/x64/runner/Release
+          ./scripts/desktop/pack-windows-pdf.ps1 -Destination "$stage/pdf-notes"
 
       - name: Package
         shell: pwsh

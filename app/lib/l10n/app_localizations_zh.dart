@@ -7594,7 +7594,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get setupPdfHelperMissing =>
-      '内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件';
+      '内置 PDF 组件缺失，请更新或重新安装 Coursive';
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';

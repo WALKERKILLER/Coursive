@@ -316,6 +316,7 @@ class _PlayerPageState extends State<PlayerPage> {
         } else {
           final view = PlayerView(
             key: _view,
+            embedded: _canvasMode && !_fullscreen,
             ctl: ctl,
             fullscreen: _fullscreen,
             onFullscreen: () => _setFullscreen(!_fullscreen),
@@ -324,7 +325,9 @@ class _PlayerPageState extends State<PlayerPage> {
             onTogglePanel: wide && !_fullscreen
                 ? () => setState(() => _panel = !_panel)
                 : null,
-            onCanvas: _canvasMode ? null : () => setState(() => _canvasMode = true),
+            onCanvas: _canvasMode
+                ? null
+                : () => setState(() => _canvasMode = true),
           );
           final panel = PlayerSidePanel(
             ctl: ctl,

@@ -1106,6 +1106,11 @@ func mediaTools() map[string]bool {
 	}
 	tools["study_pdf"] = false
 	switch pdfBackend() {
+	case "pdfium":
+		if exe, err := os.Executable(); err == nil {
+			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"))
+			tools["study_pdf"] = err == nil
+		}
 	case "pdfkit":
 		if exe, err := os.Executable(); err == nil {
 			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "coursive-study-pdf"))
@@ -1121,6 +1126,8 @@ func pdfBackend() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return "pdfkit"
+	case "windows":
+		return "pdfium"
 	case "linux":
 		return "poppler"
 	default:

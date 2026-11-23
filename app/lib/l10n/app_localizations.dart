@@ -13200,7 +13200,7 @@ abstract class AppLocalizations {
   /// No description provided for @setupPdfHelperMissing.
   ///
   /// In zh, this message translates to:
-  /// **'内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件'**
+  /// **'内置 PDF 组件缺失，请更新或重新安装 Coursive'**
   String get setupPdfHelperMissing;
 
   /// No description provided for @setupPdfUnsupported.

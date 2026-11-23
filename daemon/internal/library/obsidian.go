@@ -66,7 +66,7 @@ func (l *Library) ObsidianRoot(vault, folder string) (string, error) {
 		folder = ObsidianFolder
 	}
 	folder = filepath.Clean(filepath.FromSlash(folder))
-	if filepath.IsAbs(folder) || folder == "." || folder == ".." || strings.HasPrefix(folder, ".."+string(filepath.Separator)) {
+	if strings.HasPrefix(folder, string(filepath.Separator)) || filepath.VolumeName(folder) != "" || filepath.IsAbs(folder) || folder == "." || folder == ".." || strings.HasPrefix(folder, ".."+string(filepath.Separator)) {
 		return "", errors.New("导出文件夹必须是仓库内的子文件夹")
 	}
 	// Compare real paths, so a symbolic link cannot point the export into

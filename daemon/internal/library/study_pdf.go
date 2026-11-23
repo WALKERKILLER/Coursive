@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// macOS uses the bundled PDFKit helper; the Android Ubuntu workspace uses
+// Windows ships PDFium and macOS ships a PDFKit helper. The Android Ubuntu workspace uses
 // Poppler's documented CLI: https://manpages.ubuntu.com/manpages/noble/man1/pdftoppm.1.html
 func renderStudyPDF(ctx context.Context, source, output string) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
@@ -27,6 +27,10 @@ func renderStudyPDF(ctx context.Context, source, output string) error {
 	}
 	exe, err := os.Executable()
 	if err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		_, err = studyPDFCommand(ctx, filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"), "study", source, output)
 		return err
 	}
 	_, err = studyPDFCommand(ctx, filepath.Join(filepath.Dir(exe), "coursive-study-pdf"), source, output)
@@ -66,9 +70,10 @@ func studyPDFCommandFiles(ctx context.Context, files []*os.File, name string, ar
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("PDF 处理超时或已取消：%w", ctx.Err())
 		}
-		// The bundled PDFKit helper reserves exit 65 for page limits.
+		// Bundled PDF helpers reserve exit 65 for page limits.
 		var exited *exec.ExitError
-		if filepath.Base(name) == "coursive-study-pdf" && errors.As(err, &exited) && exited.ExitCode() == 65 {
+		helper := filepath.Base(name)
+		if (helper == "coursive-study-pdf" || helper == "coursive-pdf-notes.exe") && errors.As(err, &exited) && exited.ExitCode() == 65 {
 			return nil, ErrStudyLimit
 		}
 		// Tool output can contain the document's text or filesystem paths.

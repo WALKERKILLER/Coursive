@@ -257,12 +257,12 @@ extension _StudyPenPalette on StudyCanvasState {
                       width: 1.5,
                     ),
                   ),
-                  child: Transform.rotate(
-                    angle: -.65,
-                    child: Center(
-                      child: Container(
-                        width: 17,
-                        height: math.min(9, width + 1),
+                  child: Center(
+                    child: Container(
+                      width: (width * 1.3 + 3).clamp(4.0, 13.0),
+                      height: (width * 1.3 + 3).clamp(4.0, 13.0),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
                         color: StudyChrome.of(context).ink,
                       ),
                     ),

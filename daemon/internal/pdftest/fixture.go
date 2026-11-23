@@ -66,12 +66,17 @@ func RequirePoppler(t *testing.T) {
 
 func RequirePagedRenderer(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin", "windows":
 		exe, _ := os.Executable()
-		if _, e := os.Stat(filepath.Join(filepath.Dir(exe), "coursive-study-pdf")); e != nil {
-			studyPDFDependencyMissing(t, "run compiled test binary beside the built PDFKit helper")
+		helper := filepath.Join(filepath.Dir(exe), "coursive-study-pdf")
+		if runtime.GOOS == "windows" {
+			helper = filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe")
 		}
-	} else {
+		if _, e := os.Stat(helper); e != nil {
+			studyPDFDependencyMissing(t, "run compiled test binary beside the bundled PDF helper")
+		}
+	default:
 		RequirePoppler(t)
 	}
 }

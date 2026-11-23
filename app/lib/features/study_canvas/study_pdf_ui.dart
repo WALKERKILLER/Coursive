@@ -219,6 +219,7 @@ class _CanvasPdfState extends State<_CanvasPdf> {
       return PDFDock(
         key: _reader,
         freezeScroll: widget.owner._pdfPinching,
+        embedded: true,
         shapeAssist:
             widget.owner._presets[widget.owner._presetIndex].shapeAssist,
         pressureThreshold: widget.owner._pressureEraser

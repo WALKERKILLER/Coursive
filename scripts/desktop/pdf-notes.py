@@ -1,10 +1,9 @@
-"""Local Mac PDF editor. Render the opening revision using the PDFKit helper.
+"""Local PDF editor. Render through PDFKit on macOS and PDFium on Windows.
 
 The installer packages this module with pypdf (BSD-3-Clause, see its LICENSE).
 Page coordinates from Flutter use the displayed crop width/height as units,
 measured from the top left, allowing x > 1 on an expanded note margin.
 """
-import fcntl
 import hashlib
 import json
 import math
@@ -181,17 +180,38 @@ def handle(op, source, dest):
 def main():
     op,src,dst,*rest=sys.argv[1:]
     source,dest=Path(src),Path(dst)
+    if op == "study" and sys.platform == "win32":
+        from pdf_windows import PageLimit, render_study
+        try:
+            render_study(source, dest, int(rest[0]) if rest else None)
+        except PageLimit:
+            sys.exit(65)
+        return
     if op=="render":
+        if sys.platform == "win32":
+            from pdf_windows import render_notes
+            chosen = dest if dest.is_file() and dest != source else source
+            render_notes(chosen, int(rest[0]), rest[1] if len(rest) > 1 else "")
+            return
         renderer=Path(sys.argv[0]).resolve().with_name("coursive-pdf-notes-render")
         os.execv(renderer, [str(renderer), str(dest if dest.is_file() and dest!=source else source), str(int(rest[0])), *rest[1:]])
     if op not in ("info","save") or source.resolve()==dest.resolve():
         raise ValueError("无效的 PDF 操作")
     # A persistent, private lock path prevents two first writes from racing.
-    lockdir=Path.home()/"Library/Caches/Coursive/PDFLocks"
+    if sys.platform == "win32":
+        lockdir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Coursive/PDFLocks"
+    else:
+        lockdir = Path.home() / "Library/Caches/Coursive/PDFLocks"
     lockdir.mkdir(mode=0o700,parents=True,exist_ok=True)
     lock=lockdir/hashlib.sha256(os.fsencode(dest.resolve())).hexdigest()
-    with lock.open("a") as stream:
-        fcntl.flock(stream,fcntl.LOCK_EX if op=="save" else fcntl.LOCK_SH)
+    with lock.open("a+b") as stream:
+        if sys.platform == "win32":
+            import msvcrt
+            stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream, fcntl.LOCK_EX if op == "save" else fcntl.LOCK_SH)
         print(json.dumps(handle(op,source,dest)))
 
 

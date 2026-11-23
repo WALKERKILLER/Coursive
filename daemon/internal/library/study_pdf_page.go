@@ -51,12 +51,36 @@ func renderStudyPage(ctx context.Context, source, output string, page int, files
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		exe, e := os.Executable()
 		if e != nil {
 			return out, e
 		}
-		_, e = run(ctx, filepath.Join(filepath.Dir(exe), "coursive-study-pdf"), source, output, strconv.Itoa(page))
+		if runtime.GOOS == "windows" {
+			// Windows cannot inherit an ExtraFiles descriptor. Stage the validated
+			// handle in the existing private render directory.
+			if len(files) > 0 {
+				source = filepath.Join(output, "source.pdf")
+				f, err := os.OpenFile(source, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				if err != nil {
+					return out, err
+				}
+				n, err := io.Copy(f, io.LimitReader(files[0], StudyAssetLimit+1))
+				closeErr := f.Close()
+				if err != nil {
+					return out, err
+				}
+				if closeErr != nil {
+					return out, closeErr
+				}
+				if n > StudyAssetLimit {
+					return out, ErrStudyLimit
+				}
+			}
+			_, e = studyPDFCommand(ctx, filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"), "study", source, output, strconv.Itoa(page))
+		} else {
+			_, e = run(ctx, filepath.Join(filepath.Dir(exe), "coursive-study-pdf"), source, output, strconv.Itoa(page))
+		}
 		if e != nil {
 			return out, e
 		}

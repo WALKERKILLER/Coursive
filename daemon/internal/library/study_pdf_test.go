@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,9 @@ func TestStudyPDFMissingToolsAndOutputBound(t *testing.T) {
 }
 
 func TestStudyPDFPageLimitBeforeRasterization(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the Poppler fixture uses POSIX shell executables")
+	}
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "rendered")
 	for _, name := range []string{"pdfinfo", "pdftoppm", "pdftotext"} {
