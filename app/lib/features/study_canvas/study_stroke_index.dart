@@ -39,6 +39,8 @@ class _IndexedStrokes extends ListBase<StudyStroke> {
     }
   }
 
+  List<StudyStroke> snapshot() => List.of(_items);
+
   int get pointCount {
     _index();
     return _indexedPoints;

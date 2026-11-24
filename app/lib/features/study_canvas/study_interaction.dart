@@ -25,10 +25,14 @@ extension _StudyInteraction on StudyCanvasState {
 
   void _startErase(Offset local, Offset p) {
     _erasing = true;
-    _selectionReady = false;
+    if (_selectionReady || _selection.isNotEmpty) {
+      setState(() {
+        _selectionReady = false;
+        _selection.clear();
+      });
+    }
     _regionSelection = null;
     _detail.clear();
-    _selection.clear();
     _last = p;
     _eraserLasso.clear();
     if (_eraserMode == 'lasso') {
@@ -225,32 +229,26 @@ extension _StudyInteraction on StudyCanvasState {
     _update(() {});
   }
 
-  void _copySelection() {
+  void _duplicateSelection() {
     final d = document!;
-    _copiedCards = d.cards
-        .where((c) => _selection.contains(c.id) && c.type != 'lecture')
-        .map((c) => c.copy())
+    final bounds = _selectionBounds ?? _boundsOfSelection();
+    if (bounds == null) return;
+    final cards = d.cards
+        .where((c) => _selection.contains(c.id) && c.duplicable)
         .toList();
-    final parents = _copiedCards.map((c) => c.id).toSet();
-    _copiedInk = d.strokes
+    final cardIds = {for (final c in cards) c.id: studyId()};
+    final ink = d.strokes
         .where(
-          (s) => _detail.strokeIds.contains(s.id) || parents.contains(s.anchor),
+          (s) =>
+              _detail.strokeIds.contains(s.id) || cardIds.containsKey(s.anchor),
         )
         .toList();
-    _copiedBounds = _selectionBounds;
-    _update(() {});
-  }
-
-  void _pasteSelection() {
-    final d = document!;
-    if (_copiedBounds == null || (_copiedInk.isEmpty && _copiedCards.isEmpty))
-      return;
-    if (d.cards.length + _copiedCards.length > 2000 ||
-        d.strokes.length + _copiedInk.length > 29000 ||
-        d.inkPointCount +
-                _copiedInk.fold<int>(0, (n, s) => n + s.points.length) >
+    if (cards.isEmpty && ink.isEmpty) return;
+    if (d.cards.length + cards.length > 2000 ||
+        d.strokes.length + ink.length > 29000 ||
+        d.inkPointCount + ink.fold<int>(0, (n, s) => n + s.points.length) >
             490000) {
-      _toast('画布内容已接近容量上限，请先整理后再粘贴');
+      _toast(l10n.studyCardLimit);
       return;
     }
     if (!d.editable(d.activeLayer)) {
@@ -258,26 +256,25 @@ extension _StudyInteraction on StudyCanvasState {
       return;
     }
     d.checkpoint();
-    final oldBounds = _copiedBounds!;
-    final delta = _visibleWorld.contains(oldBounds.center)
+    final direct = _tool != StudyTool.region;
+    final delta = _visibleWorld.contains(bounds.center)
         ? Offset(28 / d.zoom, 28 / d.zoom)
-        : _visibleWorld.center - oldBounds.center;
-    final cardIds = {for (final c in _copiedCards) c.id: studyId()};
-    final gestureIds = {for (final s in _copiedInk) s.gesture: studyId()};
+        : _visibleWorld.center - bounds.center;
+    final gestureIds = {for (final s in ink) s.gesture: studyId()};
     _detail.clear();
     _selection.clear();
-    for (final c in _copiedCards) {
+    for (final card in cards) {
       final copy = StudyCard.fromJson({
-        ...c.json(),
-        'id': cardIds[c.id],
-        'pdf_column': cardIds[c.pdfColumn] ?? '',
+        ...card.json(),
+        'id': cardIds[card.id],
+        'pdf_column': cardIds[card.pdfColumn] ?? '',
         'layer': d.activeLayer,
-      });
-      copy.rect = copy.rect.shift(delta);
+        'position_locked': false,
+      })..rect = card.rect.shift(delta);
       d.cards.add(copy);
       _selection.add(copy.id);
     }
-    for (final s in _copiedInk) {
+    for (final s in ink) {
       final copy = StudyStroke(
         id: studyId(),
         layer: d.activeLayer,
@@ -291,14 +288,16 @@ extension _StudyInteraction on StudyCanvasState {
         brush: s.brush,
       );
       d.strokes.add(copy);
-      _detail.strokeIds.add(copy.id);
+      if (!direct || !_selection.contains(copy.anchor)) {
+        _detail.strokeIds.add(copy.id);
+      }
     }
-    _tool = StudyTool.region;
+    _tool = direct ? StudyTool.select : StudyTool.region;
     _selectionBounds = _boundsOfSelection();
     _selectionPolygon = [];
-    _regionSelection = _selectionBounds;
-    _detail.region = _selectionBounds;
-    _selectionReady = true;
+    _regionSelection = direct ? null : _selectionBounds;
+    _detail.region = _regionSelection;
+    _selectionReady = !direct;
     d.changed();
   }
 
@@ -459,12 +458,7 @@ extension _StudyInteraction on StudyCanvasState {
           _inputSurface.currentContext?.findRenderObject() as RenderBox?;
       if (surface == null || !surface.hasSize) return;
       final obstacles = <Rect>[];
-      for (final key in [
-        _dockKey,
-        _zoomKey,
-        _shelfKey,
-        ..._stageKeys,
-      ]) {
+      for (final key in [_dockKey, _zoomKey, _shelfKey, ..._stageKeys]) {
         final box = key.currentContext?.findRenderObject() as RenderBox?;
         if (box != null && box.hasSize && box.attached) {
           obstacles.add(
@@ -615,6 +609,7 @@ extension _StudyInteraction on StudyCanvasState {
   }
 
   Widget _selectionBar(BuildContext context) {
+    final chrome = StudyChrome.of(context);
     final actions = _selectionButtons();
     return SizedBox(
       key: const ValueKey('study-selection-bar'),
@@ -630,9 +625,11 @@ extension _StudyInteraction on StudyCanvasState {
             height: 32,
             width: double.infinity,
             child: Material(
-              elevation: 2,
-              color: StudyChrome.of(context).surfaceStrong,
-              shape: const StadiumBorder(),
+              elevation: _dark ? 0 : 1,
+              shadowColor: chrome.shadow,
+              surfaceTintColor: Colors.transparent,
+              color: chrome.surface,
+              shape: StadiumBorder(side: BorderSide(color: chrome.line)),
             ),
           ),
           Material(
@@ -989,11 +986,13 @@ class _BoundChip extends StatelessWidget {
 class _BarAction extends StatelessWidget {
   const _BarAction({
     this.label,
+    this.color,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
   });
   final String? label;
+  final Color? color;
   final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
@@ -1010,7 +1009,7 @@ class _BarAction extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16),
+              Icon(icon, color: color, size: 16),
               if (label != null) ...[
                 const SizedBox(width: 3),
                 Text(label!, style: Theme.of(context).textTheme.labelSmall),

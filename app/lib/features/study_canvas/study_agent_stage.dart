@@ -76,7 +76,6 @@ extension _StudyStage on StudyCanvasState {
   /// asks its first question once the node has loaded.
   Future<void> _startConversation({
     String? send,
-    String? initialDraft,
     bool bind = true,
     bool pick = false,
     bool allowImages = false,
@@ -109,7 +108,7 @@ extension _StudyStage on StudyCanvasState {
         : null;
     if (snapshot?.query != null)
       query = Map<String, dynamic>.from(snapshot!.query!);
-    final draft = initialDraft ?? _idleInput.text;
+    final draft = passageAnchor == null ? _idleInput.text : '';
     if (!mounted) return;
     final card = StudyCard(
       id: studyId(),
@@ -144,7 +143,7 @@ extension _StudyStage on StudyCanvasState {
       _revealCard(card);
       return;
     }
-    if (initialDraft == null) _idleInput.clear();
+    _idleInput.clear();
     _update(() {
       _activeConversation = card.id;
       _stageOpen = true;
@@ -1293,7 +1292,16 @@ class _StageViewState extends State<_StageView>
   Widget _composerPane(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final sources = widget.sources.cast<Map>();
+    final passage = widget.thread?.passageAside == true
+        ? widget.thread!.sources.firstOrNull
+        : null;
+    final sources = widget.sources.cast<Map>().where(
+      (s) =>
+          passage == null ||
+          (s['anchor'] as Map?)?['object_id'] != passage.objectId,
+    );
+    final showScope =
+        widget.onContextScope != null || widget.contextScope == 'course';
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) {
         if (details.data is! String && details.data is! StudySelectionDrop)
@@ -1359,8 +1367,8 @@ class _StageViewState extends State<_StageView>
                 ),
               ),
             if (sources.isNotEmpty ||
-                widget.loading ||
-                widget.onContextScope != null)
+                showScope ||
+                (passage == null && widget.loading))
               _SourceTray(
                 sources: sources.toList(),
                 loading: widget.loading,
@@ -1408,8 +1416,7 @@ class _StageViewState extends State<_StageView>
                         );
                 },
                 trailing: [
-                  if (widget.onContextScope != null ||
-                      widget.contextScope == 'course')
+                  if (showScope)
                     Padding(
                       padding: const EdgeInsetsDirectional.only(end: Space.xs),
                       child: Tooltip(
@@ -1452,16 +1459,17 @@ class _StageViewState extends State<_StageView>
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                IconButton(
-                  tooltip: l10n.studyPickSources,
-                  onPressed: widget.busy || widget.loading
-                      ? null
-                      : widget.onPickSources,
-                  icon: Icon(
-                    Icons.add_circle_outline_rounded,
-                    color: cs.onSurfaceVariant,
+                if (passage == null)
+                  IconButton(
+                    tooltip: l10n.studyPickSources,
+                    onPressed: widget.busy || widget.loading
+                        ? null
+                        : widget.onPickSources,
+                    icon: Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
-                ),
                 Expanded(
                   child: Focus(
                     // Enter sends, Shift+Enter breaks the line; an open IME

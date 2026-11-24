@@ -24,11 +24,40 @@ class _MarkdownPassage {
   }
 }
 
+typedef _MarkdownMark = ({StudyAnchor anchor, bool highlight});
+
 extension _StudyMarkdownEditing on StudyCanvasState {
+  List<_MarkdownMark> _marksFor(StudyCard card, int block) {
+    final d = document!;
+    if (!identical(_markdownMarksDocument, d) || _markdownMarksEdit != d.edit) {
+      _markdownMarksDocument = d;
+      _markdownMarksEdit = d.edit;
+      _markdownMarks = {};
+      for (final linked in d.cards) {
+        if (!linked.passageLinked || !d.visible(linked.layer)) continue;
+        for (final anchor in linked.sources) {
+          final parts = anchor.id.split('-');
+          if (parts.length != 4 ||
+              parts.first != 'md' ||
+              anchor.quote.isEmpty) {
+            continue;
+          }
+          final section = int.tryParse(parts[1]);
+          if (section == null) continue;
+          (_markdownMarks[anchor.objectId] ??= {})
+              .putIfAbsent(section - 1, () => [])
+              .add((anchor: anchor, highlight: linked.passageNote));
+        }
+      }
+    }
+    return _markdownMarks[card.id]?[block] ?? const [];
+  }
+
   Widget _markdownPassage(StudyCard card, String body, {int block = -1}) {
     final content = CoursiveMarkdown(
       body,
       lectureId: widget.ctl.lectureId,
+      linkDecorationStyle: TextDecorationStyle.dashed,
       baseDir: card.originalPath.isEmpty
           ? ''
           : filePath.posix.dirname(card.originalPath),
@@ -38,14 +67,19 @@ extension _StudyMarkdownEditing on StudyCanvasState {
         color: StudyChrome.of(context).ink,
       ),
     );
-    if (_tool != StudyTool.select || _pdfPinching || _snapshotting) {
-      return content;
-    }
+    final selectable =
+        _tool == StudyTool.select && !_pdfPinching && !_snapshotting;
+    final marks = _snapshotting
+        ? const <_MarkdownMark>[]
+        : _marksFor(card, block);
+    if (!selectable && marks.isEmpty) return content;
     return _SelectableMarkdownPassage(
       key: ValueKey('markdown/${card.id}/$block'),
       card: card,
       block: block,
       body: body,
+      selectable: selectable,
+      marks: marks,
       findNote: (p) => document!.cards
           .where(
             (c) =>
@@ -72,7 +106,6 @@ extension _StudyMarkdownEditing on StudyCanvasState {
               _startConversation(
                 beside: card,
                 passageAnchor: anchor,
-                initialDraft: '「${p.quote}」\n${l10n.studyPassageQuestion}',
                 sourceQuery: _passageQuery(anchor),
               );
             },
@@ -224,6 +257,8 @@ class _SelectableMarkdownPassage extends StatefulWidget {
     required this.card,
     required this.block,
     required this.body,
+    required this.selectable,
+    required this.marks,
     required this.child,
     required this.findNote,
     required this.linkedAsides,
@@ -237,6 +272,8 @@ class _SelectableMarkdownPassage extends StatefulWidget {
   final StudyCard card;
   final String body;
   final int block;
+  final bool selectable;
+  final List<_MarkdownMark> marks;
   final Widget child;
   final Iterable<StudyCard> Function(_MarkdownPassage) linkedAsides;
   final ValueChanged<StudyCard> reveal;
@@ -268,17 +305,69 @@ class _SelectableMarkdownPassageState
     _scrollToCitation();
   }
 
-  List<RenderParagraph> _paragraphs(RenderObject root) {
-    final paragraphs = <RenderParagraph>[];
+  List<({RenderParagraph paragraph, int start, String text})> _fragments(
+    RenderObject root,
+  ) {
+    final fragments = <({RenderParagraph paragraph, int start, String text})>[];
     void collect(RenderObject node) {
       if (node is RenderParagraph && node.registrar != null) {
-        paragraphs.add(node);
+        final text = node.text.toPlainText(includeSemanticsLabels: false);
+        var offset = 0;
+        for (final piece in text.split('\uFFFC')) {
+          if (piece.isNotEmpty) {
+            fragments.add((paragraph: node, start: offset, text: piece));
+          }
+          offset += piece.length + 1;
+        }
       }
       node.visitChildren(collect);
     }
 
     collect(root);
-    return paragraphs;
+    return fragments;
+  }
+
+  Iterable<({RenderParagraph paragraph, Rect box})> _rangeBoxes(
+    TextRange range,
+    List<({RenderParagraph paragraph, int start, String text})> fragments,
+  ) sync* {
+    var offset = 0;
+    for (final fragment in fragments) {
+      final from = math.max(0, range.start - offset);
+      final to = math.min(fragment.text.length, range.end - offset);
+      offset += fragment.text.length;
+      if (from < to) {
+        for (final box in fragment.paragraph.getBoxesForSelection(
+          TextSelection(
+            baseOffset: fragment.start + from,
+            extentOffset: fragment.start + to,
+          ),
+        )) {
+          yield (paragraph: fragment.paragraph, box: box.toRect());
+        }
+      }
+      if (offset >= range.end) break;
+    }
+  }
+
+  // Translate saved anchors through the current text layout, so line breaks
+  // and resizing only change the marks' geometry.
+  Iterable<({Rect box, bool highlight})> _markBoxes() sync* {
+    if (widget.marks.isEmpty) return;
+    final root = _passagePaint.currentContext?.findRenderObject();
+    if (root == null) return;
+    final fragments = _fragments(root);
+    final rendered = fragments.map((f) => f.text).join();
+    for (final mark in widget.marks) {
+      final range = _renderedRange(mark.anchor, rendered);
+      if (range == null) continue;
+      for (final (:paragraph, :box) in _rangeBoxes(range, fragments)) {
+        yield (
+          box: MatrixUtils.transformRect(paragraph.getTransformTo(root), box),
+          highlight: mark.highlight,
+        );
+      }
+    }
   }
 
   // The selection offsets count selectable characters, which exclude the
@@ -295,22 +384,15 @@ class _SelectableMarkdownPassageState
       return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !identical(widget.evidence.value, evidence)) return;
-      final root = _passagePaint.currentContext?.findRenderObject();
-      if (root == null) return;
-      final paragraphs = _paragraphs(root);
-      final fragments =
-          <({RenderParagraph paragraph, int start, String text})>[];
-      for (final paragraph in paragraphs) {
-        final text = paragraph.text.toPlainText(includeSemanticsLabels: false);
-        var at = 0;
-        for (final fragment in text.split('\uFFFC')) {
-          if (fragment.isNotEmpty) {
-            fragments.add((paragraph: paragraph, start: at, text: fragment));
-          }
-          at += fragment.length + 1;
-        }
+      if (!mounted ||
+          !widget.selectable ||
+          !identical(widget.evidence.value, evidence)) {
+        return;
       }
+      final paintContext = _passagePaint.currentContext;
+      final root = paintContext?.findRenderObject();
+      if (paintContext == null || root == null) return;
+      final fragments = _fragments(root);
       final rendered = fragments.map((f) => f.text).join();
       final range = _renderedRange(anchor, rendered);
       if (range == null) {
@@ -320,31 +402,43 @@ class _SelectableMarkdownPassageState
       final boxes = <Rect>[];
       RenderParagraph? targetParagraph;
       Rect? targetLine;
-      var offset = 0;
-      for (final fragment in fragments) {
-        final from = math.max(0, range.start - offset);
-        final to = math.min(fragment.text.length, range.end - offset);
-        offset += fragment.text.length;
-        if (from >= to) continue;
-        final paragraph = fragment.paragraph;
-        final transform = paragraph.getTransformTo(root);
-        for (final box in paragraph.getBoxesForSelection(
-          TextSelection(
-            baseOffset: fragment.start + from,
-            extentOffset: fragment.start + to,
-          ),
-        )) {
-          final rect = box.toRect();
-          targetParagraph ??= paragraph;
-          targetLine ??= rect;
-          boxes.add(MatrixUtils.transformRect(transform, rect).inflate(2));
-        }
-        if (offset >= range.end) break;
+      for (final (:paragraph, :box) in _rangeBoxes(range, fragments)) {
+        targetParagraph ??= paragraph;
+        targetLine ??= box;
+        boxes.add(
+          MatrixUtils.transformRect(
+            paragraph.getTransformTo(root),
+            box,
+          ).inflate(2),
+        );
       }
       if (targetParagraph == null || targetLine == null) return;
       _desktopMenu.remove();
       _area.currentState?.selectableRegion.clearSelection();
-      targetParagraph.showOnScreen(rect: targetLine.inflate(40));
+      final scroll = Scrollable.maybeOf(paintContext);
+      final viewport = RenderAbstractViewport.maybeOf(root);
+      if (scroll != null &&
+          axisDirectionToAxis(scroll.widget.axisDirection) == Axis.vertical &&
+          scroll.position.hasContentDimensions &&
+          viewport != null) {
+        // A horizontally scrolling table may need to reveal the cell too.
+        if (RenderAbstractViewport.maybeOf(targetParagraph) != viewport) {
+          targetParagraph.showOnScreen(rect: targetLine);
+        }
+        final position = scroll.position;
+        final passage = boxes.reduce((a, b) => a.expandToInclude(b));
+        final target = passage.height > position.viewportDimension
+            ? boxes.first
+            : passage;
+        final offset = viewport
+            .getOffsetToReveal(root, .5, rect: target)
+            .offset;
+        position.jumpTo(
+          offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+        );
+      } else {
+        targetParagraph.showOnScreen(rect: targetLine);
+      }
       _passageBoxes.value = boxes;
       _clearPassage = Timer(const Duration(milliseconds: 2400), () {
         _passageBoxes.value = const [];
@@ -369,7 +463,8 @@ class _SelectableMarkdownPassageState
     }
     // After an edit the rendered offset may have shifted. Resolve only a
     // candidate that still maps to the verified raw source offsets.
-    if (anchor.end <= anchor.start ||
+    if (anchor.quote.isEmpty ||
+        anchor.end <= anchor.start ||
         (anchor.fingerprint != hash && anchor.fingerprint != 'source-$hash')) {
       return null;
     }
@@ -405,6 +500,10 @@ class _SelectableMarkdownPassageState
       _quote = '';
       _passageBoxes.value = const [];
       _desktopMenu.remove();
+    }
+    if (old.selectable && !widget.selectable) {
+      _desktopMenu.remove();
+      _area.currentState?.selectableRegion.clearSelection();
     }
   }
 
@@ -582,55 +681,82 @@ class _SelectableMarkdownPassageState
   }
 
   @override
-  Widget build(BuildContext context) => Listener(
-    onPointerDown: (_) => _desktopMenu.remove(),
-    onPointerSignal: (_) => _desktopMenu.remove(),
-    onPointerPanZoomStart: (_) => _desktopMenu.remove(),
-    onPointerUp: (event) {
-      if (event.kind != PointerDeviceKind.mouse) return;
-      // Desktop SelectionArea normally only shows a menu on secondary click.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _quote.isEmpty || _area.currentState == null) return;
-        final region = _area.currentState!.selectableRegion;
-        if (!_range.registered || _range.selection.range == null) return;
-        final anchors = region.contextMenuAnchors;
-        _desktopMenu.show(
-          context: context,
-          contextMenuBuilder: (_) => _menu(region, anchors),
-        );
-      });
-    },
-    child: SelectionArea(
-      key: _area,
-      onSelectionChanged: (value) {
-        _quote = value?.plainText ?? '';
-        if (_quote.isEmpty) _desktopMenu.remove();
-      },
-      contextMenuBuilder: (_, region) =>
-          _menu(region, region.contextMenuAnchors),
-      child: SelectionListener(
-        selectionNotifier: _range,
-        child: CustomPaint(
-          key: _passagePaint,
-          foregroundPainter: _MarkdownCitationHighlight(
-            _passageBoxes,
-            StudyChrome.of(context).accent.withValues(alpha: .24),
+  Widget build(BuildContext context) {
+    final accent = StudyChrome.of(context).accent;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return IgnorePointer(
+      ignoring: !widget.selectable,
+      child: Listener(
+        onPointerDown: (_) => _desktopMenu.remove(),
+        onPointerSignal: (_) => _desktopMenu.remove(),
+        onPointerPanZoomStart: (_) => _desktopMenu.remove(),
+        onPointerUp: (event) {
+          if (event.kind != PointerDeviceKind.mouse) return;
+          // Desktop SelectionArea normally only shows a menu on secondary click.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _quote.isEmpty || _area.currentState == null)
+              return;
+            final region = _area.currentState!.selectableRegion;
+            if (!_range.registered || _range.selection.range == null) return;
+            final anchors = region.contextMenuAnchors;
+            _desktopMenu.show(
+              context: context,
+              contextMenuBuilder: (_) => _menu(region, anchors),
+            );
+          });
+        },
+        child: SelectionArea(
+          key: _area,
+          onSelectionChanged: (value) {
+            _quote = value?.plainText ?? '';
+            if (_quote.isEmpty) _desktopMenu.remove();
+          },
+          contextMenuBuilder: (_, region) =>
+              _menu(region, region.contextMenuAnchors),
+          child: SelectionListener(
+            selectionNotifier: _range,
+            child: CustomPaint(
+              key: _passagePaint,
+              foregroundPainter: _MarkdownPassagePainter(
+                boxes: _passageBoxes,
+                color: accent.withValues(alpha: .24),
+                marks: widget.marks,
+                body: widget.body,
+                locateMarks: _markBoxes,
+                lineColor: accent.withValues(alpha: .78),
+                highlightColor: dark
+                    ? const Color(0x45CA9238)
+                    : const Color(0x59FFD76A),
+              ),
+              child: widget.child,
+            ),
           ),
-          child: widget.child,
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
-class _MarkdownCitationHighlight extends CustomPainter {
-  _MarkdownCitationHighlight(this.boxes, this.color) : super(repaint: boxes);
+class _MarkdownPassagePainter extends CustomPainter {
+  _MarkdownPassagePainter({
+    required this.boxes,
+    required this.color,
+    required this.marks,
+    required this.body,
+    required this.locateMarks,
+    required this.lineColor,
+    required this.highlightColor,
+  }) : super(repaint: boxes);
 
   final ValueListenable<List<Rect>> boxes;
-  final Color color;
+  final Color color, lineColor, highlightColor;
+  final List<_MarkdownMark> marks;
+  final String body;
+  final Iterable<({Rect box, bool highlight})> Function() locateMarks;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (marks.isNotEmpty) _paintMarks(canvas, size);
     final ink = Paint()..color = color;
     for (final rect in boxes.value) {
       canvas.drawRRect(
@@ -640,7 +766,43 @@ class _MarkdownCitationHighlight extends CustomPainter {
     }
   }
 
+  void _paintMarks(Canvas canvas, Size size) {
+    final highlights = Path();
+    final underline = Path();
+    for (final (:box, :highlight) in locateMarks()) {
+      if (highlight) {
+        highlights.addRRect(
+          RRect.fromRectAndRadius(
+            box.inflate(1),
+            const Radius.circular(Corners.xs),
+          ),
+        );
+      } else {
+        final y = math.min(box.bottom + 1, size.height - 1);
+        for (var x = box.left; x < box.right; x += 7) {
+          underline
+            ..moveTo(x, y)
+            ..lineTo(math.min(x + 4, box.right), y);
+        }
+      }
+    }
+    canvas.drawPath(highlights, Paint()..color = highlightColor);
+    canvas.drawPath(
+      underline,
+      Paint()
+        ..color = lineColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.25
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
   @override
-  bool shouldRepaint(_MarkdownCitationHighlight old) =>
-      old.boxes != boxes || old.color != color;
+  bool shouldRepaint(_MarkdownPassagePainter old) =>
+      old.boxes != boxes ||
+      old.body != body ||
+      old.color != color ||
+      old.lineColor != lineColor ||
+      old.highlightColor != highlightColor ||
+      !listEquals(old.marks, marks);
 }

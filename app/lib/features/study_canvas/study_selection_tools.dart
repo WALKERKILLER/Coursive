@@ -63,13 +63,8 @@ extension _StudySelectionTools on StudyCanvasState {
   bool get _canDuplicateSelection =>
       _detail.strokeIds.isNotEmpty ||
       document!.cards.any(
-        (c) => _selection.contains(c.id) && c.type != 'lecture',
+        (c) => _selection.contains(c.id) && c.duplicable,
       );
-
-  void _duplicateSelection() {
-    _copySelection();
-    _pasteSelection();
-  }
 
   Future<void> _setSelectionWidth() async {
     final w = await showDialog<double>(
@@ -106,15 +101,9 @@ extension _StudySelectionTools on StudyCanvasState {
       itemBuilder: (_) => [
         if (ink && !widget.standalone)
           PopupMenuItem(value: 'excerpt', child: Text(l10n.studyExcerpt)),
-        if (_canDuplicateSelection && !widget.standalone && _linkStart == null)
+        if (content && !widget.standalone && _linkStart == null)
           PopupMenuItem(value: 'relate', child: Text(l10n.studyRelate)),
         if (ink) const PopupMenuItem(value: 'width', child: Text('选区粗细')),
-        PopupMenuItem(value: 'copy', enabled: content, child: const Text('复制')),
-        PopupMenuItem(
-          value: 'paste',
-          enabled: _copiedBounds != null,
-          child: const Text('粘贴'),
-        ),
         PopupMenuItem(
           value: 'duplicate',
           enabled: _canDuplicateSelection,
@@ -156,10 +145,6 @@ extension _StudySelectionTools on StudyCanvasState {
       ],
       onSelected: (value) {
         switch (value) {
-          case 'copy':
-            _copySelection();
-          case 'paste':
-            _pasteSelection();
           case 'duplicate':
             _duplicateSelection();
           case 'rotate':

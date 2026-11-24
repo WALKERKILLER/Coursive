@@ -24,6 +24,7 @@ func TestStudyCanvasPersistenceRevisionAndLimits(t *testing.T) {
 		t.Fatal(d)
 	}
 	d.Objects[0].PDFColumn = "column-owner"
+	d.Objects[0].PositionLocked = true
 	d.Strokes = []StudyStroke{{ID: "s", Layer: "main", Tool: "pen", Color: 0xff111111, Width: 3, Points: [][3]float64{{1, 2, .5}, {5, 6, 1}}}}
 	saved, e := l.SaveStudyCanvas(ctx, "one", d)
 	if e != nil || saved.Revision != 1 {
@@ -33,7 +34,7 @@ func TestStudyCanvasPersistenceRevisionAndLimits(t *testing.T) {
 		t.Fatal("lost update accepted", e)
 	}
 	again, e := l.StudyCanvas(ctx, "one")
-	if e != nil || len(again.Strokes) != 1 || again.Strokes[0].Points[1][0] != 5 || again.Objects[0].PDFColumn != "column-owner" {
+	if e != nil || len(again.Strokes) != 1 || again.Strokes[0].Points[1][0] != 5 || again.Objects[0].PDFColumn != "column-owner" || !again.Objects[0].PositionLocked {
 		t.Fatal(e, again)
 	}
 	invalid := again

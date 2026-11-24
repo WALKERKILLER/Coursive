@@ -7417,6 +7417,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studySelectionMore => '选区工具';
 
   @override
+  String get studyDuplicateCard => '创建副本';
+
+  @override
+  String get studyLockPosition => '锁定位置';
+
+  @override
+  String get studyUnlockPosition => '解锁位置';
+
+  @override
+  String get studyCropRectangle => '矩形裁剪';
+
+  @override
+  String get studyCropFreehand => '自由裁剪';
+
+  @override
+  String get studyCropKeepCopy => '裁剪为副本';
+
+  @override
   String get studyRotateSelection => '顺时针旋转 90°';
 
   @override
@@ -7623,15 +7641,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String studyEvidenceSemantics(int number, String locator) {
     return '引用 $number：$locator';
   }
-
-  @override
-  String get studyReturn => '返回原处';
-
-  @override
-  String get studyReturnKeys => 'Esc 或 Alt+←';
-
-  @override
-  String get studyReturnKeysMac => 'Esc 或 ⌘[';
 
   @override
   String studyCoveragePassages(int count) {

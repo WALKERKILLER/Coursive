@@ -12873,6 +12873,42 @@ abstract class AppLocalizations {
   /// **'选区工具'**
   String get studySelectionMore;
 
+  /// No description provided for @studyDuplicateCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建副本'**
+  String get studyDuplicateCard;
+
+  /// No description provided for @studyLockPosition.
+  ///
+  /// In zh, this message translates to:
+  /// **'锁定位置'**
+  String get studyLockPosition;
+
+  /// No description provided for @studyUnlockPosition.
+  ///
+  /// In zh, this message translates to:
+  /// **'解锁位置'**
+  String get studyUnlockPosition;
+
+  /// No description provided for @studyCropRectangle.
+  ///
+  /// In zh, this message translates to:
+  /// **'矩形裁剪'**
+  String get studyCropRectangle;
+
+  /// No description provided for @studyCropFreehand.
+  ///
+  /// In zh, this message translates to:
+  /// **'自由裁剪'**
+  String get studyCropFreehand;
+
+  /// No description provided for @studyCropKeepCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'裁剪为副本'**
+  String get studyCropKeepCopy;
+
   /// No description provided for @studyRotateSelection.
   ///
   /// In zh, this message translates to:
@@ -13256,24 +13292,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'引用 {number}：{locator}'**
   String studyEvidenceSemantics(int number, String locator);
-
-  /// No description provided for @studyReturn.
-  ///
-  /// In zh, this message translates to:
-  /// **'返回原处'**
-  String get studyReturn;
-
-  /// No description provided for @studyReturnKeys.
-  ///
-  /// In zh, this message translates to:
-  /// **'Esc 或 Alt+←'**
-  String get studyReturnKeys;
-
-  /// No description provided for @studyReturnKeysMac.
-  ///
-  /// In zh, this message translates to:
-  /// **'Esc 或 ⌘['**
-  String get studyReturnKeysMac;
 
   /// No description provided for @studyCoveragePassages.
   ///

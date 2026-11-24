@@ -115,3 +115,24 @@ test("tools report changes and consolidation gets no delete", async () => {
 		await done();
 	}
 });
+
+test("course conversations read global preferences and only their own course; tutor updates preserve user notes", async () => {
+	const { s, done } = await store();
+	try {
+		await s.write("preferences.md", "先画时间线");
+		await s.write("courses/os.md", "自己整理的考点");
+		const progress = { goal: "信号量", unit: "互斥", stage: "repair", completed: 0, skipped: 1,
+			last: { topic: "两个线程", outcome: "最近答错，待复测", source: "第 3 节" } };
+		await s.updateCourseProgress("os", "操作系统", progress);
+		await s.updateCourseProgress("os", "操作系统", { ...progress, stage: "finished" });
+		const os = await s.prompt({ pinnedOnly: true, courseId: "os" });
+		assert.match(os, /先画时间线/); assert.match(os, /自己整理的考点/);
+		assert.match(os, /已结束/); assert.equal(os.split("## 伴学进度").length, 2);
+		assert.match(os, /第 3 节/);
+		const other = await s.prompt({ pinnedOnly: true, courseId: "other" });
+		assert.match(other, /先画时间线/); assert.doesNotMatch(other, /两个线程/);
+		await s.updateCourseProgress("本地课程 A", "本地课程 A", progress);
+		assert.match(await s.prompt({ pinnedOnly: true, courseId: "本地课程 A" }), /两个线程/);
+		assert.doesNotMatch((await s.read("preferences.md")).content, /互斥/);
+	} finally { await done(); }
+});

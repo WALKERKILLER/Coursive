@@ -119,16 +119,17 @@ extension _StudyTransforms on StudyCanvasState {
 
   Widget _transformFrame() {
     final d = document!;
-    if (_drawingPointer != null ||
-        _quickAsk ||
-        _detail.objectId != null ||
-        !d.canRotateSelection(_selection, _detail.strokeIds))
+    if (_drawingPointer != null || _quickAsk || _detail.objectId != null)
       return const SizedBox.shrink();
     final bounds = _boundsOfSelection();
     if (bounds == null) return const SizedBox.shrink();
     final single = _selection.length == 1 && _detail.strokeIds.isEmpty
         ? d.cards.where((c) => _selection.contains(c.id)).firstOrNull
         : null;
+    final showGrips = d.canRotateSelection(_selection, _detail.strokeIds);
+    if (!showGrips && (single?.positionLocked != true || _selectionReady)) {
+      return const SizedBox.shrink();
+    }
     final corners = single == null
         ? [
             bounds.topLeft,
@@ -146,7 +147,9 @@ extension _StudyTransforms on StudyCanvasState {
           d,
           bounds,
           corners,
+          showGrips: showGrips,
           showCorners: single?.collapsed != true,
+          card: !_selectionReady && _tool == StudyTool.select ? single : null,
         ),
       ),
     );
@@ -156,8 +159,17 @@ extension _StudyTransforms on StudyCanvasState {
     StudyDocument d,
     Rect bounds,
     List<Offset> corners, {
+    required bool showGrips,
     required bool showCorners,
+    required StudyCard? card,
   }) {
+    final screenBounds = Rect.fromPoints(
+      bounds.topLeft * d.zoom + d.camera,
+      bounds.bottomRight * d.zoom + d.camera,
+    );
+    if (!screenBounds.overlaps(Offset.zero & _viewport)) {
+      return const SizedBox.shrink();
+    }
     final points = corners.map((p) => p * d.zoom + d.camera).toList();
     final top = (points[0] + points[1]) / 2;
     final centre = bounds.center * d.zoom + d.camera;
@@ -212,21 +224,32 @@ extension _StudyTransforms on StudyCanvasState {
             child: CustomPaint(
               painter: _TransformOutline(
                 points,
-                grip,
+                showGrips ? grip : null,
                 chrome.accent,
                 snapped: _angleSnap.locked != null && _rotatePivot != null,
               ),
             ),
           ),
         ),
-        if (showCorners)
+        if (showGrips && showCorners)
           for (var i = 0; i < 4; i++) handle(points[i], corner: i),
-        handle(grip),
-        if (_rotationLabel == null && !_selectionReady)
-          Positioned(
-            left: grip.dx + 26,
-            top: grip.dy - 22,
-            child: _selectionActions(),
+        if (showGrips) handle(grip),
+        if (_rotationLabel == null &&
+            _dragCard == null &&
+            _transformSession == null &&
+            card != null)
+          Positioned.fill(
+            child: CustomSingleChildLayout(
+              delegate: _FloatingLayout(
+                screenBounds,
+                _topBarsBottom,
+                [
+                  ..._selectionObstacles,
+                  if (showGrips) Rect.fromCircle(center: grip, radius: 22),
+                ],
+              ),
+              child: _cardSelectionBar(card),
+            ),
           ),
         if (_rotationLabel != null)
           Positioned(
@@ -254,7 +277,7 @@ extension _StudyTransforms on StudyCanvasState {
 class _TransformOutline extends CustomPainter {
   _TransformOutline(this.points, this.grip, this.color, {this.snapped = false});
   final List<Offset> points;
-  final Offset grip;
+  final Offset? grip;
   final Color color;
   final bool snapped;
   @override
@@ -264,10 +287,16 @@ class _TransformOutline extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
     canvas.drawPath(Path()..addPolygon(points, true), pen);
-    canvas.drawLine((points[0] + points[1]) / 2, grip, pen);
-    if (snapped) {
+    final handle = grip;
+    if (handle != null)
+      canvas.drawLine((points[0] + points[1]) / 2, handle, pen);
+    if (snapped && handle != null) {
       final centre = (points[0] + points[2]) / 2;
-      canvas.drawLine(centre - (grip - centre), grip, pen..strokeWidth = .7);
+      canvas.drawLine(
+        centre - (handle - centre),
+        handle,
+        pen..strokeWidth = .7,
+      );
     }
   }
 

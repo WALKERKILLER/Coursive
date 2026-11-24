@@ -24,7 +24,7 @@ This extends [0027](0027-grounded-canvas-answers.md): evidence IDs, the read-onl
 - The outline opens in a review panel on the side away from the assistant dock (at most 400 dp, 42 % of the window); below 720 dp it is a bottom sheet that shrinks to a 76 dp peek while a citation is being viewed. Nothing on the canvas changes.
 - Each item can be confirmed (A), flagged 待查 (F), edited (Enter, E), split at the caret, merged, moved between sections (drag or Alt+↑/↓), deleted or added; headings and levels are editable. Ctrl/⌘+Z undoes the last 60 changes. Changes are kept in the conversation after 500 ms and survive switching conversations and restarts.
 - A mark shows its real ink or image thumbnail and offers 已掌握 / 重点 / 待复习 / 自定义 / 保持原样; it never becomes a fact by default. Evidence that no longer resolves shows 「依据已失效」 and can only be kept as 待查 or have the stale citation removed.
-- Citations behave as in 0027: hover previews, click navigates, 「返回原处」 returns to the same item with keyboard focus.
+- Citations behave as in 0027: hover previews, click navigates, the back action returns to the same item with keyboard focus.
 
 ### Saving as a note
 

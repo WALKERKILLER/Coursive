@@ -1239,9 +1239,8 @@ void main() {
             .text,
         '前😀后选中内容',
       );
-      expect(find.byKey(const ValueKey('study-return')), findsOneWidget);
       expect(find.text('原资料'), findsOneWidget);
-      await t.tap(find.byKey(const ValueKey('study-return')));
+      expect(key.currentState!.returnFromSource(), isTrue);
       await t.pumpAndSettle();
       expect(key.currentState!.document!.camera, before);
       await t.pumpWidget(const SizedBox());

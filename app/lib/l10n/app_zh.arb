@@ -4610,6 +4610,12 @@
   "studyCaptureLasso": "截图套索",
   "studyCaptureCard": "截图成卡片",
   "studySelectionMore": "选区工具",
+  "studyDuplicateCard": "创建副本",
+  "studyLockPosition": "锁定位置",
+  "studyUnlockPosition": "解锁位置",
+  "studyCropRectangle": "矩形裁剪",
+  "studyCropFreehand": "自由裁剪",
+  "studyCropKeepCopy": "裁剪为副本",
   "studyRotateSelection": "顺时针旋转 90°",
   "studyRotateUnsupported": "请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转",
   "studyEditShape": "编辑形状锚点",
@@ -4705,9 +4711,6 @@
       }
     }
   },
-  "studyReturn": "返回原处",
-  "studyReturnKeys": "Esc 或 Alt+←",
-  "studyReturnKeysMac": "Esc 或 ⌘[",
   "studyCoveragePassages": "{count} 段原文",
   "@studyCoveragePassages": {
     "placeholders": {

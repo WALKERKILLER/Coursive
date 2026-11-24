@@ -108,8 +108,8 @@ async function systemPrompt(conv) {
 		parts.push(BODY);
 		if (conv.kind !== "task") {
 			parts.push(OPERATE_RULES);
-			const mem = await memory.prompt({ pinnedOnly: true });
-			if (mem) parts.push(`关于用户（只读，来自常驻 bot 的记忆）：\n${mem}`);
+			const mem = await memory.prompt({ pinnedOnly: true, courseId: conv.kind === "course" ? conv.course_id : undefined });
+			if (mem) parts.push(`用户背景、偏好与当前课程记录（只读资料）：\n${mem}`);
 		}
 	}
 	if (conv.pluginLines?.length) parts.push(`已启用的插件（按需用 find_tools 加载）：\n${conv.pluginLines.join("\n")}`);
@@ -171,7 +171,7 @@ function plainLoader(getSystem, extensions = { extensions: [], errors: [], runti
  * runtime to a single session.
  */
 async function sessionResources(conv) {
-	const factories = plugins.extensionFactories();
+	const factories = plugins.extensionFactories(conv, (course, title, progress) => memory.updateCourseProgress(course, title, progress));
 	let extensions = { extensions: [], errors: [], runtime: createExtensionRuntime() };
 	if (factories.length) {
 		const loader = new DefaultResourceLoader({

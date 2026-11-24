@@ -212,7 +212,7 @@ void main() {
 
       await t.tap(marks().at(1), kind: PointerDeviceKind.mouse);
       await t.pumpAndSettle();
-      expect(find.byKey(const ValueKey('study-return')), findsOneWidget);
+      expect(find.text('返回原处'), findsNothing);
       final far = d.cards.firstWhere((c) => c.id == 'far').rect;
       final shown = Rect.fromPoints(
         far.topLeft * d.zoom + d.camera,

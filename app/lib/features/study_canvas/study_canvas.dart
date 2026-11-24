@@ -72,6 +72,7 @@ part 'study_pen_palette.dart';
 part 'study_shape_interaction.dart';
 part 'study_stylus.dart';
 part 'study_selection_tools.dart';
+part 'study_card_actions.dart';
 part 'study_transforms.dart';
 part 'study_evidence.dart';
 part 'study_outline_review.dart';
@@ -149,6 +150,9 @@ class StudyCanvasState extends State<StudyCanvas>
   /// Dark paper: ink and paper are toned for the dark scheme.
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
   StudyDocument? document;
+  StudyDocument? _markdownMarksDocument;
+  int _markdownMarksEdit = -1;
+  Map<String, Map<int, List<_MarkdownMark>>> _markdownMarks = {};
   Object? _loadError, _saveError;
 
   /// Enabled plugins and whether one offers a canvas tool, read in [build].
@@ -189,6 +193,7 @@ class StudyCanvasState extends State<StudyCanvas>
   /// Where a finger rests on a card while the hold to move it runs.
   final _holdCue = ValueNotifier<Offset?>(null);
   final _selectionMenuKey = GlobalKey();
+  final _cardActionsKey = GlobalKey();
   Rect? _stageRect, _selectionBounds;
   Offset? _eraserCursor, _pressureOrigin, _pressureStart;
   double _cursorRadius = 18, _pressureThreshold = .8;
@@ -232,9 +237,6 @@ class StudyCanvasState extends State<StudyCanvas>
   StudyShape? _shape;
   List<InkPoint>? _shapePreview;
   int _pressureKeep = 0;
-  List<StudyStroke> _copiedInk = [];
-  List<StudyCard> _copiedCards = [];
-  Rect? _copiedBounds;
 
   final _topBarKey = GlobalKey();
   final _moduleKey = GlobalKey(), _toolbarKey = GlobalKey();
@@ -306,7 +308,6 @@ class StudyCanvasState extends State<StudyCanvas>
 
   /// Views left by following citations, newest last; see [_goBack].
   final _bookmarks = <_ViewMark>[];
-  final _returnKey = GlobalKey();
 
   /// The outline under review and, on a narrow window, whether the review
   /// steps down to show the source.
@@ -579,7 +580,8 @@ class StudyCanvasState extends State<StudyCanvas>
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 1000), _saveWhenIdle);
     _scene.value++;
-    if (!_committingPlainInk || _status != l10n.studyPendingSave) {
+    if (_status != l10n.studyPendingSave ||
+        (!_committingPlainInk && !_erasing)) {
       setState(() => _status = l10n.studyPendingSave);
     }
   }
@@ -720,7 +722,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _update(() => _quickAsk = false);
         return true;
       }
-      if (_selectionReady) {
+      if (_selectionReady || _selection.isNotEmpty) {
         _clearSelection();
         return true;
       }
@@ -839,7 +841,7 @@ class StudyCanvasState extends State<StudyCanvas>
       _dockKey,
       _zoomKey,
       _selectionMenuKey,
-      _returnKey,
+      _cardActionsKey,
       _reviewKey,
       _moduleKey,
       _toolbarKey,
@@ -981,7 +983,7 @@ class StudyCanvasState extends State<StudyCanvas>
     );
     _start = _last = point;
     if (owner == StudyContactOwner.card) {
-      if (card == null || !d.canTransformCard(card)) return;
+      if (card == null || !d.editable(card.layer)) return;
       if (!_selection.contains(card.id))
         _selection
           ..clear()
@@ -991,6 +993,10 @@ class StudyCanvasState extends State<StudyCanvas>
       _regionSelection = null;
       _selectionPolygon = [];
       _selectionBounds = null;
+      if (!d.canTransformCard(card)) {
+        setState(() {});
+        return;
+      }
       _dragCard = card.id;
       _transformSession = StudyTransformSession(
         d,
@@ -1091,7 +1097,7 @@ class StudyCanvasState extends State<StudyCanvas>
       setState(() {});
       return;
     }
-    if (card == null) {
+    if (card == null && !pan) {
       _selection.clear();
       _detail.clear();
       _selectionReady = false;
@@ -2335,7 +2341,6 @@ class StudyCanvasState extends State<StudyCanvas>
             _fixedTopBars(),
             if (!widget.standalone) _agentStage(),
             if (!widget.standalone) _reviewPanel(),
-            if (!widget.standalone) _returnPill(),
             if (!_selectionToolbarDocked) _selectionToolbar(),
             if (!widget.standalone) _shelf(),
             if (_showZoomControls)
@@ -2435,7 +2440,7 @@ class StudyCanvasState extends State<StudyCanvas>
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
       if (!c.generated)
-        for (final source in c.sources)
+        for (final source in c.sources.skip(c.passageLinked ? 1 : 0))
           (
             l10n.studySelectionSource(
               source.page > 0 ? '${source.kind} · ${source.page}' : source.kind,
@@ -2465,13 +2470,13 @@ class StudyCanvasState extends State<StudyCanvas>
           Icons.edit_outlined,
           () => _editKnowledge(c),
         ),
-      if (c.type == 'text')
+      if (c.type == 'text' && !c.passageNote)
         (
           c.markdownReader ? l10n.studyEditMarkdown : l10n.studyEditText,
           Icons.edit_outlined,
           () => _text(c),
         ),
-      if (c.type != 'lecture' && !pdfColumn)
+      if (c.type != 'lecture' && !pdfColumn && d.canTransformCard(c))
         (
           l10n.studyCardDelete,
           Icons.delete_outline_rounded,
@@ -2495,9 +2500,11 @@ class StudyCanvasState extends State<StudyCanvas>
               ? null
               : [
                   BoxShadow(
-                    color: chrome.shadow,
-                    blurRadius: 24,
-                    offset: const Offset(0, 6),
+                    color: chrome.shadow.withValues(
+                      alpha: selected ? .045 : .08,
+                    ),
+                    blurRadius: selected ? 8 : 14,
+                    offset: const Offset(0, 3),
                   ),
                 ],
         ),
@@ -2520,24 +2527,25 @@ class StudyCanvasState extends State<StudyCanvas>
                 child: Row(
                   children: [
                     const SizedBox(width: Space.md),
-                    Icon(
-                      switch (c.type) {
-                        'lecture' || 'video' => Icons.smart_display_outlined,
-                        'text' => Icons.notes_rounded,
-                        'conversation' => Icons.forum_outlined,
-                        'image' => Icons.image_outlined,
-                        'note' ||
-                        'explanation' ||
-                        'knowledge' => Icons.lightbulb_outline_rounded,
-                        'practice' => Icons.quiz_outlined,
-                        _ => Icons.description_outlined,
-                      },
-                      size: 16,
-                      color: c.type == 'conversation'
-                          ? cs.primary
-                          : cs.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: Space.sm),
+                    if (c.type != 'text') ...[
+                      Icon(
+                        switch (c.type) {
+                          'lecture' || 'video' => Icons.smart_display_outlined,
+                          'conversation' => Icons.forum_outlined,
+                          'image' => Icons.image_outlined,
+                          'note' ||
+                          'explanation' ||
+                          'knowledge' => Icons.lightbulb_outline_rounded,
+                          'practice' => Icons.quiz_outlined,
+                          _ => Icons.description_outlined,
+                        },
+                        size: 16,
+                        color: c.type == 'conversation'
+                            ? cs.primary
+                            : cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: Space.sm),
+                    ],
                     Expanded(
                       child: Tooltip(
                         message: c.title,
@@ -2601,13 +2609,26 @@ class StudyCanvasState extends State<StudyCanvas>
                             _importing ? null : () => _expandPDFColumn(c),
                           ),
                         if (c.passageLinked && c.sources.isNotEmpty)
-                          action(l10n.studyBackToPassage, Icons.reply_rounded, () => _focusSource(c.sources.first)),
+                          action(
+                            l10n.studyBackToPassage,
+                            Icons.reply_rounded,
+                            () => _focusSource(c.sources.first),
+                          ),
                         if (c.passageNote)
-                          action(_editingPassage == c.id ? l10n.commonSave : l10n.studyEditAnnotation,
-                            _editingPassage == c.id ? Icons.check : Icons.edit_outlined, () => _update(() {
-                              _editingPassage = _editingPassage == c.id ? null : c.id;
+                          action(
+                            _editingPassage == c.id
+                                ? l10n.commonSave
+                                : l10n.studyEditAnnotation,
+                            _editingPassage == c.id
+                                ? Icons.check
+                                : Icons.edit_outlined,
+                            () => _update(() {
+                              _editingPassage = _editingPassage == c.id
+                                  ? null
+                                  : c.id;
                               _passageEditCheckpoint = null;
-                            })),
+                            }),
+                          ),
                         if (c.type != 'conversation')
                           Draggable<String>(
                             data: c.id,
@@ -2644,9 +2665,14 @@ class StudyCanvasState extends State<StudyCanvas>
                               ),
                             ),
                             child: action(
-                              l10n.studyCardAsk,
+                              c.passageNote
+                                  ? l10n.studyThreadNew
+                                  : l10n.studyCardAsk,
                               Icons.add_comment_outlined,
-                              () => _chooseConversation(c),
+                              () => _chooseConversation(
+                                c,
+                                newConversation: c.passageNote,
+                              ),
                             ),
                           ),
                         if (more.isNotEmpty)
@@ -2666,11 +2692,6 @@ class StudyCanvasState extends State<StudyCanvas>
                             ),
                           ),
                       ],
-                    ),
-                    Icon(
-                      Icons.drag_indicator_rounded,
-                      size: 16,
-                      color: chrome.inkFaint,
                     ),
                     const SizedBox(width: Space.sm),
                   ],
@@ -2703,7 +2724,6 @@ class StudyCanvasState extends State<StudyCanvas>
                         owner: this, card: c, active: false,
                         initial: _initialConversations[c.id] ?? (c.sources.isEmpty ? null : {
                           'query': _passageQuery(c.sources.first),
-                          'draft': '「${c.sources.first.quote}」\n${l10n.studyPassageQuestion}',
                           'visuals': <Map<String,dynamic>>[],
                         }),
                       ),

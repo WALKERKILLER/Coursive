@@ -117,5 +117,5 @@ export async function importNotebookAsset(id, name, bytes, {paged = false} = {})
  return result;
 }
 
-// Canvas format 7 carries optional object.content_scale (default 1). Forward
-// complete documents unchanged so uniform layout transforms survive edits.
+// Keep object metadata such as content_scale and position_locked when
+// forwarding the complete canvas document.

@@ -59,6 +59,7 @@ class StudyCard {
     this.pdfColumn = '',
     this.pdfPaged = false,
     this.collapsed = false,
+    this.positionLocked = false,
     this.expandedH = 0,
     this.quarterTurns = 0,
     this.rotation = 0,
@@ -76,6 +77,7 @@ class StudyCard {
   String pdfColumn;
   bool pdfPaged;
   bool collapsed;
+  bool positionLocked;
   double expandedH;
   int page, pageCount, quarterTurns;
   double rotation, contentScale;
@@ -132,6 +134,7 @@ class StudyCard {
   bool get passageNote => type == 'text' && generation == 'markdown-annotation';
   bool get passageLinked => passageAside || passageNote;
   bool get onCanvas => type != 'conversation' || passageAside;
+  bool get duplicable => type != 'lecture' && type != 'conversation';
   bool get readerCard => generated || markdownReader;
   bool get readingSurface =>
       readerCard || passageAside || type == 'text' || type == 'pdf' || type == 'pdfdoc';
@@ -184,6 +187,7 @@ class StudyCard {
     pdfColumn: '${m['pdf_column'] ?? ''}',
     pdfPaged: m['pdf_paged'] == true,
     collapsed: m['collapsed'] == true,
+    positionLocked: m['position_locked'] == true,
     expandedH: _n(m['expanded_h']),
     rotation: _n(m['rotation']),
     contentScale: _n(m['content_scale'], 1),
@@ -197,7 +201,36 @@ class StudyCard {
         StudyAnchor.fromJson(a as Map),
     ],
   );
-  StudyCard copy() => StudyCard.fromJson(json());
+  StudyCard copy() => StudyCard(
+    id: id,
+    type: type,
+    layer: layer,
+    rect: rect,
+    title: title,
+    text: text,
+    path: path,
+    source: source,
+    documentId: documentId,
+    page: page,
+    pageCount: pageCount,
+    pageAspect: pageAspect,
+    textBoxes: textBoxes,
+    generation: generation,
+    conversationId: conversationId,
+    sourceLectureId: sourceLectureId,
+    originalPath: originalPath,
+    pdfColumn: pdfColumn,
+    pdfPaged: pdfPaged,
+    collapsed: collapsed,
+    positionLocked: positionLocked,
+    expandedH: expandedH,
+    quarterTurns: quarterTurns,
+    rotation: rotation,
+    contentScale: contentScale,
+    blocks: [for (final block in blocks) block.copy()],
+    sources: List.of(sources),
+    responses: Map.of(responses),
+  );
   Map<String, dynamic> json() => {
     'id': id,
     'type': type,
@@ -222,6 +255,7 @@ class StudyCard {
     if (pdfColumn.isNotEmpty) 'pdf_column': pdfColumn,
     if (pdfPaged) 'pdf_paged': true,
     'collapsed': collapsed,
+    if (positionLocked) 'position_locked': true,
     'expanded_h': expandedH,
     if (rotation != 0) 'rotation': rotation,
     if (contentScale != 1) 'content_scale': contentScale,
@@ -442,10 +476,11 @@ class _StudySnapshot {
     : appliedRuns = Set.of(d.appliedRuns),
       layers = d.layers.map((a) => a.copy()).toList(),
       cards = d.cards.map((a) => a.copy()).toList(),
-      connections = d.connections
-          .map((a) => StudyConnection.fromJson(a.json()))
-          .toList(),
-      strokes = List.of(d.strokes),
+      connections = [
+        for (final link in d.connections)
+          StudyConnection(link.id, link.from, link.to, link.label),
+      ],
+      strokes = d._ink.snapshot(),
       pluginObjects = List.of(d.pluginObjects);
   final Set<String> appliedRuns;
   final List<StudyLayer> layers;
@@ -496,6 +531,7 @@ class StudyDocument extends ChangeNotifier {
   bool editable(String id) =>
       layers.any((a) => a.id == id && a.visible && !a.locked);
   bool canTransformCard(StudyCard card) =>
+      !card.positionLocked &&
       editable(card.layer) &&
       (!layers.any((l) => l.locked) ||
           !inkOnCard(card.id).any(
@@ -609,10 +645,11 @@ class StudyDocument extends ChangeNotifier {
     appliedRuns = Set.of(s.appliedRuns);
     layers = s.layers.map((a) => a.copy()).toList();
     cards = s.cards.map((a) => a.copy()).toList();
-    strokes = List.of(s.strokes);
-    connections = s.connections
-        .map((a) => StudyConnection.fromJson(a.json()))
-        .toList();
+    strokes = s.strokes;
+    connections = [
+      for (final link in s.connections)
+        StudyConnection(link.id, link.from, link.to, link.label),
+    ];
     if (s.pluginObjects.length != pluginObjects.length ||
         Iterable.generate(pluginObjects.length)
             .any((i) => !identical(s.pluginObjects[i], pluginObjects[i])))

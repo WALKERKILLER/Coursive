@@ -872,11 +872,22 @@ export class PluginHost {
 	}
 
 	/** Pi inline extensions for a new conversation, one per loaded plugin. */
-	extensionFactories() {
+	extensionFactories(conversation, reportCourseProgress) {
 		const out = [];
 		for (const [id, rec] of this.loaded) {
 			if (rec.error || typeof rec.mod?.default !== "function") continue;
-			out.push({ name: id, factory: (pi) => rec.mod.default(this.wrapPi(pi, rec, false), rec.coursive) });
+			const canReadCourse = conversation?.kind === "course" && rec.manifest.permissions.includes("library.read") &&
+				this.state.plugins[id]?.granted?.includes("library.read");
+			const mayReport = id === "course-tutor" && reportCourseProgress && conversation?.kind !== "task" &&
+				rec.manifest.permissions.includes("workspace") && this.state.plugins[id]?.granted?.includes("workspace");
+			const scopedApi = canReadCourse || mayReport
+				? Object.freeze({ ...rec.coursive, currentCourseId: canReadCourse ? conversation.course_id : undefined,
+					reportCourseProgress: mayReport ? (course, title, record) => {
+						if (conversation?.course_id && course !== conversation.course_id) throw bad("伴学进度与当前课程不匹配");
+						return reportCourseProgress(course, title, record);
+					} : undefined })
+				: rec.coursive;
+			out.push({ name: id, factory: (pi) => rec.mod.default(this.wrapPi(pi, rec, false), scopedApi) });
 		}
 		return out;
 	}

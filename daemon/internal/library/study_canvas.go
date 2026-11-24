@@ -63,6 +63,7 @@ type StudyObject struct {
 	Responses       map[string]string `json:"responses,omitempty"`
 	ConversationID  string            `json:"conversation_id,omitempty"`
 	Collapsed       bool              `json:"collapsed,omitempty"`
+	PositionLocked  bool              `json:"position_locked,omitempty"`
 	ExpandedH       float64           `json:"expanded_h,omitempty"`
 	SourceLectureID string            `json:"source_lecture_id,omitempty"`
 	OriginalPath    string            `json:"original_path,omitempty"`

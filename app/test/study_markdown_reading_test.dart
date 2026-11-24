@@ -3,7 +3,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gpt_markdown/gpt_markdown.dart' show LinkTextSpan;
 
+import '../lib/features/study_canvas/outline_document.dart';
 import '../lib/features/study_canvas/study_document.dart';
 import '../lib/widgets/coursive_markdown.dart';
 import 'study_canvas_ui_test.dart' as fixture;
@@ -47,6 +49,15 @@ Future<void> selectWord(WidgetTester t, int from, int to) async {
 
 class _AsideApi extends fixture.FixtureApi {
   _AsideApi(super.doc);
+  @override
+  Future<dynamic> studyContext(String id, Map<String, dynamic> query) async {
+    final result = await super.studyContext(id, query) as Map;
+    if ((query['objects'] as List?)?.contains('md') == true) {
+      (result['sources'] as List).single['anchor'] = {'object_id': 'md'};
+    }
+    return result;
+  }
+
   @override
   Future<dynamic> canvasRun(String id) async => {
     'state': 'done',
@@ -163,7 +174,7 @@ void main() {
     await t.pumpAndSettle();
     expect(
       t.widget<TextField>(find.byType(TextField).last).controller!.text,
-      contains('「process」'),
+      isEmpty,
     );
     expect(
       api.request,
@@ -179,6 +190,18 @@ void main() {
     final frame = find.byKey(ValueKey('study-card/${aside.id}'));
     expect(frame, findsOneWidget);
     expect(
+      find.descendant(of: frame, matching: find.text('所选原文')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: frame, matching: find.text('全课程')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: frame, matching: find.byTooltip('选择参考资料')),
+      findsNothing,
+    );
+    expect(
       find.byKey(const ValueKey('study-ai-close')).hitTestable(),
       findsNothing,
     );
@@ -187,6 +210,12 @@ void main() {
     await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
     await t.pumpAndSettle();
     expect(api.request?['conversation_id'], aside.conversationId);
+    expect(api.request?['question'], '进程是什么？');
+    expect(api.request?['selection']['selection'], {
+      'object_id': 'md',
+      'start': aside.sources.single.start,
+      'end': aside.sources.single.end,
+    });
     expect(
       api.conversations[aside.conversationId]?['turns'].single['answer'],
       '旁问回答：进程是什么？',
@@ -202,6 +231,10 @@ void main() {
     expect(aside.rect, before.shift(const Offset(36, 42)));
     expect(await reopened.currentState!.flush(), isTrue);
     await close(t);
+    api.conversations[aside.conversationId]!['query'] = {
+      'objects': <String>[],
+      'selection': <String, dynamic>{},
+    };
     final again = await fixture.open(t, api);
     final restored = again.currentState!.document!.cards.last;
     expect(restored.rect, aside.rect);
@@ -216,14 +249,228 @@ void main() {
       again.currentState!.document!.cards.where((c) => c.passageAside),
       hasLength(1),
     );
+    await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
+    await t.pumpAndSettle();
+    expect(api.request?['question'], '我的旁问草稿');
+    expect(
+      api.request?['selection']['selection']['start'],
+      aside.sources.single.start,
+    );
+    expect(api.conversations[aside.conversationId]?['turns'], hasLength(2));
     await close(t);
   });
 
   testWidgets(
-    'returning from a note reveals and highlights its specific Markdown occurrence',
+    'annotation header opens a fresh AI conversation without sending',
+    (t) async {
+      final handout = imported();
+      final firstWord = handout.text.indexOf('process');
+      final note = StudyCard(
+        id: 'annotation',
+        type: 'text',
+        layer: 'main',
+        generation: 'markdown-annotation',
+        title: '进程笔记',
+        text: '进程',
+        rect: const Rect.fromLTWH(240, 100, 410, 84),
+        sources: [
+          StudyAnchor(
+            id: 'source-range',
+            objectId: handout.id,
+            kind: 'text',
+            start: firstWord,
+            end: firstWord + 7,
+            quote: 'process',
+          ),
+        ],
+      );
+      final api = _AsideApi((sheet()..cards.addAll([handout, note])).json());
+      final key = await fixture.open(t, api);
+      final frame = find.byKey(const ValueKey('study-card/annotation'));
+      Finder inCard(Finder matching) =>
+          find.descendant(of: frame, matching: matching);
+      for (final label in ['返回原文', '编辑注释', '新对话', '更多']) {
+        expect(inCard(find.byTooltip(label)), findsOneWidget);
+      }
+      expect(inCard(find.byIcon(Icons.notes_rounded)), findsNothing);
+      expect(inCard(find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
+
+      final d = key.currentState!.document!;
+      for (var i = 0; i < 2; i++) {
+        await t.tap(inCard(find.byTooltip('新对话')));
+        await t.pumpAndSettle();
+      }
+      expect(
+        d.cards
+            .where((c) => c.type == 'conversation')
+            .map((c) => c.conversationId)
+            .toSet(),
+        hasLength(2),
+      );
+      expect(api.request, isNull);
+      await close(t);
+    },
+  );
+
+  testWidgets(
+    'dashed Markdown links keep their action and ordinary strike-through',
+    (t) async {
+      final handout = imported()..text = '~~删去~~ [资料](https://example.test/)';
+      await fixture.open(
+        t,
+        fixture.FixtureApi((sheet()..cards.add(handout)).json()),
+      );
+      final paragraph = t.renderObject<RenderParagraph>(
+        find
+            .byWidgetPredicate(
+              (w) => w is RichText && w.text.toPlainText() == '删去 资料',
+            )
+            .first,
+      );
+      final spans = <TextSpan>[];
+      paragraph.text.visitChildren((span) {
+        if (span is TextSpan) spans.add(span);
+        return true;
+      });
+      final strike = spans.firstWhere((span) => span.text == '删去');
+      expect(strike.style?.decoration, TextDecoration.lineThrough);
+      expect(strike.style?.decorationStyle, isNot(TextDecorationStyle.dashed));
+      // The link container can own the decoration while the leaf owns text.
+      LinkTextSpan? link;
+      void findLink(InlineSpan span) {
+        if (span is! TextSpan) return;
+        if (span is LinkTextSpan) link = span;
+        for (final child in span.children ?? const <InlineSpan>[]) {
+          findLink(child);
+        }
+      }
+
+      findLink(paragraph.text);
+      expect(link?.style?.decorationStyle, TextDecorationStyle.dashed);
+      expect(link?.onTap, isNotNull);
+      await close(t);
+    },
+  );
+
+  testWidgets(
+    'saved marks follow each occurrence when Markdown wraps and a note is removed',
+    (t) async {
+      final handout = imported();
+      final rawStart = handout.text.indexOf('process');
+      final fingerprint = outlineNoteHash(handout.text);
+      StudyCard mark(String id, int offset, bool note) => StudyCard(
+        id: id,
+        type: note ? 'text' : 'conversation',
+        layer: 'main',
+        generation: note ? 'markdown-annotation' : 'markdown-aside',
+        conversationId: note ? '' : id,
+        rect: Rect.fromLTWH(note ? 800 : 1150, 200, 320, 200),
+        sources: [
+          StudyAnchor(
+            id: 'md-0-$offset-${offset + 7}',
+            objectId: handout.id,
+            kind: 'text',
+            fingerprint: note ? 'source-$fingerprint' : fingerprint,
+            start: note ? rawStart : 0,
+            end: note ? rawStart + 7 : 0,
+            quote: 'process',
+          ),
+        ],
+      );
+      // The renderer includes the heading and its following newline and space
+      // in the selectable offsets.
+      final api = _AsideApi(
+        (sheet()
+              ..cards.addAll([
+                handout,
+                mark('n', 5, true),
+                mark('a', 17, false),
+              ]))
+            .json(),
+      );
+      final key = await fixture.open(t, api);
+      final source = find.byKey(const ValueKey('markdown/md/-1'));
+      final overlay = find
+          .descendant(
+            of: source,
+            matching: find.byWidgetPredicate(
+              (w) => w is CustomPaint && w.foregroundPainter != null,
+            ),
+          )
+          .first;
+      final words = find
+          .descendant(
+            of: source,
+            matching: find.byWidgetPredicate(
+              (w) => w is RichText && w.text.toPlainText() == line,
+            ),
+          )
+          .first;
+      List<Rect> boxes(int start, int end) {
+        final paragraph = t.renderObject<RenderParagraph>(words);
+        final transform = paragraph.getTransformTo(t.renderObject(overlay));
+        return paragraph
+            .getBoxesForSelection(
+              TextSelection(baseOffset: start, extentOffset: end),
+            )
+            .map((box) => MatrixUtils.transformRect(transform, box.toRect()))
+            .toList();
+      }
+
+      (ui.Path, ui.Path) paths() {
+        final canvas = TestRecordingCanvas();
+        final box = t.renderObject<RenderBox>(overlay);
+        t
+            .widget<CustomPaint>(overlay)
+            .foregroundPainter!
+            .paint(canvas, box.size);
+        final paths = canvas.invocations
+            .where((call) => call.invocation.memberName == #drawPath)
+            .map((call) => call.invocation.positionalArguments.first as ui.Path)
+            .toList();
+        return (paths[0], paths[1]);
+      }
+
+      void verifyMarks({required bool hasNote}) {
+        final (highlight, dash) = paths();
+        final annotation = boxes(0, 7).first;
+        final aside = boxes(12, 19).first;
+        expect(highlight.contains(annotation.center), hasNote);
+        expect(highlight.contains(aside.center), isFalse);
+        expect(dash.getBounds().left, closeTo(aside.left, .01));
+        expect(dash.getBounds().top, closeTo(aside.bottom + 1, .01));
+        expect(dash.computeMetrics().length, greaterThan(1));
+      }
+
+      verifyMarks(hasNote: true);
+      final d = key.currentState!.document!;
+      final sourceCard = d.cards.first;
+      sourceCard.rect = Rect.fromLTWH(240, 200, 170, 400);
+      d.changed();
+      await t.pumpAndSettle();
+      expect(boxes(12, 19).first.top, greaterThan(boxes(0, 7).first.top));
+      verifyMarks(hasNote: true);
+      await t.tap(find.byKey(const ValueKey('study-tool-pan')));
+      await t.pumpAndSettle();
+      verifyMarks(hasNote: true);
+      d.cards.removeWhere((c) => c.id == 'n');
+      d.changed();
+      await t.pumpAndSettle();
+      verifyMarks(hasNote: false);
+      await close(t);
+    },
+  );
+
+  testWidgets(
+    'returning from a note centers and highlights its specific Markdown occurrence',
     (t) async {
       final source = imported()
-        ..text = [line, ...List.filled(26, '阅读下一段'), line].join('\n\n');
+        ..text = [
+          line,
+          ...List.filled(26, '阅读下一段'),
+          line,
+          ...List.filled(26, '继续阅读'),
+        ].join('\n\n');
       final key = await fixture.open(
         t,
         fixture.FixtureApi((sheet()..cards.add(source)).json()),
@@ -237,8 +484,6 @@ void main() {
       final passages = find.byWidgetPredicate(
         (widget) => widget is RichText && widget.text.toPlainText() == line,
       );
-      position().jumpTo(position().maxScrollExtent);
-      await t.pump();
       final paragraph = t.renderObject<RenderParagraph>(passages.last);
       final word = paragraph
           .getBoxesForSelection(
@@ -246,6 +491,8 @@ void main() {
           )
           .single
           .toRect();
+      position().jumpTo(position().maxScrollExtent / 2);
+      await t.pump();
       final start = paragraph.localToGlobal(
         word.centerLeft + const Offset(.2, 0),
       );
@@ -268,12 +515,14 @@ void main() {
       final anchor = key.currentState!.document!.cards.last.sources.single;
       expect(anchor.start, source.text.lastIndexOf('process'));
       position().jumpTo(0);
-      await t.pump();
+      await t.tap(find.byKey(const ValueKey('study-tool-pan')));
+      await t.pumpAndSettle();
 
       await t.tap(find.byTooltip('返回原文'));
       await t.pump();
       await t.pump(const Duration(milliseconds: 350));
       expect(position().pixels, greaterThan(0));
+      expect(find.text('返回原处'), findsNothing);
       final paint = find
           .descendant(
             of: find.byKey(const ValueKey('markdown/md/-1')),
@@ -285,6 +534,11 @@ void main() {
           .first;
       final layer = t.renderObject<RenderBox>(paint);
       final target = t.renderObject<RenderParagraph>(passages.last);
+      final viewport = RenderAbstractViewport.of(target) as RenderBox;
+      expect(
+        target.localToGlobal(word.center, ancestor: viewport).dy,
+        closeTo(viewport.size.height / 2, .75),
+      );
       final targetRect = MatrixUtils.transformRect(
         target.getTransformTo(layer),
         word,
@@ -340,10 +594,8 @@ void main() {
   testWidgets(
     'a cross-format quotation stays readable without inventing a source offset',
     (t) async {
-      final key = await fixture.open(
-        t,
-        fixture.FixtureApi((sheet()..cards.add(imported())).json()),
-      );
+      final api = _AsideApi((sheet()..cards.add(imported())).json());
+      final key = await fixture.open(t, api);
       await selectWord(t, 0, 11);
       await t.tap(find.text('加注释'));
       await t.pumpAndSettle();
@@ -356,6 +608,31 @@ void main() {
       expect(a.end, 0);
       await selectWord(t, 0, 11);
       expect(find.text('编辑注释 · 跨格式的摘句'), findsOneWidget);
+      await t.tap(find.text('旁问'));
+      await t.pumpAndSettle();
+      final aside = key.currentState!.document!.cards.last;
+      final frame = find.byKey(ValueKey('study-card/${aside.id}'));
+      final input = find.descendant(
+        of: frame,
+        matching: find.byType(TextField),
+      );
+      expect(t.widget<TextField>(input).controller!.text, isEmpty);
+      expect(await key.currentState!.flush(), isTrue);
+      await close(t);
+
+      // The old generated draft is the only text we clear during migration.
+      api.conversations[aside.conversationId]!['draft'] =
+          '「process and」\n这段话在原文里是什么意思？';
+      await fixture.open(t, api);
+      expect(t.widget<TextField>(input).controller!.text, isEmpty);
+      await t.enterText(input, '这是什么意思？');
+      await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
+      await t.pumpAndSettle();
+      expect(api.request?['question'], '「process and」\n这是什么意思？');
+      expect(
+        api.conversations[aside.conversationId]?['turns'].single['question'],
+        '这是什么意思？',
+      );
       await close(t);
     },
   );

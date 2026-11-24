@@ -34,8 +34,8 @@ For a paged PDF, a region without a text range reads the page's real text boxes:
 
 - Markers render as numbered superscripts. Hover or keyboard focus highlights the cited passage on the canvas (the actual text lines, region, stroke bounds or video card) and previews its quote; it never moves the camera or a video. Offscreen sources get an edge indicator instead of a long line. Touch shows the preview on tap with an explicit locate action.
 - Activating a citation first validates workspace, object, visible layer, page text, quote, ink and time. Invalid evidence shows 「来源已失效」 or 「无法定位」 and pushes nothing. Valid evidence pushes a view bookmark (camera, zoom, selection, PDF reading page, video time, sidebar state; at most 10, oldest dropped) and flies to the target within the area left by the sidebar and safe insets, `zoom = min(availableW / targetW, availableH / targetH)` clamped to 0.05–2.0, instantly under reduced motion. Pen, touch, wheel or pinch input cancels a flight.
-- PDF page changes made by navigation are reading state: they add no undo entry and no document edit, and a return restores the page. A video citation seeks to the verified time and pauses; a return restores the earlier time only if the learner has not played or moved the video since. Citations to another lecture are not followed automatically.
-- 「返回原处」, Esc, Alt+← / ⌘[ and the system back action restore bookmarks in LIFO order.
+- PDF page changes made by navigation are reading state: they add no undo entry and no document edit, and a return restores the page. A video citation seeks to the verified time and pauses; a return restores the earlier time only if the learner has not played or moved the video since. Citations to another lecture are not followed automatically. A Markdown passage lands centered in the card’s reading viewport within its scroll limits.
+- Esc, Alt+← / ⌘[ and the system back action restore bookmarks in LIFO order.
 
 ### Answer provenance and pins
 

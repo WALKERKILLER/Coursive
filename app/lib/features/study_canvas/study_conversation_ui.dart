@@ -75,15 +75,18 @@ extension _StudyModules on StudyCanvasState {
     _composerFocus.requestFocus();
   }
 
-  /// A card's 「加入对话」: it joins the conversation on stage.
-  Future<void> _chooseConversation(StudyCard source) async {
+  /// Bind the card to the current conversation or a new one.
+  Future<void> _chooseConversation(
+    StudyCard source, {
+    bool newConversation = false,
+  }) async {
     _selection
       ..clear()
       ..add(source.id);
     _detail.clear();
     _regionSelection = null;
     _selectionPolygon = [];
-    await _openConversation();
+    await _openConversation(newConversation: newConversation);
   }
 
   Future<void> _courseMaterials() async {
@@ -344,6 +347,8 @@ class _ConversationBodyState extends State<_ConversationBody> {
   Map<String, dynamic> get query =>
       jsonDecode(jsonEncode(data!['query'])) as Map<String, dynamic>;
   List get turns => data!['turns'] as List;
+  StudyAnchor? get _asideAnchor =>
+      widget.card.passageAside ? widget.card.sources.firstOrNull : null;
   @override
   void initState() {
     super.initState();
@@ -360,7 +365,12 @@ class _ConversationBodyState extends State<_ConversationBody> {
       data = Map<String, dynamic>.from(value as Map);
       data!['draft_attachments'] ??= <dynamic>[];
       data!['context_scope'] ??= 'selected';
-      input.text = '${data!['draft'] ?? ''}';
+      final draft = '${data!['draft'] ?? ''}', passage = _asideAnchor;
+      // Earlier builds placed their suggested question in the editable draft.
+      final generatedDraft =
+          passage != null &&
+          draft == '「${passage.quote}」\n${l10n.studyPassageQuestion}';
+      input.text = generatedDraft ? '' : draft;
       for (final t in turns) {
         studyUpgradeCitations(t as Map);
         if (t['state'] == 'running' || t['state'] == 'preparing') {
@@ -370,6 +380,10 @@ class _ConversationBodyState extends State<_ConversationBody> {
       }
       setState(() {});
       _summarize();
+      if (generatedDraft) {
+        await save();
+        if (!mounted) return;
+      }
       final initial = widget.initial;
       if (initial != null && (data!['revision'] as num) == 0) {
         input.text = '${initial['draft'] ?? ''}';
@@ -527,30 +541,16 @@ class _ConversationBodyState extends State<_ConversationBody> {
         throw FormatException(l10n.studyConversationUnsaved);
       if (!mounted || owner.document == null) return false;
       final previous = query;
-      final q = reconcileStudyQuery(previous, owner.document!);
-      final passage = widget.card.passageAside
-          ? widget.card.sources.firstOrNull
-          : null;
-      if (passage != null &&
-          (q['selection'] as Map?)?['object_id'] == passage.objectId) {
-        final source = owner.document!.cards
-            .where((c) => c.id == passage.objectId)
-            .firstOrNull;
-        final text = source?.contentText ?? '';
-        final matches =
-            passage.end > passage.start &&
-            passage.end <= text.length &&
-            text.substring(passage.start, passage.end) == passage.quote;
-        q['selection'] = matches
-            ? owner._passageQuery(passage)['selection']
-            : <String, dynamic>{};
-        (q['selections'] as Map?)?.remove(passage.objectId);
-      }
+      final d = owner.document!;
+      final q = reconcileStudyQuery(previous, d);
       repaired = jsonEncode(previous) != jsonEncode(q);
-      q['revision'] = owner.document!.revision;
+      final passage = _asideAnchor;
+      if (passage != null) _bindAsidePassage(d, q, passage);
+      final bindingChanged = jsonEncode(previous) != jsonEncode(q);
+      q['revision'] = d.revision;
       data!['query'] = q;
-      if (repaired) {
-        referenceNotice = l10n.studyReferencesRemoved;
+      if (bindingChanged) {
+        if (repaired) referenceNotice = l10n.studyReferencesRemoved;
         // Removing unrelated video timing fields must not discard a fresh PDF
         // crop. Revoke only attachments whose actual source binding changed.
         visuals.removeWhere(
@@ -591,6 +591,43 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (mounted) setState(() => loading = false);
     }
     return repaired;
+  }
+
+  void _bindAsidePassage(
+    StudyDocument d,
+    Map<String, dynamic> query,
+    StudyAnchor passage,
+  ) {
+    final id = passage.objectId;
+    final source = d.cards
+        .where((c) => c.id == id && d.visible(c.layer))
+        .firstOrNull;
+    if (source == null) return;
+    final objects = query['objects'] as List? ?? const [];
+    if (!objects.contains(id)) query['objects'] = [id, ...objects.take(11)];
+
+    final text = source.contentText;
+    final hash = source.markdownReader ? outlineNoteHash(source.text) : null;
+    final exact =
+        passage.start >= 0 &&
+        passage.end > passage.start &&
+        passage.end <= text.length &&
+        text.substring(passage.start, passage.end) == passage.quote &&
+        (hash == null ||
+            passage.fingerprint == hash ||
+            passage.fingerprint == 'source-$hash');
+    final active = query['selection'] as Map?;
+    final selections = query['selections'] as Map?;
+    selections?.remove(id);
+    if (active == null || active.isEmpty || active['object_id'] == id) {
+      query['selection'] = exact
+          ? owner._passageQuery(passage)['selection']
+          : <String, dynamic>{};
+    } else if (exact) {
+      final supplemental = selections ?? <String, dynamic>{};
+      supplemental[id] = owner._passageQuery(passage)['selection'];
+      query['selections'] = supplemental;
+    }
   }
 
   int _turnsOf(Map source) {
@@ -794,29 +831,33 @@ class _ConversationBodyState extends State<_ConversationBody> {
       return;
     }
     try {
+      final selection = query;
+      final passage = _asideAnchor;
+      final agentQuestion =
+          passage != null &&
+              passage.quote.isNotEmpty &&
+              (selection['objects'] as List?)?.contains(passage.objectId) ==
+                  true &&
+              (selection['selection'] as Map?)?['object_id'] !=
+                  passage.objectId &&
+              !(selection['selections'] as Map? ?? const {}).containsKey(
+                passage.objectId,
+              ) &&
+              !question.contains(passage.quote)
+          ? '「${passage.quote}」\n$question'
+          : question;
       final out = await owner.widget.api.startCanvasRun({
         'lecture_id': owner.widget.ctl.lectureId,
         'conversation_id': widget.card.conversationId,
         'task': ?task,
         'turn_id': turn['id'],
-        'question':
-            widget.card.passageAside &&
-                widget.card.sources.isNotEmpty &&
-                query['objects'] is List &&
-                (query['objects'] as List).contains(
-                  widget.card.sources.first.objectId,
-                ) &&
-                (query['selection'] as Map?)?['object_id'] !=
-                    widget.card.sources.first.objectId &&
-                !question.contains(widget.card.sources.first.quote)
-            ? '「${widget.card.sources.first.quote}」\n$question'
-            : question,
+        'question': agentQuestion,
         if (context.read<AssistantController?>()?.selected case final choice?)
           'model_choice': {
             'provider': choice['provider'],
             'model': choice['model'],
           },
-        'selection': query,
+        'selection': selection,
         'attachments': sentAttachments,
         'context_scope': sentScope,
         'allow_images':
@@ -1025,6 +1066,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
   @override
   Widget build(BuildContext context) {
     final ready = data != null;
+    final scope = ready ? '${data!['context_scope']}' : 'selected';
     return _StageView(
       owner: owner,
       active: widget.active,
@@ -1032,8 +1074,9 @@ class _ConversationBodyState extends State<_ConversationBody> {
       input: input,
       attachments: ready ? attachments : const [],
       pendingSnapshots: pendingSnapshots,
-      contextScope: ready ? '${data!['context_scope']}' : 'selected',
-      onContextScope: ready && !busy
+      contextScope: scope,
+      onContextScope:
+          ready && !busy && (_asideAnchor == null || scope == 'course')
           ? (course) {
               setState(
                 () => data!['context_scope'] = course ? 'course' : 'selected',
