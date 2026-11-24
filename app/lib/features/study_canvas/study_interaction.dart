@@ -26,7 +26,7 @@ extension _StudyInteraction on StudyCanvasState {
   void _startErase(Offset local, Offset p) {
     _erasing = true;
     if (_selectionReady || _selection.isNotEmpty) {
-      setState(() {
+      _update(() {
         _selectionReady = false;
         _selection.clear();
       });
