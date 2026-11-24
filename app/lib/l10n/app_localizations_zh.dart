@@ -7593,8 +7593,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupConfigure => '配置';
 
   @override
-  String get setupPdfHelperMissing =>
-      '内置 PDF 组件缺失，请更新或重新安装 Coursive';
+  String get setupPdfHelperMissing => '内置 PDF 组件缺失，请更新或重新安装 Coursive';
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';
@@ -7966,6 +7965,58 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get outlineQuick => '整理提纲';
+
+  @override
+  String get studyPanTool => '移动画布（H）';
+
+  @override
+  String get studyReadTool => '阅读与选择（V）';
+
+  @override
+  String get studyEditMarkdown => '编辑 Markdown';
+
+  @override
+  String get studyAddAnnotation => '加注释';
+
+  @override
+  String get studyEditAnnotation => '编辑注释';
+
+  @override
+  String get studyAnnotationHint => '写下释义或自己的理解';
+
+  @override
+  String get studyPassageQuestion => '这段话在原文里是什么意思？';
+
+  @override
+  String get studyQuickCreate => '生成';
+
+  @override
+  String get studyQuickHandout => '生成讲义';
+
+  @override
+  String get studyHandoutPrompt =>
+      '把本轮选中的材料做成一张可以自学的 Markdown 讲义。用一个简短的一级标题开头。先解释关键概念，再给一个分步例子，提示易错点。讲解告一段落时用独立二级标题「自测」接一道简答题，只写题干；之后可以继续下一个二级标题的讲解。每张卡最多两道题，资料不足可省略。课堂内容引用本轮实际读到的原文，补充例子注明是示例。不要给自测答案，也不要用代码围栏包住整张讲义。';
+
+  @override
+  String get studyHandoutAside => '旁问';
+
+  @override
+  String studyOpenPassageAside(int index) {
+    return '打开旁问 $index';
+  }
+
+  @override
+  String get studyBackToPassage => '返回原文';
+
+  @override
+  String get studyHandoutReview => '核对作答';
+
+  @override
+  String get studyHandoutContinue => '继续阅读';
+
+  @override
+  String get studyHandoutReviewPrompt =>
+      '请核对我对这道讲义自测的作答。指出我写对的一步和需要补的一步，用讲义与原文依据说明。没有依据的细节请指出，不要替我改写作答。';
 
   @override
   String get outlineConfirmTitle => '整理为复习提纲';

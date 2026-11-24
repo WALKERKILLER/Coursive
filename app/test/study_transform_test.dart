@@ -53,6 +53,48 @@ void main() {
   }
 
   test(
+    'Markdown viewport changes width on all four rotated corners and persists',
+    () {
+      for (final turns in [0, 1]) {
+        for (var corner = 0; corner < 4; corner++) {
+          final d = fixture(), c = d.cards.single;
+          c.source = 'assets/source.md';
+          c.quarterTurns = turns;
+          c.contentScale = 1.25;
+          final before = c.rect, t = StudyCardTransform(c);
+          final size = t.layoutSize, fixed = t.corners[(corner + 2) % 4];
+          final ink = t.toLocal(d.strokes.single.points.first.p);
+          final outward = corner == 0 || corner == 3 ? -80.0 : 80.0;
+          final delta = t.toWorld(Offset(outward, 0)) - t.toWorld(Offset.zero);
+          final session = StudyTransformSession(d, {'card'}, {}, pivot: fixed);
+          expect(session.resizesReadingFrame, true);
+          session.previewCorner(corner, delta);
+          expect(t.layoutSize.width, closeTo(size.width + 80, 1e-8));
+          expect(t.layoutSize.height, closeTo(size.height, 1e-8));
+          expect(
+            (t.corners[(corner + 2) % 4] - fixed).distance,
+            lessThan(1e-8),
+          );
+          expect(
+            (t.toLocal(d.strokes.single.points.first.p) - ink).distance,
+            lessThan(1e-8),
+          );
+          expect(d.strokes.single.width, 3);
+          expect(d.canUndo, false);
+          session.commit();
+          final resized = c.rect;
+          final saved = StudyDocument.fromJson(d.json()).cards.single;
+          expect(saved.rect, resized);
+          expect(saved.contentScale, 1.25);
+          d.undo();
+          expect(d.cards.single.rect, before);
+          d.redo();
+          expect(d.cards.single.rect, resized);
+        }
+      }
+    },
+  );
+  test(
     'uniform rotated scaling fixes the opposite corner and preserves layout',
     () {
       final d = fixture(), c = d.cards.single;

@@ -13881,6 +13881,102 @@ abstract class AppLocalizations {
   /// **'整理提纲'**
   String get outlineQuick;
 
+  /// No description provided for @studyPanTool.
+  ///
+  /// In zh, this message translates to:
+  /// **'移动画布（H）'**
+  String get studyPanTool;
+
+  /// No description provided for @studyReadTool.
+  ///
+  /// In zh, this message translates to:
+  /// **'阅读与选择（V）'**
+  String get studyReadTool;
+
+  /// No description provided for @studyEditMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑 Markdown'**
+  String get studyEditMarkdown;
+
+  /// No description provided for @studyAddAnnotation.
+  ///
+  /// In zh, this message translates to:
+  /// **'加注释'**
+  String get studyAddAnnotation;
+
+  /// No description provided for @studyEditAnnotation.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑注释'**
+  String get studyEditAnnotation;
+
+  /// No description provided for @studyAnnotationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'写下释义或自己的理解'**
+  String get studyAnnotationHint;
+
+  /// No description provided for @studyPassageQuestion.
+  ///
+  /// In zh, this message translates to:
+  /// **'这段话在原文里是什么意思？'**
+  String get studyPassageQuestion;
+
+  /// No description provided for @studyQuickCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成'**
+  String get studyQuickCreate;
+
+  /// No description provided for @studyQuickHandout.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成讲义'**
+  String get studyQuickHandout;
+
+  /// No description provided for @studyHandoutPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'把本轮选中的材料做成一张可以自学的 Markdown 讲义。用一个简短的一级标题开头。先解释关键概念，再给一个分步例子，提示易错点。讲解告一段落时用独立二级标题「自测」接一道简答题，只写题干；之后可以继续下一个二级标题的讲解。每张卡最多两道题，资料不足可省略。课堂内容引用本轮实际读到的原文，补充例子注明是示例。不要给自测答案，也不要用代码围栏包住整张讲义。'**
+  String get studyHandoutPrompt;
+
+  /// No description provided for @studyHandoutAside.
+  ///
+  /// In zh, this message translates to:
+  /// **'旁问'**
+  String get studyHandoutAside;
+
+  /// No description provided for @studyOpenPassageAside.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开旁问 {index}'**
+  String studyOpenPassageAside(int index);
+
+  /// No description provided for @studyBackToPassage.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回原文'**
+  String get studyBackToPassage;
+
+  /// No description provided for @studyHandoutReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'核对作答'**
+  String get studyHandoutReview;
+
+  /// No description provided for @studyHandoutContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续阅读'**
+  String get studyHandoutContinue;
+
+  /// No description provided for @studyHandoutReviewPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请核对我对这道讲义自测的作答。指出我写对的一步和需要补的一步，用讲义与原文依据说明。没有依据的细节请指出，不要替我改写作答。'**
+  String get studyHandoutReviewPrompt;
+
   /// No description provided for @outlineConfirmTitle.
   ///
   /// In zh, this message translates to:

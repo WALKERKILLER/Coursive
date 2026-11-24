@@ -278,6 +278,7 @@ class _CourseMaterialsState extends State<_CourseMaterials> {
                                     'webp',
                                     'txt',
                                     'md',
+                                    'markdown',
                                     'mp4',
                                     'mov',
                                     'mkv',
@@ -527,6 +528,24 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (!mounted || owner.document == null) return false;
       final previous = query;
       final q = reconcileStudyQuery(previous, owner.document!);
+      final passage = widget.card.passageAside
+          ? widget.card.sources.firstOrNull
+          : null;
+      if (passage != null &&
+          (q['selection'] as Map?)?['object_id'] == passage.objectId) {
+        final source = owner.document!.cards
+            .where((c) => c.id == passage.objectId)
+            .firstOrNull;
+        final text = source?.contentText ?? '';
+        final matches =
+            passage.end > passage.start &&
+            passage.end <= text.length &&
+            text.substring(passage.start, passage.end) == passage.quote;
+        q['selection'] = matches
+            ? owner._passageQuery(passage)['selection']
+            : <String, dynamic>{};
+        (q['selections'] as Map?)?.remove(passage.objectId);
+      }
       repaired = jsonEncode(previous) != jsonEncode(q);
       q['revision'] = owner.document!.revision;
       data!['query'] = q;
@@ -780,7 +799,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
         'conversation_id': widget.card.conversationId,
         'task': ?task,
         'turn_id': turn['id'],
-        'question': question,
+        'question':
+            widget.card.passageAside &&
+                widget.card.sources.isNotEmpty &&
+                query['objects'] is List &&
+                (query['objects'] as List).contains(
+                  widget.card.sources.first.objectId,
+                ) &&
+                (query['selection'] as Map?)?['object_id'] !=
+                    widget.card.sources.first.objectId &&
+                !question.contains(widget.card.sources.first.quote)
+            ? '「${widget.card.sources.first.quote}」\n$question'
+            : question,
         if (context.read<AssistantController?>()?.selected case final choice?)
           'model_choice': {
             'provider': choice['provider'],

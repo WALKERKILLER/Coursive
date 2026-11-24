@@ -167,6 +167,8 @@ extension _StudyToolbars on StudyCanvasState {
     _topAction('返回', Icons.arrow_back, widget.onBack),
     _topAction('页面与材料', Icons.view_sidebar_outlined, _pageIndex),
     if (!widget.standalone)
+      _topAction('打开 AI 对话', Icons.forum_outlined, _ask, key: const ValueKey('study-ai-tab')),
+    if (!widget.standalone)
       _topAction(
         l10n.studyShelf,
         Icons.inventory_2_outlined,
@@ -183,7 +185,14 @@ extension _StudyToolbars on StudyCanvasState {
       _topAction(l10n.studyRedo, Icons.redo, d.canRedo ? d.redo : null),
       _divider(false, compact: true),
       _topAction(
-        '浏览 · 点标题选卡，拖空白平移',
+        l10n.studyPanTool,
+        Icons.pan_tool_outlined,
+        () => _chooseTool(StudyTool.pan),
+        key: const ValueKey('study-tool-pan'),
+        selected: _tool == StudyTool.pan,
+      ),
+      _topAction(
+        l10n.studyReadTool,
         Icons.near_me_outlined,
         () => _chooseTool(StudyTool.select),
         key: const ValueKey('study-tool-select'),

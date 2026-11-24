@@ -39,6 +39,8 @@ For a paged PDF, a region without a text range reads the page's real text boxes:
 
 ### Answer provenance and pins
 
+- The arrow tool gives imported Markdown and pinned answers a native text selection. Selecting a passage opens actions to annotate, open a scoped question draft, or edit the Markdown. Annotations are ordinary local cards with a source quotation. Rendered selection offsets distinguish repeated words. Only a verified literal source range is used for exact text queries. Editing a card updates anchors in the unchanged prefix and suffix of its text. Imported files retain their original bytes.
+- The selection composer's 「生成」 menu offers 「生成讲义」 and 「整理提纲」. Handouts use the regular grounded answer run and render as Markdown. 「留在画布」 keeps the source anchors and makes up to two self-checks into inline exercises using the existing practice card. Each answer stays on its card. The learner can open a card-scoped aside, ask the assistant to check an answer or expand the next part of the handout.
 - An answer shows a coverage line (passages, transcript lines, inspected regions, stale citations) and its suggestions.
 - 「留在画布」 creates the editable text card through the existing undo path with the turn's anchors and `generation = "canvas-turn:<conversation_id>:<turn_id>"` (a stable hash when longer than 100 characters). The pinned card is found by generation, not by text: identical answers in different turns pin separately, a second click reveals the existing card, an edited card stays linked, and a deleted card can be pinned again. Placement avoids existing cards and ink near the source.
 

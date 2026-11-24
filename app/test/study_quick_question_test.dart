@@ -17,6 +17,10 @@ class SelectionApi extends fixture.FixtureApi {
   final uploads = <Uint8List>[];
   final metadata = <Map>[];
   bool failUpload = false;
+  Map<String, dynamic>? answerResult;
+  @override
+  Future<dynamic> canvasRun(String id) async =>
+      answerResult ?? await super.canvasRun(id);
   @override
   Future<dynamic> studyContext(String id, Map<String, dynamic> query) async {
     selection = query;
@@ -156,6 +160,74 @@ StudyDocument document() => StudyDocument()
   ];
 
 void main() {
+  testWidgets(
+    'selected material becomes a resumable handout with an independent review',
+    (t) async {
+      final api = SelectionApi(document().json())
+        ..answerResult = {
+          'state': 'done',
+          'answer': '# 进程调度\n\n## 概念\n核心是轮流运行。\n\n## 自测\n为什么单核也能并发？\n\n## 下一步\n尝试举出一个例子。',
+          'sources': [
+            {
+              'id': 'source-p0',
+              'workspace_id': 'fixture',
+              'kind': 'text',
+              'object_id': 'p0',
+              'start': 0,
+              'end': 9,
+              'quote': 'Content 0',
+            },
+          ],
+          'trace': [],
+        };
+      final key = await fixture.open(t, api);
+      await enclose(t, const Rect.fromLTRB(180, 200, 402, 436));
+      await t.tap(find.byKey(const ValueKey('study-quick-create')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('生成讲义'));
+      await t.pumpAndSettle();
+      expect(api.request?['question'], contains('Explain this page'));
+      expect(api.uploads, isEmpty);
+      await t.tap(find.text('留在画布'));
+      await t.pumpAndSettle();
+      final card = key.currentState!.document!.cards.singleWhere(
+        (c) => c.handout,
+      );
+      expect(card.title, '进程调度');
+      expect(card.blocks.map((b) => b.type), [
+        'paragraph',
+        'exercise',
+        'paragraph',
+      ]);
+      expect(card.sources.single.objectId, 'p0');
+      final review = find.widgetWithText(TextButton, '核对作答');
+      expect(t.widget<TextButton>(review).onPressed, isNull);
+      final input = find.descendant(
+        of: find.byKey(ValueKey('${card.id}/answer/1')),
+        matching: find.byType(TextField),
+      );
+      await t.ensureVisible(input);
+      await t.enterText(input, '不同进程在不同时间片运行');
+      await t.pumpAndSettle();
+      await key.currentState!.flush();
+      expect(
+        StudyDocument.fromJson(api.doc).cards
+            .singleWhere((c) => c.handout)
+            .responses['1'],
+        '不同进程在不同时间片运行',
+      );
+      await t.ensureVisible(review);
+      await t.tap(review);
+      await t.pumpAndSettle();
+      expect(api.request?['question'], contains('不同进程在不同时间片运行'));
+      expect(api.request?['question'], contains('Content 0'));
+      expect(api.selection?['objects'], [card.id]);
+      expect(card.responses['1'], '不同进程在不同时间片运行');
+      await t.pumpWidget(const SizedBox());
+      await t.pump(const Duration(seconds: 2));
+    },
+  );
+
   testWidgets(
     'image opt-in restores an IME-obscured selection without losing the question',
     (t) async {

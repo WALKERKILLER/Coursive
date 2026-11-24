@@ -64,7 +64,8 @@ class StudyTransformSession {
     Set<String> cards,
     Set<String> ink, {
     required this.pivot,
-  }) : originals = [
+  }) : singleCard = cards.length == 1 && ink.isEmpty,
+       originals = [
          for (final c in document.cards)
            if (cards.contains(c.id)) c.copy(),
        ],
@@ -75,6 +76,7 @@ class StudyTransformSession {
        format = document.formatVersion {
     allowed = document.canRotateSelection(cards, ink);
   }
+  final bool singleCard;
   final StudyDocument document;
   final List<StudyCard> originals;
   final List<StudyStroke> originalInk;
@@ -83,8 +85,10 @@ class StudyTransformSession {
   late final bool allowed;
   double _scale = 1, _angle = 0;
   Offset _translation = Offset.zero;
+  Rect? _readingFrame;
   bool _closed = false;
   bool get changed =>
+      (_readingFrame != null && _readingFrame != originals.single.rect) ||
       (_scale - 1).abs() > 1e-9 ||
       studyAngle(_angle).abs() > 1e-9 ||
       _translation.distance > 1e-9;
@@ -103,10 +107,56 @@ class StudyTransformSession {
     return value.clamp(lo, hi);
   }
 
+  bool get resizesReadingFrame =>
+      singleCard && originals.length == 1 && originals.single.markdownReader;
+
+  void previewCorner(int corner, Offset delta) {
+    if (!delta.dx.isFinite || !delta.dy.isFinite) return;
+    if (!resizesReadingFrame) {
+      throw StateError('Free resize requires one Markdown card');
+    }
+    final old = originals.single;
+    final t = StudyCardTransform(old);
+    final local =
+        (t.toLocal(old.rect.center + delta) - t.toLocal(old.rect.center)) *
+        old.contentScale;
+    final dx = corner == 0 || corner == 3 ? -1.0 : 1.0;
+    final dy = corner < 2 ? -1.0 : 1.0;
+    final size = old.contentRect.size;
+    final w = (size.width + dx * local.dx)
+        .clamp(math.min(size.width, 240 * old.contentScale), 100000.0)
+        .toDouble();
+    final h = (size.height + dy * local.dy)
+        .clamp(math.min(size.height, 120 * old.contentScale), 100000.0)
+        .toDouble();
+    final dw = w - size.width, dh = h - size.height;
+    Offset offset(double x, double y) => Offset(
+      x * math.cos(t.angle) - y * math.sin(t.angle),
+      x * math.sin(t.angle) + y * math.cos(t.angle),
+    );
+    final frame = Rect.fromCenter(
+      center: old.rect.center + offset(dx * dw / 2, dy * dh / 2),
+      width: old.quarterTurns.isEven ? w : h,
+      height: old.quarterTurns.isEven ? h : w,
+    );
+    // Ink keeps its geometry relative to the reading frame's top-left.
+    _preview(
+      readingFrame: frame,
+      translation: offset(dx < 0 ? -dw : 0, dy < 0 ? -dh : 0),
+    );
+  }
+
   void preview({
     double scale = 1,
     double angle = 0,
     Offset translation = Offset.zero,
+  }) => _preview(scale: scale, angle: angle, translation: translation);
+
+  void _preview({
+    double scale = 1,
+    double angle = 0,
+    Offset translation = Offset.zero,
+    Rect? readingFrame,
   }) {
     if (_closed ||
         !allowed ||
@@ -115,6 +165,7 @@ class StudyTransformSession {
         !translation.dx.isFinite ||
         !translation.dy.isFinite)
       return;
+    _readingFrame = readingFrame;
     _scale = limitScale(scale);
     _angle = angle;
     _translation = translation;
@@ -129,15 +180,18 @@ class StudyTransformSession {
     for (final old in originals) {
       final card = document.cards.where((c) => c.id == old.id).firstOrNull;
       if (card == null) continue;
-      card.rect = Rect.fromCenter(
-        center: map(old.rect.center),
-        width: old.rect.width * _scale,
-        height: old.rect.height * _scale,
-      );
+      card.rect =
+          readingFrame ??
+          Rect.fromCenter(
+            center: map(old.rect.center),
+            width: old.rect.width * _scale,
+            height: old.rect.height * _scale,
+          );
       card.contentScale = old.contentScale * _scale;
       card.rotation = studyAngle(old.rotation + angle);
       card.expandedH = old.expandedH * _scale;
     }
+    if (originalInk.isEmpty) return;
     final ink = {for (final s in originalInk) s.id: s};
     document.strokes = [
       for (final s in document.strokes)
@@ -181,7 +235,12 @@ class StudyTransformSession {
     _restore();
     if (allowed && changed) {
       document.checkpoint();
-      preview(scale: _scale, angle: _angle, translation: _translation);
+      _preview(
+        scale: _scale,
+        angle: _angle,
+        translation: _translation,
+        readingFrame: _readingFrame,
+      );
       if (originals.any((c) => (c.contentScale * _scale - 1).abs() > 1e-9))
         document.formatVersion = 7;
       else if (_angle != 0 && originals.isNotEmpty)

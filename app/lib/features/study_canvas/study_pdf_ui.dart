@@ -231,7 +231,6 @@ class _CanvasPdfState extends State<_CanvasPdf> {
         firstPage: widget.card.page,
         singlePage: widget.root == null ? null : widget.card.page,
         allowMouseInk:
-            widget.root == null ||
             widget.owner._ink ||
             widget.owner._tool == StudyTool.eraser,
         erasing: widget.owner._tool == StudyTool.eraser,
@@ -251,10 +250,9 @@ class _CanvasPdfState extends State<_CanvasPdf> {
         },
         legacyInk: (page, size) {
           final card = widget.card, doc = widget.owner.document!;
-          final strokes = doc.strokes
+          final strokes = doc.inkOnCard(card.id)
               .where(
                 (s) =>
-                    s.anchor == card.id &&
                     doc.visible(s.layer) &&
                     (s.page == page || (s.page == 0 && card.page == page)),
               )
@@ -293,5 +291,7 @@ class _LegacyPageInk extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LegacyPageInk old) => true;
+  bool shouldRepaint(_LegacyPageInk old) =>
+      paper != old.paper || center != old.center || angle != old.angle ||
+      !listEquals(strokes, old.strokes);
 }

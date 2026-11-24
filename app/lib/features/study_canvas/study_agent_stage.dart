@@ -1,7 +1,7 @@
 part of 'study_canvas.dart';
 
-// Conversations use a collapsible sidebar; only explicitly pinned answers
-// become canvas cards. Source bindings and sidecar histories remain independent.
+// General conversations live in the sidebar. A passage aside renders its own
+// persisted conversation in a movable card beside the source.
 // Contract: docs/multimodal-canvas.md, spec 0021.
 
 /// The zoom capsule's offset from the corner and its approximate width.
@@ -9,27 +9,11 @@ const studyZoomInset = Space.md;
 const studyZoomWidth = 172.0;
 
 extension _StudyStage on StudyCanvasState {
-  StudyEdgeDock _aiDock() => StudyEdgeDock(
-    key: const ValueKey('dock-ai'),
-    id: 'ai',
-    label: 'AI 入口',
-    showHandle: false,
-    dragIcon: Icons.auto_awesome_outlined,
-    surfaceKey: _aiDockKey,
-    placement: _aiPlacement,
-    onChanged: (p) => _moveDock('ai', p),
-    children: (_) => [
-      IconButton(
-        key: const ValueKey('study-ai-tab'),
-        tooltip: '打开 AI 对话',
-        onPressed: _ask,
-        icon: const Icon(Icons.auto_awesome_outlined),
-      ),
-    ],
-  );
-
   List<StudyCard> get _threads =>
-      document?.cards.where((c) => c.type == 'conversation').toList() ?? [];
+      document?.cards
+          .where((c) => c.type == 'conversation' && !c.passageAside)
+          .toList() ??
+      [];
 
   Widget _agentStage() {
     final threads = {for (final c in _threads) c.id: c};
@@ -82,7 +66,7 @@ extension _StudyStage on StudyCanvasState {
   void _adoptThreads(StudyDocument d) {
     if (!d.cards.any((c) => c.id == _activeConversation)) {
       _activeConversation = d.cards
-          .where((c) => c.type == 'conversation')
+          .where((c) => c.type == 'conversation' && !c.passageAside)
           .lastOrNull
           ?.id;
     }
@@ -92,38 +76,55 @@ extension _StudyStage on StudyCanvasState {
   /// asks its first question once the node has loaded.
   Future<void> _startConversation({
     String? send,
+    String? initialDraft,
     bool bind = true,
     bool pick = false,
     bool allowImages = false,
     Offset? at,
     String? task,
     StudySnapshot? snapshot,
+    Map<String, dynamic>? sourceQuery,
+    StudyCard? beside,
+    StudyAnchor? passageAnchor,
   }) async {
     final d = document;
-    if (d == null || !d.editable(d.activeLayer)) return;
-    var query = bind
-        ? _selectedQuery()
-        : <String, dynamic>{
-            'objects': <String>[],
-            'selection': <String, dynamic>{},
-            'include_video': false,
-          };
+    if (d == null || !d.editable(beside?.layer ?? d.activeLayer)) return;
+    if (d.cards.length >= 2000) {
+      _toast(l10n.studyCardLimit);
+      return;
+    }
+    var query =
+        sourceQuery ??
+        (bind
+            ? _selectedQuery()
+            : <String, dynamic>{
+                'objects': <String>[],
+                'selection': <String, dynamic>{},
+                'include_video': false,
+              });
     // With 「看图」 off no screenshot is taken at all; with it on the region
     // is one immutable attachment, exactly as shown.
     snapshot ??= bind && allowImages && _regionSelection != null
         ? await _prepareSelectionSnapshot()
         : null;
-    if (snapshot?.query != null) query = Map<String, dynamic>.from(snapshot!.query!);
-    final draft = _idleInput.text;
+    if (snapshot?.query != null)
+      query = Map<String, dynamic>.from(snapshot!.query!);
+    final draft = initialDraft ?? _idleInput.text;
     if (!mounted) return;
     final card = StudyCard(
       id: studyId(),
       type: 'conversation',
-      layer: d.activeLayer,
-      rect: at == null
+      layer: beside?.layer ?? d.activeLayer,
+      generation: passageAnchor == null ? '' : 'markdown-aside',
+      sources: [if (passageAnchor != null) passageAnchor],
+      rect: beside != null
+          ? _placeNear(beside.visualBounds, const Size(440, 440))
+          : at == null
           ? _freeSpot(const Size(300, 200))
           : Rect.fromCenter(center: at, width: 300, height: 200),
-      title: l10n.studyThreadTitle(_threads.length + 1),
+      title: passageAnchor == null
+          ? l10n.studyThreadTitle(_threads.length + 1)
+          : '${l10n.studyHandoutAside} · ${passageAnchor.quote.characters.take(40)}',
       conversationId: studyId(),
     );
     d.checkpoint();
@@ -139,7 +140,11 @@ extension _StudyStage on StudyCanvasState {
       'task': ?task,
       if (pick) 'pick': true,
     };
-    _idleInput.clear();
+    if (card.passageAside) {
+      _revealCard(card);
+      return;
+    }
+    if (initialDraft == null) _idleInput.clear();
     _update(() {
       _activeConversation = card.id;
       _stageOpen = true;
@@ -159,14 +164,20 @@ extension _StudyStage on StudyCanvasState {
       var i = 0;
       i < 60 &&
           document!.cards.any(
-            (c) =>
-                c.type != 'conversation' && c.rect.inflate(16).overlaps(rect),
+            (c) => c.onCanvas && c.visualBounds.inflate(16).overlaps(rect),
           );
       i++
     ) {
       rect = rect.shift(Offset(0, size.height + 24));
     }
     return rect;
+  }
+
+  String? _handoutBrief(String question) {
+    final prompt = l10n.studyHandoutPrompt;
+    return question.startsWith(prompt)
+        ? question.substring(prompt.length).trim()
+        : null;
   }
 
   /// Keeps an answer, or a reviewed outline's [text], as an editable card
@@ -189,6 +200,19 @@ extension _StudyStage on StudyCanvasState {
       _toast('画布卡片已达上限');
       return;
     }
+    final question = '${turn['question'] ?? 'AI 解答'}';
+    var cardTitle = title ?? question;
+    var cardText = answer;
+    var blocks = <StudyBlock>[];
+    if (title == null && _handoutBrief(question) != null) {
+      cardTitle = l10n.studyQuickHandout;
+      final heading = RegExp(r'^# +([^\n]+)\n').firstMatch(answer);
+      if (heading != null && answer.substring(heading.end).trim().isNotEmpty) {
+        cardTitle = heading.group(1)!.trim();
+        cardText = answer.substring(heading.end).trimLeft();
+      }
+      blocks = _handoutBlocks(cardText);
+    }
     // Course passages have no card here until followed; the pin keeps the
     // canvas sources it can lead back to.
     final evidence = studyTurnEvidence(turn)
@@ -208,13 +232,12 @@ extension _StudyStage on StudyCanvasState {
     d.cards.add(
       StudyCard(
         id: studyId(),
-        type: 'text',
+        type: blocks.isEmpty ? 'text' : 'practice',
         layer: d.activeLayer,
         rect: rect,
-        title: (title ?? '${turn['question'] ?? 'AI 解答'}').characters
-            .take(60)
-            .toString(),
-        text: answer,
+        title: cardTitle.characters.take(60).toString(),
+        text: blocks.isEmpty ? cardText : '',
+        blocks: blocks,
         generation: studyPinGeneration(conversation, '${turn['id']}'),
         sources: anchors,
       ),
@@ -227,6 +250,82 @@ extension _StudyStage on StudyCanvasState {
     _toast('已留在画布，可移动、编辑或撤销');
   }
 
+  List<StudyBlock> _handoutBlocks(String text) {
+    final sections = <RegExpMatch>[];
+    String? fence;
+    final lines = RegExp(r'^ {0,3}(`{3,}|~{3,}|## )[^\n]*', multiLine: true);
+    for (final line in lines.allMatches(text)) {
+      final prefix = line.group(1)!;
+      if (fence == null && prefix == '## ') {
+        sections.add(line);
+      } else if (prefix != '## ') {
+        if (fence == null) {
+          fence = prefix;
+        } else if (prefix.startsWith(fence) &&
+            line.group(0)!.trim() == prefix) {
+          fence = null;
+        }
+      }
+    }
+    final blocks = <StudyBlock>[];
+    var offset = 0;
+    var questions = 0;
+    for (var i = 0; i < sections.length && questions < 2; i++) {
+      final section = sections[i];
+      if (section.group(0)!.trim() != '## 自测') continue;
+      final end = i + 1 < sections.length ? sections[i + 1].start : text.length;
+      final question = text.substring(section.end, end).trim();
+      if (question.isEmpty || question.length > 1000) continue;
+      final prose = text.substring(offset, section.start).trim();
+      if (prose.isNotEmpty)
+        blocks.add(StudyBlock(type: 'paragraph', text: prose));
+      blocks.add(StudyBlock(type: 'exercise', text: question));
+      questions++;
+      offset = end;
+    }
+    if (blocks.isEmpty) return blocks;
+    final rest = text.substring(offset).trim();
+    if (rest.isNotEmpty) blocks.add(StudyBlock(type: 'paragraph', text: rest));
+    // An unusually long answer still fits a text card if it exceeds the
+    // existing per-block budget on practice cards.
+    if (blocks.any((b) => utf8.encode(b.text).length > 48000)) return [];
+    return blocks;
+  }
+
+  Future<void> _askAboutHandout(
+    StudyCard card,
+    int index, {
+    required bool review,
+  }) {
+    final question = card.blocks[index].text;
+    final answer = card.responses['$index']?.trim() ?? '';
+    final d = document!;
+    final excerpts = card.sources
+        .where((a) {
+          if (a.quote.isEmpty || a.end <= a.start) return false;
+          final view = _evidenceView({
+            'kind': 'exact_text',
+            'anchor': a.json(),
+          });
+          return view.problem == null && view.page == 0;
+        })
+        .take(3)
+        .map((a) => a.quote.characters.take(300).toString());
+    final quoted = excerpts.isEmpty
+        ? ''
+        : '\n\n讲义来源摘录\n${excerpts.join('\n\n')}';
+    return _startConversation(
+      sourceQuery: {
+        'revision': d.revision,
+        'objects': [card.id],
+        'selection': <String, dynamic>{},
+      },
+      send: review
+          ? '${l10n.studyHandoutReviewPrompt}\n\n题目\n$question\n\n我的作答\n$answer$quoted'
+          : null,
+    );
+  }
+
   /// A free place beside [source] (right, below, then left), clear of cards
   /// and ink; otherwise the next free spot in view.
   Rect _placeNear(Rect? source, Size size) {
@@ -235,9 +334,9 @@ extension _StudyStage on StudyCanvasState {
     bool free(Rect r) =>
         !d.cards.any(
           (c) =>
-              c.type != 'conversation' &&
+              c.onCanvas &&
               d.visible(c.layer) &&
-              c.rect.inflate(16).overlaps(r),
+              c.visualBounds.inflate(16).overlaps(r),
         ) &&
         !d.strokes.any((s) => d.visible(s.layer) && s.bounds.overlaps(r));
     const gap = 24.0;
@@ -279,7 +378,7 @@ extension _StudyStage on StudyCanvasState {
     if (d == null) return null;
     final generation = studyPinGeneration(conversation, '${turn['id']}');
     final linked = d.cards
-        .where((c) => c.type == 'text' && c.generation == generation)
+        .where((c) => c.pinnedAnswer && c.generation == generation)
         .lastOrNull;
     if (linked != null || turns.isEmpty) return linked;
     final answer = '${turn['answer'] ?? ''}'.trim();
@@ -665,6 +764,45 @@ class _StageViewState extends State<_StageView>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     _claim();
+    if (widget.thread?.passageAside == true) {
+      final anchor = widget.thread!.sources.firstOrNull;
+      return LayoutBuilder(
+        builder: (context, bounds) => Padding(
+          padding: const EdgeInsets.all(Space.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: widget.turns.isEmpty
+                    ? Align(
+                        alignment: Alignment.topLeft,
+                        child: Text(
+                          anchor?.quote ?? '',
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      )
+                    : _conversation(context),
+              ),
+              if (widget.turns.isEmpty && widget.error != null)
+                Text(
+                  widget.error!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.error),
+                ),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: math.max(0.0, bounds.maxHeight * .60 - 16),
+                ),
+                child: SingleChildScrollView(child: _composerPane(context)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final viewport = owner._viewport;
     final width = math.min(420.0, math.max(240.0, viewport.width - 16));
     final open = owner._stageOpen;
@@ -910,6 +1048,8 @@ class _StageViewState extends State<_StageView>
         raw['state'] == 'error' ||
         raw['state'] == 'cancelled';
     final working = newest && widget.busy && answer.isEmpty && !failed;
+    final question = '${raw['question']}';
+    final brief = owner._handoutBrief(question);
     final sources = ((raw['result'] as Map?)?['sources'] as List?) ?? const [];
     final evidence = studyTurnEvidence(raw);
     final conversation = widget.thread?.conversationId ?? '';
@@ -940,7 +1080,11 @@ class _StageViewState extends State<_StageView>
                   vertical: Space.md,
                 ),
                 child: SelectableText(
-                  '${raw['question']}',
+                  brief == null
+                      ? question
+                      : brief.isEmpty
+                      ? l10n.studyQuickHandout
+                      : '${l10n.studyQuickHandout} · $brief',
                   style: tt.bodyMedium?.copyWith(color: cs.onPrimaryContainer),
                 ),
               ),
@@ -1154,7 +1298,10 @@ class _StageViewState extends State<_StageView>
       onWillAcceptWithDetails: (details) {
         if (details.data is! String && details.data is! StudySelectionDrop)
           return false;
-        if (widget.loading) return false;
+        if (widget.loading ||
+            (widget.thread?.passageAside == true &&
+                details.data is StudySelectionDrop))
+          return false;
         setState(() => _hover = true);
         return true;
       },

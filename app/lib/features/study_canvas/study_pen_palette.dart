@@ -48,7 +48,7 @@ extension _StudyPenPalette on StudyCanvasState {
             quarterTurns: _penRotation,
             child: AnimatedSlide(
               duration: const Duration(milliseconds: 150),
-              offset: selected ? Offset.zero : const Offset(0, .1),
+              offset: selected ? Offset.zero : const Offset(0, .035),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 1),
                 child: child,
@@ -692,10 +692,23 @@ class _PalettePenPainter extends CustomPainter {
   final String family;
   @override
   void paint(Canvas c, Size s) {
+    final tipY = switch (family) {
+      'fountain' => 3.0,
+      'pencil' => 5.0,
+      'brush' => 7.0,
+      'lasso' => 9.0,
+      'highlighter' => 12.0,
+      'eraser' => 18.0,
+      _ => 13.0,
+    };
     final scale = math.min(s.width / 32, s.height / 90);
+    const artworkBaseY = 97.0;
+    final height = 82 * scale;
+    final scaleY = height / (artworkBaseY - tipY);
+    final baseline = s.height - 4 * scale;
     c.save();
-    c.translate((s.width - 32 * scale) / 2, s.height - 90 * scale);
-    c.scale(scale);
+    c.translate((s.width - 32 * scale) / 2, baseline - artworkBaseY * scaleY);
+    c.scale(scale, scaleY);
     final shade = Paint()
       ..shader = ui.Gradient.linear(
         const Offset(6, 0),
@@ -719,7 +732,7 @@ class _PalettePenPainter extends CustomPainter {
     if (family == 'eraser') {
       c.drawRRect(
         RRect.fromRectAndRadius(
-          const Rect.fromLTWH(7, 18, 18, 31),
+          Rect.fromLTWH(7, tipY, 18, 49 - tipY),
           const Radius.circular(7),
         ),
         Paint()
@@ -745,7 +758,7 @@ class _PalettePenPainter extends CustomPainter {
         Path()
           ..moveTo(10, 24)
           ..lineTo(11, 15)
-          ..lineTo(21, 12)
+          ..lineTo(21, tipY)
           ..lineTo(22, 24)
           ..close(),
         ink..color = Color(color),
@@ -763,7 +776,7 @@ class _PalettePenPainter extends CustomPainter {
       );
       c.drawPath(
         Path()
-          ..moveTo(16, 5)
+          ..moveTo(16, tipY)
           ..lineTo(27, 39)
           ..lineTo(20, 35)
           ..lineTo(12, 40)
@@ -773,7 +786,7 @@ class _PalettePenPainter extends CustomPainter {
       );
       c.drawPath(
         Path()
-          ..moveTo(16, 5)
+          ..moveTo(16, tipY)
           ..lineTo(19, 19)
           ..lineTo(13, 19)
           ..close(),
@@ -791,8 +804,8 @@ class _PalettePenPainter extends CustomPainter {
       );
       final gold = Paint()
         ..shader = ui.Gradient.linear(
-          const Offset(3, 0),
-          const Offset(29, 0),
+          const Offset(5, 0),
+          const Offset(27, 0),
           [
             const Color(0xffb68230),
             const Color(0xffffe7a0),
@@ -802,11 +815,11 @@ class _PalettePenPainter extends CustomPainter {
         );
       c.drawPath(
         Path()
-          ..moveTo(16, 3)
-          ..lineTo(29, 28)
+          ..moveTo(16, tipY)
+          ..lineTo(27, 28)
           ..lineTo(22, 47)
           ..lineTo(10, 47)
-          ..lineTo(3, 28)
+          ..lineTo(5, 28)
           ..close(),
         gold,
       );
@@ -827,7 +840,7 @@ class _PalettePenPainter extends CustomPainter {
     } else if (family == 'lasso') {
       c.drawPath(
         Path()
-          ..moveTo(16, 9)
+          ..moveTo(16, tipY)
           ..lineTo(23, 39)
           ..lineTo(9, 39)
           ..close(),
@@ -851,10 +864,10 @@ class _PalettePenPainter extends CustomPainter {
     } else {
       c.drawPath(
         Path()
-          ..moveTo(16, family == 'brush' ? 7 : 13)
+          ..moveTo(16, tipY)
           ..quadraticBezierTo(20, 28, 21, 43)
           ..lineTo(11, 43)
-          ..quadraticBezierTo(12, 26, 16, family == 'brush' ? 7 : 13)
+          ..quadraticBezierTo(12, 26, 16, tipY)
           ..close(),
         ink,
       );

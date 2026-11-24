@@ -267,7 +267,7 @@ class _ConnectionPainter extends CustomPainter {
     final d = document,
         rects = {
           for (final c in document.cards)
-            if (d.visible(c.layer)) c.id: c.rect,
+            if (c.onCanvas && d.visible(c.layer)) c.id: c.visualBounds,
           for (final o in document.pluginObjects) o.id: o.rect,
         };
     canvas.save();
@@ -282,6 +282,34 @@ class _ConnectionPainter extends CustomPainter {
       return scale.isFinite ? r.center + delta * scale : r.center;
     }
 
+    final dash = Paint()
+      ..color = chrome.accent.withValues(alpha: .58)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5 / d.zoom;
+    for (final child in d.cards) {
+      if (!child.passageLinked) continue;
+      final b = rects[child.id];
+      if (b == null) continue;
+      for (final anchor in child.sources) {
+        final a = rects[anchor.objectId];
+        if (a == null || !a.expandToInclude(b).overlaps(viewport)) continue;
+        final start = edge(a, b.center), end = edge(b, a.center);
+        final mid = (start.dx + end.dx) / 2;
+        final curve = Path()
+          ..moveTo(start.dx, start.dy)
+          ..cubicTo(mid, start.dy, mid, end.dy, end.dx, end.dy);
+        // Bound path subdivision even if the two cards are kilometres apart.
+        canvas.save();
+        canvas.clipRect(viewport);
+        for (final m in curve.computeMetrics()) {
+          final step = math.max(10 / d.zoom, m.length / 512);
+          for (double t = 0; t < m.length; t += step) {
+            canvas.drawPath(m.extractPath(t, t + step / 2), dash);
+          }
+        }
+        canvas.restore();
+      }
+    }
     for (final link in d.connections) {
       final a = rects[link.from], b = rects[link.to];
       if (a == null || b == null) continue;
@@ -332,121 +360,156 @@ class _KnowledgeBody extends StatelessWidget {
     required this.onBeginAnswer,
     required this.onAnswer,
     required this.editable,
+    this.onExercise,
+    this.markdown,
   });
   final StudyCard card;
   final ValueChanged<StudyAnchor> onSource;
   final VoidCallback onBeginAnswer;
   final void Function(int, String) onAnswer;
   final bool editable;
+  final void Function(int index, bool review)? onExercise;
+  final Widget Function(int index, String body)? markdown;
+  List<Widget> _lessonBlocks(BuildContext context, int start) {
+    final widgets = <Widget>[];
+    for (var i = start; i < card.blocks.length; i++) {
+      widgets.add(_block(context, i));
+      if (onExercise != null &&
+          card.blocks[i].type == 'exercise' &&
+          i < card.blocks.length - 1) {
+        widgets.add(
+          ExpansionTile(
+            key: PageStorageKey('study-reader/${card.id}/continue/$i'),
+            title: Text(l10n.studyHandoutContinue),
+            children: _lessonBlocks(context, i + 1),
+          ),
+        );
+        break;
+      }
+    }
+    return widgets;
+  }
+
+  Widget _block(BuildContext context, int index) {
+    final b = card.blocks[index];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: switch (b.type) {
+        'heading' => SelectableText(
+          b.text,
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: StudyChrome.of(context).ink,
+          ),
+        ),
+        'list' || 'steps' => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < b.items.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: SelectableText(
+                  '${b.type == 'steps' ? '${i + 1}.' : '•'} ${b.items[i]}',
+                ),
+              ),
+          ],
+        ),
+        'table' => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: [for (final c in b.columns) DataColumn(label: Text(c))],
+            rows: [
+              for (final r in b.rows)
+                DataRow(
+                  cells: [for (final v in r) DataCell(SelectableText(v))],
+                ),
+            ],
+          ),
+        ),
+        'code' => Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          color: StudyChrome.of(context).surfaceSoft,
+          child: SelectableText(
+            '${b.language}\n${b.text}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+          ),
+        ),
+        'math' => SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Math.tex(b.text, onError: (_, _) => SelectableText(b.text)),
+        ),
+        'exercise' => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(
+              b.text,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            _StudyAnswer(
+              key: ValueKey('${card.id}/answer/${index}'),
+              value: card.responses['${index}'] ?? '',
+              enabled: editable,
+              onBegin: onBeginAnswer,
+              onChanged: (v) => onAnswer(index, v),
+            ),
+            if (onExercise case final action?)
+              Wrap(
+                children: [
+                  TextButton(
+                    onPressed: editable ? () => action(index, false) : null,
+                    child: Text(l10n.studyHandoutAside),
+                  ),
+                  TextButton(
+                    onPressed:
+                        editable &&
+                            (card.responses['$index']?.trim().isNotEmpty ??
+                                false)
+                        ? () => action(index, true)
+                        : null,
+                    child: Text(l10n.studyHandoutReview),
+                  ),
+                ],
+              ),
+            if (b.hint.isNotEmpty)
+              ExpansionTile(
+                title: const Text('提示'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SelectableText(b.hint),
+                  ),
+                ],
+              ),
+            if (b.answer.isNotEmpty)
+              ExpansionTile(
+                title: const Text('答案与解析'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: SelectableText(b.answer),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        _ => markdown?.call(index, b.text) ?? CoursiveMarkdown(b.text),
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Material(
     type: MaterialType.transparency,
     child: SingleChildScrollView(
-      key:PageStorageKey("study-reader/${card.id}"),primary:false,
+      key: PageStorageKey("study-reader/${card.id}"),
+      primary: false,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final b in card.blocks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: switch (b.type) {
-                'heading' => SelectableText(
-                  b.text,
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.bold,
-                    color: StudyChrome.of(context).ink,
-                  ),
-                ),
-                'list' || 'steps' => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < b.items.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: SelectableText(
-                          '${b.type == 'steps' ? '${i + 1}.' : '•'} ${b.items[i]}',
-                        ),
-                      ),
-                  ],
-                ),
-                'table' => SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: [
-                      for (final c in b.columns) DataColumn(label: Text(c)),
-                    ],
-                    rows: [
-                      for (final r in b.rows)
-                        DataRow(
-                          cells: [
-                            for (final v in r) DataCell(SelectableText(v)),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-                'code' => Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: StudyChrome.of(context).surfaceSoft,
-                  child: SelectableText(
-                    '${b.language}\n${b.text}',
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                'math' => SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Math.tex(
-                    b.text,
-                    onError: (_, _) => SelectableText(b.text),
-                  ),
-                ),
-                'exercise' => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SelectableText(
-                      b.text,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    _StudyAnswer(
-                      key: ValueKey(
-                        '${card.id}/answer/${card.blocks.indexOf(b)}',
-                      ),
-                      value: card.responses['${card.blocks.indexOf(b)}'] ?? '',
-                      enabled: editable,
-                      onBegin: onBeginAnswer,
-                      onChanged: (v) => onAnswer(card.blocks.indexOf(b), v),
-                    ),
-                    if (b.hint.isNotEmpty)
-                      ExpansionTile(
-                        title: const Text('提示'),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: SelectableText(b.hint),
-                          ),
-                        ],
-                      ),
-                    if (b.answer.isNotEmpty)
-                      ExpansionTile(
-                        title: const Text('答案与解析'),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: SelectableText(b.answer),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-                _ => CoursiveMarkdown(b.text),
-              },
-            ),
+          ..._lessonBlocks(context, 0),
           if (card.sources.isNotEmpty) ...[
             const Divider(),
             Text('引用来源', style: Theme.of(context).textTheme.labelMedium),

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/walkerkiller/coursive/daemon/internal/store"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,6 +156,52 @@ func TestStudyCanvasConcurrentSaveAndSafeAssets(t *testing.T) {
 	}
 	if _, e = l.ImportStudyAsset(ctx, "one", "large.txt", strings.NewReader(strings.Repeat("a", 800001))); !errors.Is(e, ErrStudyLimit) {
 		t.Fatal(e)
+	}
+}
+
+func TestStudyImportedMarkdownKeepsOriginalAndAnchoredNote(t *testing.T) {
+	l, _ := reviewFixture(t)
+	ctx := context.Background()
+	const original = "# CPU\n\n**process** and process"
+	imported, err := l.ImportStudyModule(ctx, "one", "课堂 讲义.MARKDOWN", strings.NewReader(original))
+	if err != nil {
+		t.Fatal(err)
+	}
+	card := imported.Objects[0]
+	if card.Type != "text" || !strings.HasSuffix(card.Source, "/source.markdown") {
+		t.Fatal(card)
+	}
+	card.Text += "\n\n我的复习提要"
+	start := strings.LastIndex(original, "process")
+	anchor := StudyAnchor{ID: "md-0-17-24", WorkspaceID: "one", Kind: "text", ObjectID: card.ID,
+		Start: start, End: start + 7, Quote: "process", Fingerprint: "example"}
+	note := StudyObject{ID: "note-word", Type: "text", Layer: "main", W: 320, H: 180,
+		Title: "process", Text: "处理", Generation: "markdown-annotation", Sources: []StudyAnchor{anchor}}
+	d, err := l.StudyCanvas(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Objects = append(d.Objects, card, note)
+	if _, err := l.SaveStudyCanvas(ctx, "one", d); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := l.StudyCanvas(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.Objects) != 3 || reopened.Objects[1].Text != card.Text ||
+		len(reopened.Objects[2].Sources) != 1 || reopened.Objects[2].Sources[0].Start != start ||
+		reopened.Objects[2].Text != note.Text {
+		t.Fatal(reopened.Objects)
+	}
+	file, err := l.StudySource(ctx, "one", card.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(file)
+	if err != nil || string(raw) != original {
+		t.Fatalf("imported source changed: %q, %v", raw, err)
 	}
 }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -12,6 +13,7 @@ import 'package:path/path.dart' as path;
 import '../../l10n/l10n.dart';
 import '../../core/android_bridge.dart';
 import '../../core/ink_erase.dart';
+import '../../core/ink_curve.dart';
 import '../study_canvas/study_shape.dart';
 
 /// A local PDF working copy. The opening revision is rendered throughout this
@@ -37,7 +39,7 @@ class DockPDF {
   late bool canExpand;
   late int baseMargin, margin;
   String get snapshot => path.join(cache.path, 'opening.pdf');
-  final strokes = <DockStroke>[];
+  final List<DockStroke> strokes = DockStrokeList();
   int savedCount = 0, savedMargin = 0;
   List<DockStroke> _saved = [];
   final _hidden = <int, Set<int>>{};
@@ -258,6 +260,43 @@ class DockPDF {
     savedCount = snapshot.length;
     savedMargin = extension;
   }
+}
+
+extension _MarksByPage on List<DockStroke> {
+  List<DockStroke> onPage(int page) {
+    final marks = this;
+    return marks is DockStrokeList ? marks.onPage(page) : where((mark) => mark.page == page).toList();
+  }
+}
+
+/// Keep file order for native saves, and group marks once for page painting.
+class DockStrokeList extends ListBase<DockStroke> {
+  final _all = <DockStroke>[];
+  Map<int, List<DockStroke>>? _pages;
+  List<DockStroke> onPage(int page) {
+    final pages = _pages ??= <int, List<DockStroke>>{};
+    if (pages.isEmpty && _all.isNotEmpty) {
+      for (final mark in _all) {
+        (pages[mark.page] ??= []).add(mark);
+      }
+    }
+    return pages[page] ?? const [];
+  }
+  @override int get length => _all.length;
+  @override set length(int value) { _all.length = value; _pages = null; }
+  @override DockStroke operator [](int index) => _all[index];
+  @override void operator []=(int index, DockStroke value) { _all[index] = value; _pages = null; }
+  @override void add(DockStroke value) {
+    _all.add(value);
+    final pages = _pages;
+    if (pages != null) (pages[value.page] ??= []).add(value);
+  }
+  @override void addAll(Iterable<DockStroke> values) {
+    for (final value in values) { add(value); }
+  }
+  @override void insert(int index, DockStroke value) { _all.insert(index, value); _pages = null; }
+  @override void insertAll(int index, Iterable<DockStroke> values) { _all.insertAll(index, values); _pages = null; }
+  @override void replaceRange(int start, int end, Iterable<DockStroke> values) { _all.replaceRange(start, end, values); _pages = null; }
 }
 
 class DockStroke {
@@ -830,7 +869,7 @@ class _PDFSheetState extends State<_PDFSheet> {
         live = [at];
         _processed = 0;
         _preview = _PageErase(
-          widget.pdf.strokes.where((s) => s.page == widget.number),
+          widget.pdf.strokes.onPage(widget.number),
         );
         _queueFrame();
       });
@@ -860,6 +899,8 @@ class _PDFSheetState extends State<_PDFSheet> {
     _queueFrame();
   }
 
+  final _inkCurve = InkCurve();
+
   void _append(Offset p) {
     if (_shape case final fitted?) {
       final pos = _local(p);
@@ -869,7 +910,14 @@ class _PDFSheetState extends State<_PDFSheet> {
             : fitted.adjust(_shapeTip!, pos),
       );
     } else if (p != live.last) {
-      live.add(p);
+      if (erase) {
+        live.add(p);
+      } else {
+        _inkCurve.append(_local(live.last), _local(p), widget.zoom, (position, t) {
+          final q = _normal(position);
+          live.add(t == 1 ? p : Offset(q.dx.clamp(0, 1 + widget.pdf.margin / 100), q.dy.clamp(0, 1)));
+        });
+      }
     }
   }
 
@@ -1022,6 +1070,7 @@ class _PDFSheetState extends State<_PDFSheet> {
                       erase =
                           widget.erasing ||
                           e.kind == PointerDeviceKind.invertedStylus;
+                      _inkCurve.reset();
                       live = [point(e.localPosition)];
                       active = erase
                           ? null
@@ -1089,16 +1138,14 @@ class _PDFSheetState extends State<_PDFSheet> {
                             builder: (_, tick, child) {
                               final marks =
                                   _preview?.visible ??
-                                  pdf.strokes
-                                      .where((s) => s.page == widget.number)
-                                      .toList();
+                                  pdf.strokes.onPage(widget.number);
                               // Keep complete blocks in a retained layer. Appending
                               // a short stroke normally invalidates just the tail.
                               final tail = marks.length ~/ 64 * 64;
                               return Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  if (tail > 0)
+                                  for (var block = 0; block < tail; block += 64)
                                     RepaintBoundary(
                                       child: CustomPaint(
                                         isComplex: true,
@@ -1108,7 +1155,8 @@ class _PDFSheetState extends State<_PDFSheet> {
                                           h,
                                           null,
                                           0,
-                                          end: tail,
+                                          start: block,
+                                          end: block + 64,
                                         ),
                                       ),
                                     ),
@@ -1122,6 +1170,7 @@ class _PDFSheetState extends State<_PDFSheet> {
                                         null,
                                         0,
                                         start: tail,
+                                        end: marks.length,
                                       ),
                                     ),
                                   ),
@@ -1242,6 +1291,7 @@ class _DockInk extends CustomPainter {
         old.start != start ||
         (old.end ?? old.lines.length) != limit)
       return true;
+    if (identical(lines, old.lines)) return false;
     for (var i = start; i < limit; i++) {
       if (!identical(lines[i], old.lines[i])) return true;
     }

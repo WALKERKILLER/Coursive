@@ -297,6 +297,13 @@ extension _StudyEvidence on StudyCanvasState {
     }
     final a = StudyAnchor.fromJson(evidence['anchor'] as Map? ?? const {});
     final card = view.card;
+    final markdownPassage = a.id.startsWith('md-') &&
+        (card?.markdownReader == true || card?.handout == true);
+    if (markdownPassage && card!.collapsed) {
+      d.checkpoint();
+      _setCardCollapsed(card, false);
+      d.changed();
+    }
     Map? page;
     if (view.page > 0 && card != null) {
       try {
@@ -381,7 +388,7 @@ extension _StudyEvidence on StudyCanvasState {
       } else {
         final local = _localVideoKeys[card.id]?.currentState;
         mark.videoBefore =
-            local?.player.state.position.inMilliseconds ??
+            local?.positionMs ??
             _localVideoTimes[card.id] ??
             0;
         _localVideoTimes[card.id] = a.timeStartMs;
@@ -403,6 +410,7 @@ extension _StudyEvidence on StudyCanvasState {
         _stageOpen = false;
         if (_review != null) _reviewPeek = true;
       }
+      if (markdownPassage) _tool = StudyTool.select;
       _selection.clear();
       _regionSelection = null;
       _selectionReady = false;
@@ -511,15 +519,15 @@ extension _StudyEvidence on StudyCanvasState {
       } else {
         final local = _localVideoKeys[video.id]?.currentState;
         final at =
-            local?.player.state.position.inMilliseconds ??
+            local?.positionMs ??
             _localVideoTimes[video.id] ??
             mark.videoAt;
-        if (local?.player.state.playing != true &&
+        if (local?.isPlaying != true &&
             (at - mark.videoAt).abs() <= 1500) {
           _localVideoTimes[video.id] = mark.videoBefore;
           if (local != null) {
             unawaited(
-              local.player.seek(Duration(milliseconds: mark.videoBefore)),
+              local.seekPaused(mark.videoBefore),
             );
           }
         }

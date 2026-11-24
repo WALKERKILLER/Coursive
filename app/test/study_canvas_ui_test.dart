@@ -1,5 +1,6 @@
 // Protocol fixtures verify widgets, not real model inference.
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:convert';
 import 'dart:typed_data';
@@ -7,6 +8,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -180,6 +182,7 @@ Future<GlobalKey<StudyCanvasState>> open(
   bool resetPreferences = true,
   LecturePlayer? player,
   Widget? video,
+  Future<List<String>> Function()? clipboard,
   Widget Function(Widget app)? wrap,
 }) async {
   if (resetPreferences) SharedPreferences.setMockInitialValues({});
@@ -200,6 +203,7 @@ Future<GlobalKey<StudyCanvasState>> open(
             api: api,
             ctl: player ?? FixturePlayer(),
             video: video ?? const Text('视频占位'),
+            readClipboardFiles: clipboard ?? () async => [],
             panel: const SizedBox(width: 240),
             onClassic: () {},
             onAsk: (_) {},
@@ -235,6 +239,64 @@ class CountingStroke extends StudyStroke {
 }
 
 void main() {
+  testWidgets(
+    'Command V reads Finder only on the active canvas outside text entry',
+    (t) async {
+      var reads = 0;
+      final doc = StudyDocument()
+        ..cards.add(StudyCard(
+          id: 'practice', type: 'practice', layer: 'main',
+          rect: const Rect.fromLTWH(130, 60, 520, 650), title: '自测',
+          generation: 'fixture-run',
+          blocks: [StudyBlock(type: 'exercise', text: '操作系统', answer: '答案')],
+        ));
+      final key = await open(t, FixtureApi(doc.json()), clipboard: () async {
+        reads++;
+        return [];
+      });
+      final platform = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      platform.setMockMethodCallHandler(SystemChannels.platform, (call) async =>
+          call.method == 'Clipboard.getData' ? {'text': '正文'} : null);
+      addTearDown(() => platform.setMockMethodCallHandler(SystemChannels.platform, null));
+      Future<void> paste() async {
+        await t.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await t.sendKeyEvent(LogicalKeyboardKey.keyV);
+        await t.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await t.pump();
+      }
+      await t.sendKeyEvent(LogicalKeyboardKey.keyV);
+      expect(reads, 0);
+      await paste();
+      expect(reads, 1);
+      final field = find.widgetWithText(TextField, '我的作答');
+      await t.tap(field);
+      await t.pumpAndSettle();
+      await paste();
+      expect(reads, 1);
+      expect(t.widget<TextField>(field).controller!.text, '正文');
+      FocusManager.instance.primaryFocus!.unfocus();
+      await t.pumpAndSettle();
+      final dialog = showDialog<void>(
+        context: key.currentContext!,
+        builder: (_) => const AlertDialog(content: TextField(autofocus: true)),
+      );
+      await t.pumpAndSettle();
+      await paste();
+      expect(reads, 1);
+      expect(t.widget<EditableText>(find.descendant(
+        of: find.byType(AlertDialog), matching: find.byType(EditableText),
+      )).controller.text, '正文');
+      Navigator.of(key.currentContext!).pop();
+      await t.pumpAndSettle();
+      await dialog;
+      await paste();
+      expect(reads, 2);
+      await t.pumpWidget(const SizedBox());
+      await t.pumpAndSettle();
+    },
+    skip: !Platform.isMacOS,
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
   testWidgets(
     'a long new stroke retains already painted history through pen-up and undo',
     (t) async {
@@ -495,7 +557,7 @@ void main() {
   });
 
   testWidgets(
-    'docks unfold after release, avoid overlap and remember draggable AI',
+    'pen dock unfolds and stays clear of the fixed conversation entry',
     (t) async {
       final api = FixtureApi(StudyDocument().json());
       final key = await open(t, api);
@@ -514,21 +576,9 @@ void main() {
       await t.pumpAndSettle();
       expect(find.byTooltip('收起笔盒'), findsOneWidget);
 
-      // A mostly vertical drag starts directly on the AI button, not a grip.
-      final ai = find.byKey(const ValueKey('study-ai-tab'));
-      final gesture = await t.startGesture(t.getCenter(ai));
-      await gesture.moveBy(const Offset(-25, 160));
-      await t.pump();
-      expect(
-        find.byKey(const ValueKey('study-dock-floating-ai')),
-        findsOneWidget,
-      );
-      await gesture.moveTo(const Offset(120, 550));
-      await t.pump();
-      await gesture.up();
+      await t.tap(find.byKey(const ValueKey('study-ai-tab')));
       await t.pumpAndSettle();
       expect(find.byTooltip('发送'), findsOneWidget);
-      expect(t.getRect(find.byTooltip('发送')).right, lessThan(440));
       // Fixed navigation remains available above the open sidebar.
       expect(find.byTooltip('页面与材料').hitTestable(), findsOneWidget);
       await t.tap(find.byKey(const ValueKey('study-ai-close')));
@@ -536,8 +586,7 @@ void main() {
       expect(find.byTooltip('页面与材料').hitTestable(), findsOneWidget);
       void separated() {
         final rects = [
-          for (final id in ['pens', 'ai'])
-            t.getRect(find.byKey(ValueKey('study-dock-$id'))),
+          t.getRect(find.byKey(const ValueKey('study-dock-pens'))),
           for (final id in ['navigation', 'tools', 'actions'])
             t.getRect(find.byKey(ValueKey('study-top-$id'))),
         ];
@@ -565,12 +614,12 @@ void main() {
       expect(t.takeException(), isNull);
       t.view.physicalSize = const Size(1600, 1100);
       await t.pumpAndSettle();
-      final aiRect = t.getRect(find.byKey(const ValueKey('study-dock-ai')));
+      final aiRect = t.getRect(find.byKey(const ValueKey('study-ai-tab')));
       expect(jsonEncode(key.currentState!.document!.json()), original);
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
       await open(t, api, resetPreferences: false);
-      expect(t.getRect(find.byKey(const ValueKey('study-dock-ai'))), aiRect);
+      expect(t.getRect(find.byKey(const ValueKey('study-ai-tab'))), aiRect);
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
       // Previously saved overlapping collapsed controls must also recover.
@@ -625,6 +674,46 @@ void main() {
       await t.pumpAndSettle();
     },
   );
+
+  testWidgets('pen artwork shares a common height and baseline', (t) async {
+    await open(t, FixtureApi(StudyDocument().json()));
+    final tools = [
+      'study-tool-pen',
+      for (var i = 1; i < 5; i++) 'study-pen-$i',
+      'study-tool-eraser',
+      'study-tool-region',
+    ];
+    final bounds = <String, (int, int)>{};
+    for (final key in tools) {
+      final artwork = find.descendant(
+        of: find.byKey(ValueKey(key)),
+        matching: find.byType(CustomPaint),
+      );
+      final paint = t.widget<CustomPaint>(artwork);
+      final recorder = ui.PictureRecorder();
+      paint.painter!.paint(Canvas(recorder), const Size(22, 38));
+      final picture = recorder.endRecording();
+      final image = picture.toImageSync(22, 38);
+      final pixels = (await t.runAsync(
+        () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+      ))!;
+      image.dispose();
+      picture.dispose();
+      final rows = [
+        for (var y = 0; y < 38; y++)
+          if (Iterable<int>.generate(22)
+              .any((x) => pixels.getUint8((y * 22 + x) * 4 + 3) >= 128))
+            y,
+      ];
+      bounds[key] = (rows.first, rows.last);
+    }
+    final (referenceTip, referenceBase) = bounds.values.first;
+    for (final MapEntry(key: key, value: (tip, base)) in bounds.entries) {
+      // Pointed and rounded tips cover different fractions of the first pixel.
+      expect(tip, closeTo(referenceTip, 2), reason: key);
+      expect(base, closeTo(referenceBase, 1), reason: key);
+    }
+  });
 
   testWidgets(
     'pen selection recalls its settings and second tap opens settings',

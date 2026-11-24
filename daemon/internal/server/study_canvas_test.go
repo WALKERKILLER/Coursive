@@ -200,7 +200,19 @@ func TestStandaloneNotebookRoundTrip(t *testing.T) {
 		if len(result.Objects) != 1 || result.Objects[0].Type != "pdfdoc" {
 			t.Fatalf("expected a single paged PDF card, got %+v", result.Objects)
 		}
-		query := "/pdf-page?page=2&source=" + url.QueryEscape(result.Objects[0].Source)
+		reopened.Objects = append(reopened.Objects, result.Objects[0])
+		canvas, err := json.Marshal(reopened)
+		if err != nil {
+			t.Fatal(err)
+		}
+		call(t, "PUT", base+"/canvas", string(canvas), 200, nil)
+		var restored library.StudyDocument
+		call(t, "GET", base+"/canvas", "", 200, &restored)
+		object := restored.Objects[len(restored.Objects)-1]
+		if object.Type != "pdfdoc" || object.Source != result.Objects[0].Source {
+			t.Fatalf("paged PDF lost during canvas round-trip: %+v", object)
+		}
+		query := "/pdf-page?page=2&source=" + url.QueryEscape(object.Source)
 		var page library.StudyPDFPage
 		call(t, "GET", base+query, "", 200, &page)
 		if page.Count != 2 || !strings.Contains(page.Text, "Second page") {

@@ -78,7 +78,9 @@ extension _StudyTransforms on StudyCanvasState {
     final d = document!, session = _transformSession!;
     final p = _world(_surfacePoint(e.position));
     _pointers[e.pointer] = _surfacePoint(e.position);
-    if (_transformCorner != null) {
+    if (_transformCorner != null && session.resizesReadingFrame) {
+      session.previewCorner(_transformCorner!, p - _transformStart);
+    } else if (_transformCorner != null) {
       final v = p - session.pivot;
       final scale =
           (v.dx * _transformVector.dx + v.dy * _transformVector.dy) /
@@ -135,6 +137,27 @@ extension _StudyTransforms on StudyCanvasState {
             bounds.bottomLeft,
           ]
         : StudyCardTransform(single).corners;
+    // Keep the frame in screen space so its grips stay the same size.
+    // Project it from the same camera update that moves the cards.
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _camera,
+        builder: (_, _) => _screenTransformFrame(
+          d,
+          bounds,
+          corners,
+          showCorners: single?.collapsed != true,
+        ),
+      ),
+    );
+  }
+
+  Widget _screenTransformFrame(
+    StudyDocument d,
+    Rect bounds,
+    List<Offset> corners, {
+    required bool showCorners,
+  }) {
     final points = corners.map((p) => p * d.zoom + d.camera).toList();
     final top = (points[0] + points[1]) / 2;
     final centre = bounds.center * d.zoom + d.camera;
@@ -181,51 +204,49 @@ extension _StudyTransforms on StudyCanvasState {
         ),
       ),
     );
-    return Positioned.fill(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _TransformOutline(
-                  points,
-                  grip,
-                  chrome.accent,
-                  snapped: _angleSnap.locked != null && _rotatePivot != null,
-                ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CustomPaint(
+              painter: _TransformOutline(
+                points,
+                grip,
+                chrome.accent,
+                snapped: _angleSnap.locked != null && _rotatePivot != null,
               ),
             ),
           ),
-          if (single?.collapsed != true)
-            for (var i = 0; i < 4; i++) handle(points[i], corner: i),
-          handle(grip),
-          if (_rotationLabel == null && !_selectionReady)
-            Positioned(
-              left: grip.dx + 26,
-              top: grip.dy - 22,
-              child: _selectionActions(),
-            ),
-          if (_rotationLabel != null)
-            Positioned(
-              left: grip.dx + 24,
-              top: grip.dy - 16,
-              child: IgnorePointer(
-                child: Material(
-                  borderRadius: BorderRadius.circular(8),
-                  color: chrome.accent,
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Text(
-                      _rotationLabel!,
-                      style: TextStyle(color: chrome.paper),
-                    ),
+        ),
+        if (showCorners)
+          for (var i = 0; i < 4; i++) handle(points[i], corner: i),
+        handle(grip),
+        if (_rotationLabel == null && !_selectionReady)
+          Positioned(
+            left: grip.dx + 26,
+            top: grip.dy - 22,
+            child: _selectionActions(),
+          ),
+        if (_rotationLabel != null)
+          Positioned(
+            left: grip.dx + 24,
+            top: grip.dy - 16,
+            child: IgnorePointer(
+              child: Material(
+                borderRadius: BorderRadius.circular(8),
+                color: chrome.accent,
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Text(
+                    _rotationLabel!,
+                    style: TextStyle(color: chrome.paper),
                   ),
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }

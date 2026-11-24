@@ -1,5 +1,7 @@
 part of 'study_canvas.dart';
 
+enum _QuickStudyAction { handout, outline }
+
 extension _StudyInteraction on StudyCanvasState {
   void _updateEraserCursor(Offset local) {
     _eraserCursor = local;
@@ -132,7 +134,7 @@ extension _StudyInteraction on StudyCanvasState {
     final loop = Path()..addPolygon(polygon, true);
     for (final c in d.cards.where(
       (c) =>
-          c.type != 'conversation' &&
+          c.onCanvas &&
           d.visible(c.layer) &&
           _selectionKinds.contains(studyCardSelectionKind(c)),
     )) {
@@ -245,7 +247,7 @@ extension _StudyInteraction on StudyCanvasState {
       return;
     if (d.cards.length + _copiedCards.length > 2000 ||
         d.strokes.length + _copiedInk.length > 29000 ||
-        d.strokes.fold<int>(0, (n, s) => n + s.points.length) +
+        d.inkPointCount +
                 _copiedInk.fold<int>(0, (n, s) => n + s.points.length) >
             490000) {
       _toast('画布内容已接近容量上限，请先整理后再粘贴');
@@ -459,7 +461,6 @@ extension _StudyInteraction on StudyCanvasState {
       final obstacles = <Rect>[];
       for (final key in [
         _dockKey,
-        _aiDockKey,
         _zoomKey,
         _shelfKey,
         ..._stageKeys,
@@ -847,19 +848,28 @@ extension _StudyInteraction on StudyCanvasState {
                     style: tt.labelSmall?.copyWith(color: cs.outline),
                   ),
                 ),
-                // The chips above are the material it reads; 「看图」 is the consent.
-                TextButton.icon(
-                  key: const ValueKey('study-quick-outline'),
-                  onPressed: _quickSending
-                      ? null
-                      : () => _sendQuickQuestion(outline: true),
-                  icon: const Icon(
-                    Icons.format_list_bulleted_rounded,
-                    size: 16,
-                  ),
-                  label: Text(l10n.outlineQuick),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
+                PopupMenuButton<_QuickStudyAction>(
+                  key: const ValueKey('study-quick-create'),
+                  enabled: !_quickSending,
+                  onSelected: (action) => _sendQuickQuestion(action: action),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: _QuickStudyAction.handout,
+                      child: Text(l10n.studyQuickHandout),
+                    ),
+                    PopupMenuItem(
+                      value: _QuickStudyAction.outline,
+                      child: Text(l10n.outlineQuick),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.sm),
+                    child: Row(
+                      children: [
+                        Text(l10n.studyQuickCreate, style: tt.labelLarge),
+                        const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                      ],
+                    ),
                   ),
                 ),
               ],

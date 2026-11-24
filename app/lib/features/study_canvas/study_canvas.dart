@@ -17,6 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../core/api.dart';
+import '../../core/clipboard_files.dart';
+import '../../core/ink_curve.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
 import '../../core/plugins.dart';
@@ -60,6 +62,7 @@ part 'study_agent_stage.dart';
 part 'study_shelf_ui.dart';
 part 'study_brush_ui.dart';
 part 'study_interaction.dart';
+part 'study_markdown_reader.dart';
 part 'study_conversation_ui.dart';
 part 'study_pdf_ui.dart';
 part 'study_toolbar_ui.dart';
@@ -75,7 +78,7 @@ part 'study_outline_review.dart';
 part 'study_outline_export.dart';
 part 'study_plugin_ui.dart';
 
-enum StudyTool { select, pen, highlighter, eraser, region }
+enum StudyTool { pan, select, pen, highlighter, eraser, region }
 
 class StudyCanvas extends StatefulWidget {
   const StudyCanvas({
@@ -87,6 +90,7 @@ class StudyCanvas extends StatefulWidget {
     required this.onClassic,
     this.pdfLibraryRoot,
     this.openCanvasPDF = DockPDF.open,
+    this.readClipboardFiles = readMacClipboardFiles,
     required this.onAsk,
     required this.onBack,
     this.fullscreen = false,
@@ -101,6 +105,7 @@ class StudyCanvas extends StatefulWidget {
     required String name,
     this.pdfLibraryRoot,
     this.openCanvasPDF = DockPDF.open,
+    this.readClipboardFiles = readMacClipboardFiles,
     required this.onBack,
   }) : notebookId = id,
        title = name,
@@ -127,6 +132,7 @@ class StudyCanvas extends StatefulWidget {
   final Widget video, panel;
   final VoidCallback? onClassic;
   final String? pdfLibraryRoot;
+  final Future<List<String>> Function() readClipboardFiles;
   final Future<DockPDF> Function(String, String) openCanvasPDF;
   final VoidCallback onBack;
   final ValueChanged<String>? onAsk;
@@ -168,7 +174,7 @@ class StudyCanvasState extends State<StudyCanvas>
     StudyDockEdge.right,
     .34,
   );
-  final _aiDockKey = GlobalKey();
+  String? _editingPassage, _passageEditCheckpoint;
   bool _dockSmall = false;
   final _penItemKeys = <int, GlobalKey>{};
   final _eraserKey = GlobalKey();
@@ -342,6 +348,7 @@ class StudyCanvasState extends State<StudyCanvas>
   final _detail = StudySelection();
   final _capture = GlobalKey();
   final _dockKey = GlobalKey(), _zoomKey = GlobalKey();
+  String? _previewVideoId;
   final _localVideoKeys = <String, GlobalKey<_LocalVideoState>>{};
   final _localVideoTimes = <String, int>{};
   Rect? _regionSelection, _sourceHighlight;
@@ -363,7 +370,18 @@ class StudyCanvasState extends State<StudyCanvas>
   Offset? _start, _last;
   Offset? _panCamera;
   bool _pdfPinching = false;
-  bool _trackpadOnPdf = false;
+  bool _trackpadReading = false;
+  bool _overReader(Offset local) {
+    final point = _world(local);
+    final card = document!.cards
+        .where((c) => document!.visible(c.layer) && c.containsWorld(point))
+        .lastOrNull;
+    return card != null &&
+        !card.collapsed &&
+        card.readingSurface &&
+        StudyCardTransform(card).toLocal(point).dy >= 36;
+  }
+
   bool _onPdf(Offset global) => _pdfBodies.values.any((key) {
     final box = key.currentContext?.findRenderObject() as RenderBox?;
     return box != null &&
@@ -384,6 +402,16 @@ class StudyCanvasState extends State<StudyCanvas>
   double? _pinchDistance, _pinchZoom;
   Offset? _pinchWorld;
   int? _drawingPointer;
+  bool _committingPlainInk = false;
+  // Repainting the ink is sufficient between consecutive strokes on the same
+  // surface. A selection, sidebar, history change or tool switch needs chrome.
+  bool _sameInkSurface(String anchor) =>
+      !_selectionReady && !_wholeCardSelected && !_quickAsk && !_stageOpen &&
+      _review == null && _shelfTab == null &&
+      (anchor.isEmpty ? _selection.isEmpty :
+          _selection.length == 1 && _selection.contains(anchor) && _detail.objectId == anchor);
+
+  final _inkCurve = InkCurve();
   int _pointBudget = 20000;
   Size _viewport = const Size(1000, 700);
 
@@ -391,6 +419,9 @@ class StudyCanvasState extends State<StudyCanvas>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (Platform.isMacOS) {
+      FocusManager.instance.addEarlyKeyEventHandler(_onFilePaste);
+    }
     if (widget.standalone) _tool = StudyTool.pen;
     _load();
     _syncCheck = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -548,7 +579,9 @@ class StudyCanvasState extends State<StudyCanvas>
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 1000), _saveWhenIdle);
     _scene.value++;
-    setState(() => _status = l10n.studyPendingSave);
+    if (!_committingPlainInk || _status != l10n.studyPendingSave) {
+      setState(() => _status = l10n.studyPendingSave);
+    }
   }
 
   void _saveWhenIdle() {
@@ -636,6 +669,41 @@ class StudyCanvasState extends State<StudyCanvas>
   /// The system back action first returns from a followed citation.
   bool returnFromSource() => document != null && _goBack();
 
+  // macOS text-selection shortcuts can consume Paste before the player Focus
+  // receives it. Route only the active canvas gesture before normal dispatch.
+  KeyEventResult _onFilePaste(KeyEvent event) {
+    if (event is! KeyDownEvent ||
+        event.logicalKey != LogicalKeyboardKey.keyV ||
+        !_commandOnly() ||
+        !mounted ||
+        document == null ||
+        widget.fullscreen ||
+        ModalRoute.of(context)?.isCurrent != true) {
+      return KeyEventResult.ignored;
+    }
+    final contextWithFocus = FocusManager.instance.primaryFocus?.context;
+    final field = contextWithFocus?.widget is EditableText
+        ? contextWithFocus!.widget as EditableText
+        : contextWithFocus?.findAncestorWidgetOfExactType<EditableText>();
+    if (field != null && !field.readOnly) return KeyEventResult.ignored;
+    unawaited(_import(fromClipboard: true));
+    return KeyEventResult.handled;
+  }
+
+  bool _commandOnly() {
+    // Remote keyboards and accessibility input can report Command without a
+    // left/right flag on macOS. The native raw event preserves that flag.
+    final pressed = LogicalKeyboardKey.collapseSynonyms({
+      ...HardwareKeyboard.instance.logicalKeysPressed,
+      // ignore: deprecated_member_use
+      ...RawKeyboard.instance.keysPressed,
+    });
+    return pressed.contains(LogicalKeyboardKey.meta) &&
+        !pressed.contains(LogicalKeyboardKey.shift) &&
+        !pressed.contains(LogicalKeyboardKey.control) &&
+        !pressed.contains(LogicalKeyboardKey.alt);
+  }
+
   bool handleKey(KeyEvent e) {
     if (e is! KeyDownEvent || document == null) return false;
     // Typing in the composer or a card must not switch tools.
@@ -675,9 +743,10 @@ class StudyCanvasState extends State<StudyCanvas>
       keys.isShiftPressed ? document!.redo() : document!.undo();
       return true;
     }
+    if (keys.isMetaPressed || keys.isControlPressed || keys.isAltPressed) return false;
     final tool = {
       LogicalKeyboardKey.keyV: StudyTool.select,
-      LogicalKeyboardKey.keyH: StudyTool.select,
+      LogicalKeyboardKey.keyH: StudyTool.pan,
       LogicalKeyboardKey.keyD: StudyTool.pen,
       LogicalKeyboardKey.keyE: StudyTool.eraser,
     }[k];
@@ -692,6 +761,9 @@ class StudyCanvasState extends State<StudyCanvas>
   void dispose() {
     _cancelCardHold();
     unawaited(_titlebar(false));
+    if (Platform.isMacOS) {
+      FocusManager.instance.removeEarlyKeyEventHandler(_onFilePaste);
+    }
     WidgetsBinding.instance.removeObserver(this);
     _syncCheck?.cancel();
     _disposed = true;
@@ -765,7 +837,6 @@ class StudyCanvasState extends State<StudyCanvas>
   }) {
     for (final key in [
       _dockKey,
-      _aiDockKey,
       _zoomKey,
       _selectionMenuKey,
       _returnKey,
@@ -835,7 +906,7 @@ class StudyCanvasState extends State<StudyCanvas>
     final card = d.cards
         .where(
           (c) =>
-              c.type != 'conversation' &&
+              c.onCanvas &&
               d.visible(c.layer) &&
               c.containsWorld(point),
         )
@@ -886,19 +957,10 @@ class StudyCanvasState extends State<StudyCanvas>
         _inlinePDF &&
         (card.type == 'pdfdoc' || _pdfPageCard(card)) &&
         !header;
-    final reading =
-        card != null &&
-        !header &&
-        (paper ||
-            card.readerCard ||
-            const {
-              'text',
-              'note',
-              'explanation',
-              'knowledge',
-              'practice',
-            }.contains(card.type));
+    final reading = card != null && !header && (paper || card.readerCard ||
+        card.type == 'text' || (_tool == StudyTool.select && card.readingSurface));
     final pan =
+        _tool == StudyTool.pan ||
         e.buttons == kMiddleMouseButton ||
         (e.kind == PointerDeviceKind.mouse &&
             HardwareKeyboard.instance.logicalKeysPressed.contains(
@@ -984,7 +1046,8 @@ class StudyCanvasState extends State<StudyCanvas>
       return;
     }
     if (owner == StudyContactOwner.ink) {
-      if (_tool == StudyTool.select && stylus) _tool = StudyTool.pen;
+      final switchToPen = _tool == StudyTool.select && stylus;
+      if (switchToPen) _tool = StudyTool.pen;
       final temporary =
           e.kind == PointerDeviceKind.invertedStylus ||
           (_penButtons && stylus && (e.buttons & kPrimaryStylusButton) != 0);
@@ -997,7 +1060,7 @@ class StudyCanvasState extends State<StudyCanvas>
         _toast(l10n.studyLayerUnavailable);
         return;
       }
-      final used = d.strokes.fold<int>(0, (n, s) => n + s.points.length);
+      final used = d.inkPointCount;
       if (d.strokes.length >= 29000 || used >= 490000) {
         _toast(l10n.studyInkLimit);
         return;
@@ -1009,13 +1072,14 @@ class StudyCanvasState extends State<StudyCanvas>
       _gestureBrush = _brush;
       _gestureWidth = _penWidth;
       _gestureColor = _color;
+      _inkCurve.reset();
       _points = [InkPoint(point, _pressure(e))];
       _clearPrefix();
       _anchor = card?.id ?? '';
       _watchPressure(e);
       _watchShape(e);
       _live.value++;
-      setState(() {});
+      if (switchToPen || !_sameInkSurface(_anchor)) setState(() {});
       return;
     }
     if (e.kind == PointerDeviceKind.mouse && card != null && !pan) {
@@ -1093,21 +1157,10 @@ class StudyCanvasState extends State<StudyCanvas>
           delta = (p - previous.p) * (1 - _gestureBrush.smoothing * .7);
       if (delta.distance < .4 / d.zoom || _points.length >= _pointBudget)
         return;
-      final steps = _gestureBrush.family == 'highlighter'
-          ? 1
-          : (delta.distance / 4).ceil().clamp(
-              1,
-              math.min(100, _pointBudget - _points.length),
-            );
-      for (var i = 1; i <= steps; i++) {
-        final t = i / steps;
-        _points.add(
-          InkPoint(
-            previous.p + delta * t,
-            previous.pressure + (_pressure(e) - previous.pressure) * t,
-          ),
-        );
-      }
+      final pressure = _pressure(e);
+      _inkCurve.append(previous.p, previous.p + delta, d.zoom, (position, t) {
+        _points.add(InkPoint(position, previous.pressure + (pressure - previous.pressure) * t));
+      }, limit: _pointBudget - _points.length, maxStep: _gestureBrush.family == 'highlighter' ? double.infinity : 4);
       // Painting translucent chunks separately leaves dark bands at their joins.
       while (_gestureBrush.family != 'highlighter' &&
           _points.length - _prefixEnd > 65) {
@@ -1245,28 +1298,43 @@ class StudyCanvasState extends State<StudyCanvas>
       _scene.value++;
       _live.value++;
     }
+    var repaintInkOnly = false;
     if (_drawingPointer == e.pointer) {
       final d = document!;
+      repaintInkOnly = d.canUndo && !d.canRedo && _sameInkSurface(_anchor);
+      if (_shape == null && _points.isNotEmpty && _points.length < _pointBudget) {
+        final last = _points.last, tip = _world(e.localPosition);
+        if ((tip - last.p).distance * d.zoom > .4) {
+          _inkCurve.append(last.p, tip, d.zoom, (p, t) {
+            _points.add(InkPoint(p, last.pressure));
+          }, limit: _pointBudget - _points.length);
+        }
+      }
       final firstNew = d.strokes.length;
-      d.addStroke(
-        StudyStroke(
-          id: studyId(),
-          layer: d.activeLayer,
-          points: List.of(_points),
-          color: _gestureColor,
-          width: _gestureWidth,
-          brush: _gestureBrush,
-          tool: _tool == StudyTool.highlighter ? 'highlighter' : 'pen',
-          anchor: _anchor,
-          page:
-              d.cards
-                  .where((c) => c.id == _anchor && c.type == 'pdfdoc')
-                  .firstOrNull
-                  ?.page ??
-              0,
-        ),
-      );
-      _commitShape(firstNew);
+      _committingPlainInk = repaintInkOnly;
+      try {
+        d.addStroke(
+          StudyStroke(
+            id: studyId(),
+            layer: d.activeLayer,
+            points: List.of(_points),
+            color: _gestureColor,
+            width: _gestureWidth,
+            brush: _gestureBrush,
+            tool: _tool == StudyTool.highlighter ? 'highlighter' : 'pen',
+            anchor: _anchor,
+            page:
+                d.cards
+                    .where((c) => c.id == _anchor && c.type == 'pdfdoc')
+                    .firstOrNull
+                    ?.page ??
+                0,
+          ),
+        );
+        _commitShape(firstNew);
+      } finally {
+        _committingPlainInk = false;
+      }
       final added = d.strokes.getRange(firstNew, d.strokes.length);
       _detail.clear();
       _detail.strokeIds.addAll(added.map((s) => s.id));
@@ -1333,14 +1401,18 @@ class StudyCanvasState extends State<StudyCanvas>
       _erasing = false;
       _pinchDistance = null;
       _scene.value++;
-      setState(() {});
+      if (!repaintInkOnly) setState(() {});
     }
   }
 
   void _scroll(PointerSignalEvent e) {
     if (e is! PointerScrollEvent ||
         _drawingPointer != null ||
-        _overControls(e.position))
+        _overControls(e.position, includePdf: _tool != StudyTool.pan) ||
+        (_tool == StudyTool.select &&
+            _overReader(e.localPosition) &&
+            !HardwareKeyboard.instance.isMetaPressed &&
+            !HardwareKeyboard.instance.isControlPressed))
       return;
     GestureBinding.instance.pointerSignalResolver.register(e, (_) {
       _fly.stop();
@@ -1370,7 +1442,7 @@ class StudyCanvasState extends State<StudyCanvas>
   void _fit() {
     final d = document!;
     final cards = d.cards.where(
-      (a) => a.type != 'conversation' && d.visible(a.layer),
+      (a) => a.onCanvas && d.visible(a.layer),
     );
     var r = cards.isEmpty
         ? const Rect.fromLTWH(0, 0, 880, 550)
@@ -1500,39 +1572,18 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  static const _fileExtensions = [
+    'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'txt', 'md', 'markdown',
+    'mp4', 'mov', 'm4v', 'webm', 'mkv',
+  ];
+
   Future<void> _import({
     String? courseware,
     bool wholeCourse = false,
+    bool fromClipboard = false,
     Offset? at,
   }) async {
     if (_importing) return;
-    XFile? file;
-    if (courseware == null) {
-      file = await openFile(
-        acceptedTypeGroups: [
-          XTypeGroup(
-            label: l10n.studyMaterials,
-            extensions: [
-              'pdf',
-              'png',
-              'jpg',
-              'jpeg',
-              'gif',
-              'webp',
-              'txt',
-              'md',
-              'markdown',
-              'mp4',
-              'mov',
-              'm4v',
-              'webm',
-              'mkv',
-            ],
-          ),
-        ],
-      );
-      if (!mounted || file == null) return;
-    }
     final d = document!;
     if (!d.editable(d.activeLayer)) {
       _toast(l10n.studyPickLayer);
@@ -1543,68 +1594,91 @@ class StudyCanvasState extends State<StudyCanvas>
       _status = l10n.studyImporting;
     });
     try {
-      dynamic out;
-      if (courseware != null) {
-        out = wholeCourse
-            ? await widget.api.importStudyMaterial(
-                widget.ctl.lectureId,
-                courseware,
-              )
-            : await widget.api.importStudyCourseware(
-                widget.ctl.lectureId,
-                courseware,
-              );
-      } else {
-        final length = await file!.length();
-        if (length > 300 << 20) throw FormatException(l10n.studyFileTooLarge);
-        out = widget.standalone
-            ? await widget.api.upload(
-                '/api/notebooks/${widget.notebookId}/assets',
-                {'name': file.name, 'paged': '1'},
-                file.openRead(),
-                length,
-              )
-            : await widget.api.importStudyAsset(
-                widget.ctl.lectureId,
-                file.name,
-                file.openRead(),
-                length,
-              );
+      final files = <XFile>[];
+      if (fromClipboard) {
+        final paths = await widget.readClipboardFiles();
+        for (final path in paths.toSet()) {
+          final suffix = filePath.extension(path).toLowerCase();
+          if (suffix.length > 1 && _fileExtensions.contains(suffix.substring(1)) &&
+              await FileSystemEntity.type(path) == FileSystemEntityType.file) {
+            files.add(XFile(path));
+          }
+        }
+        if (files.isEmpty) {
+          if (mounted && paths.isNotEmpty) _toast(l10n.studyShelfUnsupported);
+          return;
+        }
+      } else if (courseware == null) {
+        final file = await openFile(acceptedTypeGroups: [
+          XTypeGroup(label: l10n.studyMaterials, extensions: _fileExtensions),
+        ]);
+        if (file == null) return;
+        files.add(file);
       }
-      if (!mounted) return;
-      final cards = [
-        for (final a in out['objects'] as List) StudyCard.fromJson(a as Map),
-      ];
-      if (cards.length + d.cards.length > 2000)
-        throw FormatException(l10n.studyCardLimit);
+      if (!mounted || document != d) return;
       final center = at ?? _world(_viewport.center(Offset.zero));
-      d.checkpoint();
       var y = center.dy - (at == null ? 120 : 60);
-      for (final c in cards) {
-        c.layer = d.activeLayer;
-        c.rect = Rect.fromLTWH(center.dx - 160, y, c.rect.width, c.rect.height);
-        y += c.rect.height + 36;
+      final failures = <String>[];
+      // A library reference produces one batch; copied files produce one each.
+      for (final file in <XFile?>[if (courseware != null) null, ...files]) {
+        if (!mounted || document != d) return;
+        try {
+          final dynamic out;
+          if (file != null) {
+            final length = await file.length();
+            if (length > 300 << 20) throw FormatException(l10n.studyFileTooLarge);
+            out = widget.standalone
+                ? await widget.api.upload('/api/notebooks/${widget.notebookId}/assets',
+                    {'name': file.name, 'paged': '1'}, file.openRead(), length)
+                : await widget.api.importStudyAsset(widget.ctl.lectureId,
+                    file.name, file.openRead(), length);
+          } else {
+            out = wholeCourse
+                ? await widget.api.importStudyMaterial(widget.ctl.lectureId, courseware!)
+                : await widget.api.importStudyCourseware(widget.ctl.lectureId, courseware!);
+          }
+          if (!mounted || document != d) return;
+          if (!d.editable(d.activeLayer)) throw StateError(l10n.studyPickLayer);
+          final cards = [for (final a in out['objects'] as List) StudyCard.fromJson(a as Map)];
+          if (cards.isEmpty) throw FormatException(l10n.studyShelfUnsupported);
+          if (cards.length + d.cards.length > 2000) throw FormatException(l10n.studyCardLimit);
+          d.checkpoint();
+          for (final c in cards) {
+            c.layer = d.activeLayer;
+            c.rect = Rect.fromLTWH(center.dx - 160, y, c.rect.width, c.rect.height);
+            y += c.rect.height + 36;
+          }
+          d.cards.addAll(cards);
+          _selection..clear()..add(cards.first.id);
+          d.changed();
+          _tool = StudyTool.select;
+          if (!await flush()) break;
+        } catch (e) {
+          failures.add(file == null ? '$e' : '${file.name} · $e');
+        }
       }
-      d.cards.addAll(cards);
-      _selection
-        ..clear()
-        ..add(cards.first.id);
-      d.changed();
-      _tool = StudyTool.select;
-      await flush();
+      if (mounted && failures.isNotEmpty) _toast(l10n.studyImportError(failures.join('\n')));
     } catch (e) {
-      _toast(l10n.studyImportError('$e'));
+      if (mounted) _toast(l10n.studyImportError('$e'));
     } finally {
-      if (mounted)
-        setState(() {
-          _importing = false;
-          if (_saveError == null) _status = l10n.studySaved;
-        });
+      if (mounted) setState(() {
+        _importing = false;
+        if (_saveError == null) _status = l10n.studySaved;
+      });
     }
   }
 
-  Future<void> _text([StudyCard? card]) async {
-    final input = TextEditingController(text: card?.text ?? '');
+  Future<void> _text([StudyCard? card, TextRange? passage]) async {
+    final original = card?.text;
+    final input = TextEditingController(text: original ?? '');
+    if (passage != null &&
+        passage.isValid &&
+        passage.end <= input.text.length) {
+      input.selection = TextSelection(
+        baseOffset: passage.start,
+        extentOffset: passage.end,
+      );
+    }
     final text = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
@@ -1616,7 +1690,7 @@ class StudyCanvasState extends State<StudyCanvas>
             autofocus: true,
             minLines: 5,
             maxLines: 15,
-            maxLength: 200000,
+            maxLength: card?.markdownReader == true ? 800000 : 200000,
             decoration: InputDecoration(hintText: l10n.studyTextHint),
           ),
         ),
@@ -1636,12 +1710,21 @@ class StudyCanvasState extends State<StudyCanvas>
     Future.delayed(const Duration(milliseconds: 400), input.dispose);
     if (!mounted || text == null) return;
     final d = document!;
+    if (card != null && (!d.cards.contains(card) || card.text != original)) {
+      _toast(l10n.studySelectionChanged);
+      return;
+    }
+    if (utf8.encode(text).length > 800000) {
+      _toast(l10n.studyFileTooLarge);
+      return;
+    }
     if (!d.editable(card?.layer ?? d.activeLayer)) {
       _toast(l10n.studyLocked);
       return;
     }
     d.checkpoint();
     if (card != null) {
+      _rebaseMarkdownNotes(card, text);
       card.text = text;
     } else {
       final p = _world(_viewport.center(Offset.zero));
@@ -1672,11 +1755,9 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
-  /// Sends the quick composer's question, or with [outline] drafts a review
-  /// outline of the bound material, the question becoming its brief.
-  Future<void> _sendQuickQuestion({bool outline = false}) async {
+  Future<void> _sendQuickQuestion({_QuickStudyAction? action}) async {
     final text = _quickInput.text.trim();
-    if ((text.isEmpty && !outline) || _quickSending) return;
+    if ((text.isEmpty && action == null) || _quickSending) return;
     _update(() {
       _quickSending = true;
       _quickError = null;
@@ -1688,12 +1769,16 @@ class StudyCanvasState extends State<StudyCanvas>
         throw FormatException(l10n.studySelectionNeedsSource);
       }
       await _startConversation(
-        send: !outline
-            ? text
-            : text.isEmpty
-            ? l10n.outlineAsk
-            : '${l10n.outlineAsk}：$text',
-        task: outline ? 'propose_outline' : null,
+        send: switch (action) {
+          null => text,
+          _QuickStudyAction.outline =>
+            text.isEmpty ? l10n.outlineAsk : '${l10n.outlineAsk}：$text',
+          _QuickStudyAction.handout =>
+            text.isEmpty
+                ? l10n.studyHandoutPrompt
+                : '${l10n.studyHandoutPrompt}\n\n$text',
+        },
+        task: action == _QuickStudyAction.outline ? 'propose_outline' : null,
         allowImages: _quickImages,
         snapshot: _quickImages ? _quickSnapshot : null,
       );
@@ -1889,9 +1974,14 @@ class StudyCanvasState extends State<StudyCanvas>
   );
 
   Widget _canvas(StudyDocument d) {
+    final view = _visibleWorld;
+    _previewVideoId = d.cards.where((card) => card.type == 'video' && !card.collapsed &&
+        d.visible(card.layer) && card.visualBounds.overlaps(view)).firstOrNull?.id;
     final cardIds = d.cards.map((c) => c.id).toSet();
     _cardHeaderActions.removeWhere((id, _) => !cardIds.contains(id));
     _pdfBodies.removeWhere((id, _) => !cardIds.contains(id));
+    _localVideoKeys.removeWhere((id, _) => !cardIds.contains(id));
+    _localVideoTimes.removeWhere((id, _) => !cardIds.contains(id));
     final stage = _visibleWorld.inflate(
       math.max(_viewport.width, _viewport.height) / d.zoom,
     );
@@ -1926,7 +2016,8 @@ class StudyCanvasState extends State<StudyCanvas>
                     _erasing ||
                     _overControls(e.position, includePdf: false))
                   return;
-                _trackpadOnPdf = _onPdf(e.position);
+                _trackpadReading =
+                    _tool != StudyTool.pan && _overReader(e.localPosition);
                 _fly.stop();
                 _pinchZoom = d.zoom;
                 _pinchWorld = _world(e.localPosition);
@@ -1937,7 +2028,7 @@ class StudyCanvasState extends State<StudyCanvas>
                     _pinchZoom == null ||
                     _panCamera == null)
                   return;
-                if (_trackpadOnPdf && e.scale == 1) return;
+                if (_trackpadReading && e.scale == 1) return;
                 d.zoom = (_pinchZoom! * e.scale).clamp(.05, 8);
                 d.camera = e.localPosition + e.pan - _pinchWorld! * d.zoom;
                 _cameraChanged();
@@ -2013,10 +2104,12 @@ class StudyCanvasState extends State<StudyCanvas>
                                     ),
                                     for (final c in d.cards.where(
                                       (a) =>
-                                          a.type != 'conversation' &&
+                                          a.onCanvas &&
                                           d.visible(a.layer) &&
                                           (a.type == 'lecture' ||
-                                              a.type == 'video' ||
+                                              (a.passageAside && _conversationKeys[a.id]?.currentState?.busy == true) ||
+                                              (a.type == 'video' &&
+                                                  _localVideoKeys[a.id]?.currentState?.isPlaying == true) ||
                                               a.visualBounds.overlaps(stage)),
                                     ))
                                       Positioned.fromRect(
@@ -2069,7 +2162,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                             builder: (_, __, ___) {
                                               final ink = _InkScene.visible(
                                                 d,
-                                                preview ? _prefix : d.strokes,
+                                                preview ? _prefix : d.inkIn(stage),
                                                 stage,
                                                 _inlinePDF,
                                                 _dark,
@@ -2232,12 +2325,12 @@ class StudyCanvasState extends State<StudyCanvas>
               topInset: _topBarsBottom + 8,
               children: [
                 _penDock(),
-                if (!widget.standalone && !_stageOpen) _aiDock(),
               ],
             ),
-            if (_tool == StudyTool.select ||
-                _tool == StudyTool.region ||
-                (_wholeCardSelected && _drawingPointer == null))
+            if (_tool != StudyTool.pan &&
+                (_tool == StudyTool.select ||
+                    _tool == StudyTool.region ||
+                    (_wholeCardSelected && _drawingPointer == null)))
               _rotationHandle(),
             _fixedTopBars(),
             if (!widget.standalone) _agentStage(),
@@ -2300,6 +2393,19 @@ class StudyCanvasState extends State<StudyCanvas>
     );
   }
 
+  void _setCardCollapsed(StudyCard card, bool collapsed) {
+    if (collapsed) card.expandedH = card.rect.height;
+    final minHeight = card.type == 'conversation' ? 160.0 : 240.0;
+    card
+      ..collapsed = collapsed
+      ..rect = Rect.fromLTWH(
+        card.rect.left,
+        card.rect.top,
+        card.rect.width,
+        collapsed ? 60 : math.max(minHeight, card.expandedH),
+      );
+  }
+
   Widget _card(StudyCard c) {
     final d = document!,
         selected = !_snapshotting && _selection.contains(c.id),
@@ -2343,18 +2449,7 @@ class StudyCanvasState extends State<StudyCanvas>
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
           () {
             d.checkpoint();
-            c.collapsed = !c.collapsed;
-            if (c.collapsed) {
-              c.expandedH = c.rect.height;
-              c.rect = Rect.fromLTWH(c.rect.left, c.rect.top, c.rect.width, 60);
-            } else {
-              c.rect = Rect.fromLTWH(
-                c.rect.left,
-                c.rect.top,
-                c.rect.width,
-                math.max(c.type == 'conversation' ? 160 : 240, c.expandedH),
-              );
-            }
+            _setCardCollapsed(c, !c.collapsed);
             d.changed();
           },
         ),
@@ -2371,7 +2466,11 @@ class StudyCanvasState extends State<StudyCanvas>
           () => _editKnowledge(c),
         ),
       if (c.type == 'text')
-        (l10n.studyEditText, Icons.edit_outlined, () => _text(c)),
+        (
+          c.markdownReader ? l10n.studyEditMarkdown : l10n.studyEditText,
+          Icons.edit_outlined,
+          () => _text(c),
+        ),
       if (c.type != 'lecture' && !pdfColumn)
         (
           l10n.studyCardDelete,
@@ -2501,6 +2600,14 @@ class StudyCanvasState extends State<StudyCanvas>
                             Icons.view_agenda_outlined,
                             _importing ? null : () => _expandPDFColumn(c),
                           ),
+                        if (c.passageLinked && c.sources.isNotEmpty)
+                          action(l10n.studyBackToPassage, Icons.reply_rounded, () => _focusSource(c.sources.first)),
+                        if (c.passageNote)
+                          action(_editingPassage == c.id ? l10n.commonSave : l10n.studyEditAnnotation,
+                            _editingPassage == c.id ? Icons.check : Icons.edit_outlined, () => _update(() {
+                              _editingPassage = _editingPassage == c.id ? null : c.id;
+                              _passageEditCheckpoint = null;
+                            })),
                         if (c.type != 'conversation')
                           Draggable<String>(
                             data: c.id,
@@ -2579,8 +2686,7 @@ class StudyCanvasState extends State<StudyCanvas>
                   child: IgnorePointer(
                     ignoring:
                         _tool == StudyTool.region ||
-                        (_selectsPdf(c.id) &&
-                            (c.type == "pdfdoc" || c.type == "pdf")),
+                        (_tool == StudyTool.pan && c.readingSurface),
                     child: switch (c.type) {
                       'pdfdoc' when _inlinePDF && !c.collapsed => _CanvasPdf(
                         key: _pdfBodies.putIfAbsent(
@@ -2592,6 +2698,16 @@ class StudyCanvasState extends State<StudyCanvas>
                       ),
                       'pdfdoc' when _inlinePDF => const SizedBox.shrink(),
                       'pdfdoc' => _PDFBody(owner: this, card: c),
+                      'conversation' when c.passageAside => _ConversationBody(
+                        key: _conversationKeys.putIfAbsent(c.id, () => GlobalKey<_ConversationBodyState>()),
+                        owner: this, card: c, active: false,
+                        initial: _initialConversations[c.id] ?? (c.sources.isEmpty ? null : {
+                          'query': _passageQuery(c.sources.first),
+                          'draft': '「${c.sources.first.quote}」\n${l10n.studyPassageQuestion}',
+                          'visuals': <Map<String,dynamic>>[],
+                        }),
+                      ),
+                      'text' when c.passageNote && _editingPassage == c.id => _passageEditor(c),
                       'conversation' => _ThreadNode(owner: this, card: c),
                       'lecture' => Column(
                         children: [
@@ -2657,6 +2773,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                   )
                                 : widget.api.fileUrl(c.path),
                             prepare: flush,
+                            preview: _previewVideoId == c.id || _bookmarks.lastOrNull?.video == c.id,
                             initialMs: _localVideoTimes[c.id] ?? 0,
                             onPosition: (ms) => _localVideoTimes[c.id] = ms,
                           ),
@@ -2669,14 +2786,7 @@ class StudyCanvasState extends State<StudyCanvas>
                             ? const NeverScrollableScrollPhysics()
                             : null,
                         padding: const EdgeInsets.all(18),
-                        child: CoursiveMarkdown(
-                          c.text,
-                          style: TextStyle(
-                            fontSize: 16,
-                            height: 1.55,
-                            color: chrome.ink,
-                          ),
-                        ),
+                        child: _markdownPassage(c, c.text),
                       ),
                       'note' ||
                       'explanation' ||
@@ -2685,9 +2795,17 @@ class StudyCanvasState extends State<StudyCanvas>
                         key: ValueKey('${c.id}:$_cardTextEpoch'),
                         child: _KnowledgeBody(
                           card: c,
+                          markdown: c.handout
+                              ? (index, body) =>
+                                    _markdownPassage(c, body, block: index)
+                              : null,
                           onSource: _focusSource,
                           editable: d.editable(c.layer),
                           onBeginAnswer: d.checkpoint,
+                          onExercise: c.handout
+                              ? (index, review) =>
+                                    _askAboutHandout(c, index, review: review)
+                              : null,
                           onAnswer: (i, value) {
                             if (d.editable(c.layer)) {
                               c.responses['$i'] = value;
@@ -2754,10 +2872,12 @@ class _LocalVideo extends StatefulWidget {
     required this.url,
     required this.initialMs,
     required this.prepare,
+    required this.preview,
     required this.onPosition,
   });
   final String url;
   final int initialMs;
+  final bool preview;
   final Future<bool> Function() prepare;
   final ValueChanged<int> onPosition;
   @override
@@ -2770,17 +2890,31 @@ class _LocalVideoState extends State<_LocalVideo> {
   StreamSubscription? _errors;
   StreamSubscription? _positions;
   bool _failed = false;
-  late final Future<bool> ready;
+  Future<bool>? _ready;
+  bool get isPlaying => _ready != null && player.state.playing;
+  int? get positionMs => _ready == null ? null : player.state.position.inMilliseconds;
+
   @override
   void initState() {
     super.initState();
+    if (widget.preview) _ensureOpen();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LocalVideo old) {
+    super.didUpdateWidget(old);
+    if (widget.preview && _ready == null) _ensureOpen();
+  }
+
+  Future<bool> _ensureOpen() => _ready ??= _subscribeAndOpen();
+  Future<bool> _subscribeAndOpen() {
     _errors = player.stream.error.listen((error) {
       if (mounted) setState(() => _failed = true);
     });
     _positions = player.stream.position.listen(
       (p) => widget.onPosition(p.inMilliseconds),
     );
-    ready = _open();
+    return _open();
   }
 
   Future<bool> _open() async {
@@ -2802,7 +2936,9 @@ class _LocalVideoState extends State<_LocalVideo> {
   }
 
   Future<void> seekPaused(int milliseconds) async {
-    if (!await ready || !mounted || _failed)
+    final pending = _ensureOpen();
+    if (mounted) setState(() {});
+    if (!await pending || !mounted || _failed)
       throw const FormatException('Video unavailable');
     await player.seek(Duration(milliseconds: milliseconds));
     await player.pause();
@@ -2812,12 +2948,22 @@ class _LocalVideoState extends State<_LocalVideo> {
   void dispose() {
     _errors?.cancel();
     _positions?.cancel();
-    unawaited(player.dispose());
+    if (_ready != null) unawaited(player.dispose());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => !_failed
+  Widget build(BuildContext context) => _ready == null
+      ? Center(child: IconButton(
+          tooltip: l10n.playerPlayTooltip,
+          icon: const Icon(Icons.play_circle_outline),
+          onPressed: () async {
+            final pending = _ensureOpen();
+            setState(() {});
+            if (await pending && mounted) await player.play();
+          },
+        ))
+      : !_failed
       ? MaterialDesktopVideoControlsTheme(
           normal: const MaterialDesktopVideoControlsThemeData(
             modifyVolumeOnScroll: false,
@@ -2927,12 +3073,12 @@ class _InkScene extends CustomPainter {
   // document can change in place between paints, including after undo.
   static List<(StudyStroke, bool)> visible(
     StudyDocument d,
-    List<StudyStroke> strokes,
+    Iterable<StudyStroke> strokes,
     Rect viewport,
     bool inlinePDF,
     bool dark,
   ) {
-    if (strokes.isEmpty) return const [];
+    if (strokes is List<StudyStroke> && strokes.isEmpty) return const [];
     final cards = {for (final card in d.cards) card.id: card};
     final layers = {
       for (final l in d.layers)
