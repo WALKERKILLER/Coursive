@@ -113,18 +113,17 @@ func (s *Server) folderConflict(_ http.ResponseWriter, r *http.Request) (any, er
 		if !selected {
 			return nil, badRequest("此课程未启用同步")
 		}
-		if parts[3] == "quizzes" && len(parts) == 5 {
-			relative = filepath.Join("quizzes", parts[4])
-		} else {
+		working, ok := s.Data.CourseFolderTarget(strings.Join(parts[1:], "/"))
+		if !ok {
+			return nil, badRequest("冲突路径无效")
+		}
+		if parts[3] != "quizzes" && parts[3] != "tutor" {
 			targetRoot = s.Data.Roots.Data
 			dataChanged = true
-			if parts[3] == "metadata.json" && len(parts) == 4 {
-				relative = filepath.Join("agent", "course-sessions", parts[2]+".json")
-			} else if parts[3] == "assistant" && len(parts) == 5 {
-				relative = filepath.Join("agent", "sessions", parts[4])
-			} else {
-				return nil, badRequest("冲突路径无效")
-			}
+		}
+		relative, e = filepath.Rel(targetRoot, working)
+		if e != nil {
+			return nil, e
 		}
 	default:
 		return nil, badRequest("此副本需要在本机文件夹中处理")

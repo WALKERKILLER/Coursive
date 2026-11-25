@@ -554,17 +554,18 @@ func (s *Store) Search(ctx context.Context, q, courseID string, limit int) ([]Hi
 // ---- notes ----
 
 type Note struct {
-	BaseBody  *string `json:"base_body,omitempty"`
-	ID        string  `json:"id"`
-	CourseID  string  `json:"course_id"`
-	LectureID string  `json:"lecture_id"`
-	Title     string  `json:"title"`
-	Body      string  `json:"body,omitempty"`
-	Source    string  `json:"source"`
-	Pinned    bool    `json:"pinned"`
-	Path      string  `json:"path"`
-	CreatedAt int64   `json:"created_at"`
-	UpdatedAt int64   `json:"updated_at"`
+	CreateOnly bool    `json:"create_only,omitempty"`
+	BaseBody   *string `json:"base_body,omitempty"`
+	ID         string  `json:"id"`
+	CourseID   string  `json:"course_id"`
+	LectureID  string  `json:"lecture_id"`
+	Title      string  `json:"title"`
+	Body       string  `json:"body,omitempty"`
+	Source     string  `json:"source"`
+	Pinned     bool    `json:"pinned"`
+	Path       string  `json:"path"`
+	CreatedAt  int64   `json:"created_at"`
+	UpdatedAt  int64   `json:"updated_at"`
 }
 
 func (s *Store) PutNote(ctx context.Context, n Note) error {

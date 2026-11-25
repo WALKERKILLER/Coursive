@@ -10,6 +10,24 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get lessonLoading => '正在读取本节资料并打开讲义…';
+
+  @override
+  String get lessonStudyStart => '学这节课';
+
+  @override
+  String get lessonChooseProgress => '选择要继续的学习记录';
+
+  @override
+  String get lessonPractice => '回答本节练习';
+
+  @override
+  String get lessonSubmit => '提交作答';
+
+  @override
+  String get lessonRevision => '生成讲义修订建议';
+
+  @override
   String get appTitle => 'Coursive';
 
   @override

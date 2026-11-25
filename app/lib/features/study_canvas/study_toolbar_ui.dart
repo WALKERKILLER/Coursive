@@ -238,6 +238,8 @@ extension _StudyToolbars on StudyCanvasState {
     ),
     onSelected: (v) {
       switch (v) {
+        case 'lesson':
+          unawaited(_openLesson());
         case 'course':
           _courseMaterials();
         case 'video':
@@ -270,6 +272,8 @@ extension _StudyToolbars on StudyCanvasState {
       else if (_status != l10n.studySaved)
         PopupMenuItem(enabled: false, child: Text(_status)),
       if (!widget.standalone) ...[
+        if (context.read<PluginStore?>()?.supportsLessonStudy == true)
+          PopupMenuItem(value: 'lesson', child: Text(l10n.lessonStudyStart)),
         const PopupMenuItem(value: 'course', child: Text('课程资料')),
         const PopupMenuItem(value: 'video', child: Text('视频')),
         const PopupMenuItem(value: 'chat', child: Text('AI 对话')),

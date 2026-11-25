@@ -1,6 +1,12 @@
+import 'dart:convert';
+
+import 'package:coursive/core/api.dart';
+import 'package:coursive/features/library/note_reader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/widgets/coursive_markdown.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:val_latex_flutter/val_latex_flutter.dart';
 
 // Typical model-written note: inline and display math in paragraphs, lists
@@ -36,6 +42,42 @@ cost = "$5"  # [00:10] stays code
 ''';
 
 void main() {
+  test(
+    'courseware keeps UTF-8 when the file server reports binary content',
+    () async {
+      const name = '目录/系统 调用.pdf';
+      const markdown = '## 系统调用\n\n用户态 → 内核态';
+      await http.runWithClient(
+        () async {
+          final api = Api('http://localhost', '');
+          final (file, body) = await loadParsedCourseware(api, 'L', name);
+          expect(file.path, name);
+          expect(body, markdown);
+        },
+        () => MockClient((req) async {
+          if (req.url.path.endsWith('/courseware')) {
+            return http.Response(
+              jsonEncode([
+                {
+                  'path': name,
+                  'name': '系统 调用.pdf',
+                  'parse': {'state': 'done', 'md': '目录/系统 调用.md'},
+                },
+              ]),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          }
+          expect(req.url.pathSegments, ['files', '目录', '系统 调用.md']);
+          return http.Response.bytes(
+            utf8.encode(markdown),
+            200,
+            headers: {'content-type': 'application/octet-stream'},
+          );
+        }),
+      );
+    },
+  );
   test('prepareMarkdown repairs math and links timestamps outside math and code', () {
     final out = prepareMarkdown(note);
     expect(out, contains('\$v = \\frac{dx}{dt}\$'));

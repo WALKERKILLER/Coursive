@@ -16,7 +16,7 @@ export async function api(method, path, body) {
 	} catch {
 		data = text;
 	}
-	if (!res.ok) throw new Error(data?.error ?? `daemon ${method} ${path}: HTTP ${res.status}`);
+	if (!res.ok) throw Object.assign(new Error(data?.error ?? `daemon ${method} ${path}: HTTP ${res.status}`), { status:res.status });
 	return data;
 }
 

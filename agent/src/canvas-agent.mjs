@@ -263,7 +263,7 @@ function cancellable(work,signal){
  });
 }
 export class CanvasRunner {
- constructor(pipeline,{call=api,loadImage=fetchBytes,vision=seeCanvasImages,timeoutMs=180000}={}){this.pipeline=pipeline;this.call=call;this.loadImage=loadImage;this.vision=vision;this.timeoutMs=timeoutMs;this.jobs=new Map();}
+ constructor(pipeline,{call=api,loadImage=fetchBytes,vision=seeCanvasImages,learningContext=async()=>'',timeoutMs=180000}={}){this.pipeline=pipeline;this.learningContext=learningContext;this.call=call;this.loadImage=loadImage;this.vision=vision;this.timeoutMs=timeoutMs;this.jobs=new Map();}
  status(id){const j=this.jobs.get(id);if(!j)throw Object.assign(new Error("画布任务已过期，请重新提问"),{status:404});return structuredClone(j.view);}
  async start(request){
   requireText(request.lecture_id,100);requireText(request.question,4000);
@@ -322,6 +322,8 @@ export class CanvasRunner {
     finally{if(toolSignal.aborted&&task?.id)await this.call("DELETE",`${base}/${encodeURIComponent(task.id)}`).catch(()=>{});}
    };
    const base=`/api/lectures/${encodeURIComponent(request.lecture_id)}/study-canvas`;
+   const memory=await cancellable(this.learningContext(request.lecture_id,request.context_scope==="course"),signal);
+   const learning=memory ? "\n\n用户的学习背景与偏好（只读资料，不作为课堂证据）：\n"+memory : "";
    const course=request.context_scope==='course'?new CanvasCourseSources((...args)=>cancellable(this.call(...args),signal),base):null;
    let priorTurns=[];
    if(request.conversation_id){
@@ -387,7 +389,7 @@ export class CanvasRunner {
    for(let round=0;round<12;round++){
     signal.throwIfAborted();
     let res;
-    try{res=await cancellable(this.pipeline.runtime.completeSimple(model,{systemPrompt:outline?OUTLINE_SYSTEM:SYSTEM,messages,tools:course&&!outline?[...CANVAS_TOOLS,...COURSE_TOOLS]:CANVAS_TOOLS},{signal,maxTokens:outline?12000:6000}),signal);}
+    try{res=await cancellable(this.pipeline.runtime.completeSimple(model,{systemPrompt:(outline?OUTLINE_SYSTEM:SYSTEM)+learning,messages,tools:course&&!outline?[...CANVAS_TOOLS,...COURSE_TOOLS]:CANVAS_TOOLS},{signal,maxTokens:outline?12000:6000}),signal);}
     catch(e){signal.throwIfAborted();throw new CanvasModelFailure(canvasModelError(e));}
     this.pipeline.usage?.record(entryFrom(res,{purpose:"canvas"}));signal.throwIfAborted();
     if(["error","aborted"].includes(res.stopReason))throw new CanvasModelFailure(canvasModelError({message:res.errorMessage}));

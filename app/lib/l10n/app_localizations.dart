@@ -94,6 +94,42 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('zh')];
 
+  /// No description provided for @lessonLoading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读取本节资料并打开讲义…'**
+  String get lessonLoading;
+
+  /// No description provided for @lessonStudyStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'学这节课'**
+  String get lessonStudyStart;
+
+  /// No description provided for @lessonChooseProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要继续的学习记录'**
+  String get lessonChooseProgress;
+
+  /// No description provided for @lessonPractice.
+  ///
+  /// In zh, this message translates to:
+  /// **'回答本节练习'**
+  String get lessonPractice;
+
+  /// No description provided for @lessonSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交作答'**
+  String get lessonSubmit;
+
+  /// No description provided for @lessonRevision.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成讲义修订建议'**
+  String get lessonRevision;
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:

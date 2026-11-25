@@ -125,9 +125,10 @@ class StudyCard {
   List<StudyBlock> blocks;
   List<StudyAnchor> sources;
   Map<String, String> responses;
+  bool get lessonNote => type == 'text' && generation == 'lesson-note' && RegExp(r'^lesson-[0-9a-f]{32}$').hasMatch(documentId);
   bool get markdownReader =>
       type == 'text' &&
-      (pinnedAnswer ||
+      (lessonNote || pinnedAnswer ||
           source.toLowerCase().endsWith('.md') ||
           source.toLowerCase().endsWith('.markdown'));
   bool get passageAside => type == 'conversation' && generation == 'markdown-aside';

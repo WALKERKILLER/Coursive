@@ -1,7 +1,9 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gpt_markdown/gpt_markdown.dart' show LinkTextSpan;
 
@@ -558,8 +560,21 @@ void main() {
   );
 
   testWidgets(
-    'touch long press opens passage actions without moving the canvas',
+    'passage selection offers only app actions and standard text actions',
     (t) async {
+      final messenger = t.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.processText, (
+        call,
+      ) async {
+        expect(call.method, 'ProcessText.queryTextActions');
+        return {'com.example.search': '外部搜索', 'com.example.ask': '外部问答'};
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.processText,
+          null,
+        ),
+      );
       final key = await fixture.open(
         t,
         fixture.FixtureApi((sheet()..cards.add(imported())).json()),
@@ -574,8 +589,37 @@ void main() {
       final word = paragraph.getBoxesForSelection(
         const TextSelection(baseOffset: 0, extentOffset: 7),
       );
-      await t.longPressAt(paragraph.localToGlobal(word.first.toRect().center));
-      await t.pumpAndSettle();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        await t.longPressAt(
+          paragraph.localToGlobal(word.first.toRect().center),
+        );
+        await t.pumpAndSettle();
+      } else {
+        await selectWord(t, 0, 7);
+      }
+      final region = t.state<SelectableRegionState>(
+        find.byType(SelectableRegion),
+      );
+      expect(
+        region.contextMenuButtonItems.map((item) => item.label),
+        containsAll(['外部搜索', '外部问答']),
+      );
+      final menu = t.widget<AdaptiveTextSelectionToolbar>(
+        find.byType(AdaptiveTextSelectionToolbar),
+      );
+      expect(
+        menu.buttonItems!
+            .where((item) => item.type == ContextMenuButtonType.custom)
+            .map((item) => item.label),
+        ['加注释', '旁问', '编辑 Markdown'],
+      );
+      final expected = [
+        ContextMenuButtonType.copy,
+        ContextMenuButtonType.selectAll,
+        if (defaultTargetPlatform == TargetPlatform.android)
+          ContextMenuButtonType.share,
+      ];
+      expect(menu.buttonItems!.map((item) => item.type), containsAll(expected));
       await t.tap(find.text('加注释'));
       await t.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
@@ -588,7 +632,11 @@ void main() {
       await t.pumpAndSettle();
       await close(t);
     },
-    variant: TargetPlatformVariant.only(TargetPlatform.android),
+    variant: const TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }),
   );
 
   testWidgets(

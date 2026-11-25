@@ -16,13 +16,14 @@ import { createTools, guard, TURN_TOOL_BUDGET } from "./tools.mjs";
 import { bundledPluginsDir, PluginHost } from "./plugins.mjs";
 import { generateTimeline } from "./timeline.mjs";
 import { TranscriptReviewer } from "./transcript-review.mjs";
+import { runLessonStudy } from "./lesson-study.mjs";
 import { CanvasRunner } from "./canvas-agent.mjs";
 import { api } from "./daemon.mjs";
 import { fmtStamp, TASK_WRITES, TaskScheduler } from "./tasks.mjs";
 import { httpError, readJson, replyError } from "./http.mjs";
 import { entryFrom, UsageLedger } from "./usage.mjs";
-import { Bot, CONSOLIDATE_CALLS, CONSOLIDATE_PROMPT, CONSOLIDATE_TIMEOUT_MS, Consolidator, turnsOf } from "./bot.mjs";
-import { MemoryStore, memoryTools } from "./memory.mjs";
+import { Bot, CONSOLIDATE_CALLS, CONSOLIDATE_PROMPT, CONSOLIDATE_TIMEOUT_MS, Consolidator, transcriptOf, turnsOf } from "./bot.mjs";
+import { MemoryStore, memoryTools, learningMemoryTool, courseMemoryPath } from "./memory.mjs";
 import { MEMORY_GROUP, OPERATE_GROUP, operateTools, runOp, SETTINGS } from "./operate.mjs";
 import { CAPABILITY_GROUP, capabilityTools, createCapabilityInspector, pluginHostRegistry } from "./capabilities.mjs";
 import { Sessions } from "./sessions.mjs";
@@ -38,7 +39,7 @@ await pipeline.init();
 const usage = new UsageLedger(DATA_DIR);
 pipeline.usage = usage;
 const transcriptReviewer = new TranscriptReviewer(pipeline);
-const canvasRunner = new CanvasRunner(pipeline);
+
 try {
 	await usage.backfill(SESSIONS);
 	await usage.prune();
@@ -52,6 +53,10 @@ const bot = new Bot(DATA_DIR);
 await bot.load();
 const memory = new MemoryStore(join(DATA_DIR, "bot", "memory"));
 await memory.init();
+const canvasRunner = new CanvasRunner(pipeline, { learningContext:async (lectureId, includeCourse)=>{
+	const meta = includeCourse ? await api("GET","/api/lectures/"+encodeURIComponent(lectureId)) : null;
+	return memory.prompt({pinnedOnly:true, courseId:meta?.course?.id});
+} });
 /** The app's preferences (registry keys only), pushed with PUT /app-state. */
 let appState = null;
 const botEvent = (data) => api("POST", "/api/agent/event", { type: "bot_event", data }).catch(() => {});
@@ -106,6 +111,7 @@ async function systemPrompt(conv) {
 			parts.push(SYSTEM.slice(0, SYSTEM.indexOf("\n")));
 		}
 		parts.push(BODY);
+		if (conv.kind==="course") parts.push("用户明确提出本课目标或长期偏好时用 remember_learning_request 原句保存。偶尔追问表示关注。只有用户本人作答才能评估掌握情况。");
 		if (conv.kind !== "task") {
 			parts.push(OPERATE_RULES);
 			const mem = await memory.prompt({ pinnedOnly: true, courseId: conv.kind === "course" ? conv.course_id : undefined });
@@ -221,6 +227,10 @@ function extraTools(conv) {
 	if (conv.kind === "task") return {};
 	const operate = operateTools(opDeps);
 	const inspect = capabilityTools(capabilities);
+	if (conv.kind === "course") {
+		const remember=learningMemoryTool(memory, conv, r=>botEvent({kind:"memory_changed",path:r.path,action:r.action}));
+		return {tools:[...operate,...inspect,remember],groups:{operate:OPERATE_GROUP,capabilities:CAPABILITY_GROUP},core:["open_page",remember.name]};
+	}
 	if (conv.kind !== "bot") {
 		return { tools: [...operate, ...inspect], groups: { operate: OPERATE_GROUP, capabilities: CAPABILITY_GROUP }, core: ["open_page"] };
 	}
@@ -682,6 +692,9 @@ route("POST", "/chat", async (req, _m, res) => {
 	return undefined;
 });
 
+route("POST", "/lessons/([^/]+)/study", async (req, [lecture]) =>
+	runLessonStudy({plugins,memory,pipeline,call:api},lecture,await body(req)));
+
 // ---- plugin routes ----
 
 const changed = async (out) => {
@@ -805,23 +818,25 @@ async function consolidationCandidates() {
 		const sm = sessions.open(info.path);
 		const messages = sm.getBranch().filter((e) => e.type === "message").map((e) => e.message);
 		const turns = turnsOf(messages).slice(bot.mark(info.id));
-		if (turns.length) out.push({ id: info.id, kind: k.kind, title: sessionTitle(info), course: k.course_id ? names.get(k.course_id) : undefined, turns });
+		if (turns.length) out.push({ id: info.id, kind: k.kind, title: sessionTitle(info), course_id:k.course_id, course: k.course_id ? names.get(k.course_id) : undefined, turns });
 	}
 	return out;
 }
 
 /** One consolidation run: a memory-only Pi session kept in memory. */
-async function consolidate(transcript) {
+async function consolidate(transcript, allowedCoursePath, evidenceSince) {
 	const model = await pipeline.currentModel();
 	if (!model) throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
 	const changes = new Map();
 	let calls = 0;
 	const tools = memoryTools(memory, {
-		allowDelete: false,
+		allowDelete: false, evidenceSince,
 		onChange: (r) => changes.set(r.path, changes.get(r.path) === "created" ? "created" : r.action),
 	}).map((t) => ({
 		...t,
 		execute: async (...args) => {
+			const path=args[1]?.path;
+			if (allowedCoursePath && (path !== allowedCoursePath || t.name === "memory_list")) throw Error("本轮整理仅限当前课程记忆。");
 			if (++calls > CONSOLIDATE_CALLS) throw new Error(`已达到 ${CONSOLIDATE_CALLS} 次工具调用上限，请直接总结。`);
 			return t.execute(...args);
 		},
@@ -847,7 +862,7 @@ async function consolidate(transcript) {
 	});
 	const timer = setTimeout(() => session.abort().catch(() => {}), CONSOLIDATE_TIMEOUT_MS);
 	try {
-		const current = await memory.prompt();
+		const current = allowedCoursePath ? await memory.current(allowedCoursePath) : await memory.prompt();
 		await session.prompt(`<current_memory>\n${current || "（还没有记忆）"}\n</current_memory>\n\n<transcripts>\n${transcript}</transcripts>\n\n按规则整理记忆。`);
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
 		if (last?.stopReason === "error") throw new Error(last.errorMessage ?? "模型出错");
@@ -860,7 +875,21 @@ async function consolidate(transcript) {
 	}
 }
 
-const consolidator = new Consolidator(bot, { candidates: consolidationCandidates, run: consolidate, notify: botEvent });
+const consolidator = new Consolidator(bot, { candidates: consolidationCandidates, run:async (_text,convs)=>{
+	const result={changes:[],cost:0,summary:""};
+	const groups = new Map();
+	for (const conversation of convs) {
+		const path = conversation.kind === "course" ? courseMemoryPath(conversation.course_id) : "";
+		if (conversation.kind === "course" && !path) throw Error("课程记忆缺少课程编号");
+		if (!groups.has(path)) groups.set(path, []);
+		groups.get(path).push(conversation);
+	}
+	for(const [path,items] of groups) {
+		const current=await consolidate((path ? "只整理 "+path+"。先读取该文件，若不存在可以新建。\n" : "")+transcriptOf(items),path, Math.min(...items.flatMap(c=>c.turns.map(t=>t.at ?? 0))));
+		result.changes.push(...current.changes); result.cost+=current.cost; result.summary+=current.summary+" ";
+	}
+	return result;
+}, notify: botEvent });
 
 async function botView() {
 	await bot.fresh();

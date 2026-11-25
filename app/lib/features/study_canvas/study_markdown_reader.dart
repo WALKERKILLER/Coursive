@@ -56,7 +56,8 @@ extension _StudyMarkdownEditing on StudyCanvasState {
   Widget _markdownPassage(StudyCard card, String body, {int block = -1}) {
     final content = CoursiveMarkdown(
       body,
-      lectureId: widget.ctl.lectureId,
+      lectureId: widget.standalone ? '' : widget.ctl.lectureId,
+      onRef: widget.standalone ? null : (ref) => _openMarkdownReference(ref),
       linkDecorationStyle: TextDecorationStyle.dashed,
       baseDir: card.originalPath.isEmpty
           ? ''
@@ -111,6 +112,25 @@ extension _StudyMarkdownEditing on StudyCanvasState {
             },
       child: content,
     );
+  }
+
+  void _openMarkdownReference(CoursiveRef ref) {
+    final lectureId = widget.ctl.lectureId;
+    if (ref is TimeRef &&
+        (ref.lectureId.isEmpty || ref.lectureId == lectureId)) {
+      widget.ctl.seekTo(ref.seconds * 1000);
+      final d = document!;
+      final video = d.cards
+          .where((c) => c.type == 'lecture' && d.visible(c.layer))
+          .firstOrNull;
+      if (video != null) {
+        _revealCard(video);
+      } else {
+        widget.onClassic?.call();
+      }
+      return;
+    }
+    openRef(context, ref, lectureId: lectureId);
   }
 
   // Keep exact anchors in the unchanged prefix and suffix of a source edit.
@@ -667,14 +687,18 @@ class _SelectableMarkdownPassageState
               },
             ),
           for (final item in region.contextMenuButtonItems)
-            ContextMenuButtonItem(
-              type: item.type,
-              label: item.label,
-              onPressed: () {
-                _desktopMenu.remove();
-                item.onPressed?.call();
-              },
-            ),
+            // Android also supplies text actions registered by other apps.
+            if (item.type == ContextMenuButtonType.copy ||
+                item.type == ContextMenuButtonType.share ||
+                item.type == ContextMenuButtonType.selectAll)
+              ContextMenuButtonItem(
+                type: item.type,
+                label: item.label,
+                onPressed: () {
+                  _desktopMenu.remove();
+                  item.onPressed?.call();
+                },
+              ),
         ],
       ),
     );

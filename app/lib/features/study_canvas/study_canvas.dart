@@ -29,6 +29,7 @@ import '../../widgets/coursive_markdown.dart';
 import '../../widgets/pickers.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
+import '../library/note_reader.dart' show openRef;
 import '../plugins/canvas_fallback.dart';
 import '../plugins/plugin_actions.dart' show PluginViewPatch;
 import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
@@ -63,6 +64,7 @@ part 'study_shelf_ui.dart';
 part 'study_brush_ui.dart';
 part 'study_interaction.dart';
 part 'study_markdown_reader.dart';
+part 'study_lesson.dart';
 part 'study_conversation_ui.dart';
 part 'study_pdf_ui.dart';
 part 'study_toolbar_ui.dart';
@@ -95,6 +97,7 @@ class StudyCanvas extends StatefulWidget {
     required this.onAsk,
     required this.onBack,
     this.fullscreen = false,
+    this.startLesson = false,
   }) : _player = ctl,
        notebookId = null,
        title = null;
@@ -115,7 +118,8 @@ class StudyCanvas extends StatefulWidget {
        panel = const SizedBox.shrink(),
        onAsk = null,
        onClassic = null,
-       fullscreen = false;
+       fullscreen = false,
+       startLesson = false;
   final String? notebookId, title;
   bool get standalone => notebookId != null;
   String get draftKey => standalone
@@ -137,13 +141,15 @@ class StudyCanvas extends StatefulWidget {
   final Future<DockPDF> Function(String, String) openCanvasPDF;
   final VoidCallback onBack;
   final ValueChanged<String>? onAsk;
-  final bool fullscreen;
+  final bool fullscreen, startLesson;
   @override
   State<StudyCanvas> createState() => StudyCanvasState();
 }
 
 class StudyCanvasState extends State<StudyCanvas>
     with WidgetsBindingObserver, TickerProviderStateMixin {
+  Future<void> openLesson() => _openLesson();
+
   /// Theme-derived chrome colours for the whole workspace.
   StudyChrome get chrome => StudyChrome.of(context);
 
@@ -414,6 +420,9 @@ class StudyCanvasState extends State<StudyCanvas>
 
   final _inkCurve = InkCurve();
   int _pointBudget = 20000;
+  Map<String,dynamic> _lessonState = {};
+  bool _lessonBusy = false, _lessonStarted = false;
+  Future<void> _lessonWrites = Future.value();
   Size _viewport = const Size(1000, 700);
 
   @override
@@ -475,6 +484,7 @@ class StudyCanvasState extends State<StudyCanvas>
 
   bool get _editingCanvas =>
       _transformSession != null ||
+      _lessonBusy ||
       _importing ||
       _selectionBusy ||
       (document != null && document!.edit != _savedEdit) ||
@@ -513,6 +523,10 @@ class StudyCanvasState extends State<StudyCanvas>
       document?.dispose();
       document = d;
       _adoptThreads(d);
+      if (!widget.standalone && !_lessonStarted && (widget.startLesson || d.cards.any((c)=>c.lessonNote))) {
+        _lessonStarted = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) unawaited(_openLesson(reveal:widget.startLesson)); });
+      }
       d.addListener(_changed);
       _savedEdit = d.edit;
       setState(() {
@@ -1730,7 +1744,17 @@ class StudyCanvasState extends State<StudyCanvas>
       _toast(l10n.studyLocked);
       return;
     }
-    d.checkpoint();
+    if (card?.lessonNote == true) {
+      try {
+        final path = '/api/notes/${Uri.encodeComponent(card!.documentId)}';
+        final current = await widget.api.get(path) as Map;
+        if (current['lecture_id'] != widget.ctl.lectureId || current['body'] != original) throw StateError(l10n.studySelectionChanged);
+        await widget.api.put('/api/notes', {...current.cast<String,dynamic>(),'body':text,'base_body':original});
+      } catch (e) { if (mounted) _toast('$e'); return; }
+      if (!mounted || document != d || !d.cards.contains(card)) return;
+    } else {
+      d.checkpoint();
+    }
     if (card != null) {
       _rebaseMarkdownNotes(card, text);
       card.text = text;
@@ -2801,6 +2825,7 @@ class StudyCanvasState extends State<StudyCanvas>
                           ),
                         ),
                       ),
+                      'text' when c.lessonNote => _lessonReader(c),
                       'text' when c.readerCard => SingleChildScrollView(
                         key: PageStorageKey('study-reader/${c.id}'),
                         primary: false,

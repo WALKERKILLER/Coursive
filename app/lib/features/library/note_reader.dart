@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -480,7 +482,7 @@ Future<(CoursewareFile, String)> loadParsedCourseware(Api api, String lectureId,
   if (!f.parsed) throw Exception(l10n.coursewareNotParsed);
   final res = await http.get(Uri.parse(api.fileUrl(f.mdPath)));
   if (res.statusCode != 200) throw Exception(l10n.coursewareReadFailed(res.statusCode));
-  return (f, res.body);
+  return (f, utf8.decode(res.bodyBytes));
 }
 
 /// A courseware passage in the supporting pane, opened at [query].

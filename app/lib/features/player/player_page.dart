@@ -66,7 +66,7 @@ class _PlayerPageState extends State<PlayerPage> {
   final _focus = FocusNode(debugLabel: 'player');
   bool _fullscreen = false;
   // The classic player opens first; the canvas is entered on request.
-  bool _canvasMode = false, _allowPop = false;
+  bool _canvasMode = false, _allowPop = false, _startLesson = false;
   final _canvas = GlobalKey<StudyCanvasState>();
   bool _panel = true;
   StreamSubscription? _sub;
@@ -327,11 +327,12 @@ class _PlayerPageState extends State<PlayerPage> {
                 : null,
             onCanvas: _canvasMode
                 ? null
-                : () => setState(() => _canvasMode = true),
+                : () => setState(() { _startLesson=false; _canvasMode=true; }),
           );
           final panel = PlayerSidePanel(
             ctl: ctl,
             onAsk: _ask,
+            onStudy: () { if (_canvasMode) { _canvas.currentState?.openLesson(); } else { setState(() { _startLesson=true; _canvasMode=true; }); } },
             assistant: const AssistantPanel(docked: true, embedded: true),
           );
           if (_canvasMode) {
@@ -340,6 +341,7 @@ class _PlayerPageState extends State<PlayerPage> {
               fullscreen: _fullscreen,
               child: StudyCanvas(
                 key: _canvas,
+                startLesson: _startLesson,
                 pdfLibraryRoot: context.read<AppState>().daemon.libraryRoot,
                 api: ctl.api,
                 ctl: ctl,

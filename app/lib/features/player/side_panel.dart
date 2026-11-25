@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
+import '../../core/plugins.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
@@ -32,12 +33,14 @@ class PlayerSidePanel extends StatefulWidget {
     super.key,
     required this.ctl,
     this.onAsk,
+    this.onStudy,
     this.assistant,
   });
   final LecturePlayer ctl;
 
   /// Embedded assistant shown as the last tab.
   final Widget? assistant;
+  final VoidCallback? onStudy;
 
   /// Hands a prompt to the assistant.
   final ValueChanged<String>? onAsk;
@@ -156,6 +159,8 @@ class _PlayerSidePanelState extends State<PlayerSidePanel>
                     ],
                   ),
                 ),
+                if (widget.onStudy != null && context.watch<PluginStore?>()?.supportsLessonStudy == true)
+                  TextButton(onPressed: widget.onStudy, child: Text(l10n.lessonStudyStart)),
                 PluginMenuButton(
                   surface: 'lecture.menu',
                   context_: {

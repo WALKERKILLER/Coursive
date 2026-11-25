@@ -5,6 +5,7 @@ package library
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -369,6 +370,13 @@ func NewID() string {
 func (l *Library) SaveNote(ctx context.Context, n store.Note) (store.Note, error) {
 	l.mirrorMu.Lock()
 	defer l.mirrorMu.Unlock()
+	if n.CreateOnly && n.ID != "" {
+		if _, err := l.Store.Note(ctx, n.ID); err == nil {
+			return n, ErrStudyConflict
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return n, err
+		}
+	}
 	if n.ID != "" && n.BaseBody != nil {
 		if old, err := l.Store.Note(ctx, n.ID); err == nil && old.Path != "" {
 			current, ok := parseNote(l.Abs(old.Path))

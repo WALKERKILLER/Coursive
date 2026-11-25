@@ -1,4 +1,10 @@
 {
+  "lessonLoading": "正在读取本节资料并打开讲义…",
+  "lessonStudyStart": "学这节课",
+  "lessonChooseProgress": "选择要继续的学习记录",
+  "lessonPractice": "回答本节练习",
+  "lessonSubmit": "提交作答",
+  "lessonRevision": "生成讲义修订建议",
   "@@locale": "zh",
   "appTitle": "Coursive",
   "levelStandard": "标准",
