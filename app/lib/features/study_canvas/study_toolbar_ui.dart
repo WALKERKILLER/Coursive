@@ -167,7 +167,7 @@ extension _StudyToolbars on StudyCanvasState {
     _topAction('返回', Icons.arrow_back, widget.onBack),
     _topAction('页面与材料', Icons.view_sidebar_outlined, _pageIndex),
     if (!widget.standalone)
-      _topAction('打开 AI 对话', Icons.forum_outlined, _ask, key: const ValueKey('study-ai-tab')),
+      _topAction(l10n.studyOpenAIConversation, Icons.forum_outlined, _ask, key: const ValueKey('study-ai-tab')),
     if (!widget.standalone)
       _topAction(
         l10n.studyShelf,

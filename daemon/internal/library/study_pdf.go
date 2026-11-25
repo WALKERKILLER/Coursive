@@ -64,15 +64,16 @@ func studyPDFCommandFiles(ctx context.Context, files []*os.File, name string, ar
 	var out limitedPDFOutput
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
 	if err := cmd.Run(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+		var exited *exec.ExitError
+		helper := filepath.Base(name)
+		missingPDFium := helper == "coursive-pdf-notes.exe" && errors.As(err, &exited) && exited.ExitCode() == 69
+		if missingPDFium || errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("PDF 组件不可用：请打开首页「功能准备」或设置 → 诊断检查当前平台的 PDF 组件")
 		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("PDF 处理超时或已取消：%w", ctx.Err())
 		}
 		// Bundled PDF helpers reserve exit 65 for page limits.
-		var exited *exec.ExitError
-		helper := filepath.Base(name)
 		if (helper == "coursive-study-pdf" || helper == "coursive-pdf-notes.exe") && errors.As(err, &exited) && exited.ExitCode() == 65 {
 			return nil, ErrStudyLimit
 		}

@@ -622,9 +622,10 @@ class StudyCanvasState extends State<StudyCanvas>
       while (d.edit != _savedEdit) {
         final edit = d.edit;
         if (mounted) setState(() => _status = l10n.studySaving);
+        final payload = d.json();
         Map out;
         try {
-          out = await widget.save(d.json()) as Map;
+          out = await widget.save(payload) as Map;
         } on ApiError catch (e) {
           if (e.status != 409 || retries++ >= 2) rethrow;
           final remote = await widget.load() as Map;
@@ -641,13 +642,14 @@ class StudyCanvasState extends State<StudyCanvas>
             remote,
           );
           final remoteVersion = (remote['version'] as num).toInt();
-          if (remoteVersion > 5)
+          if (remoteVersion > StudyDocument.currentFormatVersion)
             throw FormatException(l10n.studyUnknownVersion);
           d.formatVersion = math.max(d.formatVersion, remoteVersion);
           d.revision = (remote['revision'] as num).toInt();
           d.baseHash = remote['base_hash'] as String? ?? '';
           continue;
         }
+        d.formatVersion = math.max(d.formatVersion, payload['version'] as int);
         d.revision = (out['revision'] as num).toInt();
         d.baseHash = out['base_hash'] as String? ?? '';
         _savedEdit = edit;
@@ -2959,7 +2961,7 @@ class _LocalVideoState extends State<_LocalVideo> {
     final pending = _ensureOpen();
     if (mounted) setState(() {});
     if (!await pending || !mounted || _failed)
-      throw const FormatException('Video unavailable');
+      throw FormatException(l10n.studyVideoUnavailable);
     await player.seek(Duration(milliseconds: milliseconds));
     await player.pause();
   }

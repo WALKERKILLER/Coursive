@@ -135,7 +135,7 @@ void main() {
       );
       await t.pumpAndSettle();
       expect(d.camera, const Offset(130, 65));
-      expect(find.text('副本'), findsNothing);
+      expect(find.text('创建副本'), findsNothing);
       await t.tap(find.byKey(const ValueKey('study-tool-pen')));
       await t.pumpAndSettle();
       await t.tap(find.byTooltip('收起笔盒'));
@@ -143,7 +143,7 @@ void main() {
       await t.tap(find.byTooltip('展开笔盒'));
       await t.pumpAndSettle();
       expect(d.strokes, isEmpty);
-      expect(find.text('副本'), findsNothing);
+      expect(find.text('创建副本'), findsNothing);
       expect(t.takeException(), isNull);
       await close(t);
     },
@@ -285,6 +285,7 @@ void main() {
       );
       await t.tap(find.byTooltip('选区改色'));
       await t.pumpAndSettle();
+      expect(find.text('#000000'), findsOneWidget);
       await t.tap(find.text('#e65365'));
       await t.pumpAndSettle();
       expect(current.strokes.single.color, 0xffe65365);

@@ -97,6 +97,9 @@ const install = async (host, source) => host.confirm((await host.preview(source)
 
 test("manifest validation", () => {
 	assert.equal(validateManifest(pkg({ id: "ok-id" })).id, "ok-id");
+	for (const engine of ["1.0.0", "^1.0.0", "^1.1.0"]) {
+		assert.equal(validateManifest(pkg({ id: "ok-id", engine })).id, "ok-id");
+	}
 	const bad = (coursive, re) => assert.throws(() => validateManifest(pkg({ id: "x1", ...coursive })), re);
 	bad({ id: "Bad" }, /id/);
 	bad({ id: "install" }, /保留名/);
@@ -160,6 +163,35 @@ test("install, tools, groups, actions and uninstall", async (t) => {
 	await host.uninstall("demo");
 	assert.deepEqual(await host.list(), []);
 	assert.deepEqual(host.groups(), {});
+});
+
+test("course context stays scoped and rechecks the library grant", async (t) => {
+	const { host, bundled, write } = await fixture(t);
+	await write(join(bundled, "demo"), {
+		"package.json": pkg({
+			id: "course-tutor", agent: "index.mjs", permissions: ["library.read", "workspace"],
+		}),
+		"index.mjs": `export default function(pi, api) {
+		pi.registerTool({
+			name: "scope", parameters: { type: "object" },
+			execute: async () => ({ course: api.currentCourseId, writer: typeof api.reportCourseProgress })
+		});
+	}`,
+	});
+	await install(host, "bundled:demo");
+
+	const tool = (conv) => {
+		let execute;
+		const extension = host.extensionFactories(conv, () => {}).find((x) => x.name === "course-tutor");
+		extension.factory({ registerTool: (def) => { execute = def.execute; } });
+		return () => execute("1", {}, undefined, undefined, {});
+	};
+	const readCourse = tool({ kind: "course", course_id: "math" });
+	assert.deepEqual(await readCourse(), { course: "math", writer: "undefined" });
+	assert.deepEqual(await tool({ kind: "bot", course_id: "math" })(),
+		{ course: undefined, writer: "undefined" });
+	host.state.plugins["course-tutor"].granted = ["workspace"];
+	assert.deepEqual(await readCourse(), { course: undefined, writer: "undefined" });
 });
 
 test("an action that times out is aborted and its later Coursive API calls are refused", async (t) => {

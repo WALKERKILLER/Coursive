@@ -70,7 +70,7 @@ extension _StudySelectionTools on StudyCanvasState {
     final w = await showDialog<double>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('选区粗细'),
+        title: Text(l10n.studySelectionWidth),
         children: [
           for (final width in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
             SimpleDialogOption(
@@ -103,11 +103,11 @@ extension _StudySelectionTools on StudyCanvasState {
           PopupMenuItem(value: 'excerpt', child: Text(l10n.studyExcerpt)),
         if (content && !widget.standalone && _linkStart == null)
           PopupMenuItem(value: 'relate', child: Text(l10n.studyRelate)),
-        if (ink) const PopupMenuItem(value: 'width', child: Text('选区粗细')),
+        if (ink) PopupMenuItem(value: 'width', child: Text(l10n.studySelectionWidth)),
         PopupMenuItem(
           value: 'duplicate',
           enabled: _canDuplicateSelection,
-          child: const Text('副本'),
+          child: Text(l10n.studyDuplicateCard),
         ),
         const PopupMenuDivider(),
         PopupMenuItem(value: 'rotate', child: Text(l10n.studyRotateSelection)),
@@ -139,7 +139,7 @@ extension _StudySelectionTools on StudyCanvasState {
         PopupMenuItem(
           value: 'delete',
           enabled: content,
-          child: const Text('删除'),
+          child: Text(l10n.commonDelete),
         ),
         PopupMenuItem(value: 'clear', child: Text(l10n.studySelectionClear)),
       ],

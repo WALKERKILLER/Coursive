@@ -62,6 +62,7 @@ void main() {
     expect(find.byTooltip('删除'), findsNothing);
     expect(c.positionLocked, isTrue);
     expect(await key.currentState!.flush(), isTrue);
+    expect(api.doc['version'], 8);
     await close(t);
 
     final reopened = await fixture.open(t, api);
@@ -74,6 +75,16 @@ void main() {
     expect(saved.positionLocked, isFalse);
     expect(grip, findsOneWidget);
     await close(t);
+  });
+
+  test('a lock in a legacy document raises the format even after unlock', () {
+    final legacy = (sheet()..cards.add(card()..positionLocked = true)).json()
+      ..['version'] = 3;
+    final restored = StudyDocument.fromJson(legacy);
+    expect(restored.cards.single.positionLocked, isTrue);
+    restored.cards.single.positionLocked = false;
+    expect(restored.json()['version'], 8);
+    expect(sheet().json()['version'], 3);
   });
 
   testWidgets('an aside cannot create a second card for the same chat', (

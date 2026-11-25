@@ -38,7 +38,7 @@ A plugin is a directory or npm/git package whose `package.json` has a `coursive`
 
 - `id`: `[a-z][a-z0-9-]{1,31}`, unique, not `catalog`, `catalogs`, `install` or `third-party` (route names); tool names a plugin registers are prefixed `<id>__` by the host.
 - `title` (≤ 24 chars), `summary` (≤ 80), optional `description` (≤ 2000), `icon` (a Material icon name from the app's list in `app/lib/core/plugins.dart`, else a puzzle piece), `categories` (`notes`, `visualize`, `review`, `programming`, `connector`, `tutor`, `assignment`), `examples` (≤ 6 prompts).
-- `engine`: semver range of the plugin API (`PLUGIN_API_VERSION`, starts at 1.0.0); out of range → not loadable, shown as incompatible.
+- `engine`: semver range of the plugin API. The inline API supports 1.0.0 and 1.1.0. A range that matches neither version is incompatible.
 - `agent`: an ES module with two optional exports. `activate(coursive)` runs once each time the plugin loads; it registers actions and starts background work. `default function (pi, coursive)` is a Pi extension factory and runs for every new conversation, because Pi binds an extension runtime to one session; it registers tools and hooks and has no other side effects. `pi` is Pi's `ExtensionAPI` with `registerProvider`, `registerVirtualModel`, `registerMcpServer`, `setModel`, `setThinkingLevel` and `setActiveTools` blocked; `coursive` is the Coursive API below. A plugin can also be skills and views only.
 - `skills`: directories holding `SKILL.md` (or the files themselves). The assistant host has no file-reading tool, so the host does not list them like Pi skills: `find_tools` returns a plugin's skills as the playbook when the model loads the `plugin:<id>` group.
 - `views`: names from the host's view catalog the plugin's tools may return (see Views).
@@ -69,6 +69,7 @@ A plugin is a directory or npm/git package whose `package.json` has a `coursive`
 - `coursive.workspace(name)`: `workspace`. `coursive.folder(key)`: `folder`, the path setting `key`. `coursive.inside(base, rel)` resolves a path refusing escapes.
 - `coursive.spawn(cmd, args, opts)`: `exec`, a declared command, no shell, `COURSIVE_TOKEN` cleared, killed on cleanup.
 - `coursive.fetch(url)`: `localhost` for 127.0.0.1/localhost ports found in port settings, `network` for declared hosts.
+- `coursive.currentCourseId` (inline API 1.1): read-only ID on a course conversation. Each read checks the active plugin and its `library.read` grant. Outside a course conversation or without the grant, the value is undefined.
 - `coursive.notify(text)` (app snackbar) and `coursive.emit(data)`: `plugin_event` on coursive-daemon's event bus.
 
 ### Lifecycle

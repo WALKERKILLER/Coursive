@@ -11,7 +11,11 @@ from unicodedata import east_asian_width
 from contextlib import closing
 
 import pypdfium2 as pdfium
+from PIL import Image
 from pypdf import PdfReader, PdfWriter
+
+MAX_PAGE_TEXT_BYTES = 800_000
+MAX_TEXT_BOXES = 20_000
 
 
 class PageLimit(ValueError):
@@ -38,18 +42,25 @@ def render_notes(source, number, hidden):
         number = 1
     with pdfium.PdfDocument(source) as document, closing(document[number - 1]) as page:
         with closing(bitmap(page, 1500)) as rendered:
-            rendered.to_pil().save(sys.stdout.buffer, "PNG")
+            image: Image.Image = rendered.to_pil()
+            image.save(sys.stdout.buffer, "PNG")
 
 
-def page_text(page, rendered):
+def page_text(page, rendered, *, include_boxes):
     with closing(page.get_textpage()) as textpage:
-        if textpage.count_chars() > 20000:
-            raise PageLimit("PDF page exceeds character limit")
+        count = textpage.count_chars()
+        if count > MAX_PAGE_TEXT_BYTES:
+            raise PageLimit("PDF page exceeds text limit")
+        if not include_boxes:
+            text = " ".join(textpage.get_text_bounded().split())
+            if len(text.encode("utf-8")) > MAX_PAGE_TEXT_BYTES:
+                raise PageLimit("PDF page exceeds text limit")
+            return text, []
         position = rendered.get_posconv(page)
         text, boxes = [], []
         offset = 0
         word = None
-        for i in range(textpage.count_chars()):
+        for i in range(count):
             value = textpage.get_text_range(i, 1)
             if not value:
                 continue
@@ -80,6 +91,8 @@ def page_text(page, rendered):
             if word is None or wide:
                 word = dict(start=start, end=offset, x=left, y=top,
                             w=right-left, h=bottom-top)
+                if len(boxes) >= MAX_TEXT_BOXES:
+                    raise PageLimit("PDF page exceeds text box limit")
                 boxes.append(word)
             else:
                 right = max(right, word["x"] + word["w"])
@@ -91,7 +104,10 @@ def page_text(page, rendered):
                 word["end"] = offset
             if wide:
                 word = None
-        return "".join(text), boxes
+        plain = "".join(text)
+        if len(plain.encode("utf-8")) > MAX_PAGE_TEXT_BYTES:
+            raise PageLimit("PDF page exceeds text limit")
+        return plain, boxes
 
 
 def render_study(source, output, number):
@@ -105,7 +121,7 @@ def render_study(source, output, number):
         for i in ([number - 1] if number else range(count)):
             filename = f"page-{i + 1}.png"
             with closing(doc[i]) as page, closing(bitmap(page, 1400)) as rendered:
-                text, boxes = page_text(page, rendered)
+                text, boxes = page_text(page, rendered, include_boxes=bool(number))
                 image = output / filename
                 rendered.to_pil().save(image, "PNG")
                 total += image.stat().st_size

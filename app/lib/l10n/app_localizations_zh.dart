@@ -7420,6 +7420,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyDuplicateCard => '创建副本';
 
   @override
+  String get studySelectionColor => '选区改色';
+
+  @override
+  String get studySelectionWidth => '选区粗细';
+
+  @override
+  String get studyOpenAIConversation => '打开 AI 对话';
+
+  @override
+  String get studyVideoUnavailable => '视频暂不可用';
+
+  @override
   String get studyLockPosition => '锁定位置';
 
   @override

@@ -190,10 +190,12 @@ extension _StudyInteraction on StudyCanvasState {
   Rect? _boundsOfSelection() {
     final d = document!;
     final bounds = [
-      for (final s in d.strokes)
-        if (_detail.strokeIds.contains(s.id)) s.bounds,
-      for (final c in d.cards)
-        if (_selection.contains(c.id)) c.visualBounds,
+      if (_detail.strokeIds.isNotEmpty)
+        for (final s in d.strokes)
+          if (_detail.strokeIds.contains(s.id)) s.bounds,
+      if (_selection.isNotEmpty)
+        for (final c in d.cards)
+          if (_selection.contains(c.id)) c.visualBounds,
     ];
     return bounds.isEmpty
         ? null
@@ -567,7 +569,7 @@ extension _StudyInteraction on StudyCanvasState {
         ),
       if (ink)
         PopupMenuButton<int>(
-          tooltip: '选区改色',
+          tooltip: l10n.studySelectionColor,
           icon: const Icon(Icons.palette_outlined, size: 16),
           itemBuilder: (_) => [
             for (final c in _penPalette.take(20))
@@ -577,7 +579,7 @@ extension _StudyInteraction on StudyCanvasState {
                   children: [
                     Icon(Icons.circle, color: Color(c)),
                     const SizedBox(width: 12),
-                    Text('#${(c & 0xffffff).toRadixString(16)}'),
+                    Text('#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}'),
                   ],
                 ),
               ),
@@ -600,7 +602,7 @@ extension _StudyInteraction on StudyCanvasState {
       if (duplicate)
         _BarAction(
           icon: Icons.copy_all_outlined,
-          tooltip: '创建副本',
+          tooltip: l10n.studyDuplicateCard,
           onPressed: _selectionBusy ? null : _duplicateSelection,
         ),
       if (!widget.standalone) _snapshotDragHandle(),
@@ -1023,6 +1025,8 @@ class _BarAction extends StatelessWidget {
 }
 
 /// Keeps selection controls next to the visible selection and clear of other docks.
+/// Based on tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
+/// and Material 3's floating toolbar (https://m3.material.io/components/toolbars/guidelines).
 class _FloatingLayout extends SingleChildLayoutDelegate {
   _FloatingLayout(this.anchor, this.topInset, this.obstacles);
   final Rect anchor;

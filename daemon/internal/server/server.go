@@ -1096,8 +1096,19 @@ func (s *Server) files(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, abs)
 }
 
+var windowsPDFReady = sync.OnceValue(func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	helper := filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe")
+	return exec.CommandContext(ctx, helper, "probe").Run() == nil
+})
+
 // mediaTools reports executables available to the same process that runs jobs.
-// Presence is not a decoder, model or network connectivity test.
+// On Windows the bundled PDF helper must also load its renderer.
 func mediaTools() map[string]bool {
 	tools := make(map[string]bool)
 	for _, name := range []string{"ffmpeg", "ffprobe", "pdfinfo", "pdftoppm", "pdftotext"} {
@@ -1107,10 +1118,7 @@ func mediaTools() map[string]bool {
 	tools["study_pdf"] = false
 	switch pdfBackend() {
 	case "pdfium":
-		if exe, err := os.Executable(); err == nil {
-			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"))
-			tools["study_pdf"] = err == nil
-		}
+		tools["study_pdf"] = windowsPDFReady()
 	case "pdfkit":
 		if exe, err := os.Executable(); err == nil {
 			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "coursive-study-pdf"))

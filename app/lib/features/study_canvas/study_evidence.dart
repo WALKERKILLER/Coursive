@@ -526,9 +526,7 @@ extension _StudyEvidence on StudyCanvasState {
             (at - mark.videoAt).abs() <= 1500) {
           _localVideoTimes[video.id] = mark.videoBefore;
           if (local != null) {
-            unawaited(
-              local.seekPaused(mark.videoBefore),
-            );
+            unawaited(local.seekPaused(mark.videoBefore).catchError((_) {}));
           }
         }
       }

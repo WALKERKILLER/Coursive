@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { problems, satisfiesApi, trimDotSlash } from "./plugin-manifest.mjs";
 
-export const PLUGIN_API_VERSION = "1.0.0";
+export const PLUGIN_API_VERSION = "1.1.0";
 // The manifest API a v3 package (`coursive.api`, docs/specs/0031-plugin-fabric-core.md)
 // is checked against. A v1 package keeps `engine` against PLUGIN_API_VERSION.
 export const HOST_API_VERSION = "3.0.0";
@@ -325,7 +325,8 @@ function manifestV1(pkg) {
 		pages: list(c.pages, "contributes.pages").map((e) => entry(e, "pages", () => ({}))),
 		blocks: list(c.blocks, "contributes.blocks").filter((v) => views.includes(v)),
 	};
-	if (!engineSatisfied(m.engine)) throw Object.assign(bad(`需要插件接口 ${m.engine}，当前为 ${PLUGIN_API_VERSION}`), { incompatible: true });
+	// The optional course context extends, and still supports, the 1.0 API.
+	if (!engineSatisfied(m.engine) && !engineSatisfied(m.engine, "1.0.0")) throw Object.assign(bad(`需要插件接口 ${m.engine}，当前为 ${PLUGIN_API_VERSION}`), { incompatible: true });
 	return {
 		...base,
 		schema: 1,
@@ -872,20 +873,23 @@ export class PluginHost {
 	}
 
 	/** Pi inline extensions for a new conversation, one per loaded plugin. */
-	extensionFactories(conversation, reportCourseProgress) {
+	extensionFactories(conversation) {
 		const out = [];
+		const host = this;
 		for (const [id, rec] of this.loaded) {
 			if (rec.error || typeof rec.mod?.default !== "function") continue;
-			const canReadCourse = conversation?.kind === "course" && rec.manifest.permissions.includes("library.read") &&
-				this.state.plugins[id]?.granted?.includes("library.read");
-			const mayReport = id === "course-tutor" && reportCourseProgress && conversation?.kind !== "task" &&
-				rec.manifest.permissions.includes("workspace") && this.state.plugins[id]?.granted?.includes("workspace");
-			const scopedApi = canReadCourse || mayReport
-				? Object.freeze({ ...rec.coursive, currentCourseId: canReadCourse ? conversation.course_id : undefined,
-					reportCourseProgress: mayReport ? (course, title, record) => {
-						if (conversation?.course_id && course !== conversation.course_id) throw bad("伴学进度与当前课程不匹配");
-						return reportCourseProgress(course, title, record);
-					} : undefined })
+			const scopedApi = conversation?.kind === "course" && conversation.course_id
+				? Object.freeze({
+					...rec.coursive,
+					get currentCourseId() {
+						const state = host.state.plugins[id];
+						if (state?.enabled &&
+							rec.manifest.permissions.includes("library.read") &&
+							state.granted.includes("library.read")) {
+							return conversation.course_id;
+						}
+					},
+				})
 				: rec.coursive;
 			out.push({ name: id, factory: (pi) => rec.mod.default(this.wrapPi(pi, rec, false), scopedApi) });
 		}

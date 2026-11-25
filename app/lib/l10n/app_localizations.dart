@@ -12879,6 +12879,30 @@ abstract class AppLocalizations {
   /// **'创建副本'**
   String get studyDuplicateCard;
 
+  /// No description provided for @studySelectionColor.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区改色'**
+  String get studySelectionColor;
+
+  /// No description provided for @studySelectionWidth.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区粗细'**
+  String get studySelectionWidth;
+
+  /// No description provided for @studyOpenAIConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开 AI 对话'**
+  String get studyOpenAIConversation;
+
+  /// No description provided for @studyVideoUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频暂不可用'**
+  String get studyVideoUnavailable;
+
   /// No description provided for @studyLockPosition.
   ///
   /// In zh, this message translates to:

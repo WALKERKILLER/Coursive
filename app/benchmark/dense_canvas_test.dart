@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/features/study_canvas/study_document.dart';
@@ -97,9 +98,18 @@ void main() {
       if (i >= 5) written.add(w.elapsedMicroseconds);
     }
     report('write', written);
-    await t.tap(find.byKey(const ValueKey('study-tool-pan')));
+    await t.tap(find.byKey(const ValueKey('study-tool-select')));
+    final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
+    await t.tapAt(origin + const Offset(145, 96));
     await t.pumpAndSettle();
-    final pan = await t.startGesture(const Offset(730, 530));
+    final frame = find.byKey(const ValueKey('study-rotation-handle'));
+    expect(frame, findsOneWidget);
+    final gripBefore = t.getCenter(frame);
+    await t.sendKeyDownEvent(LogicalKeyboardKey.space);
+    final pan = await t.startGesture(
+      const Offset(730, 530),
+      kind: ui.PointerDeviceKind.mouse,
+    );
     final pans = <int>[];
     for (int i = 0; i < 32; i++) {
       final w = Stopwatch()..start();
@@ -109,7 +119,13 @@ void main() {
       if (i >= 5) pans.add(w.elapsedMicroseconds);
     }
     await pan.up();
-    report('pan', pans);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.space);
+    await t.pump();
+    expect(t.getCenter(frame), gripBefore + const Offset(160, 96));
+    report('pan with card selected', pans);
+
+    await t.tap(find.byKey(const ValueKey('study-tool-pan')));
+    await t.pumpAndSettle();
     final a = await t.startGesture(const Offset(450, 470), pointer: 31),
         b = await t.startGesture(const Offset(650, 470), pointer: 32);
     final zooms = <int>[];

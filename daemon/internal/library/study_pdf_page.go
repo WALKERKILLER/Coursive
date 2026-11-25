@@ -37,6 +37,29 @@ type StudyPDFPage struct {
 	Boxes  []StudyTextBox `json:"boxes"`
 }
 
+// stageStudyPDF gives a renderer that cannot inherit descriptors a private
+// copy of the already checked input. It never reopens the original by name.
+func stageStudyPDF(source io.Reader, output string, limit int64) (string, error) {
+	file := filepath.Join(output, "source.pdf")
+	dst, err := os.OpenFile(file, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return "", err
+	}
+	n, copyErr := io.Copy(dst, io.LimitReader(source, limit+1))
+	closeErr := dst.Close()
+	if copyErr == nil {
+		copyErr = closeErr
+	}
+	if copyErr == nil && n > limit {
+		copyErr = ErrStudyLimit
+	}
+	if copyErr != nil {
+		os.Remove(file)
+		return "", copyErr
+	}
+	return file, nil
+}
+
 // Each request renders exactly one page. Images and text have independent bounded outputs.
 func renderStudyPage(ctx context.Context, source, output string, page int, files ...*os.File) (StudyPDFPage, error) {
 	var out StudyPDFPage
@@ -60,21 +83,9 @@ func renderStudyPage(ctx context.Context, source, output string, page int, files
 			// Windows cannot inherit an ExtraFiles descriptor. Stage the validated
 			// handle in the existing private render directory.
 			if len(files) > 0 {
-				source = filepath.Join(output, "source.pdf")
-				f, err := os.OpenFile(source, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-				if err != nil {
-					return out, err
-				}
-				n, err := io.Copy(f, io.LimitReader(files[0], StudyAssetLimit+1))
-				closeErr := f.Close()
-				if err != nil {
-					return out, err
-				}
-				if closeErr != nil {
-					return out, closeErr
-				}
-				if n > StudyAssetLimit {
-					return out, ErrStudyLimit
+				source, e = stageStudyPDF(files[0], output, StudyAssetLimit)
+				if e != nil {
+					return out, e
 				}
 			}
 			_, e = studyPDFCommand(ctx, filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"), "study", source, output, strconv.Itoa(page))

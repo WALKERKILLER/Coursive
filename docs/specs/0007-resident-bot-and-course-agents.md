@@ -19,7 +19,7 @@ Non-goals: secrets (passwords, API keys, tokens, the MinerU token) through the a
 ### Kinds of conversation
 Every conversation has a kind, kept in `<agent data>/sessions-meta.json` (0600, `{<session id>: {kind, course_id?}}`):
 - `bot`: the bot's single thread (Pi compaction on). `bot.json` holds its session id; `POST /bot/reset` starts a new thread and keeps memory.
-- `course`: bound to `course_id`. Opened from the course page (课程助手), the player (the lecture's course) or the panel's 会话 list. Its prompt names the course (title and id) and tells it to stay within it unless asked; it reads the bot's `profile.md` and `preferences.md` (injected, read-only) and has `open_page` and `suggest_actions` but no memory or other operate tools.
+- `course`: bound to `course_id`. Opened from the course page (课程助手), the player (the lecture's course) or the panel's 会话 list. Its prompt names the course and defaults to its material. The bot's profile, preferences and current course memory are read-only context. App actions follow the [operation rules](0016-agent-acts.md).
 - `chat`: a conversation without metadata (made before this spec); behaves like a course agent without a course.
 - `task`: scheduled runs ([spec 0003](0003-scheduled-agent-tasks.md)); no bot tools.
 `GET /sessions` adds `kind`, `course_id` and `course` (title). `POST /chat` takes `{agent: "bot"}` for the bot thread or `{course_id}` to start a course agent; `session_id` continues any conversation.
@@ -35,7 +35,7 @@ Files under `<agent data>/bot/memory/` (directory 0700, files 0600):
 - limits: a file ≤ 16 KB, ≤ 200 files, ≤ 1 MB in total.
 - guard: a write is refused when its content holds a Chinese resident ID number (18 digits with a valid check digit), a payment card number (13–19 digits passing Luhn), a mainland mobile number, an API-key-like token (`sk-…`, `ghp_…`, `AKIA…`), or a `密码`/`password` followed by a value. The error names the kind, never the value.
 - versions: `hash` is the first 12 hex digits of the content's SHA-256. Replacing or editing an existing file needs the `base_hash` the writer read; a mismatch fails and returns the current content and hash.
-- injection: the bot prompt holds `profile.md` and `preferences.md` in full (8 KB together, cut at a line) and an index of the other files (path, title or description, last update; routines first; ≤ 100 lines). Course agents get the two files only.
+- injection: the bot prompt holds `profile.md` and `preferences.md` in full (8 KB together, cut at a line) and an index of the other files (path, title or description, last update; routines first; ≤ 100 lines). Course agents receive those two files and up to 2,500 characters from their own course memory. Course IDs that are not safe slugs use an `id-hash-` prefix and 48 SHA-256 hex digits. Chat without a course receives only the two pinned files. Course conversations do not receive memory write tools.
 - bot tools: `memory_list`, `memory_read {path}`, `memory_write {path, content, base_hash?}`, `memory_edit {path, old, new, base_hash?}` (`old` must occur once), `memory_append {path, text}`, `memory_delete {path}`. In conversation the bot writes memory only when the user asks it to remember, forget or correct something; consolidation does the rest.
 - API: `GET /bot/memory` (files with path, title, description, bytes, updated), `GET /bot/memory/file?path=`, `PUT /bot/memory/file {path, content, base_hash?}`, `DELETE /bot/memory/file?path=`; the same validation and guard.
 

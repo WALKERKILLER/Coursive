@@ -967,6 +967,27 @@ void main() {
     await api.syncEvents.close();
   });
 
+  testWidgets('a revision retry saves a format 8 canvas without downgrading it', (
+    t,
+  ) async {
+    final initial = StudyDocument()..formatVersion = 8;
+    final api = FixtureApi(initial.json());
+    final key = await open(t, api);
+    api.doc = {...api.doc, 'revision': 1, 'base_hash': 'remote'};
+    final doc = key.currentState!.document!;
+    doc.camera = const Offset(90, 100);
+    doc.changed();
+
+    expect(await key.currentState!.flush(), isTrue);
+    expect(api.savedDraft?['version'], 8);
+    expect(api.doc['version'], 8);
+    expect(api.doc['revision'], 2);
+    expect(api.doc['camera']['x'], 90);
+
+    await t.pumpWidget(const SizedBox());
+    await api.syncEvents.close();
+  });
+
   for (final conflicts in [2, 3]) {
     testWidgets('canvas save retries are bounded after $conflicts races', (
       t,

@@ -171,7 +171,7 @@ function plainLoader(getSystem, extensions = { extensions: [], errors: [], runti
  * runtime to a single session.
  */
 async function sessionResources(conv) {
-	const factories = plugins.extensionFactories(conv, (course, title, progress) => memory.updateCourseProgress(course, title, progress));
+	const factories = plugins.extensionFactories(conv);
 	let extensions = { extensions: [], errors: [], runtime: createExtensionRuntime() };
 	if (factories.length) {
 		const loader = new DefaultResourceLoader({

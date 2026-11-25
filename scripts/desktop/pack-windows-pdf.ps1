@@ -25,8 +25,12 @@ try {
         Pop-Location
     }
 
+    $bundle = Join-Path $build 'dist\coursive-pdf-notes'
+    & $venvPython (Join-Path $PSScriptRoot 'test_pdf_windows.py') --helper (Join-Path $bundle 'coursive-pdf-notes.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged PDF helper smoke test failed' }
+
     if (Test-Path $Destination) { throw "PDF helper destination already exists: $Destination" }
-    Copy-Item -Recurse (Join-Path $build 'dist\coursive-pdf-notes') $Destination
+    Copy-Item -Recurse $bundle $Destination
 } finally {
     Remove-Item -Recurse -Force $build
 }

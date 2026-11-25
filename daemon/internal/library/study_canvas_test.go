@@ -25,6 +25,7 @@ func TestStudyCanvasPersistenceRevisionAndLimits(t *testing.T) {
 	}
 	d.Objects[0].PDFColumn = "column-owner"
 	d.Objects[0].PositionLocked = true
+	d.Version = studyPositionLockFormat
 	d.Strokes = []StudyStroke{{ID: "s", Layer: "main", Tool: "pen", Color: 0xff111111, Width: 3, Points: [][3]float64{{1, 2, .5}, {5, 6, 1}}}}
 	saved, e := l.SaveStudyCanvas(ctx, "one", d)
 	if e != nil || saved.Revision != 1 {
@@ -50,6 +51,56 @@ func TestStudyCanvasPersistenceRevisionAndLimits(t *testing.T) {
 	}
 	if _, e = l.StudyCanvas(ctx, "missing"); e == nil {
 		t.Fatal("missing lecture accepted")
+	}
+}
+
+func TestStudyCanvasPositionLockVersion(t *testing.T) {
+	l, _ := reviewFixture(t)
+	ctx := t.Context()
+	doc, err := l.StudyCanvas(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc.Version = 3
+	doc.Objects[0].PositionLocked = true
+	if _, err = l.SaveStudyCanvas(ctx, "one", doc); !errors.Is(err, ErrStudyInvalid) {
+		t.Fatal("an unversioned position lock was accepted", err)
+	}
+
+	// A candidate version wrote this field without bumping its format.
+	root, dir, err := l.studyRoot(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	doc.Revision = 1
+	legacy, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = writeStudyBytes(root, dir+"/study-canvas.json", legacy); err != nil {
+		t.Fatal(err)
+	}
+	found, err := l.StudyCanvas(ctx, "one")
+	if err != nil || !found.Objects[0].PositionLocked {
+		t.Fatal("legacy lock was lost on read", err)
+	}
+	found.Objects[0].PositionLocked = false
+	if _, err = l.SaveStudyCanvas(ctx, "one", found); !errors.Is(err, ErrStudyInvalid) {
+		t.Fatal("older editor could remove an unversioned lock", err)
+	}
+	found.Version = 8
+	saved, err := l.SaveStudyCanvas(ctx, "one", found)
+	if err != nil || saved.Version != 8 || saved.Objects[0].PositionLocked {
+		t.Fatal("version 8 unlock did not save", err)
+	}
+	backup, err := root.ReadFile(dir + "/study-canvas.pre-v8.json")
+	if err != nil || string(backup) != string(legacy) {
+		t.Fatal("migration backup did not preserve the original", err)
+	}
+	saved.Version = 7
+	if _, err = l.SaveStudyCanvas(ctx, "one", saved); !errors.Is(err, ErrStudyInvalid) {
+		t.Fatal("downgrade accepted after unlocking", err)
 	}
 }
 

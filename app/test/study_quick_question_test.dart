@@ -438,7 +438,7 @@ void main() {
       expect(
         t
             .widget<PopupMenuItem<String>>(
-              find.widgetWithText(PopupMenuItem<String>, '副本'),
+              find.widgetWithText(PopupMenuItem<String>, '创建副本'),
             )
             .enabled,
         isFalse,

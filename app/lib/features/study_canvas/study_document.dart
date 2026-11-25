@@ -491,6 +491,8 @@ class _StudySnapshot {
 }
 
 class StudyDocument extends ChangeNotifier {
+  static const currentFormatVersion = 8;
+  static const _positionLockFormat = 8;
   int revision = 0, edit = 0, formatVersion = 3;
 
   /// The plugin-object revision a plugin batch is checked against. It moves on
@@ -538,16 +540,12 @@ class StudyDocument extends ChangeNotifier {
             (s) => layers.any((l) => l.id == s.layer && l.locked),
           ));
   factory StudyDocument.fromJson(Map m) {
-    if (m['version'] != 1 &&
-        m['version'] != 2 &&
-        m['version'] != 3 &&
-        m['version'] != 4 &&
-        m['version'] != 5 &&
-        m['version'] != 6 &&
-        m['version'] != 7)
+    final version = m['version'];
+    if (version is! int || version < 1 || version > currentFormatVersion) {
       throw FormatException(l10n.studyUnknownVersion);
+    }
     final d = StudyDocument();
-    d.formatVersion = math.max(3, (m['version'] as num).toInt());
+    d.formatVersion = math.max(3, version);
     d.revision = (m['revision'] as num).toInt();
     d.baseHash = m['base_hash'] as String? ?? '';
     d.appliedRuns = (m['applied_runs'] as List? ?? []).cast<String>().toSet();
@@ -580,13 +578,19 @@ class StudyDocument extends ChangeNotifier {
       for (final a in m['plugin_objects'] as List? ?? [])
         StudyPluginObject.fromJson(a),
     ];
+    // A candidate wrote position locks before assigning them a format.
+    if (d.cards.any((card) => card.positionLocked)) {
+      d.formatVersion = math.max(d.formatVersion, _positionLockFormat);
+    }
     return d;
   }
   StudyDocument();
   Map<String, dynamic> json() => {
     'version': math.max(
       formatVersion,
-      cards.any((c) => c.contentScale != 1)
+      cards.any((c) => c.positionLocked)
+          ? _positionLockFormat
+          : cards.any((c) => c.contentScale != 1)
           ? 7
           : cards.any(
               (c) =>
@@ -930,10 +934,17 @@ class StudyDocument extends ChangeNotifier {
   bool canRotateSelection(Set<String> cardsIds, Set<String> inkIds) {
     final selected = cards.where((c) => cardsIds.contains(c.id)).toList();
     return (selected.isNotEmpty || inkIds.isNotEmpty) &&
-        selected.every(canTransformCard) &&
-        strokes
-            .where((s) => inkIds.contains(s.id) || cardsIds.contains(s.anchor))
-            .every((s) => editable(s.layer));
+        selected.every(
+          (card) =>
+              canTransformCard(card) &&
+              (!layers.any((layer) => !layer.visible) ||
+                  inkOnCard(card.id).every((stroke) => editable(stroke.layer))),
+        ) &&
+        (inkIds.isEmpty ||
+            !layers.any((layer) => layer.locked || !layer.visible) ||
+            strokes
+                .where((stroke) => inkIds.contains(stroke.id))
+                .every((stroke) => editable(stroke.layer)));
   }
 
   void rotateSelection(

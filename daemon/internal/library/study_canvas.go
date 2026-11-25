@@ -267,6 +267,9 @@ func (l *Library) StudyCanvas(ctx context.Context, id string) (StudyDocument, er
 	defer r.Close()
 	return readStudy(r, dir+"/study-canvas.json")
 }
+
+const studyPositionLockFormat = 8
+
 func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) error {
 	invalid := func(s string) error { return fmt.Errorf("%w：%s", ErrStudyInvalid, s) }
 	if len(d.AppliedRuns) > 256 {
@@ -277,7 +280,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 			return ErrStudyInvalid
 		}
 	}
-	if (d.Version < 1 || d.Version > 7) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
+	if (d.Version < 1 || d.Version > studyPositionLockFormat) || d.Revision < 0 || !finite(d.Camera.X) || !finite(d.Camera.Y) || !finite(d.Camera.Z) || d.Camera.Z < 0.05 || d.Camera.Z > 8 {
 		return invalid("版本或视图")
 	}
 	if len(d.Layers) < 1 || len(d.Layers) > 32 || len(d.Objects) > 2000 || len(d.Strokes) > 30000 {
@@ -307,6 +310,9 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 		return e == nil && st.Mode().IsRegular()
 	}
 	for _, a := range d.Objects {
+		if a.PositionLocked && d.Version < studyPositionLockFormat {
+			return invalid("卡片位置锁定需要画布格式 8")
+		}
 		if a.ContentScale != 0 && (d.Version < 7 || !finite(a.ContentScale) || a.ContentScale < 0.05 || a.ContentScale > 20) {
 			return invalid("卡片比例或画布版本")
 		}
@@ -452,6 +458,13 @@ func (l *Library) saveStudy(ctx context.Context, r *os.Root, dir, id string, d S
 	}
 	if old.Version > d.Version {
 		return d, ErrStudyInvalid
+	}
+	if d.Version < studyPositionLockFormat {
+		for _, card := range old.Objects {
+			if card.PositionLocked {
+				return d, ErrStudyInvalid
+			}
+		}
 	}
 	if old.Version < d.Version && old.Revision > 0 {
 		previous, err := r.ReadFile(dir + "/study-canvas.json")

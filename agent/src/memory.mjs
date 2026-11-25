@@ -25,7 +25,7 @@ export const hashOf = (text) => createHash("sha256").update(text).digest("hex").
 
 export function courseMemoryPath(courseId) {
 	if (typeof courseId !== "string" || !courseId.trim() || courseId.length > 128)
-		throw bad("课程 ID 无效");
+		return null;
 	const slug = /^[a-z0-9][a-z0-9_-]{0,63}$/.test(courseId) && !courseId.startsWith("id-hash-")
 		? courseId : "id-hash-" + createHash("sha256").update(courseId).digest("hex").slice(0, 48);
 	return `courses/${slug}.md`;
@@ -182,33 +182,6 @@ export class MemoryStore {
 		});
 	}
 
-	/** Update only the tutor section; keep user notes and their front matter. */
-	updateCourseProgress(courseId, title, progress) {
-		const path = courseMemoryPath(courseId);
-		const clean = (value, limit) => String(value ?? "").replace(/[<>\r\n]/g, " ").slice(0, limit);
-		const begin = "<!-- course-tutor:begin -->";
-		const end = "<!-- course-tutor:end -->";
-		const stageNames = { prepare: "备课", teach: "讲解", repair: "待复测", transfer: "迁移复测",
-			await_answer: "等待作答", review_written: "等待简答评阅", finished: "已结束" };
-		if (!Object.hasOwn(stageNames, progress.stage)) throw bad("未知伴学阶段");
-		const lines = [begin, "## 伴学进度", "", `目标：${clean(progress.goal, 400)}`,
-			`单元：${clean(progress.unit, 150)}（${progress.paused ? "已暂停" : stageNames[progress.stage]}）`,
-			`已完成 ${Number(progress.completed) || 0} 个单元，已跳过 ${Number(progress.skipped) || 0} 个。`];
-		if (progress.last) lines.push(`最近作答：${clean(progress.last.topic, 150)}，${clean(progress.last.outcome, 60)}。`,
-			`依据：${clean(progress.last.source, 160)}`);
-		const section = [...lines, end].join("\n");
-		return this.serial(async () => {
-			const old = await this.current(path);
-			const base = old ?? `---\ntitle: ${clean(title || courseId, 100)}\n---\n`;
-			const start = base.indexOf(begin), finish = base.indexOf(end);
-			if ((start >= 0 || finish >= 0) && (start < 0 || finish < start))
-				throw bad("课程记忆中的伴学段落标记不完整，请先修复或移除标记");
-			const next = start < 0 ? base.trimEnd() + "\n\n" + section + "\n"
-				: base.slice(0, start) + section + base.slice(finish + end.length);
-			if (next !== old) await this.save(path, next, old);
-		});
-	}
-
 	/** Replaces the one occurrence of oldText. */
 	edit(path, oldText, newText, baseHash) {
 		checkPath(path);
@@ -266,8 +239,8 @@ export class MemoryStore {
 			}
 			pinned = `${lines.join("\n")}\n…(其余部分用 memory_read 读取)\n`;
 		}
-		if (courseId) {
-			const path = courseMemoryPath(courseId);
+		const path = courseMemoryPath(courseId);
+		if (path) {
 			const content = await this.current(path);
 			if (content?.trim()) pinned += `\n<memory path="${path}">\n${content.trim().slice(0, 2500)}\n</memory>\n`;
 		}

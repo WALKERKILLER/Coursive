@@ -178,20 +178,28 @@ def handle(op, source, dest):
 
 
 def main():
-    op,src,dst,*rest=sys.argv[1:]
-    source,dest=Path(src),Path(dst)
-    if op == "study" and sys.platform == "win32":
-        from pdf_windows import PageLimit, render_study
+    op, *args = sys.argv[1:]
+    windows_backend = None
+    if sys.platform == "win32" and op in ("probe", "study", "render"):
         try:
-            render_study(source, dest, int(rest[0]) if rest else None)
-        except PageLimit:
+            import pdf_windows as windows_backend
+        except (ImportError, OSError):
+            print("PDF 组件不可用：请重新安装包含 PDF 组件的 Windows 版", file=sys.stderr)
+            sys.exit(69)
+        if op == "probe":
+            return
+    src, dst, *rest = args
+    source, dest = Path(src), Path(dst)
+    if op == "study" and windows_backend is not None:
+        try:
+            windows_backend.render_study(source, dest, int(rest[0]) if rest else None)
+        except windows_backend.PageLimit:
             sys.exit(65)
         return
-    if op=="render":
-        if sys.platform == "win32":
-            from pdf_windows import render_notes
+    if op == "render":
+        if windows_backend is not None:
             chosen = dest if dest.is_file() and dest != source else source
-            render_notes(chosen, int(rest[0]), rest[1] if len(rest) > 1 else "")
+            windows_backend.render_notes(chosen, int(rest[0]), rest[1] if len(rest) > 1 else "")
             return
         renderer=Path(sys.argv[0]).resolve().with_name("coursive-pdf-notes-render")
         os.execv(renderer, [str(renderer), str(dest if dest.is_file() and dest!=source else source), str(int(rest[0])), *rest[1:]])

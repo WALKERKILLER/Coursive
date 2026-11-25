@@ -46,6 +46,28 @@ func TestStudyPopplerRealPDF(t *testing.T) {
 	}
 }
 
+func TestStageStudyPDFKeepsValidatedBytesAndLimit(t *testing.T) {
+	const bytes = "%PDF-1.7"
+	dir := filepath.Join(t.TempDir(), "中文 目录")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stageStudyPDF(strings.NewReader(bytes), dir, int64(len(bytes))-1); !errors.Is(err, ErrStudyLimit) {
+		t.Fatalf("oversize copy must fail: %v", err)
+	}
+	file, err := stageStudyPDF(strings.NewReader(bytes), dir, int64(len(bytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = stageStudyPDF(strings.NewReader("different"), dir, 20); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("second copy replaced a staged PDF: %v", err)
+	}
+	got, err := os.ReadFile(file)
+	if err != nil || string(got) != bytes {
+		t.Fatalf("wrong staged input: %q, %v", got, err)
+	}
+}
+
 func TestStudyPDFMissingToolsAndOutputBound(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	err := renderStudyPoppler(t.Context(), "source.pdf", t.TempDir())
