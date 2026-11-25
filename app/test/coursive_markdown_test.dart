@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:coursive/core/api.dart';
 import 'package:coursive/features/library/note_reader.dart';
+import 'package:coursive/widgets/md_reader.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:coursive/widgets/coursive_markdown.dart';
 import 'package:http/http.dart' as http;
@@ -42,6 +44,25 @@ cost = "$5"  # [00:10] stays code
 ''';
 
 void main() {
+  testWidgets('courseware reader omits registered external text actions', (t) async {
+    final messenger = t.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.processText, (_) async => {
+      'example.lookup': '外部查词',
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.processText, null));
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarkdownReader(doc: MdDoc('context switch'), controller: MdReaderController())),
+    ));
+    await t.pumpAndSettle();
+    await t.longPress(find.text('context switch',findRichText:true));
+    await t.pumpAndSettle();
+    final selectable = t.state<SelectableRegionState>(find.byType(SelectableRegion));
+    expect(selectable.contextMenuButtonItems.any((item)=>item.label == '外部查词'),isTrue);
+    final toolbar = t.widget<AdaptiveTextSelectionToolbar>(find.byType(AdaptiveTextSelectionToolbar));
+    expect(toolbar.buttonItems!.map((item)=>item.type), contains(ContextMenuButtonType.copy));
+    expect(toolbar.buttonItems!.map((item)=>item.label),isNot(contains('外部查词')));
+  }, variant: const TargetPlatformVariant({TargetPlatform.android}));
+
   test(
     'courseware keeps UTF-8 when the file server reports binary content',
     () async {

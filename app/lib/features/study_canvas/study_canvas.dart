@@ -27,6 +27,7 @@ import '../../theme/glass.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/coursive_markdown.dart';
 import '../../widgets/pickers.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
 import '../library/note_reader.dart' show openRef;

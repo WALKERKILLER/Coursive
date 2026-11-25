@@ -1155,6 +1155,7 @@ class _StageViewState extends State<_StageView>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SelectionArea(
+                    contextMenuBuilder: readingSelectionMenu,
                     child: evidence == null
                         ? CoursiveMarkdown(answer)
                         : CoursiveMarkdown(

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/api.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/reading_selection_menu.dart';
 
 class TranscriptReviewBar extends StatefulWidget {
   const TranscriptReviewBar({
@@ -307,6 +308,7 @@ class ReviewedTranscriptText extends StatelessWidget {
         title: Text(l10n.reviewGuess('${a['guess']}')),
         content: SingleChildScrollView(
           child: SelectionArea(
+            contextMenuBuilder: readingSelectionMenu,
             child: Text(
               l10n.reviewDetails(
                 '${a['original']}',

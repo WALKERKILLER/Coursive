@@ -13,6 +13,7 @@ import '../../core/plugins.dart';
 import '../../shell.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../../widgets/horizontal_scroller.dart';
 import '../../widgets/loading.dart';
 import '../../widgets/states.dart';
@@ -464,6 +465,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(MediaQuery.textScalerOf(context).scale(1) * prefs.chatTextScale)),
       child: SelectionArea(
+        contextMenuBuilder: readingSelectionMenu,
         child: ListView.builder(
           controller: _scroll,
           reverse: true,

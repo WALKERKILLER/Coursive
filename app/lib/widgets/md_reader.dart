@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/tokens.dart';
 import 'coursive_markdown.dart';
+import 'reading_selection_menu.dart';
 import '../l10n/l10n.dart';
 
 /// A heading of a reader document; [section] is the section it opens.
@@ -184,6 +185,7 @@ class _MarkdownReaderState extends State<MarkdownReader> {
     final tt = Theme.of(context).textTheme;
     final n = doc.sections.length + (widget.header == null ? 0 : 1);
     return SelectionArea(
+      contextMenuBuilder: readingSelectionMenu,
       child: ListView.builder(
         controller: _scroll,
         padding: widget.padding,

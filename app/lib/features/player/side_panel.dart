@@ -11,6 +11,7 @@ import '../../core/plugins.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../courses/download_sheet.dart';
 import '../library/note_editor.dart';
 import '../courseware/courseware.dart';
@@ -819,6 +820,7 @@ class _TranscriptTabState extends State<_TranscriptTab>
               return false;
             },
             child: SelectionArea(
+              contextMenuBuilder: readingSelectionMenu,
               child: ListView.builder(
                 controller: _scroll,
                 padding: const EdgeInsets.fromLTRB(

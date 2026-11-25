@@ -686,19 +686,11 @@ class _SelectableMarkdownPassageState
                 widget.edit!(p);
               },
             ),
-          for (final item in region.contextMenuButtonItems)
-            // Android also supplies text actions registered by other apps.
-            if (item.type == ContextMenuButtonType.copy ||
-                item.type == ContextMenuButtonType.share ||
-                item.type == ContextMenuButtonType.selectAll)
-              ContextMenuButtonItem(
-                type: item.type,
-                label: item.label,
-                onPressed: () {
-                  _desktopMenu.remove();
-                  item.onPressed?.call();
-                },
-              ),
+          for (final item in readingSelectionActions(region))
+            item.copyWith(onPressed: () {
+              _desktopMenu.remove();
+              item.onPressed?.call();
+            }),
         ],
       ),
     );

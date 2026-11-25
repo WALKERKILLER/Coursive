@@ -11,6 +11,7 @@ import '../../core/daemon_service.dart';
 import '../../core/open_path.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../assistant/runtime_setup.dart';
 import 'models_page.dart';
 import 'settings_page.dart';
@@ -784,6 +785,7 @@ Future<void> showLogViewer(
                     ),
                   )
                 : SelectionArea(
+                    contextMenuBuilder: readingSelectionMenu,
                     child: ListView.builder(
                       reverse: true,
                       padding: const EdgeInsets.all(Space.lg),
