@@ -1,7 +1,7 @@
 # Editable lecture handouts and course tutor checkpoints
 
 ## Status
-Proposed
+Accepted
 Class: architecture
 
 ## Context and Problem Statement

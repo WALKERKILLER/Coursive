@@ -51,10 +51,18 @@ StudyDocument dense() {
   return d;
 }
 
-void report(String name, List<int> samples) {
+void expectWithinBudget(String name, List<int> samples, Duration budget) {
   samples.sort();
+  final p50 = samples[samples.length ~/ 2];
+  final p95 = samples[(samples.length * .95).ceil() - 1];
   debugPrint(
-    'PERF $name p50_us=${samples[samples.length ~/ 2]} p95_us=${samples[(samples.length * .95).ceil() - 1]} n=${samples.length}',
+    'PERF $name p50_us=$p50 p95_us=$p95 max_us=${samples.last} '
+    'budget_us=${budget.inMicroseconds} n=${samples.length}',
+  );
+  expect(
+    p95,
+    lessThanOrEqualTo(budget.inMicroseconds),
+    reason: '$name p95 exceeded its widget benchmark budget in microseconds',
   );
 }
 
@@ -77,18 +85,25 @@ void main() {
         if (name == 'hit') d.undo();
         if (i >= 10) t.add(w.elapsedMicroseconds);
       }
-      report(name, t);
+      expectWithinBudget(
+        name,
+        t,
+        Duration(milliseconds: name == 'miss' ? 2 : 6),
+      );
     }
   });
   testWidgets('mixed media draw / camera', (t) async {
     final key = await fixture.open(t, fixture.FixtureApi(dense().json()));
     await t.tap(find.byKey(const ValueKey('study-tool-pen')));
     await t.pumpAndSettle();
+    const writes = 37;
+    final document = key.currentState!.document!;
+    final strokesBefore = document.strokes.length;
     final written = <int>[];
-    for (int i = 0; i < 22; i++) {
+    for (int i = 0; i < writes; i++) {
       final w = Stopwatch()..start();
       final g = await t.startGesture(
-        Offset(700, 440.0 + i * 4),
+        Offset(700, 440.0 + i * 2),
         kind: ui.PointerDeviceKind.stylus,
       );
       await g.moveBy(const Offset(36, 2));
@@ -97,7 +112,8 @@ void main() {
       w.stop();
       if (i >= 5) written.add(w.elapsedMicroseconds);
     }
-    report('write', written);
+    expect(document.strokes.length, strokesBefore + writes);
+    expectWithinBudget('write', written, const Duration(milliseconds: 45));
     await t.tap(find.byKey(const ValueKey('study-tool-select')));
     final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
     await t.tapAt(origin + const Offset(145, 96));
@@ -122,7 +138,11 @@ void main() {
     await t.sendKeyUpEvent(LogicalKeyboardKey.space);
     await t.pump();
     expect(t.getCenter(frame), gripBefore + const Offset(160, 96));
-    report('pan with card selected', pans);
+    expectWithinBudget(
+      'pan with card selected',
+      pans,
+      const Duration(milliseconds: 45),
+    );
 
     await t.tap(find.byKey(const ValueKey('study-tool-pan')));
     await t.pumpAndSettle();
@@ -140,7 +160,7 @@ void main() {
     await a.up();
     await b.up();
     expect(key.currentState!.document!.zoom, greaterThan(1));
-    report('zoom', zooms);
+    expectWithinBudget('zoom', zooms, const Duration(milliseconds: 35));
     await t.pumpWidget(const SizedBox());
     await t.pumpAndSettle();
   });

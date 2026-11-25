@@ -179,7 +179,7 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
-      - name: Dense canvas behavior
+      - name: Dense canvas regression
         run: flutter test benchmark/dense_canvas_test.dart
       - name: PDF working-copy and package regression
         working-directory: .
