@@ -218,8 +218,13 @@ class _CurrentCard extends StatefulWidget {
 class _CurrentCardState extends State<_CurrentCard> {
   late final _persona = TextEditingController(text: '${(widget.a.models?['prefs'] as Map?)?['persona'] ?? ''}');
 
+  late final _reviewGuidance = TextEditingController(
+    text: '${(widget.a.models?['prefs'] as Map?)?['reviewGuidance'] ?? ''}',
+  );
+
   @override
   void dispose() {
+    _reviewGuidance.dispose();
     _persona.dispose();
     super.dispose();
   }
@@ -272,6 +277,30 @@ class _CurrentCardState extends State<_CurrentCard> {
                 onPressed: () async {
                   await a.setPrefs({'persona': _persona.text.trim()});
                   if (context.mounted) showSnack(context, l10n.modelsPersonaSaved);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: Space.md),
+          TextField(
+            controller: _reviewGuidance,
+            minLines: 1,
+            maxLines: 4,
+            maxLength: 3000,
+            decoration: InputDecoration(
+              labelText: l10n.modelsReviewGuidance,
+              hintText: l10n.modelsReviewGuidanceHint,
+              fillColor: cs.surface.withValues(alpha: 0.7),
+              suffixIcon: IconButton(
+                tooltip: l10n.commonSave,
+                icon: const Icon(Icons.check_rounded),
+                onPressed: () async {
+                  try {
+                    await a.setPrefs({'reviewGuidance': _reviewGuidance.text.trim()});
+                    if (context.mounted) showSnack(context, l10n.commonSaved);
+                  } catch (_) {
+                    if (context.mounted) showSnack(context, l10n.modelPrefsSaveFailed);
+                  }
                 },
               ),
             ),

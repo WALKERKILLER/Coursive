@@ -46,7 +46,7 @@ void main() {
     final bar = find.byKey(const ValueKey('study-card-selection-bar'));
     final grip = find.byKey(const ValueKey('study-rotation-handle'));
     expect(bar, findsOneWidget);
-    expect(t.getRect(bar).overlaps(t.getRect(grip)), isFalse);
+    expect(t.getRect(bar).bottom, lessThan(t.getRect(grip).top));
     expect(find.byTooltip('矩形裁剪'), findsNothing);
     expect(find.byTooltip('剪切'), findsNothing);
     expect(find.byTooltip('复制'), findsNothing);
@@ -74,6 +74,21 @@ void main() {
     await t.pumpAndSettle();
     expect(saved.positionLocked, isFalse);
     expect(grip, findsOneWidget);
+    await close(t);
+  });
+
+  testWidgets('the card toolbar yields to the top controls if needed', (
+    t,
+  ) async {
+    final nearTop = card()..rect = const Rect.fromLTWH(260, 100, 340, 230);
+    final key = await fixture.open(
+      t,
+      fixture.FixtureApi((sheet()..cards.add(nearTop)).json()),
+    );
+    await selectCard(t, key.currentState!.document!.cards.single);
+    final bar = find.byKey(const ValueKey('study-card-selection-bar'));
+    expect(t.getTopLeft(bar).dy, greaterThan(nearTop.rect.bottom));
+    expect(find.byTooltip('锁定位置').hitTestable(), findsOneWidget);
     await close(t);
   });
 

@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,9 +31,10 @@ type ParseInfo struct {
 }
 
 type CoursewareMeta struct {
-	Name     string     `json:"name"`
-	Uploaded bool       `json:"uploaded,omitempty"`
-	Parse    *ParseInfo `json:"parse,omitempty"`
+	Name          string     `json:"name"`
+	Uploaded      bool       `json:"uploaded,omitempty"`
+	Parse         *ParseInfo `json:"parse,omitempty"`
+	PreviousPaths []string   `json:"previous_paths,omitempty"`
 }
 
 // ParsedDir is where a courseware file's Markdown and images go.
@@ -41,6 +43,8 @@ func ParsedDir(rel string) string { return rel + ".parsed" }
 // ImportCourseware copies an uploaded document into the lecture's
 // courseware/ folder and indexes it.
 func (l *Library) ImportCourseware(ctx context.Context, lectureID, name string, r io.Reader, limit int64) (store.Asset, error) {
+	l.mirrorMu.Lock()
+	defer l.mirrorMu.Unlock()
 	ext := strings.ToLower(filepath.Ext(name))
 	if !CoursewareExts[ext] {
 		return store.Asset{}, fmt.Errorf("不支持的文件类型 %s（支持 PDF、PPT、Word、Excel 和图片）", ext)
@@ -55,8 +59,13 @@ func (l *Library) ImportCourseware(ctx context.Context, lectureID, name string, 
 	}
 	rel := dir + "/courseware/" + stem + ext
 	for i := 2; ; i++ {
-		if _, err := os.Stat(l.Abs(rel)); errors.Is(err, os.ErrNotExist) {
+		_, aliasErr := l.Store.CoursewareAlias(ctx, rel)
+		if _, err := os.Stat(l.Abs(rel)); errors.Is(err, os.ErrNotExist) && errors.Is(aliasErr, sql.ErrNoRows) {
 			break
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return store.Asset{}, err
+		} else if aliasErr != nil && !errors.Is(aliasErr, sql.ErrNoRows) {
+			return store.Asset{}, aliasErr
 		}
 		rel = fmt.Sprintf("%s/courseware/%s (%d)%s", dir, stem, i, ext)
 	}
@@ -115,10 +124,16 @@ func CoursewareInfo(a store.Asset) CoursewareMeta {
 
 // SetParse records a parse result on a courseware asset.
 func (l *Library) SetParse(ctx context.Context, a store.Asset, p *ParseInfo) error {
-	m := CoursewareInfo(a)
+	l.mirrorMu.Lock()
+	defer l.mirrorMu.Unlock()
+	current, err := l.coursewareAt(ctx, a.LectureID, a.Path)
+	if err != nil {
+		return err
+	}
+	m := CoursewareInfo(current)
 	m.Parse = p
-	a.Meta, _ = json.Marshal(m)
-	if err := l.Store.PutAsset(ctx, a); err != nil {
+	current.Meta, _ = json.Marshal(m)
+	if err := l.Store.PutAsset(ctx, current); err != nil {
 		return err
 	}
 	return l.WriteLectureJSON(ctx, a.LectureID)
@@ -126,6 +141,8 @@ func (l *Library) SetParse(ctx context.Context, a store.Asset, p *ParseInfo) err
 
 // RemoveCourseware deletes one courseware file and its parsed output.
 func (l *Library) RemoveCourseware(ctx context.Context, lectureID, rel string) (int64, error) {
+	l.mirrorMu.Lock()
+	defer l.mirrorMu.Unlock()
 	as, err := l.Courseware(ctx, lectureID)
 	if err != nil {
 		return 0, err

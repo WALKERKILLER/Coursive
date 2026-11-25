@@ -58,6 +58,15 @@ type Service struct {
 	runMu    sync.Mutex // one sync or restore at a time
 }
 
+// WithLibraryWrite keeps a local multi-file change out of an active sync or restore.
+func (s *Service) WithLibraryWrite(write func() error) error {
+	if !s.runMu.TryLock() {
+		return ErrBusy
+	}
+	defer s.runMu.Unlock()
+	return write()
+}
+
 type config struct {
 	Kind        string           `json:"kind,omitempty"`
 	LocalFolder string           `json:"local_folder,omitempty"`

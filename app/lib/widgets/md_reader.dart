@@ -17,8 +17,9 @@ class MdHeading {
 /// lazily and the reader can jump to and track sections.
 class MdDoc {
   MdDoc(String md) {
-    final heading = RegExp(r'^(#{1,4})\s+(.+?)\s*#*\s*$');
+    final heading = RegExp(r'^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*$');
     final fence = RegExp(r'^\s*(```|~~~)');
+    final ids = MarkdownHeadingIds();
     var buf = StringBuffer();
     var inFence = false;
     for (final line in md.split('\n')) {
@@ -27,7 +28,9 @@ class MdDoc {
       if (m != null) {
         if (buf.toString().trim().isNotEmpty || sections.isNotEmpty) sections.add(buf.toString());
         buf = StringBuffer();
-        headings.add(MdHeading(m[1]!.length, _plain(m[2]!), sections.length));
+        final title = _plain(m[2]!);
+        headings.add(MdHeading(m[1]!.length, title, sections.length));
+        headingSections[ids.add(title)] = sections.length;
       }
       buf.writeln(line);
     }
@@ -37,9 +40,14 @@ class MdDoc {
 
   final sections = <String>[];
   final headings = <MdHeading>[];
+  final headingSections = <String, int>{};
   late final List<String> lower;
 
-  static String _plain(String s) => s.replaceAll(RegExp(r'[*_`]|\$'), '').replaceAll(RegExp(r'\[([^\]]*)\]\([^)]*\)'), r'$1').trim();
+  static String _plain(String s) => s
+      .replaceFirst(RegExp(r'[ \t]+#+[ \t]*$'), '')
+      .replaceAllMapped(RegExp(r'\[([^\]]*)\]\([^)]*\)'), (m) => m[1]!)
+      .replaceAll(RegExp(r'[*_`]|\$'), '')
+      .trim();
 
   /// Sections containing [q] (case-insensitive), in order.
   List<int> find(String q) {
@@ -179,6 +187,13 @@ class _MarkdownReaderState extends State<MarkdownReader> {
     }
   }
 
+  bool _followFragment(String fragment) {
+    final section = fragment.isEmpty ? 0 : doc.headingSections[fragment];
+    if (section == null || section >= doc.sections.length) return false;
+    _jump(section);
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -212,6 +227,7 @@ class _MarkdownReaderState extends State<MarkdownReader> {
                   lectureId: widget.lectureId,
                   baseDir: widget.baseDir,
                   onRef: widget.onRef,
+                  onFragment: _followFragment,
                 ),
               ),
             );

@@ -78,7 +78,12 @@ ${slideTimes ? `PPT 换页时间（可作为分段参考）：${slideTimes}\n` :
  * saved chapters.
  * @param {import("./models.mjs").ModelPipeline} pipeline
  */
-export async function generateTimeline(pipeline, lectureId, signal, detail = "concise") {
+export async function generateTimeline(pipeline, lectureId, signal, detail) {
+	const text = await draftTimeline(pipeline, lectureId, signal, detail);
+	return api("PUT", `/api/lectures/${enc(lectureId)}/timeline`, { text });
+}
+
+export async function draftTimeline(pipeline, lectureId, signal, detail = "concise") {
 	const r = await get(`/api/lectures/${enc(lectureId)}`);
 	const segs = await get(`/api/lectures/${enc(lectureId)}/transcript`);
 	if (!segs.length) throw new Error("这节课还没有文字稿，先转写再生成大纲");
@@ -116,5 +121,5 @@ export async function generateTimeline(pipeline, lectureId, signal, detail = "co
 		const lines = text.split("\n").filter((l) => /\d{1,3}:\d{2}\s*[-–—~～]\s*\d{1,3}:\d{2}/.test(l));
 		if (lines.length >= 2) break;
 	}
-	return api("PUT", `/api/lectures/${enc(lectureId)}/timeline`, { text });
+	return text;
 }

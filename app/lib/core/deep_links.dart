@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../features/player/player_page.dart';
+import '../features/library/note_reader.dart';
+import '../widgets/coursive_markdown.dart';
 
 /// The app's root navigator, so links from other programs can open screens.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -50,6 +52,11 @@ class DeepLinks {
     final links = List.of(_pending);
     _pending.clear();
     for (final uri in links) {
+      if (uri.host == 'canvas' || uri.host == 'note') {
+        final ref = CoursiveRef.parse(uri.toString());
+        if (ref != null) openRef(context, ref);
+        continue;
+      }
       if (uri.host != 'lecture' || uri.pathSegments.isEmpty) continue;
       final id = uri.pathSegments.first;
       final t = int.tryParse(uri.queryParameters['t'] ?? '');

@@ -307,6 +307,7 @@
     }
   },
   "linkCannotOpen": "这个链接无法打开",
+  "linkHeadingNotFound": "找不到链接指向的标题",
   "markdownImageUnavailable": "图片不可用",
   "timestampOpenLecture": "打开对应课次并跳到这里",
   "timestampSeek": "跳到这里播放",
@@ -3870,7 +3871,7 @@
   "approvalAuto": "自动",
   "approvalAskDetail": "改动先生成卡片，由你应用",
   "approvalAutoDetail": "直接执行，可以撤销",
-  "approvalDeleteNote": "删除文件在两种模式下都会先问你",
+  "approvalDeleteNote": "永久删除、覆盖原件和批量修改都会先问你",
   "approvalSwitchHint": "Shift+Tab 切换",
   "approvalFailed": "无法切换操作模式。确认助手已启动后再试",
   "aboutTagline": "课堂录像的回放、转写与笔记",
@@ -4257,6 +4258,7 @@
   "studyVisualChanged": "圈选的画面已经变了，请重新圈选后再加入对话",
   "studyConversationFull": "这段对话已满 300 轮，请开始新对话",
   "studyCardExpand": "展开模块",
+  "studyCardFitContent": "适应内容高度",
   "studyCardCollapse": "折叠模块",
   "studyCardFoldColumn": "收起整列",
   "studyCardSelectText": "选择文档文字",
@@ -4761,7 +4763,6 @@
       }
     }
   },
-  "studyCoverageNone": "未引用资料原文，内容可能来自常识或推断",
   "studySuggestOpen": "回看 {locator}",
   "@studySuggestOpen": {
     "placeholders": {
@@ -5076,5 +5077,7 @@
   "modelsSwitchFailed": "模型切换未保存，请检查连接后重试",
   "studyRestoreUpright": "恢复正向",
   "studyAngleSnapping": "角度吸附",
-  "modelPrefsSaveFailed": "模型选择未能保存，请重新选择模型后发送"
+  "modelPrefsSaveFailed": "模型选择未能保存，请重新选择模型后发送",
+  "modelsReviewGuidance": "复习讲义写法",
+  "modelsReviewGuidanceHint": "例如：讲每种算法时，先带我做一个例子。"
 }

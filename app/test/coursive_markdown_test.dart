@@ -154,6 +154,30 @@ void main() {
     expect(find.text('这个链接无法打开'), findsOneWidget);
   });
 
+  testWidgets('the section reader handles encoded and repeated headings', (t) async {
+    final controller = MdReaderController();
+    final fragment = Uri.encodeComponent('分页-1');
+    final doc = MdDoc('## 目录\n\n[去第二个分页](#$fragment)\n\n'
+        '## 分页\n\n${List.filled(25, '前一节的正文。').join('\n\n')}\n\n'
+        '### **分页**\n\n第二个标题的正文。\n\n${List.filled(25, '后一节的正文。').join('\n\n')}');
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarkdownReader(doc: doc, controller: controller)),
+    ));
+    await t.tap(find.text('去第二个分页', findRichText: true));
+    await t.pumpAndSettle();
+    expect(find.text('第二个标题的正文。', findRichText: true).hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('missing local headings do not invoke the external link route', (t) async {
+    await t.pumpWidget(const MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CoursiveMarkdown('[找不到](#missing)\n\n## 标题\n\n正文'),
+    ))));
+    await t.tap(find.text('找不到', findRichText: true));
+    await t.pumpAndSettle();
+    expect(find.text('找不到链接指向的标题'), findsOneWidget);
+    expect(find.text('这个链接无法打开'), findsNothing);
+  });
+
   test('coursive-app:// links from exported notes parse like coursive://', () {
     final ref = CoursiveRef.parse('coursive-app://lecture/L1?t=723');
     expect(ref, isA<TimeRef>());

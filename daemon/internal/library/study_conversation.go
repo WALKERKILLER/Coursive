@@ -372,6 +372,7 @@ func (l *Library) ImportStudyMaterial(ctx context.Context, lecture, rel string) 
 		return out, e
 	}
 	var item *CatalogItem
+	rel = l.currentCoursewarePath(ctx, rel)
 	for i := range items {
 		if items[i].Path == rel {
 			item = &items[i]
@@ -428,6 +429,10 @@ func (l *Library) StudyCourseSource(ctx context.Context, lecture, rel string) (*
 		if strings.HasPrefix(part, ".") {
 			return nil, ErrStudyInvalid
 		}
+	}
+	rel = l.currentCoursewarePath(ctx, rel)
+	if !hasCleanCoursePath(course, rel) {
+		return nil, ErrStudyInvalid
 	}
 	root, e := os.OpenRoot(l.Root)
 	if e != nil {

@@ -117,13 +117,16 @@ extension _StudyStage on StudyCanvasState {
       generation: passageAnchor == null ? '' : 'markdown-aside',
       sources: [if (passageAnchor != null) passageAnchor],
       rect: beside != null
-          ? _placeNear(beside.visualBounds, const Size(440, 440))
+          ? _placeNear(
+              beside.visualBounds,
+              Size(440, passageAnchor == null ? 440 : _asideOpeningHeight),
+            )
           : at == null
           ? _freeSpot(const Size(300, 200))
           : Rect.fromCenter(center: at, width: 300, height: 200),
       title: passageAnchor == null
           ? l10n.studyThreadTitle(_threads.length + 1)
-          : '${l10n.studyHandoutAside} · ${passageAnchor.quote.characters.take(40)}',
+          : l10n.studyHandoutAside,
       conversationId: studyId(),
     );
     d.checkpoint();
@@ -398,6 +401,12 @@ extension _StudyStage on StudyCanvasState {
 
   /// Selects a pinned card and carries the view to it.
   void _revealCard(StudyCard card) {
+    final d = document!;
+    if (card.passageAside && card.collapsed && d.editable(card.layer)) {
+      d.checkpoint();
+      _setCardCollapsed(card, false);
+      d.changed();
+    }
     _update(() {
       _selection
         ..clear()
@@ -604,6 +613,7 @@ class _StageView extends StatefulWidget {
     required this.onDrop,
     this.thread,
     this.turns = const [],
+    this.asideAnswerVersion = 0,
     this.sources = const [],
     this.busy = false,
     this.loading = false,
@@ -637,6 +647,7 @@ class _StageView extends StatefulWidget {
   final ValueChanged<String> onDrop;
   final StudyCard? thread;
   final List turns, sources;
+  final int asideAnswerVersion;
   final bool busy, loading;
   final Map? live;
   final String? error;
@@ -671,8 +682,11 @@ class _StageViewState extends State<_StageView>
     duration: const Duration(milliseconds: 1400),
   );
   final _composer = GlobalKey(), _panel = GlobalKey(), _stage = GlobalKey();
+  final _asideContent = GlobalKey();
+  final _latestAnswer = GlobalKey();
   final _messages = ScrollController();
   bool _hover = false;
+  bool _measuringAside = false;
   String? _focusSource;
   bool _looping = false;
 
@@ -712,13 +726,39 @@ class _StageViewState extends State<_StageView>
   @override
   void didUpdateWidget(_StageView old) {
     super.didUpdateWidget(old);
-    final answered =
-        old.busy &&
-        !widget.busy &&
-        widget.turns.isNotEmpty &&
-        (widget.turns.last as Map)['state'] == 'done';
+    final latest = widget.turns.lastOrNull as Map?;
+    final answered = old.busy && !widget.busy && latest?['state'] == 'done';
+    if (old.asideAnswerVersion != widget.asideAnswerVersion &&
+        latest != null &&
+        '${latest['answer'] ?? ''}'.isNotEmpty &&
+        outlineProposal(latest) == null) {
+      unawaited(_revealLatestAnswer(latest['id']));
+    }
     _claim();
     _sync(pulse: answered);
+  }
+
+  Future<void> _revealLatestAnswer(Object? turnId) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted ||
+          widget.thread?.collapsed != false ||
+          widget.busy ||
+          (widget.turns.lastOrNull as Map?)?['id'] != turnId ||
+          !_messages.hasClients) {
+        return;
+      }
+      final position = _messages.position;
+      final answer = _latestAnswer.currentContext?.findRenderObject();
+      if (answer != null && answer.attached) {
+        // This list is reversed, so alignment 1 reveals the answer's top.
+        await position.ensureVisible(answer, alignment: 1);
+        return;
+      }
+      // While reading older turns, the lazy list may not have built this one.
+      if (position.pixels == position.minScrollExtent) return;
+      position.jumpTo(position.minScrollExtent);
+    }
   }
 
   /// Loops the flow while the agent works; after an answer, one pass
@@ -759,47 +799,78 @@ class _StageViewState extends State<_StageView>
     widget.onSend(text);
   }
 
+  void _measureAside() {
+    if (_measuringAside) return;
+    _measuringAside = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measuringAside = false;
+      if (!mounted) return;
+      final size = _asideContent.currentContext?.size;
+      final card = widget.thread;
+      if (size != null && card != null) {
+        owner._fitAsideHeight(card, size.height);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     _claim();
     if (widget.thread?.passageAside == true) {
-      final anchor = widget.thread!.sources.firstOrNull;
+      final card = widget.thread!;
+      if (card.collapsed) return const SizedBox.shrink();
+      final anchor = card.sources.firstOrNull;
+      if (card.fitsAsideHeight) _measureAside();
       return LayoutBuilder(
-        builder: (context, bounds) => Padding(
-          padding: const EdgeInsets.all(Space.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: widget.turns.isEmpty
-                    ? Align(
-                        alignment: Alignment.topLeft,
-                        child: Text(
-                          anchor?.quote ?? '',
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
+        builder: (context, bounds) =>
+            NotificationListener<SizeChangedLayoutNotification>(
+              onNotification: (_) {
+                if (card.fitsAsideHeight) _measureAside();
+                return false;
+              },
+              child: SizeChangedLayoutNotifier(
+                child: Padding(
+                  key: _asideContent,
+                  padding: const EdgeInsets.all(Space.sm),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Flexible(
+                        child: widget.turns.isEmpty
+                            ? SingleChildScrollView(
+                                primary: false,
+                                child: Text(
+                                  anchor?.quote ?? '',
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              )
+                            : _conversation(context),
+                      ),
+                      const SizedBox(height: Space.xs),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: math.min(
+                            math.max(
+                              0.0,
+                              bounds.maxHeight - Space.sm * 2 - Space.xs,
+                            ),
+                            math.max(56, bounds.maxHeight * .56),
+                          ),
                         ),
-                      )
-                    : _conversation(context),
-              ),
-              if (widget.turns.isEmpty && widget.error != null)
-                Text(
-                  widget.error!,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: cs.error),
+                        child: SingleChildScrollView(
+                          primary: false,
+                          child: _composerPane(context),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: math.max(0.0, bounds.maxHeight * .60 - 16),
-                ),
-                child: SingleChildScrollView(child: _composerPane(context)),
               ),
-            ],
-          ),
-        ),
+            ),
       );
     }
     final viewport = owner._viewport;
@@ -1016,6 +1087,17 @@ class _StageViewState extends State<_StageView>
 
   Widget _conversation(BuildContext context) {
     final turns = widget.turns.reversed.toList();
+    final aside = widget.thread?.passageAside == true;
+    final messages = ListView.builder(
+      controller: _messages,
+      reverse: true,
+      shrinkWrap: true,
+      padding: EdgeInsets.only(top: aside ? Space.sm : Space.xl),
+      itemCount: turns.length,
+      itemBuilder: (context, i) =>
+          _turn(context, turns[i] as Map, newest: i == 0),
+    );
+    if (aside) return messages;
     return ShaderMask(
       // The oldest messages fade into the canvas instead of being cut off.
       shaderCallback: (r) => const LinearGradient(
@@ -1025,15 +1107,7 @@ class _StageViewState extends State<_StageView>
         stops: [0, .08],
       ).createShader(r),
       blendMode: BlendMode.dstIn,
-      child: ListView.builder(
-        controller: _messages,
-        reverse: true,
-        shrinkWrap: true,
-        padding: const EdgeInsets.only(top: Space.xl),
-        itemCount: turns.length,
-        itemBuilder: (context, i) =>
-            _turn(context, turns[i] as Map, newest: i == 0),
-      ),
+      child: messages,
     );
   }
 
@@ -1143,6 +1217,9 @@ class _StageViewState extends State<_StageView>
             _OutlineCard(owner: owner, turn: raw, thread: widget.thread)
           else if (answer.isNotEmpty)
             _Well(
+              key: newest && widget.thread?.passageAside == true
+                  ? _latestAnswer
+                  : null,
               radius: _innerRadius,
               color: _wellOf(cs),
               padding: const EdgeInsets.fromLTRB(
@@ -1301,8 +1378,8 @@ class _StageViewState extends State<_StageView>
           passage == null ||
           (s['anchor'] as Map?)?['object_id'] != passage.objectId,
     );
-    final showScope =
-        widget.onContextScope != null || widget.contextScope == 'course';
+    final showScope = widget.thread?.passageAside != true &&
+        (widget.onContextScope != null || widget.contextScope == 'course');
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) {
         if (details.data is! String && details.data is! StudySelectionDrop)

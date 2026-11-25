@@ -88,8 +88,9 @@ func (l *Library) ReadStudyCourseSource(ctx context.Context, lecture string, q S
 		return out, e
 	}
 	var item *CatalogItem
+	rel := l.currentCoursewarePath(ctx, q.Source.Path)
 	for i := range items {
-		if items[i].Path == q.Source.Path {
+		if items[i].Path == rel {
 			item = &items[i]
 			break
 		}

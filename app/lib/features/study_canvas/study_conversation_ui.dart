@@ -343,12 +343,21 @@ class _ConversationBodyState extends State<_ConversationBody> {
   bool busy = false, loading = false;
   bool _stopRequested = false;
   Timer? saveTimer, pollTimer;
+  int _asideAnswerVersion = 0;
   Future<void> saving = Future.value();
   Map<String, dynamic> get query =>
       jsonDecode(jsonEncode(data!['query'])) as Map<String, dynamic>;
   List get turns => data!['turns'] as List;
   StudyAnchor? get _asideAnchor =>
       widget.card.passageAside ? widget.card.sources.firstOrNull : null;
+  bool get usesCourseSources => data?['context_scope'] == 'course';
+
+  void setCourseScope(bool enabled) {
+    if (data == null || busy || usesCourseSources == enabled) return;
+    setState(() => data!['context_scope'] = enabled ? 'course' : 'selected');
+    unawaited(save());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -413,10 +422,22 @@ class _ConversationBodyState extends State<_ConversationBody> {
   /// Tells this conversation's node how far it went.
   void _summarize() {
     if (data == null || owner._disposed) return;
-    owner._threadSummary[widget.card.id] = {
+    final summary = <String, Object>{
       'turns': turns.length,
       'last': turns.isEmpty ? '' : '${(turns.last as Map)['question'] ?? ''}',
     };
+    if (widget.card.passageAside && turns.isNotEmpty) {
+      var question = '${(turns.first as Map)['question'] ?? ''}';
+      // Older drafts embedded the source quotation before the question.
+      final quote = _asideAnchor?.quote ?? '';
+      final prefix = '「$quote」\n';
+      if (quote.isNotEmpty && question.startsWith(prefix)) {
+        question = question.substring(prefix.length);
+      }
+      summary['first'] = question.trim().replaceAll(RegExp(r'\s+'), ' ');
+    }
+    if (mapEquals(owner._threadSummary[widget.card.id], summary)) return;
+    owner._threadSummary[widget.card.id] = summary;
     owner._threadTick.value++;
   }
 
@@ -852,7 +873,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
         'task': ?task,
         'turn_id': turn['id'],
         'question': agentQuestion,
-        if (context.read<AssistantController?>()?.selected case final choice?)
+        if (context.read<AssistantController?>()?.explicitModelChoice case final choice?)
           'model_choice': {
             'provider': choice['provider'],
             'model': choice['model'],
@@ -1019,7 +1040,12 @@ class _ConversationBodyState extends State<_ConversationBody> {
           },
         };
         runId = null;
-        setState(() => busy = false);
+        setState(() {
+          busy = false;
+          if (widget.card.passageAside && identical(turn, turns.lastOrNull)) {
+            _asideAnswerVersion++;
+          }
+        });
         await save();
         // A finished draft opens for review; nothing is written until then.
         if (mounted && outlineProposal(turn) != null) {
@@ -1076,14 +1102,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       pendingSnapshots: pendingSnapshots,
       contextScope: scope,
       onContextScope:
-          ready && !busy && (_asideAnchor == null || scope == 'course')
-          ? (course) {
-              setState(
-                () => data!['context_scope'] = course ? 'course' : 'selected',
-              );
-              unawaited(save());
-            }
-          : null,
+          ready && !busy && !widget.card.passageAside ? setCourseScope : null,
       onSnapshotRetry: attachSnapshot,
       onRemoveAttachment: (a) {
         setState(() => attachments.remove(a));
@@ -1093,6 +1112,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
         if (!a.uploading) setState(() => pendingSnapshots.remove(a));
       },
       turns: ready ? turns : const [],
+      asideAnswerVersion: _asideAnswerVersion,
       sources: preview?['sources'] as List? ?? const [],
       busy: busy,
       loading: loading || (!ready && error == null),

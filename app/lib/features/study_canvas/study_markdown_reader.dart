@@ -349,8 +349,9 @@ class _SelectableMarkdownPassageState
 
   Iterable<({RenderParagraph paragraph, Rect box})> _rangeBoxes(
     TextRange range,
-    List<({RenderParagraph paragraph, int start, String text})> fragments,
-  ) sync* {
+    List<({RenderParagraph paragraph, int start, String text})> fragments, {
+    ui.BoxHeightStyle boxHeightStyle = ui.BoxHeightStyle.tight,
+  }) sync* {
     var offset = 0;
     for (final fragment in fragments) {
       final from = math.max(0, range.start - offset);
@@ -362,6 +363,7 @@ class _SelectableMarkdownPassageState
             baseOffset: fragment.start + from,
             extentOffset: fragment.start + to,
           ),
+          boxHeightStyle: boxHeightStyle,
         )) {
           yield (paragraph: fragment.paragraph, box: box.toRect());
         }
@@ -381,13 +383,46 @@ class _SelectableMarkdownPassageState
     for (final mark in widget.marks) {
       final range = _renderedRange(mark.anchor, rendered);
       if (range == null) continue;
-      for (final (:paragraph, :box) in _rangeBoxes(range, fragments)) {
-        yield (
-          box: MatrixUtils.transformRect(paragraph.getTransformTo(root), box),
-          highlight: mark.highlight,
-        );
+      final boxes =
+          _rangeBoxes(
+            range,
+            fragments,
+            boxHeightStyle: mark.highlight
+                ? ui.BoxHeightStyle.tight
+                : ui.BoxHeightStyle.max,
+          ).map(
+            (part) => MatrixUtils.transformRect(
+              part.paragraph.getTransformTo(root),
+              part.box,
+            ),
+          );
+      for (final box in mark.highlight ? boxes : _joinUnderlineRuns(boxes)) {
+        yield (box: box, highlight: mark.highlight);
       }
     }
+  }
+
+  // Continue the dash pattern across adjacent font runs on the same line.
+  Iterable<Rect> _joinUnderlineRuns(Iterable<Rect> boxes) sync* {
+    final ordered = boxes.toList()
+      ..sort((a, b) {
+        final byLine = a.top.compareTo(b.top);
+        return byLine == 0 ? a.left.compareTo(b.left) : byLine;
+      });
+    Rect? line;
+    for (final box in ordered) {
+      if (line != null) {
+        if (line.top == box.top &&
+            line.bottom == box.bottom &&
+            box.left <= line.right + .01) {
+          line = line.expandToInclude(box);
+          continue;
+        }
+        yield line;
+      }
+      line = box;
+    }
+    if (line != null) yield line;
   }
 
   // The selection offsets count selectable characters, which exclude the

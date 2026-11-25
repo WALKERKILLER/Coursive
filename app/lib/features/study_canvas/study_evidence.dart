@@ -959,25 +959,26 @@ class _Provenance extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                parts.isEmpty
-                    ? l10n.studyCoverageNone
-                    : [
-                        l10n.studyCoverageLead(parts.join(' · ')),
-                        if (stale > 0) l10n.studyCoverageStale(stale),
-                      ].join(' · '),
-                key: const ValueKey('study-coverage'),
-                style: tt.labelSmall?.copyWith(
-                  color: stale > 0 ? cs.error : cs.onSurfaceVariant,
+        if (parts.isNotEmpty)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  [
+                    l10n.studyCoverageLead(parts.join(' · ')),
+                    if (stale > 0) l10n.studyCoverageStale(stale),
+                  ].join(' · '),
+                  key: const ValueKey('study-coverage'),
+                  style: tt.labelSmall?.copyWith(
+                    color: stale > 0 ? cs.error : cs.onSurfaceVariant,
+                  ),
                 ),
               ),
-            ),
-            ?trailing,
-          ],
-        ),
+              ?trailing,
+            ],
+          )
+        else if (trailing != null)
+          Align(alignment: AlignmentDirectional.centerEnd, child: trailing),
         if (next.isNotEmpty) ...[
           const SizedBox(height: Space.sm),
           Wrap(spacing: Space.xs, runSpacing: Space.xs, children: next),

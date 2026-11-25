@@ -53,9 +53,10 @@ void seekOrOpen(BuildContext context, String lectureId, int seconds) {
 }
 
 class PlayerPage extends StatefulWidget {
-  const PlayerPage({super.key, required this.lectureId, this.startMs});
+  const PlayerPage({super.key, required this.lectureId, this.startMs, this.canvasCardId});
   final String lectureId;
   final int? startMs;
+  final String? canvasCardId;
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
@@ -66,7 +67,9 @@ class _PlayerPageState extends State<PlayerPage> {
   final _focus = FocusNode(debugLabel: 'player');
   bool _fullscreen = false;
   // The classic player opens first; the canvas is entered on request.
-  bool _canvasMode = false, _allowPop = false, _startLesson = false;
+  late bool _canvasMode = widget.canvasCardId != null;
+  bool _allowPop = false, _startLesson = false;
+  String? _initialCanvasCard;
   final _canvas = GlobalKey<StudyCanvasState>();
   bool _panel = true;
   StreamSubscription? _sub;
@@ -85,11 +88,16 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     final app = context.read<AppState>();
     _hub = context.read<PlayerHub>();
+    _initialCanvasCard = widget.canvasCardId;
     ctl = LecturePlayer(
       api: app.api,
       lectureId: widget.lectureId,
       prefs: context.read<UiPrefs>(),
     );
+    ctl.canvasCommand = (op) async {
+      final state = _canvas.currentState;
+      return state != null && await state.runAssistantCommand(op);
+    };
     ctl.addListener(_onCtl);
     ctl.load().then((_) {
       if (!mounted) return;
@@ -342,6 +350,8 @@ class _PlayerPageState extends State<PlayerPage> {
               child: StudyCanvas(
                 key: _canvas,
                 startLesson: _startLesson,
+                initialCardId: _initialCanvasCard,
+                onInitialCardShown: () => _initialCanvasCard = null,
                 pdfLibraryRoot: context.read<AppState>().daemon.libraryRoot,
                 api: ctl.api,
                 ctl: ctl,
@@ -421,6 +431,7 @@ class _PlayerPageState extends State<PlayerPage> {
             value: {
               'screen': l10n.screenPlayer,
               'lecture_id': widget.lectureId,
+              if (_canvasMode) 'study_canvas': 'yes',
               if (l != null) 'lecture': '${l.date} ${l.shortTitle}',
               if (ctl.course != null) 'course': ctl.course!.title,
               if (ctl.course != null) 'course_id': ctl.course!.id,

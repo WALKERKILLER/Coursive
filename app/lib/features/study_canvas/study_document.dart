@@ -126,12 +126,15 @@ class StudyCard {
   List<StudyAnchor> sources;
   Map<String, String> responses;
   bool get lessonNote => type == 'text' && generation == 'lesson-note' && RegExp(r'^lesson-[0-9a-f]{32}$').hasMatch(documentId);
+  bool get linkedNote => type == 'text' && generation == 'linked-note' && documentId.isNotEmpty;
   bool get markdownReader =>
       type == 'text' &&
-      (lessonNote || pinnedAnswer ||
+      (lessonNote || linkedNote || pinnedAnswer ||
           source.toLowerCase().endsWith('.md') ||
           source.toLowerCase().endsWith('.markdown'));
   bool get passageAside => type == 'conversation' && generation == 'markdown-aside';
+  // For asides, a zero saved expanded height means fit the content.
+  bool get fitsAsideHeight => passageAside && expandedH == 0;
   bool get passageNote => type == 'text' && generation == 'markdown-annotation';
   bool get passageLinked => passageAside || passageNote;
   bool get onCanvas => type != 'conversation' || passageAside;
@@ -241,7 +244,7 @@ class StudyCard {
     'w': rect.width,
     'h': rect.height,
     'title': title,
-    'text': text,
+    if (!linkedNote) 'text': text,
     'path': path,
     'source': source,
     'document_id': documentId,

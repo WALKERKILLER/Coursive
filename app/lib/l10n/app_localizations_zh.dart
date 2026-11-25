@@ -441,6 +441,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get linkCannotOpen => '这个链接无法打开';
 
   @override
+  String get linkHeadingNotFound => '找不到链接指向的标题';
+
+  @override
   String get markdownImageUnavailable => '图片不可用';
 
   @override
@@ -6237,7 +6240,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get approvalAutoDetail => '直接执行，可以撤销';
 
   @override
-  String get approvalDeleteNote => '删除文件在两种模式下都会先问你';
+  String get approvalDeleteNote => '永久删除、覆盖原件和批量修改都会先问你';
 
   @override
   String get approvalSwitchHint => 'Shift+Tab 切换';
@@ -6885,6 +6888,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyCardExpand => '展开模块';
+
+  @override
+  String get studyCardFitContent => '适应内容高度';
 
   @override
   String get studyCardCollapse => '折叠模块';
@@ -7698,9 +7704,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get studyCoverageNone => '未引用资料原文，内容可能来自常识或推断';
-
-  @override
   String studySuggestOpen(String locator) {
     return '回看 $locator';
   }
@@ -8276,4 +8279,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyAngleSnapping => '角度吸附';
+
+  @override
+  String get modelsReviewGuidance => '复习讲义写法';
+
+  @override
+  String get modelsReviewGuidanceHint => '例如：讲每种算法时，先带我做一个例子。';
 }

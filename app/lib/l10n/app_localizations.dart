@@ -814,6 +814,12 @@ abstract class AppLocalizations {
   /// **'这个链接无法打开'**
   String get linkCannotOpen;
 
+  /// No description provided for @linkHeadingNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到链接指向的标题'**
+  String get linkHeadingNotFound;
+
   /// No description provided for @markdownImageUnavailable.
   ///
   /// In zh, this message translates to:
@@ -10825,7 +10831,7 @@ abstract class AppLocalizations {
   /// No description provided for @approvalDeleteNote.
   ///
   /// In zh, this message translates to:
-  /// **'删除文件在两种模式下都会先问你'**
+  /// **'永久删除、覆盖原件和批量修改都会先问你'**
   String get approvalDeleteNote;
 
   /// No description provided for @approvalSwitchHint.
@@ -11984,6 +11990,12 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'展开模块'**
   String get studyCardExpand;
+
+  /// No description provided for @studyCardFitContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'适应内容高度'**
+  String get studyCardFitContent;
 
   /// No description provided for @studyCardCollapse.
   ///
@@ -13383,12 +13395,6 @@ abstract class AppLocalizations {
   /// **'依据 {parts}'**
   String studyCoverageLead(String parts);
 
-  /// No description provided for @studyCoverageNone.
-  ///
-  /// In zh, this message translates to:
-  /// **'未引用资料原文，内容可能来自常识或推断'**
-  String get studyCoverageNone;
-
   /// No description provided for @studySuggestOpen.
   ///
   /// In zh, this message translates to:
@@ -14468,6 +14474,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'角度吸附'**
   String get studyAngleSnapping;
+
+  /// No description provided for @modelsReviewGuidance.
+  ///
+  /// In zh, this message translates to:
+  /// **'复习讲义写法'**
+  String get modelsReviewGuidance;
+
+  /// No description provided for @modelsReviewGuidanceHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：讲每种算法时，先带我做一个例子。'**
+  String get modelsReviewGuidanceHint;
 }
 
 class _AppLocalizationsDelegate

@@ -183,6 +183,7 @@ test('literal quote checks ignore punctuation and code examples without treating
  await scope.execute('read_course_source',{source_id:'file'});
  assert.deepEqual(invalidQuotations('“我们来看一道银行家算法的练习题啊。”[[e:e1]]',scope),[]);
  assert.deepEqual(invalidQuotations('“这是不存在于该来源的另一段直接引文。”[[e:e1]]',scope),['e1']);
+ assert.deepEqual(invalidQuotations('“这是不存在于该来源的另一段直接引文。”[[e1]]',scope),['e1']);
  assert.deepEqual(invalidQuotations('example `“这是不存在于该来源的另一段直接引文。”[[e:e1]]`',scope),[]);
  assert.deepEqual(invalidQuotations('“下面这个题目的名字是银行家算法的例子”，见如下解释。 [[e:e1]]',scope),[]);
 });

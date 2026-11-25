@@ -78,7 +78,7 @@ class _NotePageState extends State<NotePage> {
   String get _lectureId => _note?.lectureId ?? '';
 
   void _open(CoursiveRef ref, bool wide) {
-    if (ref is LectureRef || ref is FileRef) {
+    if (ref is LectureRef || ref is FileRef || ref is NoteRef || ref is CanvasRef) {
       openRef(context, ref);
       return;
     }
@@ -320,7 +320,7 @@ class SourcePane extends StatelessWidget {
       SlideRef() => _MomentSource(lectureId: r.lectureId, slideIdx: r.idx, onClose: onClose),
       CoursewareRef() => CoursewareSource(lectureId: r.lectureId, file: r.file, query: r.query, onClose: onClose),
       // Lectures and files open in place of a pane (openRef).
-      LectureRef() || FileRef() => const SizedBox.shrink(),
+      LectureRef() || FileRef() || NoteRef() || CanvasRef() => const SizedBox.shrink(),
     };
   }
 }
@@ -477,7 +477,15 @@ class _SegmentLine extends StatelessWidget {
 /// Loads a parsed courseware file's Markdown through daemon.
 Future<(CoursewareFile, String)> loadParsedCourseware(Api api, String lectureId, String file) async {
   final list = jsonList(await api.get('/api/lectures/$lectureId/courseware')).map((e) => CoursewareFile((e as Map).cast<String, dynamic>()));
-  final f = list.where((x) => x.path == file || x.name == file).firstOrNull;
+  var f = list.where((x) => x.path == file || x.name == file).firstOrNull;
+  if (f == null && file.isNotEmpty) {
+    final aliases = jsonList(await api.get('/api/lectures/$lectureId/courseware', {
+      'former_path': file,
+    }));
+    if (aliases.length == 1) {
+      f = CoursewareFile((aliases.single as Map).cast<String, dynamic>());
+    }
+  }
   if (f == null) throw Exception(l10n.coursewareGone);
   if (!f.parsed) throw Exception(l10n.coursewareNotParsed);
   final res = await http.get(Uri.parse(api.fileUrl(f.mdPath)));
@@ -655,6 +663,14 @@ class _CoursewareReaderPageState extends State<_CoursewareReaderPage> {
 void openRef(BuildContext context, CoursiveRef ref, {String lectureId = '', void Function(TimeRef)? onSeek}) {
   if (ref is LectureRef) {
     Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: ref.lectureId)));
+    return;
+  }
+  if (ref is NoteRef) {
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => NotePage(noteId: ref.noteId)));
+    return;
+  }
+  if (ref is CanvasRef) {
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: ref.lectureId, canvasCardId: ref.cardId)));
     return;
   }
   if (ref is FileRef) {

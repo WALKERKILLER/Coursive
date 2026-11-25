@@ -28,6 +28,7 @@ class Source {
 
 /// Owns the media_kit players and everything the player UI shows.
 class LecturePlayer extends ChangeNotifier implements PlayerHandle {
+  Future<bool> Function(Map<String, dynamic>)? canvasCommand;
   LecturePlayer({
     required this.api,
     required this.lectureId,

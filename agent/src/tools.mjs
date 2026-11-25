@@ -9,7 +9,8 @@ import { Type } from "typebox";
 import { api, get } from "./daemon.mjs";
 import { checkQuiz, QUIZ_PLAYBOOK } from "./practice.mjs";
 import { TASK_WRITES } from "./tasks.mjs";
-import { generateTimeline } from "./timeline.mjs";
+import { draftTimeline } from "./timeline.mjs";
+import { resolveWorkspaceCourse } from "./course-files.mjs";
 import { seeImages } from "./vision.mjs";
 
 export const clock = (ms) => {
@@ -226,6 +227,21 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 	const all = { ...own, ...pluginGroups };
 	const core = [...CORE, ...(extra.core ?? [])];
 	const plugins = Object.entries(pluginGroups);
+	const saveOutline = async (lectureId, text, before) => {
+		const route = `/api/lectures/${enc(lectureId)}/timeline`;
+		const base = before ?? await get(route);
+		if (!extra.act) {
+			if (base.length) throw Error("覆盖大纲需要用户通过确认卡应用");
+			const chapters = await api("PUT", route, { text });
+			return { content: [{type: "text", text: `已保存 ${chapters.length} 个章节`}], details: { timeline: chapters, lecture_id: lectureId } };
+		}
+		return extra.act({
+			kind: "outline", title: base.length ? "覆盖课次大纲" : "保存课次大纲", doneTitle: "大纲已保存",
+			forceConfirm: !!base.length, lines: [lectureId, ...base.map((c) => c.title)],
+			op: { type: "save_outline", lecture_id: lectureId, text, base: JSON.stringify(base) },
+			said: (r) => `已保存 ${r.timeline.length} 个章节`,
+		});
+	};
 	const tools = [
 		{
 			name: "find_tools",
@@ -441,11 +457,20 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				partial: Type.Optional(Type.Boolean({ description: "The user asked for notes on only part of the lecture" })),
 			}),
 			execute: async (_id, p) => {
-				if (p.note_id) {
-					const old = await get(`/api/notes/${enc(p.note_id)}`);
-					if (old.source !== "agent") throw new Error("这是用户自己写的笔记，不能覆盖。请不传 note_id，另存为一篇新笔记。");
-					if (!p.replace) throw new Error("覆盖已有笔记需要用户明确要求修改这一篇（并传 replace: true）。否则不要传 note_id，新建一篇笔记。");
+				const old = p.note_id ? await get(`/api/notes/${enc(p.note_id)}`) : null;
+				if (!/笔记|讲义|记录|整理|保存|note|handout|save/i.test(conv.lastUser ?? "") && extra.act) throw Error("需要用户请求保存或修改笔记");
+				if (p.note_id && (!extra.act || !p.replace || !/改|编辑|覆盖|重写|edit|rewrite|replace/i.test(conv.lastUser ?? ""))) {
+					throw Error("覆盖笔记需要用户提出修改，并通过确认卡应用");
 				}
+				const active = conv.course_id || conv.context?.course_id;
+				let course_id = old?.course_id ?? p.course_id ?? active ?? "";
+				const lecture_id = old?.lecture_id ?? p.lecture_id ?? "";
+				if (lecture_id) {
+					const lecture = (await get(`/api/lectures/${enc(lecture_id)}`)).lecture;
+					if (!lecture || course_id && course_id !== lecture.course_id) throw Error("节次与目标课程不匹配");
+					course_id = lecture.course_id;
+				}
+				if (extra.act && course_id) await resolveWorkspaceCourse(api, conv, course_id);
 				if (p.lecture_id && !p.partial) {
 					const u = await unread(conv, p.lecture_id);
 					if (u && u.ratio > 0.1) {
@@ -453,15 +478,21 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 						throw new Error(`字幕还有 ${list} 没有读（约 ${Math.round(u.ratio * 100)}%）。整节课的笔记必须以完整字幕为依据：先用 read_transcript 读完这些部分，补充笔记后再保存。只整理部分内容时传 partial: true。`);
 					}
 				}
-				const n = await api("PUT", "/api/notes", {
-					id: p.note_id ?? "",
-					title: p.title,
-					body: p.body,
-					lecture_id: p.lecture_id ?? "",
-					course_id: p.course_id ?? "",
-					source: "agent",
+				const note = {
+					id: p.note_id ?? "", title: old?.title ?? p.title, body: p.body,
+					lecture_id, course_id, source: old?.source ?? "agent",
+					...(old ? { base_body: old.body } : {}),
+				};
+				if (!extra.act) {
+					const n = await api("PUT", "/api/notes", note);
+					return text(`已保存笔记「${n.title}」(id ${n.id})，文件：${n.path}`, { note: n });
+				}
+				return extra.act({
+					kind: "save_note", title: `${old ? "覆盖" : "新建"}笔记「${note.title}」`,
+					doneTitle: "笔记已保存", lines: [old?.path || course_id || "本地资料库"],
+					op: { type: "save_note", note }, forceConfirm: !!old,
+					said: ({note: n}) => `已保存[笔记「${n.title}」](coursive://note/${enc(n.id)})，文件：${n.path}`,
 				});
-				return text(`已保存笔记「${n.title}」(id ${n.id})，文件：${n.path}`, { note: n });
 			},
 		},
 		{
@@ -498,7 +529,7 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				if (d < -1 || d > 200) {
 					throw new Error(`due_date ${p.due_date} 与参照日期 ${anchor}（${weekday(anchor)}）相差 ${d} 天，不合理。相对日期要以${p.source === "chat" ? "今天" : "这节课的日期"}为准重新换算。`);
 				}
-				const r = await api("POST", "/api/schedule", {
+				const item = {
 					kind: p.kind,
 					title: p.title.trim().slice(0, 40),
 					detail: p.detail ?? "",
@@ -509,7 +540,14 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 					t_ms: tMs,
 					quote: p.quote.trim().slice(0, 200),
 					source: "agent",
+				};
+				if (extra.act) return extra.act({
+					kind: "schedule", title: `添加日程「${item.title}」`, doneTitle: "日程已保存",
+					lines: [`${item.due_date} ${item.due_time}`.trim()],
+					op: { type: "new_schedule", item },
+					said: (r) => r.duplicate ? `日程里已有「${r.item.title}」` : `已加入日程「${r.item.title}」`,
 				});
+				const r = await api("POST", "/api/schedule", item);
 				const it = r.item;
 				const when = `${it.due_date}（${weekday(it.due_date)}${it.due_time ? " " + it.due_time : ""}）`;
 				return text(
@@ -561,9 +599,18 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				if (remove) {
 					if (it.source === "lms") throw new Error("这条作业来自学习平台，不能删除；用户可以在日程页把它从日程隐藏。");
 					if (it.source !== "agent") throw new Error("这条是用户自己添加的，不能删除；请让用户在日程页处理。");
-					await api("DELETE", `/api/schedule/${enc(id)}`);
-					return text(`已删除「${it.title}」`, { removed: id });
+					if (!extra.act) throw Error("删除日程需要用户通过确认卡应用");
+					return extra.act({
+						kind: "schedule", title: `删除日程「${it.title}」`, doneTitle: "日程已删除",
+						lines: [it.due_date, it.title], forceConfirm: true,
+						op: { type: "delete_schedule", id, base: JSON.stringify(it) }, said: () => `已删除「${it.title}」`,
+					});
 				}
+				if (extra.act) return extra.act({
+					kind: "schedule", title: `修改日程「${it.title}」`, doneTitle: "日程已更新",
+					lines: Object.entries(patch).map(([key, value]) => `${key}：${value}`),
+					op: { type: "edit_schedule", id, patch }, said: () => `已更新「${it.title}」`,
+				});
 				const r = await api("PATCH", `/api/schedule/${enc(id)}`, patch);
 				return text(`已更新「${r.title}」${r.due_date} ${weekday(r.due_date)}${r.done ? "（已完成）" : ""}`, { schedule: r });
 			},
@@ -589,8 +636,10 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				detail: Type.Optional(Type.Union([Type.Literal("concise"), Type.Literal("detailed")])),
 			}),
 			execute: async (_id, { lecture_id, detail }, signal) => {
-				const chs = await generateTimeline(conv.pipeline, lecture_id, signal, detail);
-				return text(chs.map((c) => `[${clock(c.start_ms)}]–[${clock(c.end_ms)}] ${c.title}`).join("\n"), { timeline: chs, lecture_id });
+				const before = await get(`/api/lectures/${enc(lecture_id)}/timeline`);
+				if (before.length && !extra.act) throw Error("覆盖大纲需要用户通过确认卡应用");
+				const draft = await draftTimeline(conv.pipeline, lecture_id, signal, detail);
+				return saveOutline(lecture_id, draft, before);
 			},
 		},
 		{
@@ -600,8 +649,7 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				"Save an outline you wrote or edited. text: one chapter per line, 'MM:SS-MM:SS：阶段内容' (minutes keep counting past 60, e.g. 75:20); chapters are made contiguous from 00:00 to the end.",
 			parameters: Type.Object({ lecture_id: Type.String(), text: Type.String() }),
 			execute: async (_id, { lecture_id, text: t }) => {
-				const chs = await api("PUT", `/api/lectures/${enc(lecture_id)}/timeline`, { text: t });
-				return text(`已保存 ${chs.length} 个章节`, { timeline: chs, lecture_id });
+				return saveOutline(lecture_id, t);
 			},
 		},
 		{
@@ -738,6 +786,12 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				const problem = checkQuiz(p, conv.reads, coverage);
 				if (problem) throw new Error(problem);
 				const { partial: _, ...body } = p;
+				if (extra.act) return extra.act({
+					kind: "quiz", title: `保存练习「${body.title}」`, doneTitle: "练习已保存",
+					lines: [`${body.questions.length} 道题`],
+					op: { type: "new_quiz", quiz: { ...body, source: "agent" } },
+					said: ({quiz}) => `已保存练习「${quiz.title}」`,
+				});
 				const q = await api("POST", "/api/quizzes", { ...body, source: "agent" });
 				return text(`已保存练习「${q.title}」${q.count} 题（id ${q.id}）。聊天里会显示练习卡片，用户点“开始练习”即可作答。`, {
 					quiz: { id: q.id, title: q.title, count: q.count, difficulty: q.difficulty, lecture_id: q.lecture_id, lecture_title: q.lecture_title ?? "" },

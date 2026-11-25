@@ -239,6 +239,13 @@ func (s *Server) courseware(_ http.ResponseWriter, r *http.Request) (any, error)
 		m := library.CoursewareInfo(a)
 		out = append(out, coursewareView{Path: a.Path, Name: m.Name, Bytes: a.Bytes, CreatedAt: a.CreatedAt, Uploaded: m.Uploaded, Parse: m.Parse})
 	}
+	if rel := r.URL.Query().Get("former_path"); rel != "" {
+		if a, ok := s.Lib.FormerLectureCourseware(r.Context(), r.PathValue("id"), rel); ok {
+			m := library.CoursewareInfo(a)
+			return []coursewareView{{Path: a.Path, Name: m.Name, Bytes: a.Bytes, CreatedAt: a.CreatedAt, Uploaded: m.Uploaded, Parse: m.Parse}}, nil
+		}
+		return []coursewareView{}, nil
+	}
 	return out, nil
 }
 
@@ -281,9 +288,13 @@ func (s *Server) coursewareText(_ http.ResponseWriter, r *http.Request) (any, er
 	if err != nil {
 		return nil, err
 	}
+	former, hasFormer := s.Lib.FormerLectureCourseware(ctx, id, q.Get("path"))
+	if hasFormer {
+		as = append(as, former)
+	}
 	for _, a := range as {
 		m := library.CoursewareInfo(a)
-		if a.Path != q.Get("path") && m.Name != q.Get("path") {
+		if a.Path != q.Get("path") && m.Name != q.Get("path") && (!hasFormer || a.Path != former.Path) {
 			continue
 		}
 		if m.Parse == nil || m.Parse.State != "done" {

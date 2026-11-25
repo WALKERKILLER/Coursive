@@ -175,6 +175,9 @@ export async function lectureEvidence(call, lectureId, readSlide) {
       const selected = [...parsed.values()].filter(f=>readRole(f.name) !== "past_exam").slice(0, 3);
       return (await Promise.all(selected.map(file=>readFileExcerpt(file,0)))).filter(Boolean);
     },
+    async readCourseware(limit = 2) {
+      return (await Promise.all([...parsed.values()].slice(0, limit).map((file) => readFileExcerpt(file, 0)))).filter(Boolean);
+    },
     coverage: () => [
       !windows.length && "本节缺少可读转写",
       parsed.size < (files ?? []).length && "部分课件尚未解析",

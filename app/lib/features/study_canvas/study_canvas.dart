@@ -57,6 +57,7 @@ import 'study_input_router.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 
+part 'study_assistant.dart';
 part 'study_agent_ui.dart';
 part 'study_snapshot_capture.dart';
 part 'study_source_navigation.dart';
@@ -84,6 +85,12 @@ part 'study_plugin_ui.dart';
 
 enum StudyTool { pan, select, pen, highlighter, eraser, region }
 
+const double _cardHeaderHeight = 36;
+const double _asideCollapsedHeight = 40;
+const double _asideOpeningHeight = 160;
+const double _asideMinHeight = 120;
+const double _asideMaxHeight = 440;
+
 class StudyCanvas extends StatefulWidget {
   const StudyCanvas({
     super.key,
@@ -99,6 +106,8 @@ class StudyCanvas extends StatefulWidget {
     required this.onBack,
     this.fullscreen = false,
     this.startLesson = false,
+    this.initialCardId,
+    this.onInitialCardShown,
   }) : _player = ctl,
        notebookId = null,
        title = null;
@@ -120,7 +129,9 @@ class StudyCanvas extends StatefulWidget {
        onAsk = null,
        onClassic = null,
        fullscreen = false,
-       startLesson = false;
+       startLesson = false,
+       initialCardId = null,
+       onInitialCardShown = null;
   final String? notebookId, title;
   bool get standalone => notebookId != null;
   String get draftKey => standalone
@@ -143,6 +154,8 @@ class StudyCanvas extends StatefulWidget {
   final VoidCallback onBack;
   final ValueChanged<String>? onAsk;
   final bool fullscreen, startLesson;
+  final String? initialCardId;
+  final VoidCallback? onInitialCardShown;
   @override
   State<StudyCanvas> createState() => StudyCanvasState();
 }
@@ -446,9 +459,19 @@ class StudyCanvasState extends State<StudyCanvas>
       unawaited(_refreshFromSync());
     });
     _syncSubscription = widget.api.sse('/api/events').listen((e) {
+      final data = e['data'] as Map?;
+      if (e['type'] == 'notes_changed' && !widget.standalone) {
+        if (data?['card_id'] != null && data?['lecture_id'] == widget.ctl.lectureId) {
+          unawaited(_refreshFromSync());
+        }
+        final d = document;
+        if (data?['id'] is String && d != null) {
+          unawaited(_refreshLinkedNotes(d, noteId: data!['id'] as String));
+        }
+      }
       if (e['type'] == 'sync_done' &&
-          ((e['data'] as Map?)?['downloaded'] as num? ?? 0) > 0) {
-        unawaited(_refreshFromSync());
+          (data?['downloaded'] as num? ?? 0) > 0) {
+        unawaited(_refreshFromSync(refreshNotes: true));
       }
     }, onError: (_) {});
     unawaited(_titlebar(true));
@@ -530,6 +553,16 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       d.addListener(_changed);
       _savedEdit = d.edit;
+      if (!widget.standalone) unawaited(_refreshLinkedNotes(d));
+      final initial = widget.initialCardId;
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || document != d) return;
+          final card = d.cards.where((card) => card.id == initial).firstOrNull;
+          if (card != null) _showAssistantCard(card);
+          widget.onInitialCardShown?.call();
+        });
+      }
       setState(() {
         _loadError = null;
         _status = l10n.studySaved;
@@ -539,14 +572,19 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
-  Future<void> _refreshFromSync() async {
+  Future<void> _refreshFromSync({bool refreshNotes = false}) async {
     if (_refreshing || !mounted) return;
     _refreshing = true;
     try {
       final remote = await widget.load() as Map;
       final d = document;
       if (d == null || !mounted) return;
-      if (remote['base_hash'] == d.baseHash) return;
+      if (remote['base_hash'] == d.baseHash) {
+        if (!widget.standalone && !_editingCanvas && refreshNotes) {
+          await _refreshLinkedNotes(d);
+        }
+        return;
+      }
       // Finish an edit already in progress. Its save rebases against the latest
       // revision, so the last saved whole canvas wins (ADR 0022).
       if (_editingCanvas) return;
@@ -1745,11 +1783,14 @@ class StudyCanvasState extends State<StudyCanvas>
       _toast(l10n.studyLocked);
       return;
     }
-    if (card?.lessonNote == true) {
+    if (card?.lessonNote == true || card?.linkedNote == true) {
       try {
         final path = '/api/notes/${Uri.encodeComponent(card!.documentId)}';
         final current = await widget.api.get(path) as Map;
-        if (current['lecture_id'] != widget.ctl.lectureId || current['body'] != original) throw StateError(l10n.studySelectionChanged);
+        final scoped = card.lessonNote
+            ? current['lecture_id'] == widget.ctl.lectureId
+            : current['course_id'] == widget.ctl.course?.id;
+        if (!scoped || (current['body'] ?? '') != original) throw StateError(l10n.studySelectionChanged);
         await widget.api.put('/api/notes', {...current.cast<String,dynamic>(),'body':text,'base_body':original});
       } catch (e) { if (mounted) _toast('$e'); return; }
       if (!mounted || document != d || !d.cards.contains(card)) return;
@@ -2426,6 +2467,17 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   void _setCardCollapsed(StudyCard card, bool collapsed) {
+    if (card.passageAside) {
+      card.rect = StudyCardTransform(card).withLayoutHeight(
+        collapsed
+            ? _asideCollapsedHeight
+            : card.fitsAsideHeight
+            ? _asideOpeningHeight
+            : card.expandedH / card.contentScale,
+      );
+      card.collapsed = collapsed;
+      return;
+    }
     if (collapsed) card.expandedH = card.rect.height;
     final minHeight = card.type == 'conversation' ? 160.0 : 240.0;
     card
@@ -2436,6 +2488,34 @@ class StudyCanvasState extends State<StudyCanvas>
         card.rect.width,
         collapsed ? 60 : math.max(minHeight, card.expandedH),
       );
+  }
+
+  void _fitAsideHeight(StudyCard card, double bodyHeight) {
+    final d = document;
+    if (!mounted ||
+        _disposed ||
+        _transformSession != null ||
+        card.collapsed ||
+        !card.fitsAsideHeight ||
+        d?.cards.contains(card) != true) {
+      return;
+    }
+    final transform = StudyCardTransform(card);
+    final rect = transform.withLayoutHeight(
+      (_cardHeaderHeight + bodyHeight).clamp(_asideMinHeight, _asideMaxHeight),
+    );
+    final fittedHeight = card.quarterTurns.isEven ? rect.height : rect.width;
+    if ((card.contentRect.height - fittedHeight).abs() <= .5 * card.contentScale) {
+      return;
+    }
+    _update(() {
+      card.rect = rect;
+      if (_selection.contains(card.id)) {
+        _selectionBounds = _boundsOfSelection();
+        if (_selectionReady) _regionSelection = _selectionBounds;
+      }
+    });
+    _scene.value++;
   }
 
   Widget _card(StudyCard c) {
@@ -2464,6 +2544,20 @@ class StudyCanvasState extends State<StudyCanvas>
           icon: Icon(icon),
         );
     final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
+    final aside = c.passageAside;
+    final fitAside = !c.collapsed && c.fitsAsideHeight;
+    Widget titleLabel(String label, {String? tooltip}) => Tooltip(
+      message: tooltip ?? label,
+      ignorePointer: true,
+      waitDuration: const Duration(milliseconds: 600),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge
+            ?.copyWith(color: chrome.ink),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
       if (!c.generated)
@@ -2475,7 +2569,17 @@ class StudyCanvasState extends State<StudyCanvas>
             Icons.link,
             () => _focusSource(source),
           ),
-      if (!pdfColumn && c.quarterTurns == 0)
+      if (aside && !c.fitsAsideHeight && !c.collapsed && d.canTransformCard(c))
+        (
+          l10n.studyCardFitContent,
+          Icons.fit_screen_outlined,
+          () {
+            d.checkpoint();
+            c.expandedH = 0;
+            d.changed();
+          },
+        ),
+      if (!aside && !pdfColumn && c.quarterTurns == 0)
         (
           c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
@@ -2539,7 +2643,7 @@ class StudyCanvasState extends State<StudyCanvas>
         child: Column(
           children: [
             SizedBox(
-              height: 36,
+              height: _cardHeaderHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: c.type == 'lecture'
@@ -2574,24 +2678,29 @@ class StudyCanvasState extends State<StudyCanvas>
                       const SizedBox(width: Space.sm),
                     ],
                     Expanded(
-                      child: Tooltip(
-                        message: c.title,
-                        ignorePointer: true,
-                        waitDuration: const Duration(milliseconds: 600),
-                        child: Text(
-                          c.type == 'pdf' && c.pdfColumn.isNotEmpty
-                              ? l10n.studyCardPdfPage(
-                                  c.title,
-                                  c.page,
-                                  c.pageCount,
-                                )
-                              : c.title,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: chrome.ink),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      child: aside
+                          ? ValueListenableBuilder<int>(
+                              valueListenable: _threadTick,
+                              builder: (_, _, _) {
+                                final question =
+                                    _threadSummary[c.id]?['first'] as String?;
+                                return titleLabel(
+                                  question == null || question.isEmpty
+                                      ? l10n.studyHandoutAside
+                                      : '${l10n.studyHandoutAside} · $question',
+                                );
+                              },
+                            )
+                          : titleLabel(
+                              c.type == 'pdf' && pdfColumn
+                                  ? l10n.studyCardPdfPage(
+                                      c.title,
+                                      c.page,
+                                      c.pageCount,
+                                    )
+                                  : c.title,
+                              tooltip: c.title,
+                            ),
                     ),
                     Row(
                       key: _cardHeaderActions.putIfAbsent(
@@ -2640,6 +2749,20 @@ class StudyCanvasState extends State<StudyCanvas>
                             l10n.studyBackToPassage,
                             Icons.reply_rounded,
                             () => _focusSource(c.sources.first),
+                          ),
+                        if (aside)
+                          action(
+                            c.collapsed
+                                ? l10n.studyCardExpand
+                                : l10n.commonCollapse,
+                            c.collapsed
+                                ? Icons.keyboard_arrow_down_rounded
+                                : Icons.keyboard_arrow_up_rounded,
+                            () {
+                              d.checkpoint();
+                              _setCardCollapsed(c, !c.collapsed);
+                              d.changed();
+                            },
                           ),
                         if (c.passageNote)
                           action(
@@ -2702,9 +2825,33 @@ class StudyCanvasState extends State<StudyCanvas>
                               ),
                             ),
                           ),
-                        if (more.isNotEmpty)
+                        if (aside || more.isNotEmpty)
                           MenuAnchor(
                             menuChildren: [
+                              if (aside)
+                                Builder(
+                                  builder: (context) {
+                                    final thread =
+                                        _conversationKeys[c.id]?.currentState;
+                                    final enabled =
+                                        thread?.usesCourseSources ?? false;
+                                    return MenuItemButton(
+                                      leadingIcon: Icon(
+                                        enabled
+                                            ? Icons.check_box_outlined
+                                            : Icons.check_box_outline_blank,
+                                        size: 18,
+                                      ),
+                                      onPressed:
+                                          thread == null ||
+                                              thread.data == null ||
+                                              thread.busy
+                                          ? null
+                                          : () => thread.setCourseScope(!enabled),
+                                      child: Text(l10n.studyCourseScopeChip),
+                                    );
+                                  },
+                                ),
                               for (final (label, icon, run) in more)
                                 MenuItemButton(
                                   leadingIcon: Icon(icon, size: 18),
@@ -2727,8 +2874,17 @@ class StudyCanvasState extends State<StudyCanvas>
             ),
             Expanded(
               child: OverflowBox(
-                minHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
-                maxHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
+                alignment: aside ? Alignment.topCenter : Alignment.center,
+                minHeight: fitAside
+                    ? 0
+                    : c.collapsed
+                    ? math.max(480, c.expandedH) - 56
+                    : null,
+                maxHeight: fitAside
+                    ? _asideMaxHeight - _cardHeaderHeight
+                    : c.collapsed
+                    ? math.max(480, c.expandedH) - 56
+                    : null,
                 child: Offstage(
                   offstage: c.collapsed,
                   child: IgnorePointer(
@@ -2894,19 +3050,20 @@ class StudyCanvasState extends State<StudyCanvas>
                 ),
               ),
             ),
-            SizedBox(
-              height: 16,
-              child: Align(
-                alignment: Alignment.bottomRight,
-                child: c.quarterTurns != 0
-                    ? null
-                    : Icon(
-                        Icons.south_east,
-                        size: 12,
-                        color: selected ? chrome.accent : chrome.inkFaint,
-                      ),
+            if (!aside)
+              SizedBox(
+                height: 16,
+                child: Align(
+                  alignment: Alignment.bottomRight,
+                  child: c.quarterTurns != 0
+                      ? null
+                      : Icon(
+                          Icons.south_east,
+                          size: 12,
+                          color: selected ? chrome.accent : chrome.inkFaint,
+                        ),
+                ),
               ),
-            ),
           ],
         ),
       ),

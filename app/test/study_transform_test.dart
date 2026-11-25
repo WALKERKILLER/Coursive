@@ -67,7 +67,7 @@ void main() {
           final outward = corner == 0 || corner == 3 ? -80.0 : 80.0;
           final delta = t.toWorld(Offset(outward, 0)) - t.toWorld(Offset.zero);
           final session = StudyTransformSession(d, {'card'}, {}, pivot: fixed);
-          expect(session.resizesReadingFrame, true);
+          expect(session.resizesSingleCard, true);
           session.previewCorner(corner, delta);
           expect(t.layoutSize.width, closeTo(size.width + 80, 1e-8));
           expect(t.layoutSize.height, closeTo(size.height, 1e-8));
@@ -133,6 +133,50 @@ void main() {
       expect(d.cards.single.contentScale, 2);
     },
   );
+  test('single media and aside frames resize each axis independently', () {
+    for (final type in [
+      'image',
+      'lecture',
+      'video',
+      'pdfdoc',
+      'note',
+      'conversation',
+    ]) {
+      final d = StudyDocument();
+      final card = StudyCard(
+        id: 'card',
+        type: type,
+        generation: type == 'conversation' ? 'markdown-aside' : '',
+        layer: 'main',
+        rect: const Rect.fromLTWH(100, 100, 400, 200),
+        contentScale: 1.25,
+        rotation: .6,
+      );
+      d.cards.add(card);
+      final t = StudyCardTransform(card);
+      final fixed = t.corners.first;
+      void drag(Offset local) {
+        final delta = t.toWorld(local) - t.toWorld(Offset.zero);
+        StudyTransformSession(d, {'card'}, {}, pivot: fixed)
+          ..previewCorner(2, delta)
+          ..commit();
+      }
+
+      drag(const Offset(60, 0));
+      expect(card.rect.width, closeTo(475, 1e-8));
+      expect(card.rect.height, closeTo(200, 1e-8));
+      expect(card.expandedH, 0);
+      drag(const Offset(0, 40));
+      expect(card.rect.width, closeTo(475, 1e-8));
+      expect(card.rect.height, closeTo(250, 1e-8));
+      expect(card.contentScale, 1.25);
+      expect((t.corners.first - fixed).distance, lessThan(1e-8));
+      final stored = StudyDocument.fromJson(d.json()).cards.single;
+      expect(stored.expandedH, type == 'conversation' ? closeTo(250, 1e-8) : 0);
+      d.undo();
+      expect(d.cards.single.expandedH, 0);
+    }
+  });
   test(
     'many previews use original geometry and cancellation publishes no edit',
     () {

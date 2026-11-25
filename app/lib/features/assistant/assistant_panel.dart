@@ -62,6 +62,9 @@ final _toolLabels = {
   'list_courseware': (l10n.toolListCourseware, Icons.folder_open_outlined),
   'read_courseware': (l10n.toolReadCourseware, Icons.article_outlined),
   'search_courseware': (l10n.toolSearchCourseware, Icons.plagiarism_outlined),
+  'list_course_files': (l10n.toolListCourseware, Icons.folder_open_outlined),
+  'read_course_file': (l10n.toolReadCourseware, Icons.article_outlined),
+  'organize_course_files': (l10n.toolOrganizeCourses, Icons.drive_file_move_outlined),
   'view_slides': (l10n.toolListSlides, Icons.slideshow_outlined),
   'view_images': (l10n.toolViewImage, Icons.image_outlined),
   'create_quiz': (l10n.toolCreateQuiz, Icons.quiz_outlined),
@@ -214,6 +217,11 @@ class _AssistantPanelState extends State<AssistantPanel> {
         if (lectureId.isEmpty) return showSnack(context, l10n.botNoLecture);
         leaveFullscreenPanel();
         root.push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: lectureId, startMs: secs == null ? null : secs * 1000)));
+      case 'open_canvas':
+        final cardId = '${act['card_id'] ?? ''}';
+        if (lectureId.isEmpty || cardId.isEmpty) return showSnack(context, l10n.botNoLecture);
+        leaveFullscreenPanel();
+        root.push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: lectureId, canvasCardId: cardId)));
       case 'open_course':
         if (courseId.isEmpty) return showSnack(context, l10n.botNoCourse);
         leaveFullscreenPanel();
@@ -1108,22 +1116,32 @@ class _AssistantTurn extends StatelessWidget {
               onUndo: () => a.undoProposal(b),
             ));
           }
-          if (d?['schedule'] is Map && b.name == 'mark_schedule') {
-            children.add(ScheduleChatCard(data: (d!['schedule'] as Map).cast<String, dynamic>(), duplicate: d['duplicate'] == true));
+          final result = d?['result'] as Map?;
+          if (result?['note_id'] is String && result?['card_id'] is String) {
+            children.add(_Actions(actions: [
+              {'kind': 'open_note', 'label': l10n.commonNotes, 'note_id': result!['note_id']},
+              {'kind': 'open_canvas', 'label': l10n.studyOpenCanvas, 'lecture_id': result['lecture_id'], 'card_id': result['card_id']},
+            ], onAction: onAction));
+          }
+          if ((result?['item'] ?? d?['schedule']) is Map && b.name == 'mark_schedule') {
+            final item = (result?['item'] ?? d?['schedule']) as Map;
+            children.add(ScheduleChatCard(data: item.cast<String, dynamic>(), duplicate: (result?['duplicate'] ?? d?['duplicate']) == true));
           }
           if (b.name == 'view_slides' && d?['slides'] is List) {
             children.add(_SlideStrip(lectureId: '${d!['lecture_id'] ?? ''}', slides: [for (final x in d['slides'] as List) (x as num).toInt()], mode: '${d['mode'] ?? ''}'));
           }
-          if (b.name == 'create_quiz' && d?['quiz'] is Map) {
-            final q = Quiz((d!['quiz'] as Map).cast<String, dynamic>());
+          if (b.name == 'create_quiz' && (result?['quiz'] ?? d?['quiz']) is Map) {
+            final q = Quiz(((result?['quiz'] ?? d?['quiz']) as Map).cast<String, dynamic>());
             children.add(QuizCard(key: ValueKey(q.id), quiz: q, live: true));
           }
-          if (b.name == 'save_note' && d?['note'] is Map) {
-            children.add(_NoteCard(note: (d!['note'] as Map).cast<String, dynamic>(), onAction: onAction));
+          if (b.name == 'save_note' && (result?['note'] ?? d?['note']) is Map) {
+            final note = (result?['note'] ?? d?['note']) as Map;
+            children.add(_NoteCard(note: note.cast<String, dynamic>(), onAction: onAction));
           }
           if (d?['view'] is Map) children.add(PluginView(view: (d!['view'] as Map).cast<String, dynamic>()));
-          if (d?['timeline'] is List && (d!['timeline'] as List).isNotEmpty) {
-            children.add(_OutlineCard(lectureId: '${d['lecture_id'] ?? ''}', chapters: jsonList(d['timeline']), onAction: onAction));
+          final timeline = result?['timeline'] ?? d?['timeline'];
+          if (timeline is List && timeline.isNotEmpty) {
+            children.add(_OutlineCard(lectureId: '${result?['lecture_id'] ?? d?['lecture_id'] ?? ''}', chapters: jsonList(timeline), onAction: onAction));
           }
         default:
           if (b.text.isNotEmpty) {

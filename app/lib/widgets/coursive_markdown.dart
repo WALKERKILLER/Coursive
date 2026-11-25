@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -34,6 +35,8 @@ sealed class CoursiveRef {
       return CoursewareRef(seg[0], u.queryParameters['file'] ?? '', u.queryParameters['q'] ?? '');
     }
     if (u.host == 'lecture' && seg.isNotEmpty) return LectureRef(seg[0]);
+    if (u.host == 'note' && seg.length == 1) return NoteRef(seg[0]);
+    if (u.host == 'canvas' && seg.length == 2) return CanvasRef(seg[0], seg[1]);
     if (u.host == 'file' && seg.isNotEmpty) return FileRef(seg.join('/'));
     return null;
   }
@@ -62,6 +65,16 @@ class LectureRef extends CoursiveRef {
   final String lectureId;
 }
 
+class NoteRef extends CoursiveRef {
+  const NoteRef(this.noteId);
+  final String noteId;
+}
+
+class CanvasRef extends CoursiveRef {
+  const CanvasRef(this.lectureId, this.cardId);
+  final String lectureId, cardId;
+}
+
 /// A file in the course library, by its library-relative path.
 class FileRef extends CoursiveRef {
   const FileRef(this.path);
@@ -71,6 +84,123 @@ class FileRef extends CoursiveRef {
 const _evidenceScheme = 'coursive-evidence:';
 
 const _imageExts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'};
+
+/// Fragment IDs for headings in document order, including repeated headings.
+class MarkdownHeadingIds {
+  static final _punctuation = RegExp(r'[^\p{L}\p{M}\p{N}_\s-]', unicode: true);
+  static final _whitespace = RegExp(r'\s');
+  final _used = <String>{};
+
+  String add(String title) {
+    final base = title.trim().toLowerCase()
+        .replaceAll(_punctuation, '')
+        .replaceAll(_whitespace, '-');
+    var id = base;
+    for (var suffix = 1; !_used.add(id); suffix++) {
+      id = '$base-$suffix';
+    }
+    return id;
+  }
+}
+
+class _HeadingTarget extends StatelessWidget {
+  const _HeadingTarget({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(header: true, child: child);
+}
+
+String? _headingText(RenderObject? object) {
+  if (object is RenderParagraph) {
+    return object.text.toPlainText(
+      includeSemanticsLabels: false,
+      includePlaceholders: false,
+    );
+  }
+  String? text;
+  object?.visitChildren((child) => text ??= _headingText(child));
+  return text;
+}
+
+Widget _anchoredHeading(
+  BuildContext context,
+  int level,
+  Widget content,
+  HeadingStyle style,
+) {
+  final theme = GptMarkdownTheme.of(context);
+  if (level == 1 && (style.showDivider ?? theme.autoAddDividerLineAfterH1)) {
+    // Preserve the heading divider's selectable newline and space.
+    content = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        content,
+        Text.rich(
+          TextSpan(children: [
+            const TextSpan(text: '\n ', style: TextStyle(fontSize: 0, height: 0)),
+            WidgetSpan(
+              child: Padding(
+                padding: style.dividerPadding ?? theme.hrLinePadding,
+                child: SizedBox(
+                  width: MediaQuery.sizeOf(context).width,
+                  height: style.dividerThickness ?? theme.hrLineThickness,
+                  child: ColoredBox(color: style.dividerColor ?? theme.hrLineColor),
+                ),
+              ),
+            ),
+          ]),
+          textScaler: TextScaler.noScaling,
+        ),
+      ],
+    );
+  }
+  return _HeadingTarget(
+    child: Padding(padding: style.padding ?? EdgeInsets.zero, child: content),
+  );
+}
+
+bool _revealHeading(BuildContext document, String fragment) {
+  if (fragment.isEmpty) {
+    final scroll = Scrollable.maybeOf(document, axis: Axis.vertical);
+    if (scroll == null) return false;
+    scroll.position.jumpTo(scroll.position.minScrollExtent);
+    return true;
+  }
+  final ids = MarkdownHeadingIds();
+  Element? target;
+  void find(Element element) {
+    if (target != null) return;
+    if (element.widget is _HeadingTarget) {
+      final title = _headingText(element.findRenderObject());
+      if (title != null && ids.add(title) == fragment) target = element;
+      return;
+    }
+    element.visitChildElements(find);
+  }
+  document.visitChildElements(find);
+  final heading = target;
+  if (heading == null) return false;
+  final scroll = Scrollable.maybeOf(heading, axis: Axis.vertical);
+  final box = heading.findRenderObject();
+  if (scroll != null && box != null) {
+    scroll.position.ensureVisible(box, alignment: .02);
+  }
+  return true;
+}
+
+String? _decodeFragment(String url) {
+  try {
+    return Uri.decodeComponent(Uri.parse(url).fragment).toLowerCase();
+  } on ArgumentError {
+    return null;
+  } on FormatException {
+    return null;
+  }
+}
+
+final _fragmentLink = RegExp(r'\]\(\s*<?#|\]:[ \t]*<?#');
 
 /// Opens a library file: images in the viewer, anything else with the
 /// system's default app.
@@ -173,6 +303,7 @@ class CoursiveMarkdown extends StatelessWidget {
     this.lectureId = '',
     this.baseDir = '',
     this.onRef,
+    this.onFragment,
     this.onImage,
     this.isStreaming = false,
     this.animation = GptMarkdownAnimation.none,
@@ -191,6 +322,9 @@ class CoursiveMarkdown extends StatelessWidget {
   /// (a note's folder, or a parsed courseware folder).
   final String baseDir;
   final ValueChanged<CoursiveRef>? onRef;
+
+  /// Handles links within a document whose sections render separately.
+  final bool Function(String target)? onFragment;
 
   /// Tap on an image; defaults to a zoomable viewer.
   final void Function(String url)? onImage;
@@ -215,6 +349,9 @@ class CoursiveMarkdown extends StatelessWidget {
       styleSheet: GptMarkdownStyleSheet(
         latex: LatexStyle(scrollBlockHorizontally: true, padding: const EdgeInsets.symmetric(vertical: Space.xs)),
       ),
+      headingBuilder: onFragment == null && _fragmentLink.hasMatch(data)
+          ? _anchoredHeading
+          : null,
       inlineLatexBuilder: (d) => d.asWidgetSpan(
         Math.tex(
           d.tex,
@@ -225,6 +362,14 @@ class CoursiveMarkdown extends StatelessWidget {
       ),
       onLinkTap: (url, _) {
         if (url.startsWith(_evidenceScheme)) return;
+        if (url.startsWith('#')) {
+          final fragment = _decodeFragment(url);
+          if (fragment == null ||
+              !(onFragment?.call(fragment) ?? _revealHeading(context, fragment))) {
+            showSnack(context, l10n.linkHeadingNotFound);
+          }
+          return;
+        }
         final ref = CoursiveRef.parse(url);
         ref != null && onRef != null ? onRef!(ref) : openPlainLink(context, url);
       },
@@ -247,6 +392,8 @@ class CoursiveMarkdown extends StatelessWidget {
             SlideRef() => RefChip(icon: Icons.slideshow_outlined, label: d.label, onTap: () => onRef!(ref)),
             CoursewareRef() => RefChip(icon: Icons.description_outlined, label: d.label, onTap: () => onRef!(ref)),
             LectureRef() => RefChip(icon: Icons.ondemand_video_rounded, label: d.label, onTap: () => onRef!(ref)),
+            NoteRef() => RefChip(icon: Icons.description_outlined, label: d.label, onTap: () => onRef!(ref)),
+            CanvasRef() => RefChip(icon: Icons.dashboard_outlined, label: d.label, onTap: () => onRef!(ref)),
             FileRef() => RefChip(icon: Icons.attach_file_rounded, label: d.label, onTap: () => onRef!(ref)),
           },
         );

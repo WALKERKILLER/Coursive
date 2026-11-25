@@ -53,9 +53,48 @@ async function setup(over = {}) {
 		tasks: { create: async (t) => ({ id: "t1", ...t }), remove: async () => {} },
 		plugins: { list: async () => [{ id: "demo", name: "Demo", enabled: true }], update: async () => {} },
 	};
-	const tools = Object.fromEntries(operateTools(deps).map((t) => [t.name, t]));
+	const tools = Object.fromEntries(operateTools(deps, over.conv).map((t) => [t.name, t]));
 	return { bot, calls, deps, tools, prefs, done: () => rm(dir, { recursive: true, force: true }) };
 }
+
+test("material batches reject unrequested writes and use one approval and undo", async () => {
+	const conv = { course_id: "c1", lastUser: "这份课件写了什么？" };
+	const { bot, tools, deps, calls, prefs, done } = await setup({
+		approval: "ask",
+		conv,
+		daemon: {
+			"POST /api/courses/c1/material-files/batches": { id: "b1", lines: ["旧.pdf → 新.pdf"] },
+		},
+	});
+	const input = { edits: [{ op: "rename", path: "旧.pdf", name: "新.pdf", version: "a".repeat(64) }] };
+	try {
+		await assert.rejects(tools.organize_course_files.execute("1", input), /本轮用户消息/);
+		assert.equal(calls.length, 0);
+		conv.lastUser = "把课件改名";
+		const pending = await tools.organize_course_files.execute("2", input);
+		assert.equal(pending.details.proposal.state, "pending");
+		assert.deepEqual(calls.map((r) => r.path), ["/api/courses/c1/material-files/batches"]);
+		const proposal = bot.proposal(pending.details.proposal.id);
+		await runOp(proposal.op, deps);
+		await runOp(proposal.undo, deps);
+		assert.deepEqual(calls.slice(-2).map((r) => r.path), [
+			"/api/material-file-batches/b1/apply", "/api/material-file-batches/b1/undo",
+		]);
+		prefs.approval = "auto";
+		const applied = await tools.organize_course_files.execute("3", input);
+		assert.equal(calls.at(-1).path, "/api/material-file-batches/b1/apply");
+		assert.equal(bot.proposal(applied.details.app.proposal_id).state, "applied");
+		const update = { ...input, edits: [{ ...input.edits[0], op: "edit_markdown" }] };
+		const change = await tools.organize_course_files.execute("4", update);
+		assert.equal(change.details.proposal.state, "pending");
+		await bot.transition(change.details.proposal.id, ["pending"], "dismissed");
+		assert.equal(bot.proposal(change.details.proposal.id).state, "dismissed");
+		assert.equal(calls.at(-1).path, "/api/courses/c1/material-files/batches");
+		await assert.rejects(tools.organize_course_files.execute("4", { ...input, course_id: "c2" }), /明确指定课程/);
+	} finally {
+		await done();
+	}
+});
 
 test("the registry validates values and lists no secret", () => {
 	assert.equal(checkSetting("textScale", 1.2), 1.2);
@@ -63,41 +102,40 @@ test("the registry validates values and lists no secret", () => {
 	assert.throws(() => checkSetting("seekStepSec", 7.5), /整数/);
 	assert.throws(() => checkSetting("themeMode", "blue"), /system/);
 	assert.throws(() => checkSetting("mineru.token", "x"), /不能修改/);
-	assert.throws(() => checkSetting("download.rate_limit", 3), /只能是/);
+	assert.throws(() => checkSetting("download.rate_limit", 3), /不能修改/);
 	for (const k of Object.keys(SETTINGS)) assert.doesNotMatch(k, /token|key|password|secret|auth|root/i);
 });
 
-test("settings apply at once with undo, across the app, daemon and the assistant", async () => {
-	const { tools, bot, calls, prefs, done } = await setup();
+test("ordinary app preferences apply with undo; batches wait for confirmation", async () => {
+	const { tools, bot, deps, calls, prefs, done } = await setup();
 	try {
-		const r = await tools.change_settings.execute("1", {
-			changes: [
-				{ key: "textScale", value: 1.2 },
-				{ key: "download.video_parallel", value: 3 },
-				{ key: "model", value: "p/m2" },
-			],
-		});
-		assert.equal(r.details.app.op, "prefs");
-		assert.deepEqual(r.details.app.set, { textScale: 1.2 });
-		assert.deepEqual(calls.at(-1), { method: "PUT", path: "/api/settings", body: { "download.video_parallel": 3 } });
+		const direct = await tools.change_settings.execute("1", { changes: [{ key: "textScale", value: 1.2 }] });
+		assert.deepEqual(direct.details.app.set, { textScale: 1.2 });
+		assert.equal(bot.proposal(direct.details.app.proposal_id).undo.app.textScale, 1);
+		const batch = await tools.change_settings.execute("2", { changes: [{ key: "contrast", value: "high" }, { key: "model", value: "p/m2" }] });
+		assert.equal(batch.details.proposal.state, "pending");
+		assert.equal(prefs.model, "m1");
+		const applied = await runOp(bot.proposal(batch.details.proposal.id).op, deps);
+		assert.deepEqual(applied, { app: { contrast: "high" } });
 		assert.equal(prefs.model, "m2");
-		const p = bot.proposal(r.details.app.proposal_id);
-		assert.equal(p.state, "applied");
-		assert.deepEqual(p.undo, { type: "settings", app: { textScale: 1 }, daemon: { "download.video_parallel": 2 }, agent: { model: "p/m1" } });
-		await assert.rejects(tools.change_settings.execute("2", { changes: [{ key: "model", value: "p/m3" }] }), /不可用/);
+		await assert.rejects(tools.change_settings.execute("3", { changes: [{ key: "model", value: "p/m3" }] }), /不可用/);
+		await assert.rejects(runOp({ type: "settings", daemon: { "transcript.delete_video": true } }, deps), /运行配置/);
+		await assert.rejects(runOp({ type: "settings", agent: { approval: "auto" } }, deps), /不能修改/);
+		assert.equal(calls.some((c) => c.path === "/api/settings"), false);
 	} finally {
 		await done();
 	}
 });
 
-test("ask mode turns a change into a card and sends nothing first", async () => {
-	const { tools, bot, calls, done } = await setup({ approval: "ask" });
+test("ask mode holds application actions until the user applies them", async () => {
+	const { tools, bot, calls, deps, done } = await setup({ approval: "ask" });
 	try {
-		const r = await tools.change_settings.execute("1", { changes: [{ key: "textScale", value: 1.2 }, { key: "asr.concurrency", value: 3 }] });
+		const r = await tools.open_page.execute("1", { target: "lecture", lecture_id: "l1" });
 		assert.equal(r.details.proposal.state, "pending");
 		assert.equal(r.details.app, undefined);
-		assert.equal(calls.filter((c) => c.method !== "GET").length, 0);
-		assert.deepEqual(bot.proposal(r.details.proposal.id).op, { type: "settings", app: { textScale: 1.2 }, daemon: { "asr.concurrency": 3 }, agent: {} });
+		assert.deepEqual(await runOp(bot.proposal(r.details.proposal.id).op, deps), {
+			app_op: { op: "open", lecture_id: "l1", target: "lecture" },
+		});
 		const d = await tools.download.execute("2", { course_id: "c1", latest: 1, kinds: ["video"] });
 		assert.equal(d.details.proposal.state, "pending");
 		assert.equal(calls.filter((c) => c.method === "POST").length, 0);
@@ -107,26 +145,15 @@ test("ask mode turns a change into a card and sends nothing first", async () => 
 	}
 });
 
-test("applying a settings card writes daemon and the assistant prefs", async () => {
-	const { deps, calls, prefs, done } = await setup();
-	try {
-		const r = await runOp({ type: "settings", app: { contrast: "high" }, daemon: { "asr.concurrency": 3 }, agent: { model: "p/m2", thinking: "low" } }, deps);
-		assert.deepEqual(r, { app: { contrast: "high" } });
-		assert.deepEqual(calls.at(-1), { method: "PUT", path: "/api/settings", body: { "asr.concurrency": 3 } });
-		assert.equal(prefs.provider, "p");
-		assert.equal(prefs.model, "m2");
-		assert.equal(prefs.thinking, "low");
-	} finally {
-		await done();
-	}
-});
-
 test("download jobs pause and cancel with their undo", async () => {
 	const { tools, bot, deps, calls, done } = await setup();
 	try {
 		const r = await tools.manage_downloads.execute("1", { action: "pause" });
+		assert.equal(r.details.proposal.state, "pending");
+		assert.equal(calls.filter((c) => c.method === "POST").length, 0);
+		await runOp(bot.proposal(r.details.proposal.id).op, deps);
 		assert.deepEqual(calls.at(-1), { method: "POST", path: "/api/jobs/bulk", body: { action: "pause", ids: ["j1", "j3"] } });
-		assert.deepEqual(bot.proposal(r.details.app.proposal_id).undo, { type: "jobs", action: "resume", ids: ["j1", "j3"] });
+		assert.deepEqual(bot.proposal(r.details.proposal.id).undo, { type: "jobs", action: "resume", ids: ["j1", "j3"] });
 		const none = await tools.manage_downloads.execute("2", { action: "retry" });
 		assert.match(none.content[0].text, /没有符合条件/);
 		const c = await tools.manage_downloads.execute("3", { action: "cancel", job_ids: ["j2"] });
@@ -171,7 +198,7 @@ test("download picks a course's lectures by date or latest and skips what is loc
 test("download undo leaves jobs that were already running", async () => {
 	const { tools, bot, done } = await setup({ daemon: { "GET /api/jobs": [{ id: "l3-video", state: "running", kind: "video" }] } });
 	try {
-		const r = await tools.download.execute("1", { lecture_ids: ["l1"], kinds: ["video"], redownload: true });
+		const r = await tools.download.execute("1", { lecture_ids: ["l1"], kinds: ["video"] });
 		assert.deepEqual(bot.proposal(r.details.app.proposal_id).undo, { type: "jobs", action: "cancel", ids: ["l1-video"] });
 		assert.ok(MAX_DOWNLOAD >= 50);
 	} finally {
@@ -208,17 +235,13 @@ test("course changes apply at once and undo to the previous values", async () =>
 	}
 });
 
-test("tasks and plugins are created and switched at once with undo", async () => {
+test("tasks are undoable and plugin authorization is user-only", async () => {
 	const { tools, bot, done } = await setup();
 	try {
 		await assert.rejects(tools.create_task.execute("1", { name: "x", prompt: "y", schedule: { type: "daily", time: "25:00" } }), /HH:MM/);
-		const r = await tools.create_task.execute("2", { name: "周复习", prompt: "复习本周课程", schedule: { type: "weekly", days: [7], time: "20:00" }, writes: ["notes"] });
+		const r = await tools.create_task.execute("2", { name: "周复习", prompt: "复习本周课程", schedule: { type: "weekly", days: [7], time: "20:00" } });
 		assert.deepEqual(bot.proposal(r.details.app.proposal_id).undo, { type: "delete_task", id: "t1" });
-		await assert.rejects(tools.toggle_plugin.execute("3", { id: "ghost", enabled: true }), /没有安装/);
-		const same = await tools.toggle_plugin.execute("4", { id: "demo", enabled: true });
-		assert.match(same.content[0].text, /已经是/);
-		const off = await tools.toggle_plugin.execute("5", { id: "demo", enabled: false });
-		assert.deepEqual(bot.proposal(off.details.app.proposal_id).undo, { type: "plugin", id: "demo", enabled: true });
+		assert.equal(tools.toggle_plugin, undefined);
 	} finally {
 		await done();
 	}
@@ -251,7 +274,7 @@ test("open_page needs the id its target names", async () => {
 	try {
 		await assert.rejects(tools.open_page.execute("1", { target: "lecture" }), /lecture_id/);
 		const r = await tools.open_page.execute("2", { target: "lecture", lecture_id: "l1", t: 90 });
-		assert.deepEqual(r.details.app, { op: "open", target: "lecture", lecture_id: "l1", t: 90 });
+		assert.deepEqual(r.details.result.app_op, { op: "open", target: "lecture", lecture_id: "l1", t: 90 });
 	} finally {
 		await done();
 	}

@@ -274,6 +274,17 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 		if !ok || !visible[o.Layer] {
 			return out, ErrStudyInvalid
 		}
+		if o.Type == "text" && o.Generation == "linked-note" {
+			note, err := l.Store.Note(ctx, o.DocumentID)
+			if err != nil {
+				return out, err
+			}
+			lecture, err := l.Store.Lecture(ctx, id)
+			if err != nil || note.CourseID != lecture.CourseID {
+				return out, ErrStudyInvalid
+			}
+			o.Text, o.Title = note.Body, note.Title
+		}
 		out.ObjectIDs = append(out.ObjectIDs, oid)
 		if o.Generation != "" && editable[o.Layer] {
 			out.EditableIDs = append(out.EditableIDs, oid)

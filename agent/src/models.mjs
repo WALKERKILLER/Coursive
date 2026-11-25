@@ -43,7 +43,7 @@ export class ModelPipeline {
 	runtime = null;
 	// vision: "provider/model" that transcribes images for text-only chat models.
 	// approval: "auto" runs operations at once with undo, "ask" makes them cards.
-	prefs = { provider: "", model: "", thinking: "medium", persona: "", autoTitle: true, vision: "", approval: "auto" };
+	prefs = { provider: "", model: "", thinking: "medium", persona: "", autoTitle: true, vision: "", approval: "auto", reviewGuidance: "" };
 	listeners = new Set();
 	catalog = new Catalog(DATA_DIR);
 
@@ -141,7 +141,10 @@ export class ModelPipeline {
 	}
 
 	async setPrefs(patch) {
-		const allowed = ["provider", "model", "thinking", "persona", "autoTitle", "vision", "approval"];
+		const allowed = ["provider", "model", "thinking", "persona", "autoTitle", "vision", "approval", "reviewGuidance"];
+		if ("reviewGuidance" in patch && (typeof patch.reviewGuidance !== "string" || patch.reviewGuidance.length > 3000)) {
+			throw Object.assign(new Error("讲义生成要求最多 3000 字"), { status: 400 });
+		}
 		if ("approval" in patch && !["ask", "auto"].includes(patch.approval)) throw Object.assign(new Error("approval 只能是 ask 或 auto"), { status: 400 });
 		for (const k of allowed) if (k in patch) this.prefs[k] = patch[k];
 		await writeJSON(PREFS, this.prefs, 0o644);

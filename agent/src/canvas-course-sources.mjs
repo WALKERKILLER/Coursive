@@ -4,7 +4,7 @@ import { documentPassages, neutralize } from "./canvas-agent.mjs";
 export const COURSE_TOOLS = [
 	{
 		name: "search_course_materials",
-		description: "检索当前课程本地材料，最多12项；搜索摘要不能作为已读证据。",
+		description: "按一个关键术语（例如“地址空间”）检索当前课程本地材料，最多12项；再读候选原文核对，搜索摘要不能作为证据。",
 		parameters: Type.Object({ query: Type.String({ maxLength: 500 }) }, { additionalProperties: false }),
 	},
 	{

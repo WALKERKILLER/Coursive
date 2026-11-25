@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -105,9 +106,25 @@ func (l *Library) reindexLectures(ctx context.Context) int {
 					l.adoptSlides(ctx, lm.ID, dir+"/"+f.Path)
 				}
 			}
+			l.pruneMissingCourseware(ctx, lm.ID, dir)
 		}
 	}
 	return count
+}
+
+// A peer's move or undo removes the old file and publishes the new manifest.
+func (l *Library) pruneMissingCourseware(ctx context.Context, lecture, dir string) {
+	assets, err := l.Courseware(ctx, lecture)
+	if err != nil {
+		return
+	}
+	for _, a := range assets {
+		if strings.HasPrefix(a.Path, dir+"/courseware/") && path.Clean(a.Path) == a.Path {
+			if _, err := os.Lstat(l.Abs(a.Path)); os.IsNotExist(err) {
+				l.Store.DeleteAsset(ctx, lecture, a.Kind, a.Path)
+			}
+		}
+	}
 }
 
 func (l *Library) adoptSlides(ctx context.Context, lectureID, rel string) {
