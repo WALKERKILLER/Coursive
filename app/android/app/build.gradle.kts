@@ -77,6 +77,7 @@ flutter {
 }
 
 dependencies {
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
     testImplementation("junit:junit:4.13.2")
     implementation("androidx.input:input-motionprediction:1.0.0")
     implementation("com.huawei.stylus:penengine:11.1.0.300")

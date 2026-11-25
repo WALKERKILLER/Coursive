@@ -293,7 +293,7 @@ func (l *Library) StudyContext(ctx context.Context, id string, q StudyContextReq
 			o.Text = page.Text
 			o.Path = page.File
 			// Regions on a rotated card are not in page orientation; they stay visual.
-			if o.QuarterTurns%4 == 0 {
+			if o.QuarterTurns%4 == 0 && o.Rotation == 0 {
 				boxes = page.Boxes
 			}
 		}

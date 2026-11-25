@@ -2,6 +2,21 @@ part of 'study_canvas.dart';
 
 extension _StudySnapshotCapture on StudyCanvasState {
   Future<StudySnapshot> _prepareSelectionSnapshot() async {
+    // An IME can shrink the canvas after the selection was made. Restore the
+    // reading viewport before measuring/rasterising it; do not move the camera.
+    if (View.of(context).viewInsets.bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+      for (
+        var i = 0;
+        i < 30 && mounted && View.of(context).viewInsets.bottom > 0;
+        i++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+      }
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) throw FormatException(l10n.studySelectionChanged);
+    }
     final d = document!, region = _regionSelection;
     if (region == null) throw FormatException(l10n.studySelectionEmpty);
     final polygon = List<Offset>.of(_selectionPolygon);
@@ -98,7 +113,7 @@ extension _StudySnapshotCapture on StudyCanvasState {
         'bounds': [region.left, region.top, region.width, region.height],
         'polygon': polygon.map((p) => [p.dx, p.dy]).toList(),
         'sources': sources.map((a) => a.json()).toList(),
-      });
+      }, query: query);
     } finally {
       _snapshotFrames.clear();
       if (mounted) _update(() => _snapshotting = false);
@@ -181,7 +196,7 @@ extension _StudySnapshotCapture on StudyCanvasState {
               }),
         icon: _snapshotPreparing
             ? const ReadingOrb()
-            : const Icon(Icons.add_photo_alternate_outlined, size: 20),
+            : const Icon(Icons.add_photo_alternate_outlined, size: 16),
       ),
     );
   }

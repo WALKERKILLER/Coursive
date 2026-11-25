@@ -473,7 +473,6 @@ void main() {
       await t.tap(mark, kind: PointerDeviceKind.mouse);
       await t.pumpAndSettle();
       expect(state.document!.camera, isNot(camera));
-      expect(find.byKey(const ValueKey('study-return')), findsOneWidget);
       // Following hands keys to the canvas; the return gives them back.
       bool inItem() {
         final ctx = FocusManager.instance.primaryFocus?.context;
@@ -485,7 +484,7 @@ void main() {
       }
 
       expect(inItem(), isFalse);
-      await t.tap(find.byKey(const ValueKey('study-return')));
+      expect(state.returnFromSource(), isTrue);
       await t.pumpAndSettle();
       expect(state.document!.camera, camera);
       expect(find.byKey(const ValueKey('outline-title')), findsOneWidget);

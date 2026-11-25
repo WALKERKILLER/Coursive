@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/api.dart';
+import '../../core/app_state.dart';
+import '../../core/models.dart';
 import '../../core/plugins.dart';
 import '../../core/plugin_navigation.dart';
 import '../../shell.dart';
@@ -14,6 +16,7 @@ import '../../widgets/pickers.dart';
 import '../../widgets/states.dart';
 import '../practice/quiz.dart' show askInSheet;
 import '../sources/source_market.dart';
+import '../sources/sources_page.dart';
 import 'plugin_views.dart';
 import '../../l10n/l10n.dart';
 
@@ -77,20 +80,22 @@ class PluginSettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<PluginStore>();
-    final on = store.active.length;
+    final app = context.watch<AppState>();
+    final sources = app.plugins;
+    final on = store.active.length + sources.where((p) => p.enabled).length;
     final attention = store.attention;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       ListTile(
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.extension_outlined),
         title: Text(l10n.pluginsInstalled),
-        subtitle: Text(!store.ready
+        subtitle: Text(!store.ready && sources.isEmpty
             ? l10n.pluginsAfterAssistant
-            : store.installed.isEmpty
+            : store.installed.isEmpty && sources.isEmpty
                 ? l10n.pluginsNoneInstalled
                 : l10n.pluginsEnabledSummary(on, attention > 0 ? l10n.pluginsAttentionSuffix(attention) : '')),
         trailing: attention > 0 ? Badge(label: Text('$attention')) : const Icon(Icons.chevron_right_rounded),
-        enabled: store.ready,
+        enabled: app.connected || store.ready,
         onTap: () => openPlugins(context, installed: true),
       ),
       ListTile(
@@ -99,7 +104,7 @@ class PluginSettingsSection extends StatelessWidget {
         title: Text(l10n.pluginsDiscover),
         subtitle: Text(l10n.pluginsTagline),
         trailing: const Icon(Icons.chevron_right_rounded),
-        enabled: store.ready,
+        enabled: app.connected || store.ready,
         onTap: () => openPlugins(context),
       ),
     ]);
@@ -126,7 +131,7 @@ class _PluginsPageState extends State<PluginsPage> {
   String _category = '';
   String? _picked; // 发现: the plugin in the side pane
   Map<String, dynamic>? _shown; // 发现: the pane's content, kept while it closes
-  String? _selected; // 已安装: the plugin beside the list
+  ({String id, bool source})? _selected; // 已安装: the plugin beside the list
 
   @override
   void initState() {
@@ -165,7 +170,13 @@ class _PluginsPageState extends State<PluginsPage> {
     }
   }
 
-  Future<void> _refresh() => Future.wait([context.read<PluginStore>().load(), _loadCatalog()]);
+  Future<void> _refresh() {
+    final store = context.read<PluginStore>();
+    return Future.wait([
+      context.read<AppState>().loadSources(),
+      if (store.ready) ...[store.load(), _loadCatalog()],
+    ]);
+  }
 
   List<Map<String, dynamic>> get _listings => [for (final p in jsonList(_catalog?['plugins'])) (p as Map).cast<String, dynamic>()];
 
@@ -188,6 +199,7 @@ class _PluginsPageState extends State<PluginsPage> {
   @override
   Widget build(BuildContext context) {
     final store = context.watch<PluginStore>();
+    final sources = context.watch<AppState>().plugins;
     if (store.ready && _catalog == null && _catalogError == null && !_fetching) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _catalog == null) _loadCatalog();
@@ -210,15 +222,15 @@ class _PluginsPageState extends State<PluginsPage> {
               EmptyState(icon: Icons.extension_outlined, title: l10n.pluginsAfterAssistant, body: l10n.pluginsNeedAssistant),
             ]),
           );
-        } else if (!store.ready) {
+        } else if (!store.ready && sources.isEmpty) {
           body = EmptyState(icon: Icons.extension_outlined, title: l10n.pluginsAfterAssistant, body: l10n.pluginsNeedAssistant);
         } else if (view == 0) {
           body = _discover(store, pad, box.maxWidth, wide);
         } else {
-          body = _installed(store, pad, box.maxWidth, wide);
+          body = _installed(store, sources, pad, box.maxWidth, wide);
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _header(store, pad, compact),
+          _header(store, sources, pad, compact),
           Expanded(
             child: AnimatedSwitcher(
               duration: Motion.medium2,
@@ -233,11 +245,11 @@ class _PluginsPageState extends State<PluginsPage> {
     );
   }
 
-  Widget _header(PluginStore store, double pad, bool compact) {
+  Widget _header(PluginStore store, List<SourcePlugin> sources, double pad, bool compact) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final n = store.installed.length;
-    final on = store.active.length;
+    final n = store.installed.length + sources.length;
+    final on = store.active.length + sources.where((p) => p.enabled).length;
     final attention = store.attention;
     final updates = _listings.where((p) => p['update'] == true).length;
     final sub = n == 0
@@ -425,12 +437,12 @@ class _PluginsPageState extends State<PluginsPage> {
     );
   }
 
-  Widget _installed(PluginStore store, double pad, double width, bool wide) {
+  Widget _installed(PluginStore store, List<SourcePlugin> sources, double pad, double width, bool wide) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    if (!store.loaded) return const CenteredLoader();
-    if (store.error != null && store.installed.isEmpty) return ErrorState(error: store.error!, onRetry: store.load);
-    if (store.installed.isEmpty) {
+    if (sources.isEmpty && store.installed.isEmpty) {
+      if (!store.loaded) return const CenteredLoader();
+      if (store.error != null) return ErrorState(error: store.error!, onRetry: store.load);
       return EmptyState(
         icon: Icons.extension_outlined,
         title: l10n.pluginsNoneInstalled,
@@ -444,7 +456,13 @@ class _PluginsPageState extends State<PluginsPage> {
       (l10n.commonDisabled, store.installed.where((p) => p['state'] == 'disabled').toList()),
     ];
     final flat = [for (final (_, items) in groups) ...items];
-    final sel = flat.firstWhere((p) => p['id'] == _selected, orElse: () => flat.first);
+    final sourceSelection = _selected?.source == true
+        ? sources.where((p) => p.id == _selected?.id).firstOrNull
+        : null;
+    final selectedAgent = _selected?.source == false
+        ? flat.where((p) => p['id'] == _selected?.id).firstOrNull ?? flat.firstOrNull
+        : flat.firstOrNull;
+    final selectedSource = sourceSelection ?? (selectedAgent == null ? sources.firstOrNull : null);
     Future<void> toggle(Map<String, dynamic> p, bool v) async {
       try {
         await store.update('${p['id']}', {'enabled': v});
@@ -453,14 +471,36 @@ class _PluginsPageState extends State<PluginsPage> {
       }
     }
 
+    Widget heading(String title, int count) => Padding(
+          padding: const EdgeInsets.fromLTRB(Space.md, Space.md, 0, Space.sm),
+          child: Text('$title · $count', style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
+        );
+
     List<Widget> rows({required bool cards}) => [
           PluginPageLauncher(store: store),
+          if (sources.isNotEmpty) ...[
+            heading(l10n.sourcesMarketTitle, sources.length),
+            for (final p in sources)
+              Padding(
+                padding: EdgeInsets.only(bottom: cards ? Space.sm : Space.xs),
+                child: cards
+                    ? SourcePluginCard(key: ValueKey(p.id), plugin: p)
+                    : _InstalledRow(
+                        plugin: {
+                          'id': p.id,
+                          'icon': p.icon.isEmpty ? 'school' : p.icon,
+                          'title': p.title,
+                          'summary': p.enabled ? l10n.sourcesVersion(p.version) : l10n.sourcesDisabled,
+                          'state': p.enabled ? 'enabled' : 'disabled',
+                        },
+                        selected: p == selectedSource,
+                        onTap: () => setState(() => _selected = (id: p.id, source: true)),
+                      ),
+              ),
+          ],
           for (final (title, items) in groups)
             if (items.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(Space.md, Space.md, 0, Space.sm),
-                child: Text('$title · ${items.length}', style: tt.labelLarge?.copyWith(color: cs.onSurfaceVariant)),
-              ),
+              heading(title, items.length),
               for (final p in items)
                 Padding(
                   padding: EdgeInsets.only(bottom: cards ? Space.sm : Space.xs),
@@ -468,8 +508,10 @@ class _PluginsPageState extends State<PluginsPage> {
                     plugin: p,
                     card: cards,
                     update: _listing('${p['id']}')?['update'] == true,
-                    selected: !cards && p == sel,
-                    onTap: cards ? () => _openDetail(_listing('${p['id']}') ?? p) : () => setState(() => _selected = '${p['id']}'),
+                    selected: !cards && selectedSource == null && p == selectedAgent,
+                    onTap: cards
+                        ? () => _openDetail(_listing('${p['id']}') ?? p)
+                        : () => setState(() => _selected = (id: '${p['id']}', source: false)),
                     onToggle: cards && p['state'] != 'needs_consent' ? (v) => toggle(p, v) : null,
                   ),
                 ),
@@ -494,7 +536,11 @@ class _PluginsPageState extends State<PluginsPage> {
             child: ListView(padding: const EdgeInsets.only(bottom: Space.xl), children: rows(cards: false)),
           ),
           const SizedBox(width: Space.md),
-          Expanded(child: _pane(_listing('${sel['id']}') ?? sel)),
+          Expanded(
+            child: selectedSource != null
+                ? ListView(children: [SourcePluginCard(key: ValueKey(selectedSource.id), plugin: selectedSource)])
+                : _pane(_listing('${selectedAgent!['id']}') ?? selectedAgent),
+          ),
         ]),
       ),
     );

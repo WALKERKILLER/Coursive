@@ -10,9 +10,13 @@ class VideoCardHoldScope extends InheritedWidget {
     super.key,
     required this.onSurfaceDown,
     required this.onSurfaceEnd,
+    this.onControlDown,
+    this.writing = false,
     required super.child,
   });
+  final bool writing;
   final ValueChanged<PointerDownEvent> onSurfaceDown;
+  final ValueChanged<PointerDownEvent>? onControlDown;
   final ValueChanged<PointerEvent> onSurfaceEnd;
 
   static VideoCardHoldScope? maybeOf(BuildContext context) =>
@@ -20,8 +24,20 @@ class VideoCardHoldScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(VideoCardHoldScope oldWidget) =>
-      onSurfaceDown != oldWidget.onSurfaceDown ||
+      writing != oldWidget.writing || onControlDown != oldWidget.onControlDown || onSurfaceDown != oldWidget.onSurfaceDown ||
       onSurfaceEnd != oldWidget.onSurfaceEnd;
+}
+
+class VideoCardControls extends StatelessWidget {
+  const VideoCardControls({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    final scope = VideoCardHoldScope.maybeOf(context);
+    if (scope == null) return child;
+    return Listener(onPointerDown: scope.onControlDown, onPointerUp: scope.onSurfaceEnd,
+        onPointerCancel: scope.onSurfaceEnd, child: child);
+  }
 }
 
 /// Wrap the picture below controls, or reserve a known bottom control lane.
@@ -48,7 +64,11 @@ class VideoCardHoldRegion extends StatelessWidget {
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerDown: (e) {
-        if (picture(e)) scope.onSurfaceDown(e);
+        if (picture(e)) {
+          scope.onSurfaceDown(e);
+        } else {
+          scope.onControlDown?.call(e);
+        }
       },
       onPointerUp: scope.onSurfaceEnd,
       onPointerCancel: scope.onSurfaceEnd,

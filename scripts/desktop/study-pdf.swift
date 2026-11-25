@@ -6,14 +6,14 @@ import AppKit
 
 struct TextBox: Codable { let start: Int; let end: Int; let x: Double; let y: Double; let w: Double; let h: Double }
 struct PageInfo: Codable { let file: String; let width: Int; let height: Int; let text: String; let count: Int; let boxes: [TextBox] }
-func fail(_ message: String) -> Never { FileHandle.standardError.write(Data(message.utf8)); exit(1) }
+func fail(_ message: String, code: Int32 = 1) -> Never { FileHandle.standardError.write(Data(message.utf8)); exit(code) }
 guard CommandLine.arguments.count == 3 || CommandLine.arguments.count == 4 else { fail("缺少 PDF 文件或输出目录") }
 guard let document = PDFDocument(url: URL(fileURLWithPath: CommandLine.arguments[1])), !document.isLocked else { fail("PDF 无法打开，或需要密码") }
-guard document.pageCount > 0, document.pageCount <= (CommandLine.arguments.count == 4 ? 5000 : 100) else { fail("PDF 须为 1–100 页，请拆分后导入") }
+guard document.pageCount > 0, document.pageCount <= (CommandLine.arguments.count == 4 ? 5000 : 100) else { fail("PDF 页数超出导入范围", code: 65) }
 let output = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
 var pages: [PageInfo] = []
 let selected = CommandLine.arguments.count == 4 ? (Int(CommandLine.arguments[3]) ?? 0) : nil
-if let selected = selected { guard selected >= 1, selected <= document.pageCount else { fail("页码无效") } }
+if let selected = selected { guard selected >= 1, selected <= document.pageCount else { fail("页码无效", code: 65) } }
 let indices = selected.map { [ $0 - 1 ] } ?? Array(0..<document.pageCount)
 do {
     for index in indices {

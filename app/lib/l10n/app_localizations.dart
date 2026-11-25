@@ -94,6 +94,42 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[Locale('zh')];
 
+  /// No description provided for @lessonLoading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在读取本节资料并打开讲义…'**
+  String get lessonLoading;
+
+  /// No description provided for @lessonStudyStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'学这节课'**
+  String get lessonStudyStart;
+
+  /// No description provided for @lessonChooseProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择要继续的学习记录'**
+  String get lessonChooseProgress;
+
+  /// No description provided for @lessonPractice.
+  ///
+  /// In zh, this message translates to:
+  /// **'回答本节练习'**
+  String get lessonPractice;
+
+  /// No description provided for @lessonSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'提交作答'**
+  String get lessonSubmit;
+
+  /// No description provided for @lessonRevision.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成讲义修订建议'**
+  String get lessonRevision;
+
   /// No description provided for @appTitle.
   ///
   /// In zh, this message translates to:
@@ -4413,6 +4449,48 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'模型'**
   String get commonModel;
+
+  /// No description provided for @gptLogin.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录 ChatGPT'**
+  String get gptLogin;
+
+  /// No description provided for @gptLoginDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'小 C 已连接 GPT'**
+  String get gptLoginDone;
+
+  /// No description provided for @gptLoginRestarted.
+  ///
+  /// In zh, this message translates to:
+  /// **'助手已重启，请重新发起登录。'**
+  String get gptLoginRestarted;
+
+  /// No description provided for @gptLoginPortBusy.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机登录端口 1455 正被占用，请结束其他登录后重试。'**
+  String get gptLoginPortBusy;
+
+  /// No description provided for @gptLoginFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录未完成，请检查网络后重试'**
+  String get gptLoginFailed;
+
+  /// No description provided for @modelPrefsSaveFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型选择未能保存，请重新选择模型后发送'**
+  String get modelPrefsSaveFailed;
+
+  /// No description provided for @modelPrefsRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型设置保存失败，请重试。'**
+  String get modelPrefsRetry;
 
   /// No description provided for @modelsImportPi.
   ///
@@ -11455,8 +11533,32 @@ abstract class AppLocalizations {
   /// No description provided for @folderSyncBody.
   ///
   /// In zh, this message translates to:
-  /// **'把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。'**
+  /// **'通过 NAS WebDAV 或 Syncthing 文件夹同步选中的课程。来源登录、模型密钥和本机设置留在本机；画布以最新保存版本为准，并保留恢复副本。'**
   String get folderSyncBody;
+
+  /// No description provided for @folderSyncLocalFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择 Syncthing 同步文件夹'**
+  String get folderSyncLocalFolder;
+
+  /// No description provided for @folderSyncLocalHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择专用交换目录，两端由 Syncthing 保持一致。'**
+  String get folderSyncLocalHint;
+
+  /// No description provided for @folderSyncLocalConnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'已连接同步文件夹'**
+  String get folderSyncLocalConnected;
+
+  /// No description provided for @folderSyncUseWebDav.
+  ///
+  /// In zh, this message translates to:
+  /// **'使用 WebDAV'**
+  String get folderSyncUseWebDav;
 
   /// No description provided for @folderSyncAccount.
   ///
@@ -12807,6 +12909,66 @@ abstract class AppLocalizations {
   /// **'选区工具'**
   String get studySelectionMore;
 
+  /// No description provided for @studyDuplicateCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建副本'**
+  String get studyDuplicateCard;
+
+  /// No description provided for @studySelectionColor.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区改色'**
+  String get studySelectionColor;
+
+  /// No description provided for @studySelectionWidth.
+  ///
+  /// In zh, this message translates to:
+  /// **'选区粗细'**
+  String get studySelectionWidth;
+
+  /// No description provided for @studyOpenAIConversation.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开 AI 对话'**
+  String get studyOpenAIConversation;
+
+  /// No description provided for @studyVideoUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'视频暂不可用'**
+  String get studyVideoUnavailable;
+
+  /// No description provided for @studyLockPosition.
+  ///
+  /// In zh, this message translates to:
+  /// **'锁定位置'**
+  String get studyLockPosition;
+
+  /// No description provided for @studyUnlockPosition.
+  ///
+  /// In zh, this message translates to:
+  /// **'解锁位置'**
+  String get studyUnlockPosition;
+
+  /// No description provided for @studyCropRectangle.
+  ///
+  /// In zh, this message translates to:
+  /// **'矩形裁剪'**
+  String get studyCropRectangle;
+
+  /// No description provided for @studyCropFreehand.
+  ///
+  /// In zh, this message translates to:
+  /// **'自由裁剪'**
+  String get studyCropFreehand;
+
+  /// No description provided for @studyCropKeepCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'裁剪为副本'**
+  String get studyCropKeepCopy;
+
   /// No description provided for @studyRotateSelection.
   ///
   /// In zh, this message translates to:
@@ -12816,7 +12978,7 @@ abstract class AppLocalizations {
   /// No description provided for @studyRotateUnsupported.
   ///
   /// In zh, this message translates to:
-  /// **'旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象'**
+  /// **'请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转'**
   String get studyRotateUnsupported;
 
   /// No description provided for @studyEditShape.
@@ -13134,7 +13296,7 @@ abstract class AppLocalizations {
   /// No description provided for @setupPdfHelperMissing.
   ///
   /// In zh, this message translates to:
-  /// **'内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件'**
+  /// **'内置 PDF 组件缺失，请更新或重新安装 Coursive'**
   String get setupPdfHelperMissing;
 
   /// No description provided for @setupPdfUnsupported.
@@ -13190,24 +13352,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'引用 {number}：{locator}'**
   String studyEvidenceSemantics(int number, String locator);
-
-  /// No description provided for @studyReturn.
-  ///
-  /// In zh, this message translates to:
-  /// **'返回原处'**
-  String get studyReturn;
-
-  /// No description provided for @studyReturnKeys.
-  ///
-  /// In zh, this message translates to:
-  /// **'Esc 或 Alt+←'**
-  String get studyReturnKeys;
-
-  /// No description provided for @studyReturnKeysMac.
-  ///
-  /// In zh, this message translates to:
-  /// **'Esc 或 ⌘['**
-  String get studyReturnKeysMac;
 
   /// No description provided for @studyCoveragePassages.
   ///
@@ -13815,6 +13959,102 @@ abstract class AppLocalizations {
   /// **'整理提纲'**
   String get outlineQuick;
 
+  /// No description provided for @studyPanTool.
+  ///
+  /// In zh, this message translates to:
+  /// **'移动画布（H）'**
+  String get studyPanTool;
+
+  /// No description provided for @studyReadTool.
+  ///
+  /// In zh, this message translates to:
+  /// **'阅读与选择（V）'**
+  String get studyReadTool;
+
+  /// No description provided for @studyEditMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑 Markdown'**
+  String get studyEditMarkdown;
+
+  /// No description provided for @studyAddAnnotation.
+  ///
+  /// In zh, this message translates to:
+  /// **'加注释'**
+  String get studyAddAnnotation;
+
+  /// No description provided for @studyEditAnnotation.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑注释'**
+  String get studyEditAnnotation;
+
+  /// No description provided for @studyAnnotationHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'写下释义或自己的理解'**
+  String get studyAnnotationHint;
+
+  /// No description provided for @studyPassageQuestion.
+  ///
+  /// In zh, this message translates to:
+  /// **'这段话在原文里是什么意思？'**
+  String get studyPassageQuestion;
+
+  /// No description provided for @studyQuickCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成'**
+  String get studyQuickCreate;
+
+  /// No description provided for @studyQuickHandout.
+  ///
+  /// In zh, this message translates to:
+  /// **'生成讲义'**
+  String get studyQuickHandout;
+
+  /// No description provided for @studyHandoutPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'把本轮选中的材料做成一张可以自学的 Markdown 讲义。用一个简短的一级标题开头。先解释关键概念，再给一个分步例子，提示易错点。讲解告一段落时用独立二级标题「自测」接一道简答题，只写题干；之后可以继续下一个二级标题的讲解。每张卡最多两道题，资料不足可省略。课堂内容引用本轮实际读到的原文，补充例子注明是示例。不要给自测答案，也不要用代码围栏包住整张讲义。'**
+  String get studyHandoutPrompt;
+
+  /// No description provided for @studyHandoutAside.
+  ///
+  /// In zh, this message translates to:
+  /// **'旁问'**
+  String get studyHandoutAside;
+
+  /// No description provided for @studyOpenPassageAside.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开旁问 {index}'**
+  String studyOpenPassageAside(int index);
+
+  /// No description provided for @studyBackToPassage.
+  ///
+  /// In zh, this message translates to:
+  /// **'返回原文'**
+  String get studyBackToPassage;
+
+  /// No description provided for @studyHandoutReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'核对作答'**
+  String get studyHandoutReview;
+
+  /// No description provided for @studyHandoutContinue.
+  ///
+  /// In zh, this message translates to:
+  /// **'继续阅读'**
+  String get studyHandoutContinue;
+
+  /// No description provided for @studyHandoutReviewPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请核对我对这道讲义自测的作答。指出我写对的一步和需要补的一步，用讲义与原文依据说明。没有依据的细节请指出，不要替我改写作答。'**
+  String get studyHandoutReviewPrompt;
+
   /// No description provided for @outlineConfirmTitle.
   ///
   /// In zh, this message translates to:
@@ -14066,6 +14306,168 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'选区截图'**
   String get studyShot;
+
+  /// No description provided for @documentCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建'**
+  String get documentCreate;
+
+  /// No description provided for @documentMarkdown.
+  ///
+  /// In zh, this message translates to:
+  /// **'文字笔记'**
+  String get documentMarkdown;
+
+  /// No description provided for @documentCanvas.
+  ///
+  /// In zh, this message translates to:
+  /// **'无限画布'**
+  String get documentCanvas;
+
+  /// No description provided for @documentCanvasTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'画布名称'**
+  String get documentCanvasTitle;
+
+  /// No description provided for @documentUngrouped.
+  ///
+  /// In zh, this message translates to:
+  /// **'未归入课程'**
+  String get documentUngrouped;
+
+  /// No description provided for @courseDocuments.
+  ///
+  /// In zh, this message translates to:
+  /// **'笔记与画布'**
+  String get courseDocuments;
+
+  /// No description provided for @pdfDockCanvasRead.
+  ///
+  /// In zh, this message translates to:
+  /// **'在卡片内滚动阅读'**
+  String get pdfDockCanvasRead;
+
+  /// No description provided for @pdfDockOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'并排批注 PDF'**
+  String get pdfDockOpen;
+
+  /// No description provided for @pdfDockCropped.
+  ///
+  /// In zh, this message translates to:
+  /// **'此 PDF 已裁剪，可在原页书写'**
+  String get pdfDockCropped;
+
+  /// No description provided for @pdfDockMargin.
+  ///
+  /// In zh, this message translates to:
+  /// **'右侧白边'**
+  String get pdfDockMargin;
+
+  /// No description provided for @pdfDockPen.
+  ///
+  /// In zh, this message translates to:
+  /// **'鼠标书写'**
+  String get pdfDockPen;
+
+  /// No description provided for @pdfDockChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'批注版已发生变化，请重新打开'**
+  String get pdfDockChanged;
+
+  /// No description provided for @pdfDockSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在写入 PDF…'**
+  String get pdfDockSaving;
+
+  /// No description provided for @pdfDockSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到批注版 PDF'**
+  String get pdfDockSaved;
+
+  /// No description provided for @pdfDockHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'笔或鼠标书写，触控或滚轮翻页'**
+  String get pdfDockHint;
+
+  /// No description provided for @pdfDockChoose.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择本机 PDF…'**
+  String get pdfDockChoose;
+
+  /// No description provided for @pdfDockSuffix.
+  ///
+  /// In zh, this message translates to:
+  /// **' · 批注版'**
+  String get pdfDockSuffix;
+
+  /// No description provided for @pdfCardEraser.
+  ///
+  /// In zh, this message translates to:
+  /// **'橡皮擦'**
+  String get pdfCardEraser;
+
+  /// No description provided for @pdfCardPrevious.
+  ///
+  /// In zh, this message translates to:
+  /// **'上一页'**
+  String get pdfCardPrevious;
+
+  /// No description provided for @pdfCardNext.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一页'**
+  String get pdfCardNext;
+
+  /// No description provided for @pdfCardView.
+  ///
+  /// In zh, this message translates to:
+  /// **'PDF 视图'**
+  String get pdfCardView;
+
+  /// No description provided for @pdfCardColumns.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开为一列'**
+  String get pdfCardColumns;
+
+  /// No description provided for @pdfCardPaged.
+  ///
+  /// In zh, this message translates to:
+  /// **'左右翻页'**
+  String get pdfCardPaged;
+
+  /// No description provided for @pdfCardScroll.
+  ///
+  /// In zh, this message translates to:
+  /// **'上下滚动'**
+  String get pdfCardScroll;
+
+  /// No description provided for @modelsSwitchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'模型切换未保存，请检查连接后重试'**
+  String get modelsSwitchFailed;
+
+  /// No description provided for @studyRestoreUpright.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复正向'**
+  String get studyRestoreUpright;
+
+  /// No description provided for @studyAngleSnapping.
+  ///
+  /// In zh, this message translates to:
+  /// **'角度吸附'**
+  String get studyAngleSnapping;
 }
 
 class _AppLocalizationsDelegate

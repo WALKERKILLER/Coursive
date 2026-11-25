@@ -72,6 +72,15 @@ async function describe(pipeline, vm, img, signal, prompt = PROMPT) {
 	return text;
 }
 
+/** Reuse the same image-hash cache as slide inspection for passage-level citations. */
+export async function readLessonSlide(pipeline, path, signal) {
+	const current = await pipeline.currentModel();
+	const reader = current?.input?.includes("image") ? current : await pipeline.visionModel();
+	if (!reader) return null;
+	const image = await fetchBytes(path, { maxBytes: 6*1024*1024, signal });
+	return describe(pipeline, reader, image, signal);
+}
+
 /** Images are already resolved to the run's approved sources; no URL or file access here. */
 export async function seeCanvasImages(pipeline, images, signal) {
  const model=await pipeline.currentModel();

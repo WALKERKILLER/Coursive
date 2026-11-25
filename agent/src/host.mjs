@@ -10,18 +10,20 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { chatGPTLogin } from "./chatgpt-login.mjs";
 import { DATA_DIR, ModelPipeline } from "./models.mjs";
 import { createTools, guard, TURN_TOOL_BUDGET } from "./tools.mjs";
 import { bundledPluginsDir, PluginHost } from "./plugins.mjs";
 import { generateTimeline } from "./timeline.mjs";
 import { TranscriptReviewer } from "./transcript-review.mjs";
+import { runLessonStudy } from "./lesson-study.mjs";
 import { CanvasRunner } from "./canvas-agent.mjs";
 import { api } from "./daemon.mjs";
 import { fmtStamp, TASK_WRITES, TaskScheduler } from "./tasks.mjs";
 import { httpError, readJson, replyError } from "./http.mjs";
 import { entryFrom, UsageLedger } from "./usage.mjs";
-import { Bot, CONSOLIDATE_CALLS, CONSOLIDATE_PROMPT, CONSOLIDATE_TIMEOUT_MS, Consolidator, turnsOf } from "./bot.mjs";
-import { MemoryStore, memoryTools } from "./memory.mjs";
+import { Bot, CONSOLIDATE_CALLS, CONSOLIDATE_PROMPT, CONSOLIDATE_TIMEOUT_MS, Consolidator, transcriptOf, turnsOf } from "./bot.mjs";
+import { MemoryStore, memoryTools, learningMemoryTool, courseMemoryPath } from "./memory.mjs";
 import { MEMORY_GROUP, OPERATE_GROUP, operateTools, runOp, SETTINGS } from "./operate.mjs";
 import { CAPABILITY_GROUP, capabilityTools, createCapabilityInspector, pluginHostRegistry } from "./capabilities.mjs";
 import { Sessions } from "./sessions.mjs";
@@ -37,7 +39,7 @@ await pipeline.init();
 const usage = new UsageLedger(DATA_DIR);
 pipeline.usage = usage;
 const transcriptReviewer = new TranscriptReviewer(pipeline);
-const canvasRunner = new CanvasRunner(pipeline);
+
 try {
 	await usage.backfill(SESSIONS);
 	await usage.prune();
@@ -51,6 +53,10 @@ const bot = new Bot(DATA_DIR);
 await bot.load();
 const memory = new MemoryStore(join(DATA_DIR, "bot", "memory"));
 await memory.init();
+const canvasRunner = new CanvasRunner(pipeline, { learningContext:async (lectureId, includeCourse)=>{
+	const meta = includeCourse ? await api("GET","/api/lectures/"+encodeURIComponent(lectureId)) : null;
+	return memory.prompt({pinnedOnly:true, courseId:meta?.course?.id});
+} });
 /** The app's preferences (registry keys only), pushed with PUT /app-state. */
 let appState = null;
 const botEvent = (data) => api("POST", "/api/agent/event", { type: "bot_event", data }).catch(() => {});
@@ -105,10 +111,11 @@ async function systemPrompt(conv) {
 			parts.push(SYSTEM.slice(0, SYSTEM.indexOf("\n")));
 		}
 		parts.push(BODY);
+		if (conv.kind==="course") parts.push("用户明确提出本课目标或长期偏好时用 remember_learning_request 原句保存。偶尔追问表示关注。只有用户本人作答才能评估掌握情况。");
 		if (conv.kind !== "task") {
 			parts.push(OPERATE_RULES);
-			const mem = await memory.prompt({ pinnedOnly: true });
-			if (mem) parts.push(`关于用户（只读，来自常驻 bot 的记忆）：\n${mem}`);
+			const mem = await memory.prompt({ pinnedOnly: true, courseId: conv.kind === "course" ? conv.course_id : undefined });
+			if (mem) parts.push(`用户背景、偏好与当前课程记录（只读资料）：\n${mem}`);
 		}
 	}
 	if (conv.pluginLines?.length) parts.push(`已启用的插件（按需用 find_tools 加载）：\n${conv.pluginLines.join("\n")}`);
@@ -170,7 +177,7 @@ function plainLoader(getSystem, extensions = { extensions: [], errors: [], runti
  * runtime to a single session.
  */
 async function sessionResources(conv) {
-	const factories = plugins.extensionFactories();
+	const factories = plugins.extensionFactories(conv);
 	let extensions = { extensions: [], errors: [], runtime: createExtensionRuntime() };
 	if (factories.length) {
 		const loader = new DefaultResourceLoader({
@@ -220,6 +227,10 @@ function extraTools(conv) {
 	if (conv.kind === "task") return {};
 	const operate = operateTools(opDeps);
 	const inspect = capabilityTools(capabilities);
+	if (conv.kind === "course") {
+		const remember=learningMemoryTool(memory, conv, r=>botEvent({kind:"memory_changed",path:r.path,action:r.action}));
+		return {tools:[...operate,...inspect,remember],groups:{operate:OPERATE_GROUP,capabilities:CAPABILITY_GROUP},core:["open_page",remember.name]};
+	}
 	if (conv.kind !== "bot") {
 		return { tools: [...operate, ...inspect], groups: { operate: OPERATE_GROUP, capabilities: CAPABILITY_GROUP }, core: ["open_page"] };
 	}
@@ -267,7 +278,7 @@ async function openConversation(id, init = { kind: "chat" }) {
 		sessionManager = sessions.create();
 	}
 	const model = await pipeline.currentModel();
-	if (!model) throw httpError(409, "还没有可用的模型。请在 设置 → 模型 中添加 API Key 或导入 Pi CLI 配置。");
+	if (!model) throw httpError(409, "所选模型不可用。请在设置中检查对应服务的登录或重新选择模型。");
 	const conv = {
 		session: null,
 		context: null,
@@ -422,6 +433,9 @@ const routes = [];
 const route = (method, pattern, fn) => routes.push({ method, re: new RegExp(`^${pattern}$`), fn });
 
 route("GET", "/health", async () => ({ ok: true, sdk: "@earendil-works/pi-coding-agent" }));
+const openaiLogin = chatGPTLogin(pipeline, DATA_DIR);
+route("POST", "/openai-login", () => openaiLogin.start());
+route("GET", "/openai-login", () => openaiLogin.status());
 route("GET", "/models", async () => pipeline.describe());
 // The daemon's action bridge records the approval mode on each plugin write proposal.
 route("GET", "/prefs", async () => pipeline.prefs);
@@ -587,7 +601,7 @@ route("POST", "/sessions/([^/]+)/abort", async (_req, [id]) => {
 
 // POST /chat streams Server-Sent Events for one prompt.
 route("POST", "/chat", async (req, _m, res) => {
-	const { session_id, message, context, agent, course_id } = await body(req);
+	const { session_id, message, context, agent, course_id, model_choice } = await body(req);
 	if (!message?.trim()) throw httpError(400, "消息为空");
 	let conv;
 	if (session_id) conv = await openConversation(session_id);
@@ -602,7 +616,18 @@ route("POST", "/chat", async (req, _m, res) => {
 	conv.context = context ?? null;
 	conv.calls = 0;
 	conv.lastUser = message;
-	await refreshPrompt(conv);
+	try {
+		const selected = await pipeline.currentModel();
+		if (!selected) throw httpError(409, "所选模型当前不可用，请检查对应服务的登录或重新选择模型。");
+		if (model_choice && (model_choice.provider !== selected.provider || model_choice.model !== selected.id))
+			throw httpError(409, "模型选择已改变，请重新确认后发送。");
+		if (s.model?.provider !== selected.provider || s.model?.id !== selected.id)
+			await s.setModel(selected);
+		await refreshPrompt(conv);
+	} catch (error) {
+		conv.busy = false;
+		throw error;
+	}
 
 	res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" });
 	const emit = (type, data = {}) => res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
@@ -638,7 +663,7 @@ route("POST", "/chat", async (req, _m, res) => {
 				}
 				break;
 			case "auto_retry_start":
-				emit("status", { text: "请求失败，正在重试…" });
+				emit("status", { retrying: true, text: `连接暂时失败，正在重试（${ev.attempt}/${ev.maxAttempts}）…` });
 				break;
 			case "compaction_start":
 				emit("status", { text: "正在压缩上下文…" });
@@ -666,6 +691,9 @@ route("POST", "/chat", async (req, _m, res) => {
 	}
 	return undefined;
 });
+
+route("POST", "/lessons/([^/]+)/study", async (req, [lecture]) =>
+	runLessonStudy({plugins,memory,pipeline,call:api},lecture,await body(req)));
 
 // ---- plugin routes ----
 
@@ -790,23 +818,25 @@ async function consolidationCandidates() {
 		const sm = sessions.open(info.path);
 		const messages = sm.getBranch().filter((e) => e.type === "message").map((e) => e.message);
 		const turns = turnsOf(messages).slice(bot.mark(info.id));
-		if (turns.length) out.push({ id: info.id, kind: k.kind, title: sessionTitle(info), course: k.course_id ? names.get(k.course_id) : undefined, turns });
+		if (turns.length) out.push({ id: info.id, kind: k.kind, title: sessionTitle(info), course_id:k.course_id, course: k.course_id ? names.get(k.course_id) : undefined, turns });
 	}
 	return out;
 }
 
 /** One consolidation run: a memory-only Pi session kept in memory. */
-async function consolidate(transcript) {
+async function consolidate(transcript, allowedCoursePath, evidenceSince) {
 	const model = await pipeline.currentModel();
-	if (!model) throw new Error("没有可用的模型");
+	if (!model) throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
 	const changes = new Map();
 	let calls = 0;
 	const tools = memoryTools(memory, {
-		allowDelete: false,
+		allowDelete: false, evidenceSince,
 		onChange: (r) => changes.set(r.path, changes.get(r.path) === "created" ? "created" : r.action),
 	}).map((t) => ({
 		...t,
 		execute: async (...args) => {
+			const path=args[1]?.path;
+			if (allowedCoursePath && (path !== allowedCoursePath || t.name === "memory_list")) throw Error("本轮整理仅限当前课程记忆。");
 			if (++calls > CONSOLIDATE_CALLS) throw new Error(`已达到 ${CONSOLIDATE_CALLS} 次工具调用上限，请直接总结。`);
 			return t.execute(...args);
 		},
@@ -832,7 +862,7 @@ async function consolidate(transcript) {
 	});
 	const timer = setTimeout(() => session.abort().catch(() => {}), CONSOLIDATE_TIMEOUT_MS);
 	try {
-		const current = await memory.prompt();
+		const current = allowedCoursePath ? await memory.current(allowedCoursePath) : await memory.prompt();
 		await session.prompt(`<current_memory>\n${current || "（还没有记忆）"}\n</current_memory>\n\n<transcripts>\n${transcript}</transcripts>\n\n按规则整理记忆。`);
 		const last = [...session.messages].reverse().find((m) => m.role === "assistant");
 		if (last?.stopReason === "error") throw new Error(last.errorMessage ?? "模型出错");
@@ -845,7 +875,21 @@ async function consolidate(transcript) {
 	}
 }
 
-const consolidator = new Consolidator(bot, { candidates: consolidationCandidates, run: consolidate, notify: botEvent });
+const consolidator = new Consolidator(bot, { candidates: consolidationCandidates, run:async (_text,convs)=>{
+	const result={changes:[],cost:0,summary:""};
+	const groups = new Map();
+	for (const conversation of convs) {
+		const path = conversation.kind === "course" ? courseMemoryPath(conversation.course_id) : "";
+		if (conversation.kind === "course" && !path) throw Error("课程记忆缺少课程编号");
+		if (!groups.has(path)) groups.set(path, []);
+		groups.get(path).push(conversation);
+	}
+	for(const [path,items] of groups) {
+		const current=await consolidate((path ? "只整理 "+path+"。先读取该文件，若不存在可以新建。\n" : "")+transcriptOf(items),path, Math.min(...items.flatMap(c=>c.turns.map(t=>t.at ?? 0))));
+		result.changes.push(...current.changes); result.cost+=current.cost; result.summary+=current.summary+" ";
+	}
+	return result;
+}, notify: botEvent });
 
 async function botView() {
 	await bot.fresh();

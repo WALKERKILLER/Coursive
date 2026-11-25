@@ -201,6 +201,14 @@ func (s *Server) Handler() http.Handler {
 		return s.St.Note(r.Context(), r.PathValue("id"))
 	})
 	h("PUT /api/notes", s.putNote)
+	h("GET /api/notebooks", func(_ http.ResponseWriter, r *http.Request) (any, error) {
+		return s.Lib.Notebooks(r.URL.Query().Get("course_id"))
+	})
+	h("POST /api/notebooks", s.createNotebook)
+	h("POST /api/notebooks/{id}/assets", s.notebookAsset)
+	h("GET /api/notebooks/{id}/pdf-page", s.notebookPDFPage)
+	h("GET /api/notebooks/{id}/canvas", s.studyCanvas)
+	h("PUT /api/notebooks/{id}/canvas", s.studyCanvas)
 	h("DELETE /api/notes/{id}", func(_ http.ResponseWriter, r *http.Request) (any, error) {
 		err := s.Lib.DeleteNote(r.Context(), r.PathValue("id"))
 		if err == nil {
@@ -1088,8 +1096,19 @@ func (s *Server) files(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, abs)
 }
 
+var windowsPDFReady = sync.OnceValue(func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	helper := filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe")
+	return exec.CommandContext(ctx, helper, "probe").Run() == nil
+})
+
 // mediaTools reports executables available to the same process that runs jobs.
-// Presence is not a decoder, model or network connectivity test.
+// On Windows the bundled PDF helper must also load its renderer.
 func mediaTools() map[string]bool {
 	tools := make(map[string]bool)
 	for _, name := range []string{"ffmpeg", "ffprobe", "pdfinfo", "pdftoppm", "pdftotext"} {
@@ -1098,6 +1117,8 @@ func mediaTools() map[string]bool {
 	}
 	tools["study_pdf"] = false
 	switch pdfBackend() {
+	case "pdfium":
+		tools["study_pdf"] = windowsPDFReady()
 	case "pdfkit":
 		if exe, err := os.Executable(); err == nil {
 			_, err = exec.LookPath(filepath.Join(filepath.Dir(exe), "coursive-study-pdf"))
@@ -1113,6 +1134,8 @@ func pdfBackend() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return "pdfkit"
+	case "windows":
+		return "pdfium"
 	case "linux":
 		return "poppler"
 	default:

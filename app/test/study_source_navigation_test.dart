@@ -108,8 +108,6 @@ Finder mark(int n) => find.descendant(
 Future<void> follow(WidgetTester t, int n) =>
     t.tap(mark(n), kind: PointerDeviceKind.mouse);
 
-final back = find.byKey(const ValueKey('study-return'));
-
 void main() {
   for (final concurrent in [false, true]) {
     testWidgets(
@@ -174,7 +172,7 @@ void main() {
           cards.map((c) => c.text),
           unorderedEquals([evidence(1)['text'], longer]),
         );
-        expect(back, findsOneWidget);
+        expect(key.currentState!.returnFromSource(), isTrue);
         await t.pumpWidget(const SizedBox());
         await t.pumpAndSettle();
       },
@@ -198,7 +196,7 @@ void main() {
       await t.pump();
       await t.pump(const Duration(seconds: 1));
       expect(d.camera, before);
-      expect(back, findsNothing);
+      expect(key.currentState!.returnFromSource(), isFalse);
       api.saveGate!.complete();
       await t.pumpAndSettle();
       expect(
@@ -207,7 +205,7 @@ void main() {
         ),
         hasLength(1),
       );
-      expect(back, findsOneWidget);
+      expect(key.currentState!.returnFromSource(), isTrue);
       await t.pumpWidget(const SizedBox());
       await t.pumpAndSettle();
     },
@@ -220,7 +218,7 @@ void main() {
     final key = await fixture.open(t, api);
     await t.tap(find.byKey(const ValueKey('study-ai-tab')));
     await t.pumpAndSettle();
-    await t.tap(find.byKey(const ValueKey('study-tool-hand')));
+    await t.tap(find.byKey(const ValueKey('study-tool-select')));
     await follow(t, 1);
     await t.pump();
     await t.pump(const Duration(milliseconds: 50));
@@ -265,10 +263,10 @@ void main() {
       await follow(t, 2);
       await t.pumpAndSettle();
       first.text = 'User edit while viewing another source';
-      await t.tap(back);
+      expect(key.currentState!.returnFromSource(), isTrue);
       await t.pumpAndSettle();
       expect((d.camera - camera1).distance, lessThan(1));
-      await t.tap(back);
+      expect(key.currentState!.returnFromSource(), isTrue);
       await t.pumpAndSettle();
       expect((d.camera - start).distance, lessThan(1));
       expect(d.zoom, closeTo(zoom, .001));

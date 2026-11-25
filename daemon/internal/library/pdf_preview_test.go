@@ -3,10 +3,10 @@ package library
 import (
 	"bytes"
 	"errors"
+	"github.com/walkerkiller/coursive/daemon/internal/pdftest"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,18 +19,11 @@ func (zeros) Read(p []byte) (int, error) {
 }
 
 func TestPreviewPDFRendersTheSameBytesAndKeepsNothing(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		exe, _ := os.Executable()
-		if _, e := os.Stat(filepath.Join(filepath.Dir(exe), "coursive-study-pdf")); e != nil {
-			studyPDFDependencyMissing(t, "run compiled library.test beside the built PDFKit helper")
-		}
-	} else {
-		requireStudyPoppler(t)
-	}
+	pdftest.RequirePagedRenderer(t)
 	temp := t.TempDir()
 	t.Setenv("TMPDIR", temp)
 	source := filepath.Join(t.TempDir(), "export.pdf")
-	writeStudyPDFFixture(t, source)
+	pdftest.WriteTwoPagePDF(t, source)
 	b, e := os.ReadFile(source)
 	if e != nil {
 		t.Fatal(e)

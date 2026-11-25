@@ -12,453 +12,121 @@ import 'study_handwriting_test.dart' show sheet, stroke, close, selectInk;
 import 'study_pdf_column_test.dart' as pdf;
 
 void main() {
-  testWidgets('duplicated PDF handwriting stays on its source page after reopening', (t) async {
-    final d = sheet()..cards.add(pdf.pdf());
-    d.strokes.add(StudyStroke.fromJson({...stroke('page-ink').json(), 'anchor': 'pdf', 'page': 2}));
-    final api = pdf.PDFApi(d.json());
-    final key = await fixture.open(t, api);
-    await selectInk(t);
-    await t.tap(find.byKey(const ValueKey('study-selection-actions')));
-    await t.pumpAndSettle();
-    await t.tap(find.text('副本'));
-    await t.pumpAndSettle();
-    final current = key.currentState!.document!;
-    expect(current.strokes, hasLength(2));
-    expect(current.strokes.last.page, 2);
-    await key.currentState!.flush();
-    final reopened = StudyDocument.fromJson(api.doc);
-    reopened.cards.single.page = 1;
-    expect(reopened.strokes.where(reopened.strokeVisible), isEmpty);
-    reopened.cards.single.page = 2;
-    expect(reopened.strokes.where(reopened.strokeVisible), hasLength(2));
-    await close(t);
-  });
-
-  for (final type in ['note', 'text', 'pdfdoc', 'image']) {
-    testWidgets('$type stays movable after hold release with pen hovering', (
-      t,
-    ) async {
-      final card = StudyCard.fromJson({...pdf.pdf().json(), 'type': type})
-        ..rect = const Rect.fromLTWH(300, 300, 400, 300);
-      final key = await fixture.open(
-        t,
-        pdf.PDFApi((sheet()..cards.add(card)).json()),
-      );
-      final d = key.currentState!.document!;
-      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-      final before = d.cards.single.rect;
-      final hold = await t.startGesture(
-        origin + before.topLeft + const Offset(80, 18),
-      );
-      await t.pump(const Duration(milliseconds: 610));
-      await hold.up();
-      await t.pump();
-      await t.sendEventToBinding(
-        PointerHoverEvent(
-          kind: ui.PointerDeviceKind.stylus,
-          position: origin + const Offset(800, 600),
-        ),
-      );
-      await t.dragFrom(origin + before.center, const Offset(60, 30));
-      await t.pumpAndSettle();
-      expect(d.cards.single.rect, before.shift(const Offset(60, 30)));
-      expect(d.camera, Offset.zero);
-      d.undo();
-      expect(d.cards.single.rect, before);
-      await close(t);
-    });
-  }
-
-  testWidgets('finger holds subtitle body and moves it with its ink', (
-    t,
-  ) async {
-    final card = StudyCard(
-      id: 'subtitle',
-      type: 'note',
-      layer: 'main',
-      rect: const Rect.fromLTWH(300, 300, 400, 300),
-      title: '字幕',
-      text: '课堂字幕',
-    );
-    final d = sheet()
-      ..cards.add(
-        StudyCard.fromJson({
-          ...card.json(),
-          'blocks': [
-            {'type': 'paragraph', 'text': '课堂字幕内容'},
-          ],
-        }),
-      );
-    d.strokes.add(pdf.ink('subtitle', 0, const Offset(400, 400)));
-    final key = await fixture.open(t, fixture.FixtureApi(d.json()));
-    final actual = key.currentState!.document!;
-    final before = actual.cards.single.rect;
-    final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-    final g = await t.startGesture(origin + before.center);
-    await t.pump(const Duration(milliseconds: 610));
-    await g.moveBy(const Offset(60, 30));
-    await g.up();
-    await t.pumpAndSettle();
-    expect(actual.cards.single.rect, before.shift(const Offset(60, 30)));
-    expect(actual.camera, Offset.zero);
-    expect(actual.strokes.single.points.single.p, const Offset(460, 430));
-    actual.undo();
-    expect(actual.cards.single.rect, before);
-    await close(t);
-  });
-
   testWidgets(
-    'hold static material selects and drags without panning or losing ink',
-    (t) async {
-      for (final kind in [
-        ui.PointerDeviceKind.touch,
-        ui.PointerDeviceKind.mouse,
-      ]) {
-        final d = sheet()..cards.add(pdf.pdf());
-        d.strokes.add(pdf.ink('pdf', 2, const Offset(300, 350)));
-        final api = pdf.PDFApi(d.json());
-        final key = await fixture.open(t, api);
-        final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect;
-        final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        final g = await t.startGesture(
-          origin + const Offset(300, 350),
-          kind: kind,
-        );
-        await t.pump(const Duration(milliseconds: 500));
-        await g.moveBy(const Offset(2, 2));
-        await t.pump(const Duration(milliseconds: 110));
-        expect(actual.camera, Offset.zero);
-        await g.moveBy(const Offset(80, 40));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before.shift(const Offset(80, 40)));
-        expect(actual.camera, Offset.zero);
-        expect(actual.strokes.single.points.single.p, const Offset(380, 390));
-        actual.undo();
-        expect(actual.cards.single.rect, before);
-        expect(actual.strokes.single.points.single.p, const Offset(300, 350));
-        await close(t);
-      }
-    },
-  );
-
-  testWidgets('finger holds video and PDF bodies with hand or pen selected', (
-    t,
-  ) async {
-    for (final type in ['lecture', 'pdfdoc']) {
-      for (final tool in ['hand', 'pen']) {
-        final d = sheet()
-          ..cards.add(StudyCard.fromJson({...pdf.pdf().json(), 'type': type}));
-        final key = await fixture.open(t, pdf.PDFApi(d.json()));
-        await t.tap(find.byKey(ValueKey('study-tool-$tool')));
-        await t.pumpAndSettle();
-        final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect, camera = actual.camera;
-        final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        final g = await t.startGesture(origin + before.center);
-        await t.pump(const Duration(milliseconds: 610));
-        await g.moveBy(const Offset(60, 40));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before.shift(const Offset(60, 40)));
-        expect(actual.camera, camera);
-        expect(actual.strokes, isEmpty);
-        actual.undo();
-        expect(actual.cards.single.rect, before);
-        await close(t);
-      }
-    }
-  });
-
-  testWidgets('moving early or adding a second finger cancels material hold', (
-    t,
-  ) async {
-    final d = sheet()..cards.add(pdf.pdf());
-    final key = await fixture.open(t, pdf.PDFApi(d.json()));
-    final actual = key.currentState!.document!;
-    final before = actual.cards.single.rect;
-    final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-    var g = await t.startGesture(origin + const Offset(300, 350));
-    await t.pump(const Duration(milliseconds: 500));
-    await g.moveBy(const Offset(50, 30));
-    await t.pump(const Duration(milliseconds: 900));
-    await g.moveBy(const Offset(50, 30));
-    await g.up();
-    await t.pumpAndSettle();
-    expect(actual.camera, const Offset(100, 60));
-    expect(actual.cards.single.rect, before);
-    g = await t.startGesture(
-      origin + actual.camera + const Offset(250, 350),
-      pointer: 21,
-    );
-    final second = await t.startGesture(
-      origin + actual.camera + const Offset(400, 350),
-      pointer: 22,
-    );
-    await t.pump(const Duration(milliseconds: 900));
-    await second.moveBy(const Offset(70, 0));
-    await t.pump();
-    expect(actual.zoom, greaterThan(1));
-    expect(actual.cards.single.rect, before);
-    await g.up();
-    await second.up();
-    await close(t);
-  });
-  testWidgets('material title grips move cards at normal and reduced zoom', (
-    t,
-  ) async {
-    for (final type in ['lecture', 'pdfdoc']) {
-      for (final zoom in [1.0, .42]) {
-        final d = sheet()..zoom = zoom;
-        final card = StudyCard.fromJson({...pdf.pdf().json(), 'type': type});
-        card.rect = const Rect.fromLTWH(500, 500, 600, 472);
-        d.cards.add(card);
-        final key = await fixture.open(t, pdf.PDFApi(d.json()));
-        final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect, camera = actual.camera;
-        final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        final grip =
-            origin + camera + Offset(before.right - 16, before.top + 18) * zoom;
-        final g = await t.startGesture(
-          grip,
-          kind: zoom == 1
-              ? ui.PointerDeviceKind.touch
-              : ui.PointerDeviceKind.mouse,
-        );
-        if (zoom == 1) await t.pump(const Duration(milliseconds: 610));
-        await g.moveBy(const Offset(60, 30));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(
-          actual.cards.single.rect.left,
-          closeTo(before.left + 60 / zoom, .01),
-          reason: '$type at $zoom',
-        );
-        expect(
-          actual.cards.single.rect.top,
-          closeTo(before.top + 30 / zoom, .01),
-        );
-        expect(actual.camera, camera);
-        actual.undo();
-        expect(actual.cards.single.rect, before);
-        await close(t);
-      }
-    }
-  });
-  testWidgets(
-    'a finger pans from the title and only a stationary hold moves the card',
+    'duplicated PDF handwriting stays on its source page after reopening',
     (t) async {
       final d = sheet()..cards.add(pdf.pdf());
-      final key = await fixture.open(t, pdf.PDFApi(d.json()));
-      final actual = key.currentState!.document!;
-      final before = actual.cards.single.rect;
-      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-      final grip = origin + before.topLeft + const Offset(80, 18);
-      await t.dragFrom(grip, const Offset(60, 30));
+      d.strokes.add(
+        StudyStroke.fromJson({
+          ...stroke('page-ink').json(),
+          'anchor': 'pdf',
+          'page': 2,
+        }),
+      );
+      final api = pdf.PDFApi(d.json());
+      final key = await fixture.open(t, api);
+      await selectInk(t);
+      await t.tap(find.byKey(const ValueKey('study-selection-actions')));
       await t.pumpAndSettle();
-      expect(actual.camera, const Offset(60, 30));
-      expect(actual.cards.single.rect, before);
+      await t.tap(find.text('创建副本'));
+      await t.pumpAndSettle();
+      final current = key.currentState!.document!;
+      expect(current.strokes, hasLength(2));
+      expect(current.strokes.last.page, 2);
+      await key.currentState!.flush();
+      final reopened = StudyDocument.fromJson(api.doc);
+      reopened.cards.single.page = 1;
+      expect(reopened.strokes.where(reopened.strokeVisible), isEmpty);
+      reopened.cards.single.page = 2;
+      expect(reopened.strokes.where(reopened.strokeVisible), hasLength(2));
       await close(t);
     },
   );
 
-  for (final type in ['lecture', 'pdfdoc', 'image', 'note', 'text']) {
+  // Selected content remains writable; movement belongs to the title.
+  for (final type in ['text', 'note', 'image', 'pdfdoc']) {
     testWidgets(
-      'stylus short movement writes and enclosing selection moves $type',
+      '$type title moves, four grips scale, selected pen still writes',
       (t) async {
-        final card = StudyCard.fromJson({...pdf.pdf().json(), 'type': type})
-          ..rect = const Rect.fromLTWH(300, 300, 400, 300);
-        final d = sheet()..cards.add(card);
+        final d = sheet()
+          ..cards.add(
+            StudyCard.fromJson({...pdf.pdf().json(), 'type': type})
+              ..rect = const Rect.fromLTWH(300, 300, 400, 300),
+          );
         final key = await fixture.open(t, pdf.PDFApi(d.json()));
         final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect;
         final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        var g = await t.startGesture(
-          origin + before.topLeft + const Offset(80, 18),
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await t.pump(const Duration(milliseconds: 100));
-        await g.moveBy(const Offset(50, 30));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(
-          actual.cards.single.rect,
-          before,
-          reason: 'short pen contact must not move an unselected card',
-        );
-        await t.tap(find.byKey(const ValueKey('study-tool-pen')));
-        await t.pumpAndSettle();
+        final before = actual.cards.single.rect;
         await t.dragFrom(
-          origin + before.center,
-          const Offset(40, 20),
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before);
-        expect(actual.strokes, isNotEmpty);
-        final inkBefore = actual.strokes.last.points.first.p;
-        await t.tap(find.byKey(const ValueKey('study-tool-region')));
-        await t.pumpAndSettle();
-        await t.tap(find.byTooltip('矩形框选'));
-        await t.pumpAndSettle();
-        g = await t.startGesture(
-          origin + before.topLeft - const Offset(20, 20),
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await g.moveTo(origin + before.bottomRight + const Offset(20, 20));
-        await g.up();
-        await t.pumpAndSettle();
-        await t.dragFrom(
-          origin + before.center,
+          origin + before.topLeft + const Offset(100, 18),
           const Offset(60, 30),
-          kind: ui.PointerDeviceKind.stylus,
         );
         await t.pumpAndSettle();
         expect(actual.cards.single.rect, before.shift(const Offset(60, 30)));
+        expect(actual.camera, Offset.zero);
+        final opposite = actual.cards.single.rect.topLeft;
+        final grip = find.byKey(const ValueKey('study-resize-handle-2'));
+        expect(t.getSize(grip), const Size(44, 44));
+        await t.drag(grip, const Offset(80, 60));
+        await t.pumpAndSettle();
+        expect(actual.cards.single.contentScale, closeTo(1.2, .001));
         expect(
-          actual.strokes.last.points.first.p,
-          inkBefore + const Offset(60, 30),
+          (actual.cards.single.rect.topLeft - opposite).distance,
+          lessThan(.001),
         );
-        // After the pen leaves, a finger can move the same selected region.
-        await t.pump(const Duration(seconds: 2));
+        expect(actual.json()['version'], 7);
+        // Finger body never moves a reader or its attached ink.
+        final scaled = actual.cards.single.rect;
+        if (type == 'text' || type == 'note' || type == 'pdfdoc') {
+          await t.dragFrom(origin + scaled.center, const Offset(0, -40));
+          expect(actual.cards.single.rect, scaled);
+        }
         await t.dragFrom(
-          origin + actual.cards.single.rect.center,
-          const Offset(20, 10),
+          origin + scaled.center,
+          const Offset(50, 20),
+          kind: ui.PointerDeviceKind.stylus,
         );
         await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before.shift(const Offset(80, 40)));
-        expect(actual.camera, Offset.zero);
-        actual.undo();
-        actual.undo();
-        expect(actual.cards.single.rect, before);
-        expect(actual.strokes.last.points.first.p, inkBefore);
+        expect(actual.cards.single.rect, scaled);
+        expect(actual.strokes, isNotEmpty);
+        await key.currentState!.flush();
+        expect(
+          StudyDocument.fromJson(key.currentState!.document!.json())
+              .cards
+              .single
+              .contentScale,
+          closeTo(1.2, .001),
+        );
         await close(t);
       },
     );
   }
-
-  for (final type in ['pdfdoc', 'image', 'note', 'text']) {
-    for (final tool in ['select', 'pen']) {
-      testWidgets('stylus holds $type body then regrabs it in $tool mode', (
-        t,
-      ) async {
-        final card = StudyCard.fromJson({...pdf.pdf().json(), 'type': type})
-          ..rect = const Rect.fromLTWH(300, 300, 400, 300);
-        final d = sheet()..cards.add(card);
-        d.strokes.add(pdf.ink(card.id, 0, const Offset(400, 400)));
-        final key = await fixture.open(t, pdf.PDFApi(d.json()));
-        await t.tap(find.byKey(ValueKey('study-tool-$tool')));
-        await t.pumpAndSettle();
-        final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect;
-        final inkBefore = actual.strokes.single.points.single.p;
-        final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        var g = await t.startGesture(
-          origin + before.center,
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await t.pump(const Duration(milliseconds: 610));
-        await g.moveBy(const Offset(60, 30));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before.shift(const Offset(60, 30)));
-        expect(actual.camera, Offset.zero);
-        expect(
-          actual.strokes.length,
-          1,
-          reason: 'hold does not leave an ink dot',
-        );
-        expect(
-          actual.strokes.single.points.single.p,
-          inkBefore + const Offset(60, 30),
-        );
-        g = await t.startGesture(
-          origin + actual.cards.single.rect.center,
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await g.moveBy(const Offset(40, 20));
-        await g.up();
-        await t.pumpAndSettle();
-        expect(actual.cards.single.rect, before.shift(const Offset(100, 50)));
-        expect(actual.strokes.length, 1);
-        actual.undo();
-        expect(actual.cards.single.rect, before.shift(const Offset(60, 30)));
-        actual.undo();
-        expect(actual.cards.single.rect, before);
-        expect(actual.strokes.single.points.single.p, inkBefore);
-        await t.tap(find.byKey(const ValueKey('study-tool-pen')));
-        await t.pumpAndSettle();
-        await t.dragFrom(
-          origin + before.center,
-          const Offset(40, 20),
-          kind: ui.PointerDeviceKind.stylus,
-        );
-        await t.pumpAndSettle();
-        expect(
-          actual.cards.single.rect,
-          before,
-          reason: 'choosing a pen resumes writing',
-        );
-        expect(actual.strokes.length, greaterThan(1));
-        await close(t);
-      });
-    }
-  }
-
   testWidgets(
-    'pen hold selection and cancellation leave no ink or undo entry',
+    'cancelled corner preview restores geometry and publishes no undo',
     (t) async {
-      final original = sheet()..cards.add(pdf.pdf());
-      final key = await fixture.open(t, pdf.PDFApi(original.json()));
-      await t.tap(find.byKey(const ValueKey('study-tool-pen')));
-      await t.pumpAndSettle();
-      final d = key.currentState!.document!;
-      final before = jsonEncode(d.json());
-      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-      var g = await t.startGesture(
-        origin + d.cards.single.rect.center,
-        kind: ui.PointerDeviceKind.stylus,
+      final key = await fixture.open(
+        t,
+        fixture.FixtureApi((sheet()..cards.add(pdf.pdf())).json()),
       );
-      await t.pump(const Duration(milliseconds: 400));
+      final d = key.currentState!.document!;
+      final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
+      await t.tapAt(
+        origin + d.cards.single.rect.topLeft + const Offset(100, 18),
+      );
+      await t.pumpAndSettle();
+      final before = jsonEncode(d.json()), undo = d.canUndo;
+      final g = await t.startGesture(
+        t.getCenter(find.byKey(const ValueKey('study-resize-handle-2'))),
+      );
+      await g.moveBy(const Offset(60, 40));
+      await t.pump();
       await g.cancel();
       await t.pumpAndSettle();
       expect(jsonEncode(d.json()), before);
-      g = await t.startGesture(
-        origin + d.cards.single.rect.center,
-        kind: ui.PointerDeviceKind.stylus,
-      );
-      await t.pump(const Duration(milliseconds: 610));
-      await g.up();
-      await t.pumpAndSettle();
-      expect(jsonEncode(d.json()), before);
-      expect(d.canUndo, false);
-      // A palm landing during a deliberate pen drag cannot move the camera.
-      g = await t.startGesture(
-        origin + d.cards.single.rect.center,
-        kind: ui.PointerDeviceKind.stylus,
-        pointer: 70,
-      );
-      final palm = await t.startGesture(
-        origin + const Offset(800, 600),
-        pointer: 71,
-      );
-      await palm.moveBy(const Offset(100, 50));
-      await g.moveBy(const Offset(60, 30));
-      await g.up();
-      await palm.up();
-      await t.pumpAndSettle();
-      expect(d.camera, Offset.zero);
-      expect(
-        d.cards.single.rect,
-        original.cards.single.rect.shift(const Offset(60, 30)),
-      );
-      d.undo();
-      expect(jsonEncode(d.json()), before);
+      expect(d.canUndo, undo);
       await close(t);
     },
   );
-
   for (final mode in ['partial', 'stroke', 'lasso']) {
     for (final trigger in ['pressure', 'button', 'inverted']) {
       testWidgets('$trigger respects $mode and restores pen after lift', (
@@ -553,34 +221,6 @@ void main() {
           StudyDocument.fromJson(api.doc).strokes.length,
           actual.strokes.length,
         );
-        await close(t);
-      });
-    }
-  }
-  for (final type in ['pdfdoc', 'pdf', 'image']) {
-    for (final kind in [
-      ui.PointerDeviceKind.touch,
-      ui.PointerDeviceKind.mouse,
-    ]) {
-      testWidgets('$kind drags canvas from $type without moving material', (
-        t,
-      ) async {
-        final d = sheet();
-        final card = StudyCard.fromJson({...pdf.pdf().json(), 'type': type});
-        d.cards.add(card);
-        final key = await fixture.open(t, pdf.PDFApi(d.json()));
-        final actual = key.currentState!.document!;
-        final before = actual.cards.single.rect;
-        final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
-        await t.dragFrom(
-          origin + const Offset(320, 350),
-          const Offset(100, 60),
-          kind: kind,
-        );
-        await t.pumpAndSettle();
-        expect(actual.camera, const Offset(100, 60));
-        expect(actual.cards.single.rect, before);
-        expect(actual.strokes, isEmpty);
         await close(t);
       });
     }

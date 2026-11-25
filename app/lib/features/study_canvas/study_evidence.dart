@@ -206,7 +206,7 @@ extension _StudyEvidence on StudyCanvasState {
     if (card == null || !d.visible(card.layer)) {
       return _EvidenceView.invalid(l10n.studyEvidenceMissing);
     }
-    final upright = card.quarterTurns % 4 == 0;
+    final upright = card.rotation == 0 && card.quarterTurns % 4 == 0;
     if (card.type == 'pdfdoc' && a.page > 0 && card.page != a.page) {
       return _EvidenceView(card, const [], page: a.page);
     }
@@ -297,6 +297,13 @@ extension _StudyEvidence on StudyCanvasState {
     }
     final a = StudyAnchor.fromJson(evidence['anchor'] as Map? ?? const {});
     final card = view.card;
+    final markdownPassage = a.id.startsWith('md-') &&
+        (card?.markdownReader == true || card?.handout == true);
+    if (markdownPassage && card!.collapsed) {
+      d.checkpoint();
+      _setCardCollapsed(card, false);
+      d.changed();
+    }
     Map? page;
     if (view.page > 0 && card != null) {
       try {
@@ -381,7 +388,7 @@ extension _StudyEvidence on StudyCanvasState {
       } else {
         final local = _localVideoKeys[card.id]?.currentState;
         mark.videoBefore =
-            local?.player.state.position.inMilliseconds ??
+            local?.positionMs ??
             _localVideoTimes[card.id] ??
             0;
         _localVideoTimes[card.id] = a.timeStartMs;
@@ -403,6 +410,7 @@ extension _StudyEvidence on StudyCanvasState {
         _stageOpen = false;
         if (_review != null) _reviewPeek = true;
       }
+      if (markdownPassage) _tool = StudyTool.select;
       _selection.clear();
       _regionSelection = null;
       _selectionReady = false;
@@ -511,16 +519,14 @@ extension _StudyEvidence on StudyCanvasState {
       } else {
         final local = _localVideoKeys[video.id]?.currentState;
         final at =
-            local?.player.state.position.inMilliseconds ??
+            local?.positionMs ??
             _localVideoTimes[video.id] ??
             mark.videoAt;
-        if (local?.player.state.playing != true &&
+        if (local?.isPlaying != true &&
             (at - mark.videoAt).abs() <= 1500) {
           _localVideoTimes[video.id] = mark.videoBefore;
           if (local != null) {
-            unawaited(
-              local.player.seek(Duration(milliseconds: mark.videoBefore)),
-            );
+            unawaited(local.seekPaused(mark.videoBefore).catchError((_) {}));
           }
         }
       }
@@ -576,91 +582,6 @@ extension _StudyEvidence on StudyCanvasState {
       });
     }
     return true;
-  }
-
-  /// 「返回原处」, shown while a citation's view can be left.
-  Widget _returnPill() => Positioned(
-    top: _topBarsBottom + Space.sm,
-    left: 0,
-    right: 0,
-    child: Center(
-      child: AnimatedSwitcher(
-        duration: Motion.medium1,
-        switchInCurve: Motion.emphasizedDecelerate,
-        switchOutCurve: Motion.emphasizedAccelerate,
-        transitionBuilder: (child, a) => FadeTransition(
-          opacity: a,
-          child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, -.4),
-              end: Offset.zero,
-            ).animate(a),
-            child: child,
-          ),
-        ),
-        child: _bookmarks.isEmpty
-            ? const SizedBox.shrink()
-            : _ReturnPill(
-                key: _returnKey,
-                count: _bookmarks.length,
-                onPressed: _goBack,
-              ),
-      ),
-    ),
-  );
-}
-
-class _ReturnPill extends StatelessWidget {
-  const _ReturnPill({super.key, required this.count, required this.onPressed});
-  final int count;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final mac = Theme.of(context).platform == TargetPlatform.macOS;
-    return GlassSurface(
-      radius: Corners.full,
-      depth: GlassDepth.float,
-      child: Tooltip(
-        message: mac ? l10n.studyReturnKeysMac : l10n.studyReturnKeys,
-        child: InkWell(
-          key: const ValueKey('study-return'),
-          customBorder: const StadiumBorder(),
-          onTap: onPressed,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Padding(
-              padding: const EdgeInsetsDirectional.fromSTEB(
-                Space.md,
-                Space.xs,
-                Space.lg,
-                Space.xs,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.undo_rounded, size: 18, color: cs.primary),
-                  const SizedBox(width: Space.sm),
-                  Text(l10n.studyReturn, style: tt.labelLarge),
-                  if (count > 1) ...[
-                    const SizedBox(width: Space.sm),
-                    Text(
-                      '$count',
-                      style: tt.labelMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontFeatures: const [ui.FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

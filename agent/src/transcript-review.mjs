@@ -129,7 +129,7 @@ export class TranscriptReviewer {
 		this.jobs.set(id, { ac });
 		try {
 			const model = await this.pipeline.currentModel();
-			if (!model) throw new Error("尚未配置可用模型，请在设置 → 模型中添加服务");
+			if (!model) throw new Error("所选模型不可用，请在设置中检查对应服务的登录或重新选择模型。");
 			const info = await this.call("GET", `${endpoint(id)}/context`);
 			if (!info.segments?.length) throw new Error("这节课还没有文字稿，请先转写");
 			const chunks = reviewChunks(info.segments);

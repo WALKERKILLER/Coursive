@@ -10,6 +10,24 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
+  String get lessonLoading => '正在读取本节资料并打开讲义…';
+
+  @override
+  String get lessonStudyStart => '学这节课';
+
+  @override
+  String get lessonChooseProgress => '选择要继续的学习记录';
+
+  @override
+  String get lessonPractice => '回答本节练习';
+
+  @override
+  String get lessonSubmit => '提交作答';
+
+  @override
+  String get lessonRevision => '生成讲义修订建议';
+
+  @override
   String get appTitle => 'Coursive';
 
   @override
@@ -2469,6 +2487,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonModel => '模型';
+
+  @override
+  String get gptLogin => '登录 ChatGPT';
+
+  @override
+  String get gptLoginDone => '小 C 已连接 GPT';
+
+  @override
+  String get gptLoginRestarted => '助手已重启，请重新发起登录。';
+
+  @override
+  String get gptLoginPortBusy => '本机登录端口 1455 正被占用，请结束其他登录后重试。';
+
+  @override
+  String get gptLoginFailed => '登录未完成，请检查网络后重试';
+
+  @override
+  String get modelPrefsSaveFailed => '模型选择未能保存，请重新选择模型后发送';
+
+  @override
+  String get modelPrefsRetry => '模型设置保存失败，请重试。';
 
   @override
   String get modelsImportPi => '导入 Pi CLI 配置';
@@ -6584,7 +6623,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get folderSyncBody =>
-      '把选中的课程直接同步到 NAS 的 WebDAV 目录。每台设备只发布改动过的文件，接收端合并并保留冲突副本；来源登录、模型密钥和本机设置留在本机。';
+      '通过 NAS WebDAV 或 Syncthing 文件夹同步选中的课程。来源登录、模型密钥和本机设置留在本机；画布以最新保存版本为准，并保留恢复副本。';
+
+  @override
+  String get folderSyncLocalFolder => '选择 Syncthing 同步文件夹';
+
+  @override
+  String get folderSyncLocalHint => '选择专用交换目录，两端由 Syncthing 保持一致。';
+
+  @override
+  String get folderSyncLocalConnected => '已连接同步文件夹';
+
+  @override
+  String get folderSyncUseWebDav => '使用 WebDAV';
 
   @override
   String get folderSyncAccount => 'NAS 账号';
@@ -7384,10 +7435,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studySelectionMore => '选区工具';
 
   @override
+  String get studyDuplicateCard => '创建副本';
+
+  @override
+  String get studySelectionColor => '选区改色';
+
+  @override
+  String get studySelectionWidth => '选区粗细';
+
+  @override
+  String get studyOpenAIConversation => '打开 AI 对话';
+
+  @override
+  String get studyVideoUnavailable => '视频暂不可用';
+
+  @override
+  String get studyLockPosition => '锁定位置';
+
+  @override
+  String get studyUnlockPosition => '解锁位置';
+
+  @override
+  String get studyCropRectangle => '矩形裁剪';
+
+  @override
+  String get studyCropFreehand => '自由裁剪';
+
+  @override
+  String get studyCropKeepCopy => '裁剪为副本';
+
+  @override
   String get studyRotateSelection => '顺时针旋转 90°';
 
   @override
-  String get studyRotateUnsupported => '旋转支持笔迹和展开的图片；请取消选择其他类型或锁定的对象';
+  String get studyRotateUnsupported => '请选择可编辑的卡片或笔迹；锁定图层上的对象无法旋转';
 
   @override
   String get studyEditShape => '编辑形状锚点';
@@ -7560,8 +7641,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupConfigure => '配置';
 
   @override
-  String get setupPdfHelperMissing =>
-      '内置 PDFKit 组件缺失，请更新或重新安装包含 PDF 组件的应用；安装 Poppler 不能替代此组件';
+  String get setupPdfHelperMissing => '内置 PDF 组件缺失，请更新或重新安装 Coursive';
 
   @override
   String get setupPdfUnsupported => '当前平台的画布 PDF 导入尚未支持，不能仅靠安装组件启用；已导入的页面仍可查看';
@@ -7591,15 +7671,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String studyEvidenceSemantics(int number, String locator) {
     return '引用 $number：$locator';
   }
-
-  @override
-  String get studyReturn => '返回原处';
-
-  @override
-  String get studyReturnKeys => 'Esc 或 Alt+←';
-
-  @override
-  String get studyReturnKeysMac => 'Esc 或 ⌘[';
 
   @override
   String studyCoveragePassages(int count) {
@@ -7935,6 +8006,58 @@ class AppLocalizationsZh extends AppLocalizations {
   String get outlineQuick => '整理提纲';
 
   @override
+  String get studyPanTool => '移动画布（H）';
+
+  @override
+  String get studyReadTool => '阅读与选择（V）';
+
+  @override
+  String get studyEditMarkdown => '编辑 Markdown';
+
+  @override
+  String get studyAddAnnotation => '加注释';
+
+  @override
+  String get studyEditAnnotation => '编辑注释';
+
+  @override
+  String get studyAnnotationHint => '写下释义或自己的理解';
+
+  @override
+  String get studyPassageQuestion => '这段话在原文里是什么意思？';
+
+  @override
+  String get studyQuickCreate => '生成';
+
+  @override
+  String get studyQuickHandout => '生成讲义';
+
+  @override
+  String get studyHandoutPrompt =>
+      '把本轮选中的材料做成一张可以自学的 Markdown 讲义。用一个简短的一级标题开头。先解释关键概念，再给一个分步例子，提示易错点。讲解告一段落时用独立二级标题「自测」接一道简答题，只写题干；之后可以继续下一个二级标题的讲解。每张卡最多两道题，资料不足可省略。课堂内容引用本轮实际读到的原文，补充例子注明是示例。不要给自测答案，也不要用代码围栏包住整张讲义。';
+
+  @override
+  String get studyHandoutAside => '旁问';
+
+  @override
+  String studyOpenPassageAside(int index) {
+    return '打开旁问 $index';
+  }
+
+  @override
+  String get studyBackToPassage => '返回原文';
+
+  @override
+  String get studyHandoutReview => '核对作答';
+
+  @override
+  String get studyHandoutContinue => '继续阅读';
+
+  @override
+  String get studyHandoutReviewPrompt =>
+      '请核对我对这道讲义自测的作答。指出我写对的一步和需要补的一步，用讲义与原文依据说明。没有依据的细节请指出，不要替我改写作答。';
+
+  @override
   String get outlineConfirmTitle => '整理为复习提纲';
 
   @override
@@ -8072,4 +8195,85 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get studyShot => '选区截图';
+
+  @override
+  String get documentCreate => '新建';
+
+  @override
+  String get documentMarkdown => '文字笔记';
+
+  @override
+  String get documentCanvas => '无限画布';
+
+  @override
+  String get documentCanvasTitle => '画布名称';
+
+  @override
+  String get documentUngrouped => '未归入课程';
+
+  @override
+  String get courseDocuments => '笔记与画布';
+
+  @override
+  String get pdfDockCanvasRead => '在卡片内滚动阅读';
+
+  @override
+  String get pdfDockOpen => '并排批注 PDF';
+
+  @override
+  String get pdfDockCropped => '此 PDF 已裁剪，可在原页书写';
+
+  @override
+  String get pdfDockMargin => '右侧白边';
+
+  @override
+  String get pdfDockPen => '鼠标书写';
+
+  @override
+  String get pdfDockChanged => '批注版已发生变化，请重新打开';
+
+  @override
+  String get pdfDockSaving => '正在写入 PDF…';
+
+  @override
+  String get pdfDockSaved => '已保存到批注版 PDF';
+
+  @override
+  String get pdfDockHint => '笔或鼠标书写，触控或滚轮翻页';
+
+  @override
+  String get pdfDockChoose => '选择本机 PDF…';
+
+  @override
+  String get pdfDockSuffix => ' · 批注版';
+
+  @override
+  String get pdfCardEraser => '橡皮擦';
+
+  @override
+  String get pdfCardPrevious => '上一页';
+
+  @override
+  String get pdfCardNext => '下一页';
+
+  @override
+  String get pdfCardView => 'PDF 视图';
+
+  @override
+  String get pdfCardColumns => '展开为一列';
+
+  @override
+  String get pdfCardPaged => '左右翻页';
+
+  @override
+  String get pdfCardScroll => '上下滚动';
+
+  @override
+  String get modelsSwitchFailed => '模型切换未保存，请检查连接后重试';
+
+  @override
+  String get studyRestoreUpright => '恢复正向';
+
+  @override
+  String get studyAngleSnapping => '角度吸附';
 }

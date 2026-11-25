@@ -1,7 +1,6 @@
 part of 'study_canvas.dart';
 
-// Following bound material and passages read through 「全课程」. Both land
-// as a citation does, with one 「返回原处」 (specs 0027 and 0029).
+// Bound material and passages from 「全课程」 share citation navigation.
 
 extension _StudySourceNavigation on StudyCanvasState {
   /// A bound material's pill or a card's source, shown like a citation.

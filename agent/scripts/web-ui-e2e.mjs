@@ -86,7 +86,8 @@ async function main() {
 		}
 		daemon.kill("SIGINT");
 		await new Promise((r) => daemon.once("exit", r).once("error", r));
-		await rm(root, { recursive: true, force: true });
+		// Chromium subprocesses can finish a profile write after the browser exits.
+		await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 	}
 }
 

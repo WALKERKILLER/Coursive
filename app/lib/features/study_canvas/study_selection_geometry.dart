@@ -110,7 +110,7 @@ Rect? studySelectionMenuRect(
 }
 
 /// Where a floating control of [size] fits in empty space by the selection:
-/// off its top-right corner if it can, otherwise as near to that as the free
+/// centered above it if it can, otherwise as near to that as the free
 /// space allows, never over the selection or [obstacles]. Null when nothing
 /// fits.
 Offset? studyFloatingPosition(
@@ -127,10 +127,25 @@ Offset? studyFloatingPosition(
   ]) {
     free = _maximal([for (final r in free) ..._subtract(r, blocked)]);
   }
-  final ideal = Offset(
-    selection.right - size.width,
-    selection.top - gap - size.height,
+  if (viewport.width < size.width || viewport.height < size.height) return null;
+  final visible = selection.intersect(viewport);
+  final center = visible.isEmpty ? selection.center.dx : visible.center.dx;
+  final x = (center - size.width / 2).clamp(
+    viewport.left,
+    viewport.right - size.width,
   );
+  final ideal = Offset(x, selection.top - gap - size.height);
+  for (final point in [ideal, Offset(x, selection.bottom + gap)]) {
+    final bar = point & size;
+    if (free.any(
+      (r) =>
+          r.left <= bar.left &&
+          r.right >= bar.right &&
+          r.top <= bar.top &&
+          r.bottom >= bar.bottom,
+    ))
+      return point;
+  }
   Offset? best;
   var distance = double.infinity;
   for (final r in free) {

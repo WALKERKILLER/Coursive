@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api.dart';
+import '../../core/android_bridge.dart';
 import '../../core/app_state.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/tokens.dart';
 import 'settings_common.dart';
 
-/// Course-scoped portable library, carried by the NAS's WebDAV server.
+/// Course-scoped portable library carried by WebDAV or a shared folder.
 /// Contract: docs/specs/0023-course-folder-sync.md.
 class FolderSyncPage extends StatefulWidget {
   const FolderSyncPage({super.key, this.api});
@@ -28,6 +31,9 @@ class _FolderSyncPageState extends State<FolderSyncPage>
       _pass = TextEditingController(),
       _folder = TextEditingController();
   bool _busy = false, _media = true, _auto = true, _obscure = true;
+  bool _loaded = false;
+  String _localFolder = '';
+  Map<String, dynamic> _bridge = {};
   String? _error;
   Timer? _poll;
   ApiCall get _call => widget.api ?? context.read<AppState>().api.call;
@@ -58,10 +64,15 @@ class _FolderSyncPageState extends State<FolderSyncPage>
 
   Map<String, dynamic> _settings() => {
     'kind': 'folder',
-    'url': _url.text.trim(),
-    'user': _user.text.trim(),
-    if (_pass.text.isNotEmpty) 'password': _pass.text,
-    'folder': _folder.text.trim(),
+    if (_localFolder.isNotEmpty) ...{
+      'local_folder': _localFolder,
+      ..._bridge,
+    } else ...{
+      'url': _url.text.trim(),
+      'user': _user.text.trim(),
+      if (_pass.text.isNotEmpty) 'password': _pass.text,
+      'folder': _folder.text.trim(),
+    },
     'course_ids': _selected.toList()..sort(),
     'media': _media,
     'auto': _auto,
@@ -72,24 +83,43 @@ class _FolderSyncPageState extends State<FolderSyncPage>
       final s = Map<String, dynamic>.from(
         await _call('GET', '/api/sync') as Map,
       );
+      Map<String, dynamic>? bridge;
+      String? restoreError;
+      if (!_loaded &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          '${s['local_folder'] ?? ''}'.startsWith('content:')) {
+        try {
+          bridge = await AndroidBridge.syncFolderBridge(
+            s['local_folder'] as String,
+          );
+        } catch (e) {
+          restoreError = '$e';
+        }
+      }
       if (!mounted) return;
       // The page polls while it is open; rebuild only when the daemon actually
       // reported something new so idle polling does not repaint the form.
       if (_status.isNotEmpty && jsonEncode(s) == jsonEncode(_status)) return;
       setState(() {
         _status = s;
-        if (_url.text.isEmpty && '${s['url'] ?? ''}'.isNotEmpty) {
-          _url.text = '${s['url']}';
+        if (!_loaded) {
+          _loaded = true;
+          _error = restoreError;
+          _localFolder = '${s['local_folder'] ?? ''}';
+          if (bridge != null) _bridge = bridge;
+          _url.text = '${s['url'] ?? ''}';
           _user.text = '${s['user'] ?? ''}';
           _folder.text = '${s['folder'] ?? ''}';
-          _media = s['media'] == true;
-          _auto = s['auto'] == true;
+          _media = s['configured'] != true || s['media'] == true;
+          _auto = s['configured'] != true || s['auto'] == true;
           if (s['kind'] == 'folder') {
             _selected.addAll((s['course_ids'] as List? ?? []).cast<String>());
           }
         }
       });
-      if (_courses.isEmpty && _selected.isNotEmpty) await _preview();
+      if (_courses.isEmpty && _selected.isNotEmpty && restoreError == null) {
+        await _preview();
+      }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -123,12 +153,41 @@ class _FolderSyncPageState extends State<FolderSyncPage>
 
   /// A stored password is reused when the field is left empty, so only a first
   /// connection has to type it.
-  bool get _ready =>
-      _url.text.trim().length > 8 &&
-      _user.text.trim().isNotEmpty &&
-      (_pass.text.isNotEmpty ||
-          (_status['has_password'] == true && _status['kind'] == 'folder')) &&
-      _selected.isNotEmpty;
+  bool get _ready => _localFolder.isNotEmpty
+      ? _selected.isNotEmpty &&
+            (!_localFolder.startsWith('content:') || _bridge.isNotEmpty)
+      : _url.text.trim().length > 8 &&
+            _user.text.trim().isNotEmpty &&
+            (_pass.text.isNotEmpty ||
+                (_status['has_password'] == true &&
+                    _status['kind'] == 'folder')) &&
+            _selected.isNotEmpty;
+
+  Future<void> _chooseLocalFolder() async {
+    try {
+      Map<String, dynamic> bridge = {};
+      String? folder;
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final chosen = await AndroidBridge.pickSyncFolder(
+          _status['local_folder'] as String?,
+        );
+        if (chosen == null) return;
+        bridge = chosen;
+        folder = '${chosen['local_folder']}';
+      } else {
+        folder = await getDirectoryPath();
+      }
+      if (folder == null || !mounted) return;
+      setState(() {
+        _localFolder = folder!;
+        _bridge = bridge;
+        _error = null;
+      });
+      await _refreshCourses();
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
 
   Future<void> _connect() async {
     setState(() {
@@ -165,7 +224,8 @@ class _FolderSyncPageState extends State<FolderSyncPage>
       if (ok != true) return;
       await _call('PUT', '/api/sync', _settings());
       _pass.clear();
-      await _run();
+      await _call('POST', '/api/sync/run');
+      await _load();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     } finally {
@@ -273,7 +333,20 @@ class _FolderSyncPageState extends State<FolderSyncPage>
     final last = Map<String, dynamic>.from(_status['last'] as Map? ?? {});
     final running = _status['running'] == true;
     final on = _status['configured'] == true && _status['kind'] == 'folder';
-    final host = Uri.tryParse(_url.text.trim())?.host ?? '';
+    final host = Uri.tryParse('${_status['url'] ?? ''}')?.host ?? '';
+    if (!_loaded) {
+      return SettingsSubpage(
+        title: l10n.folderSyncTitle,
+        children: [
+          if (_error == null)
+            const LinearProgressIndicator()
+          else ...[
+            Text(_error!),
+            TextButton(onPressed: _load, child: Text(l10n.commonRetry)),
+          ],
+        ],
+      );
+    }
     return SettingsSubpage(
       title: l10n.folderSyncTitle,
       children: [
@@ -293,71 +366,94 @@ class _FolderSyncPageState extends State<FolderSyncPage>
           ),
           title: l10n.folderSyncTitle,
           on: on,
-          status: on && host.isNotEmpty
+          status: on && '${_status['local_folder'] ?? ''}'.isNotEmpty
+              ? l10n.folderSyncLocalConnected
+              : on && host.isNotEmpty
               ? l10n.webdavConnectedTo(host)
               : l10n.commonNotSet,
           body: l10n.folderSyncBody,
         ),
-        SettingsGroup(
-          title: l10n.folderSyncAccount,
-          icon: Icons.dns_outlined,
-          children: [
-            const SizedBox(height: Space.xs),
-            TextField(
-              controller: _url,
-              keyboardType: TextInputType.url,
-              autocorrect: false,
-              onChanged: (_) => setState(() => _error = null),
-              decoration: InputDecoration(
-                labelText: l10n.webdavServer,
-                helperText: l10n.folderSyncAccountHint,
-                border: const OutlineInputBorder(),
+        ListTile(
+          leading: const Icon(Icons.folder_shared_outlined),
+          title: Text(l10n.folderSyncLocalFolder),
+          subtitle: Text(
+            _localFolder.isEmpty ? l10n.folderSyncLocalHint : _localFolder,
+          ),
+          onTap: _busy ? null : _chooseLocalFolder,
+          trailing: _localFolder.isEmpty
+              ? null
+              : TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() {
+                          _localFolder = '';
+                          _bridge = {};
+                          _error = null;
+                        }),
+                  child: Text(l10n.folderSyncUseWebDav),
+                ),
+        ),
+        if (_localFolder.isEmpty)
+          SettingsGroup(
+            title: l10n.folderSyncAccount,
+            icon: Icons.dns_outlined,
+            children: [
+              const SizedBox(height: Space.xs),
+              TextField(
+                controller: _url,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                onChanged: (_) => setState(() => _error = null),
+                decoration: InputDecoration(
+                  labelText: l10n.webdavServer,
+                  helperText: l10n.folderSyncAccountHint,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: Space.md),
-            TextField(
-              controller: _user,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: l10n.webdavAccount,
-                border: const OutlineInputBorder(),
+              const SizedBox(height: Space.md),
+              TextField(
+                controller: _user,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: l10n.webdavAccount,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-            const SizedBox(height: Space.md),
-            TextField(
-              controller: _pass,
-              obscureText: _obscure,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: l10n.webdavAppPassword,
-                helperText: on && _status['has_password'] == true
-                    ? l10n.webdavKeepPassword
-                    : l10n.webdavPasswordSealed,
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: _obscure ? l10n.commonShow : l10n.commonHide,
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                  icon: Icon(
-                    _obscure
-                        ? Icons.visibility_outlined
-                        : Icons.visibility_off_outlined,
+              const SizedBox(height: Space.md),
+              TextField(
+                controller: _pass,
+                obscureText: _obscure,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: l10n.webdavAppPassword,
+                  helperText: on && _status['has_password'] == true
+                      ? l10n.webdavKeepPassword
+                      : l10n.webdavPasswordSealed,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: _obscure ? l10n.commonShow : l10n.commonHide,
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                    icon: Icon(
+                      _obscure
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: Space.md),
-            TextField(
-              controller: _folder,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: l10n.webdavFolder,
-                helperText: l10n.webdavFolderHelper,
-                border: const OutlineInputBorder(),
+              const SizedBox(height: Space.md),
+              TextField(
+                controller: _folder,
+                autocorrect: false,
+                decoration: InputDecoration(
+                  labelText: l10n.webdavFolder,
+                  helperText: l10n.webdavFolderHelper,
+                  border: const OutlineInputBorder(),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
         SettingsGroup(
           title: l10n.folderSyncCourses,
           icon: Icons.menu_book_outlined,
@@ -389,7 +485,8 @@ class _FolderSyncPageState extends State<FolderSyncPage>
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
-                onPressed: _busy || _url.text.trim().isEmpty
+                onPressed:
+                    _busy || (_localFolder.isEmpty && _url.text.trim().isEmpty)
                     ? null
                     : _refreshCourses,
                 icon: const Icon(Icons.refresh_rounded),

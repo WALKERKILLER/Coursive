@@ -7,9 +7,11 @@ import 'package:provider/provider.dart';
 import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/models.dart';
+import '../../core/plugins.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/states.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../courses/download_sheet.dart';
 import '../library/note_editor.dart';
 import '../courseware/courseware.dart';
@@ -32,12 +34,14 @@ class PlayerSidePanel extends StatefulWidget {
     super.key,
     required this.ctl,
     this.onAsk,
+    this.onStudy,
     this.assistant,
   });
   final LecturePlayer ctl;
 
   /// Embedded assistant shown as the last tab.
   final Widget? assistant;
+  final VoidCallback? onStudy;
 
   /// Hands a prompt to the assistant.
   final ValueChanged<String>? onAsk;
@@ -156,6 +160,8 @@ class _PlayerSidePanelState extends State<PlayerSidePanel>
                     ],
                   ),
                 ),
+                if (widget.onStudy != null && context.watch<PluginStore?>()?.supportsLessonStudy == true)
+                  TextButton(onPressed: widget.onStudy, child: Text(l10n.lessonStudyStart)),
                 PluginMenuButton(
                   surface: 'lecture.menu',
                   context_: {
@@ -290,10 +296,13 @@ class _SlidesTabState extends State<_SlidesTab>
   void initState() {
     super.initState();
     widget.ctl.position.addListener(_onPos);
+    widget.ctl.seekEvents.addListener(_onSeek);
+    WidgetsBinding.instance.addPostFrameCallback((_){if(mounted) _onPos();});
   }
 
   @override
   void dispose() {
+    widget.ctl.seekEvents.removeListener(_onSeek);
     widget.ctl.position.removeListener(_onPos);
     _scroll.dispose();
     super.dispose();
@@ -316,9 +325,10 @@ class _SlidesTabState extends State<_SlidesTab>
     return ans;
   }
 
-  void _onPos() {
+  void _onSeek(){ _userScrolled=DateTime(0); _onPos(force:true); }
+  void _onPos({bool force=false}) {
     final i = _indexAt(widget.ctl.positionMs);
-    if (i == _current) return;
+    if (!force && i == _current) return;
     setState(() => _current = i);
     final follow = context.read<UiPrefs>().slideFollow;
     if (follow &&
@@ -810,6 +820,7 @@ class _TranscriptTabState extends State<_TranscriptTab>
               return false;
             },
             child: SelectionArea(
+              contextMenuBuilder: readingSelectionMenu,
               child: ListView.builder(
                 controller: _scroll,
                 padding: const EdgeInsets.fromLTRB(

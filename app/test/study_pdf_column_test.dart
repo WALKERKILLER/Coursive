@@ -47,6 +47,49 @@ class PDFApi extends fixture.FixtureApi {
 }
 
 void main() {
+  test(
+    'erasing legacy PDF ink keeps pressure after rotation, save and undo',
+    () {
+      final doc = StudyDocument(), card = pdf()..rotation = .6;
+      doc.cards.add(card);
+      final paper = studyOriginalPaper(card, 1.5);
+      Offset world(double x) => card.mapWorld(
+        Offset(paper.left + x * paper.width, paper.center.dy),
+        card.rotation,
+      );
+      final source = StudyStroke(
+        id: 'pressure-ramp',
+        layer: 'main',
+        anchor: card.id,
+        page: 2,
+        color: 0xff000000,
+        width: 3,
+        points: [InkPoint(world(.1), .1), InkPoint(world(.9), .9)],
+      );
+      doc.strokes.add(source);
+      doc.erasePDFInk(
+        card,
+        2,
+        1.5,
+        [const Offset(.5, .5)],
+        const Size(600, 400),
+        12,
+        'partial',
+      );
+      final restored = StudyDocument.fromJson(doc.json()).strokes;
+      expect(restored, hasLength(2));
+      for (final fragment in restored) {
+        expect(fragment.anchor, card.id);
+        expect(fragment.page, 2);
+        for (final sample in fragment.points) {
+          final x = (card.contentPoint(sample.p).dx - paper.left) / paper.width;
+          expect(sample.pressure, closeTo(x, .000001));
+        }
+      }
+      doc.undo();
+      expect(doc.strokes.single.json(), source.json());
+    },
+  );
   test('page ink survives column expansion, new writing, movement, collapse and reopening', () {
     final d = StudyDocument();
     final root = pdf();

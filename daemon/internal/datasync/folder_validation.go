@@ -57,6 +57,21 @@ func validateFolderTransfer(entries map[string]folderEntry, local map[string]str
 		if name == "course.json" || name == "lecture.json" || name == "metadata.json" || strings.Contains(p, "/quizzes/") {
 			limit = folderRecordLimit
 		}
+		if strings.HasPrefix(p, "course-data/") && strings.Contains(p, "/tutor/") {
+			limit = folderRecordLimit
+			if v.Deleted == 0 && name != v.Hash+".json" {
+				return errors.New("伴学保存点与内容哈希不匹配")
+			}
+			if len(v.Alternatives) > 0 {
+				return errors.New("不可变伴学保存点出现内容冲突")
+			}
+		}
+		if strings.HasPrefix(p, "course-data/") && strings.HasSuffix(p, "/memory.md") {
+			limit = 16 * 1024
+		}
+		if strings.HasSuffix(p, "/memory.md.edited") {
+			limit = 32
+		}
 		if v.Deleted == 0 {
 			if err := add(v.Entry, v.Hash != local[p], limit); err != nil {
 				return err
@@ -266,7 +281,7 @@ func (s *Service) validateFolderTargets(ctx context.Context, entries map[string]
 		}
 		targets[abs] = course
 		root := s.Roots.Data
-		if strings.Contains(p, "/quizzes/") {
+		if !folderPrivateData(p) {
 			root = s.Roots.Library
 		}
 		if err := safeWorkingPath(abs, root); err != nil {
@@ -276,6 +291,23 @@ func (s *Service) validateFolderTargets(ctx context.Context, entries map[string]
 		exists := err == nil
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
+		}
+		if strings.Contains(p, "/tutor/") && v.Deleted == 0 {
+			var event struct {
+				Format int    `json:"format"`
+				Parent string `json:"parent"`
+				Fields struct {
+					Course string `json:"course"`
+				} `json:"fields"`
+			}
+			if err := ReadFolderIndex(source(p, v), &event); err != nil {
+				return err
+			}
+			if event.Format != 1 || (event.Parent == "" && event.Fields.Course != course) ||
+				(event.Fields.Course != "" && event.Fields.Course != course) ||
+				(event.Parent != "" && !tutorEventName.MatchString(event.Parent+".json")) {
+				return errors.New("伴学保存点无效或属于其他课程")
+			}
 		}
 		if strings.Contains(p, "/quizzes/") && exists {
 			var doc struct {

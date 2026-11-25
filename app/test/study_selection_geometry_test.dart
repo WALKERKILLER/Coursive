@@ -98,10 +98,20 @@ void main() {
         ),
       ]
       ..strokes = [stroke('ink', 1)];
-    expect(d.canRotateSelection({'video'}, {'ink'}), false);
+    expect(d.canRotateSelection({'video'}, {'ink'}), true);
+    d.rotateSelection({'video'}, {'ink'}, Offset.zero, radians: .51);
+    final saved = StudyDocument.fromJson(d.json());
+    expect(saved.cards.single.rotation, closeTo(.51, 1e-10));
+    expect(saved.json()['version'], 6);
+    expect(
+      saved.cards.single.containsWorld(saved.cards.single.rect.center),
+      true,
+    );
+    d.undo();
+    d.layers.first.locked = true;
     d.rotateSelection({'video'}, {'ink'}, Offset.zero);
-    expect(d.edit, 0);
-    expect(d.canUndo, false);
+    expect(d.cards.single.rotation, 0);
+    expect(d.cards.single.quarterTurns, 0);
     d.cards = [
       StudyCard(
         id: 'image',

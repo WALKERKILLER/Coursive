@@ -178,6 +178,7 @@ class CoursiveMarkdown extends StatelessWidget {
     this.animation = GptMarkdownAnimation.none,
     this.codeBuilder,
     this.evidenceBuilder,
+    this.linkDecorationStyle,
   });
 
   final String data;
@@ -196,6 +197,7 @@ class CoursiveMarkdown extends StatelessWidget {
   final bool isStreaming;
   final GptMarkdownAnimation animation;
   final CodeBlockBuilder? codeBuilder;
+  final TextDecorationStyle? linkDecorationStyle;
 
   /// Renders a `coursive-evidence:<id>` link (a host-issued citation) inline.
   final Widget Function(String id, String label)? evidenceBuilder;
@@ -231,7 +233,13 @@ class CoursiveMarkdown extends StatelessWidget {
           return WidgetSpan(alignment: PlaceholderAlignment.middle, child: evidenceBuilder!(d.url.substring(_evidenceScheme.length), d.label));
         }
         final ref = CoursiveRef.parse(d.url);
-        if (ref == null || onRef == null) return d.defaultSpan();
+        if (ref == null || onRef == null) {
+          return d.defaultSpan(
+            style: linkDecorationStyle == null
+                ? null
+                : d.style.copyWith(decorationStyle: linkDecorationStyle),
+          );
+        }
         return WidgetSpan(
           alignment: PlaceholderAlignment.middle,
           child: switch (ref) {

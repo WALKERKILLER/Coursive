@@ -2,14 +2,32 @@ package datasync
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var tutorEventName = regexp.MustCompile("^[0-9a-f]{64}\\.json$")
+var courseMemorySlug = regexp.MustCompile("^[a-z0-9][a-z0-9_-]{0,63}$")
+
+func courseHash(id string) string {
+	sum := sha256.Sum256([]byte(id))
+	return hex.EncodeToString(sum[:24])
+}
+
+func courseMemoryName(id string) string {
+	if courseMemorySlug.MatchString(id) && !strings.HasPrefix(id, "id-hash-") {
+		return id + ".md"
+	}
+	return "id-hash-" + courseHash(id) + ".md"
+}
 
 // Non-course-tree files are namespaced by course in the exchange directory.
 // Their working locations remain compatible with the existing app and agent.
@@ -24,10 +42,17 @@ func (s *Service) folderAbs(p string) (string, bool) {
 	if len(parts) == 3 && parts[0] == "course-data" && parts[2] == "metadata.json" {
 		return filepath.Join(s.Roots.Data, "agent", "course-sessions", parts[1]+".json"), true
 	}
+	if len(parts) == 3 && parts[0] == "course-data" && (parts[2] == "memory.md" || parts[2] == "memory.md.edited") {
+		return filepath.Join(s.Roots.Data, "agent", "bot", "memory", "courses", courseMemoryName(parts[1])+strings.TrimPrefix(parts[2], "memory.md")), true
+	}
 	if len(parts) != 4 || parts[0] != "course-data" {
 		return "", false
 	}
 	switch parts[2] {
+	case "tutor":
+		if tutorEventName.MatchString(parts[3]) {
+			return filepath.Join(s.Roots.Library, "workspaces", "course-tutor", "course-"+courseHash(parts[1]), parts[3]), true
+		}
 	case "quizzes":
 		if strings.HasSuffix(parts[3], ".json") {
 			return filepath.Join(s.Roots.Library, "quizzes", parts[3]), true
@@ -38,6 +63,14 @@ func (s *Service) folderAbs(p string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// CourseFolderTarget maps a validated course exchange path to its working file.
+func (s *Service) CourseFolderTarget(path string) (string, bool) {
+	if !strings.HasPrefix(path, "course-data/") {
+		return "", false
+	}
+	return s.folderAbs(path)
 }
 
 // Export only selected courses. A malformed previously tracked file stops the
@@ -64,6 +97,41 @@ func (s *Service) folderExtras(ctx context.Context, ids []string, tracked map[st
 		}
 		out = append(out, File{Path: p, Abs: abs, Size: fi.Size(), ModTime: fi.ModTime()})
 		return nil
+	}
+	for _, id := range ids {
+		prefix := "course-data/" + id + "/"
+		for _, name := range []string{"memory.md", "memory.md.edited"} {
+			p := prefix + name
+			abs, _ := s.folderAbs(p)
+			if err := safeWorkingPath(abs, s.Roots.Data); err != nil {
+				return nil, err
+			}
+			if _, err := os.Stat(abs); err == nil {
+				if err := add(p, abs); err != nil {
+					return nil, err
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+		}
+		dir := filepath.Join(s.Roots.Library, "workspaces", "course-tutor", "course-"+courseHash(id))
+		if err := safeWorkingPath(dir, s.Roots.Library); err != nil {
+			return nil, err
+		}
+		files, err := os.ReadDir(dir)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range files {
+			if tutorEventName.MatchString(file.Name()) {
+				if err := add(prefix+"tutor/"+file.Name(), filepath.Join(dir, file.Name())); err != nil {
+					return nil, err
+				}
+			}
+		}
 	}
 	quizzes, err := filepath.Glob(filepath.Join(s.Roots.Library, "quizzes", "*.json"))
 	if err != nil {
@@ -256,5 +324,5 @@ func validateFolderDocument(p, staged string, dirs map[string]string) error {
 }
 
 func folderPrivateData(p string) bool {
-	return strings.HasPrefix(p, "course-data/") && (strings.Contains(p, "/assistant/") || strings.HasSuffix(p, "/metadata.json"))
+	return strings.HasPrefix(p, "course-data/") && (strings.Contains(p, "/assistant/") || strings.HasSuffix(p, "/metadata.json") || strings.HasSuffix(p, "/memory.md") || strings.HasSuffix(p, "/memory.md.edited"))
 }

@@ -61,7 +61,7 @@ The app finds the daemon through `COURSIVE_DAEMON`, `COURSIVE_AGENT` and `COURSI
 | `agent/src/sessions.mjs` | Finds and opens conversations whatever library path they recorded, so ones synced from another device open here |
 | `agent/src/http.mjs` | Request body reading with the 1 MiB limit and 30 s deadline, HTTP error replies |
 | `agent/src/tools.mjs` | Tool groups, `find_tools`, note playbook, write guards |
-| `agent/src/models.mjs`, `catalog.mjs` | Providers, model preferences, models.dev metadata |
+| `agent/src/models.mjs`, `catalog.mjs` | Providers, model preferences, models.dev metadata ([selection and sign-in](assistant-models.md)) |
 | `agent/src/timeline.mjs`, `vision.mjs`, `daemon.mjs` | Outline generation, image bridge for text-only models, daemon client |
 | `agent/src/canvas-agent.mjs`, `transcript-review.mjs` | Bounded, user-triggered canvas model runs and non-destructive transcript suggestions |
 | `agent/src/usage.mjs` | Usage ledger (`usage.jsonl`): one line per model call, summaries and call paging |

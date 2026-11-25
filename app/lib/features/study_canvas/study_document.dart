@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -6,12 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show HSLColor;
 
 import '../../l10n/l10n.dart';
+import '../../core/ink_erase.dart';
 import 'study_content.dart';
 import 'study_brush.dart';
 import 'study_plugin_objects.dart';
 export 'study_content.dart';
 export 'study_brush.dart';
 export 'study_plugin_objects.dart';
+
+part 'study_stroke_index.dart';
 
 String studyId() =>
     '${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${_nextId++}';
@@ -53,9 +57,13 @@ class StudyCard {
     this.sourceLectureId = '',
     this.originalPath = '',
     this.pdfColumn = '',
+    this.pdfPaged = false,
     this.collapsed = false,
+    this.positionLocked = false,
     this.expandedH = 0,
     this.quarterTurns = 0,
+    this.rotation = 0,
+    this.contentScale = 1,
     List<StudyBlock>? blocks,
     List<StudyAnchor>? sources,
     Map<String, String>? responses,
@@ -67,14 +75,74 @@ class StudyCard {
   Rect rect;
   String documentId, generation, conversationId, sourceLectureId, originalPath;
   String pdfColumn;
+  bool pdfPaged;
   bool collapsed;
+  bool positionLocked;
   double expandedH;
   int page, pageCount, quarterTurns;
+  double rotation, contentScale;
   double pageAspect;
+  Offset mapWorld(Offset world, double angle) {
+    final v = world - rect.center;
+    return rect.center +
+        Offset(
+          v.dx * math.cos(angle) - v.dy * math.sin(angle),
+          v.dx * math.sin(angle) + v.dy * math.cos(angle),
+        );
+  }
+
+  List<Offset> get corners => [
+    for (final p in [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomRight,
+      rect.bottomLeft,
+    ])
+      mapWorld(p, rotation),
+  ];
+  Rect get visualBounds {
+    if (rotation == 0) return rect;
+    final points = corners;
+    return points
+        .skip(1)
+        .fold(
+          Rect.fromPoints(points.first, points.first),
+          (r, p) => r.expandToInclude(Rect.fromPoints(p, p)),
+        );
+  }
+
+  Rect get contentRect => quarterTurns.isEven
+      ? rect
+      : Rect.fromCenter(
+          center: rect.center,
+          width: rect.height,
+          height: rect.width,
+        );
+  Offset contentPoint(Offset p) =>
+      mapWorld(p, -rotation - quarterTurns * math.pi / 2);
+  bool containsWorld(Offset p) => rect.contains(mapWorld(p, -rotation));
   List<Map> textBoxes;
   List<StudyBlock> blocks;
   List<StudyAnchor> sources;
   Map<String, String> responses;
+  bool get lessonNote => type == 'text' && generation == 'lesson-note' && RegExp(r'^lesson-[0-9a-f]{32}$').hasMatch(documentId);
+  bool get markdownReader =>
+      type == 'text' &&
+      (lessonNote || pinnedAnswer ||
+          source.toLowerCase().endsWith('.md') ||
+          source.toLowerCase().endsWith('.markdown'));
+  bool get passageAside => type == 'conversation' && generation == 'markdown-aside';
+  bool get passageNote => type == 'text' && generation == 'markdown-annotation';
+  bool get passageLinked => passageAside || passageNote;
+  bool get onCanvas => type != 'conversation' || passageAside;
+  bool get duplicable => type != 'lecture' && type != 'conversation';
+  bool get readerCard => generated || markdownReader;
+  bool get readingSurface =>
+      readerCard || passageAside || type == 'text' || type == 'pdf' || type == 'pdfdoc';
+  bool get pinnedAnswer =>
+      (type == 'text' || type == 'practice') &&
+      generation.startsWith('canvas-turn:');
+  bool get handout => type == 'practice' && pinnedAnswer;
   bool get generated =>
       const {'note', 'explanation', 'knowledge', 'practice'}.contains(type);
   String get contentStamp => jsonEncode({
@@ -118,8 +186,12 @@ class StudyCard {
     sourceLectureId: '${m['source_lecture_id'] ?? ''}',
     originalPath: '${m['original_path'] ?? ''}',
     pdfColumn: '${m['pdf_column'] ?? ''}',
+    pdfPaged: m['pdf_paged'] == true,
     collapsed: m['collapsed'] == true,
+    positionLocked: m['position_locked'] == true,
     expandedH: _n(m['expanded_h']),
+    rotation: _n(m['rotation']),
+    contentScale: _n(m['content_scale'], 1),
     quarterTurns: (m['quarter_turns'] as num? ?? 0).toInt(),
     responses: Map<String, String>.from(m['responses'] as Map? ?? {}),
     blocks: [
@@ -130,7 +202,36 @@ class StudyCard {
         StudyAnchor.fromJson(a as Map),
     ],
   );
-  StudyCard copy() => StudyCard.fromJson(json());
+  StudyCard copy() => StudyCard(
+    id: id,
+    type: type,
+    layer: layer,
+    rect: rect,
+    title: title,
+    text: text,
+    path: path,
+    source: source,
+    documentId: documentId,
+    page: page,
+    pageCount: pageCount,
+    pageAspect: pageAspect,
+    textBoxes: textBoxes,
+    generation: generation,
+    conversationId: conversationId,
+    sourceLectureId: sourceLectureId,
+    originalPath: originalPath,
+    pdfColumn: pdfColumn,
+    pdfPaged: pdfPaged,
+    collapsed: collapsed,
+    positionLocked: positionLocked,
+    expandedH: expandedH,
+    quarterTurns: quarterTurns,
+    rotation: rotation,
+    contentScale: contentScale,
+    blocks: [for (final block in blocks) block.copy()],
+    sources: List.of(sources),
+    responses: Map.of(responses),
+  );
   Map<String, dynamic> json() => {
     'id': id,
     'type': type,
@@ -153,8 +254,12 @@ class StudyCard {
     'source_lecture_id': sourceLectureId,
     'original_path': originalPath,
     if (pdfColumn.isNotEmpty) 'pdf_column': pdfColumn,
+    if (pdfPaged) 'pdf_paged': true,
     'collapsed': collapsed,
+    if (positionLocked) 'position_locked': true,
     'expanded_h': expandedH,
+    if (rotation != 0) 'rotation': rotation,
+    if (contentScale != 1) 'content_scale': contentScale,
     if (quarterTurns != 0) 'quarter_turns': quarterTurns,
     'responses': responses,
     'blocks': blocks.map((b) => b.json()).toList(),
@@ -166,6 +271,10 @@ class InkPoint {
   const InkPoint(this.p, this.pressure);
   final Offset p;
   final double pressure;
+  static InkPoint lerp(InkPoint a, InkPoint b, double t) => InkPoint(
+    Offset.lerp(a.p, b.p, t)!,
+    a.pressure + (b.pressure - a.pressure) * t,
+  );
   List<double> json() => [p.dx, p.dy, pressure];
 }
 
@@ -200,7 +309,15 @@ class StudyStroke {
   void paint(Canvas canvas, {bool dark = false}) {
     Picture record(int c) {
       final recorder = PictureRecorder();
-      paintInk(Canvas(recorder), points, c, width, tool, brush: brush);
+      paintInk(
+        Canvas(recorder),
+        points,
+        c,
+        width,
+        tool,
+        brush: brush,
+        darkPaper: dark,
+      );
       return recorder.endRecording();
     }
 
@@ -263,16 +380,27 @@ void paintInk(
   int color,
   double width,
   String tool, {
+  bool darkPaper = false,
   StudyBrush? brush,
 }) {
   if (points.isEmpty) return;
   final paint = Paint()
     ..color = Color(color)
         .withValues(alpha: brush?.opacity ?? (tool == 'highlighter' ? .3 : 1))
+    ..blendMode = tool == 'highlighter' && !darkPaper
+        ? BlendMode.darken
+        : BlendMode.srcOver
     ..strokeCap = brush?.squareTip == true ? StrokeCap.square : StrokeCap.round
     ..strokeJoin = StrokeJoin.round;
   if (points.length == 1) {
-    canvas.drawCircle(points.first.p, width * .5, paint);
+    if (tool == 'highlighter' && brush?.squareTip == true) {
+      canvas.drawRect(
+        Rect.fromCenter(center: points.first.p, width: width, height: width),
+        paint,
+      );
+    } else {
+      canvas.drawCircle(points.first.p, width * .5, paint);
+    }
     return;
   }
   if (tool == 'highlighter') {
@@ -286,6 +414,34 @@ void paintInk(
         ..style = PaintingStyle.stroke
         ..strokeWidth = width,
     );
+    return;
+  }
+  // A constant-width opaque round pen has the same outline along a single
+  // round-joined path. Submit it once, including when replaying legacy ink.
+  final fixedWidth =
+      brush?.family == 'ballpoint' ||
+      brush?.pressure == 0 ||
+      points.every((p) => p.pressure == points.first.pressure);
+  if (fixedWidth &&
+      brush?.family != 'pencil' &&
+      brush?.squareTip != true &&
+      (brush?.opacity ?? 1) == 1 &&
+      points.length > 2) {
+    paint.strokeWidth =
+        width *
+        (brush?.radiusScale(points.first.pressure) ??
+            (.35 + .65 * points.first.pressure));
+    final path = Path()..moveTo(points.first.p.dx, points.first.p.dy);
+    var hasLength = false;
+    for (final p in points.skip(1)) {
+      hasLength |= p.p != points.first.p;
+      path.lineTo(p.p.dx, p.p.dy);
+    }
+    if (hasLength) {
+      canvas.drawPath(path, paint..style = PaintingStyle.stroke);
+    } else {
+      canvas.drawCircle(points.first.p, paint.strokeWidth / 2, paint);
+    }
     return;
   }
   for (var i = 1; i < points.length; i++) {
@@ -321,10 +477,11 @@ class _StudySnapshot {
     : appliedRuns = Set.of(d.appliedRuns),
       layers = d.layers.map((a) => a.copy()).toList(),
       cards = d.cards.map((a) => a.copy()).toList(),
-      connections = d.connections
-          .map((a) => StudyConnection.fromJson(a.json()))
-          .toList(),
-      strokes = List.of(d.strokes),
+      connections = [
+        for (final link in d.connections)
+          StudyConnection(link.id, link.from, link.to, link.label),
+      ],
+      strokes = d._ink.snapshot(),
       pluginObjects = List.of(d.pluginObjects);
   final Set<String> appliedRuns;
   final List<StudyLayer> layers;
@@ -335,6 +492,8 @@ class _StudySnapshot {
 }
 
 class StudyDocument extends ChangeNotifier {
+  static const currentFormatVersion = 8;
+  static const _positionLockFormat = 8;
   int revision = 0, edit = 0, formatVersion = 3;
 
   /// The plugin-object revision a plugin batch is checked against. It moves on
@@ -347,7 +506,13 @@ class StudyDocument extends ChangeNotifier {
   String activeLayer = 'main';
   List<StudyLayer> layers = [StudyLayer('main', l10n.studyDefaultLayer)];
   List<StudyCard> cards = [];
-  List<StudyStroke> strokes = [];
+  _IndexedStrokes _ink = _IndexedStrokes(const []);
+  List<StudyStroke> get strokes => _ink;
+  set strokes(List<StudyStroke> value) => _ink = _IndexedStrokes(value);
+  int get inkPointCount => _ink.pointCount;
+  Iterable<StudyStroke> inkIn(Rect area) =>
+      _ink.intersecting(area).map((i) => _ink[i]);
+  Iterable<StudyStroke> inkOnCard(String id) => _ink.anchored(id);
   List<StudyConnection> connections = [];
 
   /// Persistent plugin output (`pluginfabric.CanvasObject`), saved as
@@ -360,6 +525,7 @@ class StudyDocument extends ChangeNotifier {
   bool visible(String id) => layers.any((a) => a.id == id && a.visible);
   bool strokeVisible(StudyStroke s) {
     if (!visible(s.layer)) return false;
+    if (s.anchor.isEmpty) return true;
     final card = cards.where((c) => c.id == s.anchor).firstOrNull;
     return card == null ||
         (!card.collapsed && (s.page == 0 || card.page == s.page));
@@ -368,21 +534,19 @@ class StudyDocument extends ChangeNotifier {
   bool editable(String id) =>
       layers.any((a) => a.id == id && a.visible && !a.locked);
   bool canTransformCard(StudyCard card) =>
+      !card.positionLocked &&
       editable(card.layer) &&
-      !strokes.any(
-        (s) =>
-            s.anchor == card.id &&
-            layers.any((l) => l.id == s.layer && l.locked),
-      );
+      (!layers.any((l) => l.locked) ||
+          !inkOnCard(card.id).any(
+            (s) => layers.any((l) => l.id == s.layer && l.locked),
+          ));
   factory StudyDocument.fromJson(Map m) {
-    if (m['version'] != 1 &&
-        m['version'] != 2 &&
-        m['version'] != 3 &&
-        m['version'] != 4 &&
-        m['version'] != 5)
+    final version = m['version'];
+    if (version is! int || version < 1 || version > currentFormatVersion) {
       throw FormatException(l10n.studyUnknownVersion);
+    }
     final d = StudyDocument();
-    d.formatVersion = math.max(3, (m['version'] as num).toInt());
+    d.formatVersion = math.max(3, version);
     d.revision = (m['revision'] as num).toInt();
     d.baseHash = m['base_hash'] as String? ?? '';
     d.appliedRuns = (m['applied_runs'] as List? ?? []).cast<String>().toSet();
@@ -415,15 +579,30 @@ class StudyDocument extends ChangeNotifier {
       for (final a in m['plugin_objects'] as List? ?? [])
         StudyPluginObject.fromJson(a),
     ];
+    // A candidate wrote position locks before assigning them a format.
+    if (d.cards.any((card) => card.positionLocked)) {
+      d.formatVersion = math.max(d.formatVersion, _positionLockFormat);
+    }
     return d;
   }
   StudyDocument();
   Map<String, dynamic> json() => {
     'version': math.max(
       formatVersion,
-      pluginObjects.isNotEmpty
+      cards.any((c) => c.positionLocked)
+          ? _positionLockFormat
+          : cards.any((c) => c.contentScale != 1)
+          ? 7
+          : cards.any(
+              (c) =>
+                  c.rotation != 0 || (c.quarterTurns != 0 && c.type != 'image'),
+            )
+          ? 6
+          : pluginObjects.isNotEmpty
           ? 5
-          : (cards.any((c) => c.quarterTurns != 0) ? 4 : 3),
+          : cards.any((c) => c.quarterTurns != 0)
+          ? 4
+          : 3,
     ),
     'revision': revision,
     if (baseHash.isNotEmpty) 'base_hash': baseHash,
@@ -437,7 +616,8 @@ class StudyDocument extends ChangeNotifier {
       'plugin_objects': pluginObjects.map((a) => a.json()).toList(),
   };
   static List<StudyStroke> chunks(StudyStroke s) {
-    if (s.points.length <= 65) return [s];
+    // A translucent gesture must composite once, including after reopening.
+    if (s.tool == 'highlighter' || s.points.length <= 65) return [s];
     return [
       for (var i = 0; i < s.points.length - 1; i += 64)
         StudyStroke(
@@ -470,10 +650,11 @@ class StudyDocument extends ChangeNotifier {
     appliedRuns = Set.of(s.appliedRuns);
     layers = s.layers.map((a) => a.copy()).toList();
     cards = s.cards.map((a) => a.copy()).toList();
-    strokes = List.of(s.strokes);
-    connections = s.connections
-        .map((a) => StudyConnection.fromJson(a.json()))
-        .toList();
+    strokes = s.strokes;
+    connections = [
+      for (final link in s.connections)
+        StudyConnection(link.id, link.from, link.to, link.label),
+    ];
     if (s.pluginObjects.length != pluginObjects.length ||
         Iterable.generate(pluginObjects.length)
             .any((i) => !identical(s.pluginObjects[i], pluginObjects[i])))
@@ -750,31 +931,62 @@ class StudyDocument extends ChangeNotifier {
     changed();
   }
 
-  /// Quarter turns retain axis-aligned card hit areas; image content rotates
-  /// together with its frame, while ink uses the same world-space pivot.
+  /// Cards and attached ink share the selection pivot. A locked member blocks the group.
   bool canRotateSelection(Set<String> cardsIds, Set<String> inkIds) {
     final selected = cards.where((c) => cardsIds.contains(c.id)).toList();
     return (selected.isNotEmpty || inkIds.isNotEmpty) &&
         selected.every(
-          (c) => c.type == 'image' && !c.collapsed && canTransformCard(c),
+          (card) =>
+              canTransformCard(card) &&
+              (!layers.any((layer) => !layer.visible) ||
+                  inkOnCard(card.id).every((stroke) => editable(stroke.layer))),
         ) &&
-        strokes
-            .where((s) => inkIds.contains(s.id) || cardsIds.contains(s.anchor))
-            .every((s) => editable(s.layer));
+        (inkIds.isEmpty ||
+            !layers.any((layer) => layer.locked || !layer.visible) ||
+            strokes
+                .where((stroke) => inkIds.contains(stroke.id))
+                .every((stroke) => editable(stroke.layer)));
   }
 
-  void rotateSelection(Set<String> cardIds, Set<String> inkIds, Offset pivot) {
+  void rotateSelection(
+    Set<String> cardIds,
+    Set<String> inkIds,
+    Offset pivot, {
+    double? radians,
+    bool recordUndo = true,
+  }) {
     if (!canRotateSelection(cardIds, inkIds)) return;
-    Offset turn(Offset p) => pivot + Offset(-(p - pivot).dy, (p - pivot).dx);
-    checkpoint();
+    final quarter = radians == null;
+    final angle = radians ?? math.pi / 2;
+    if (!angle.isFinite || angle == 0) return;
+    final cs = math.cos(angle), sn = math.sin(angle);
+    Offset turn(Offset p) {
+      final v = p - pivot;
+      return pivot +
+          (quarter
+              ? Offset(-v.dy, v.dx)
+              : Offset(cs * v.dx - sn * v.dy, sn * v.dx + cs * v.dy));
+    }
+
+    if (recordUndo) checkpoint();
     for (final c in cards.where((c) => cardIds.contains(c.id))) {
       c.rect = Rect.fromCenter(
         center: turn(c.rect.center),
-        width: c.rect.height,
-        height: c.rect.width,
+        width: quarter ? c.rect.height : c.rect.width,
+        height: quarter ? c.rect.width : c.rect.height,
       );
-      c.quarterTurns = (c.quarterTurns + 1) % 4;
-      formatVersion = 4;
+      if (quarter) {
+        c.quarterTurns = (c.quarterTurns + 1) % 4;
+      } else {
+        c.rotation = math.atan2(
+          math.sin(c.rotation + angle),
+          math.cos(c.rotation + angle),
+        );
+      }
+      formatVersion = math.max(
+        formatVersion,
+        quarter && c.type == 'image' ? 4 : 6,
+      );
     }
     strokes = [
       for (final s in strokes)
@@ -799,35 +1011,31 @@ class StudyDocument extends ChangeNotifier {
 
   bool erase(Offset a, Offset b, double radius) {
     final hit = Rect.fromPoints(a, b).inflate(radius);
-    var touched = false;
-    final next = <StudyStroke>[];
-    for (final s in strokes) {
-      if (!editable(s.layer) || !strokeVisible(s) || !s.bounds.overlaps(hit)) {
-        next.add(s);
+    final replacements = <(int, List<StudyStroke>)>[];
+    for (final i in _ink.intersecting(hit)) {
+      final s = strokes[i];
+      if (!editable(s.layer) || !strokeVisible(s)) continue;
+      final eraser = InkEraser(
+        [a, b],
+        const Size(1, 1),
+        radius + s.width / 2,
+        'partial',
+      );
+      final fragments = eraser.clipSamples(
+        s.points,
+        position: (sample) => sample.p,
+        interpolate: InkPoint.lerp,
+        bounds: s.bounds,
+      );
+      if (fragments.length == 1 && identical(fragments.first, s.points)) {
         continue;
       }
-      final fragments = <List<InkPoint>>[];
-      var fragment = <InkPoint>[];
-      for (var i = 0; i < s.points.length; i++) {
-        final p = s.points[i];
-        final erased = _distanceToSegment(p.p, a, b) <= radius + s.width / 2;
-        final cross =
-            i > 0 &&
-            _segmentsNear(s.points[i - 1].p, p.p, a, b, radius + s.width / 2);
-        if (erased || cross) {
-          if (fragment.isNotEmpty) fragments.add(fragment);
-          fragment = [];
-          touched = true;
-        }
-        if (!erased) fragment.add(p);
-      }
-      if (fragment.isNotEmpty) fragments.add(fragment);
-      for (final f in fragments) {
-        next.add(
+      replacements.add((i, [
+        for (final fragment in fragments)
           StudyStroke(
             id: studyId(),
             layer: s.layer,
-            points: f,
+            points: fragment,
             color: s.color,
             width: s.width,
             tool: s.tool,
@@ -836,20 +1044,33 @@ class StudyDocument extends ChangeNotifier {
             gesture: s.gesture,
             brush: s.brush,
           ),
-        );
+      ]));
+    }
+    if (replacements.isEmpty) return false;
+    // Splits stay at their original paint position.
+    if (replacements.length == 1) {
+      final (i, pieces) = replacements.single;
+      _ink.replaceRange(i, i + 1, pieces);
+    } else {
+      // A sweep through stacked ink can replace many strokes at once.
+      final next = <StudyStroke>[];
+      var start = 0;
+      for (final (i, pieces) in replacements) {
+        next.addAll(strokes.getRange(start, i));
+        next.addAll(pieces);
+        start = i + 1;
       }
-    }
-    if (touched) {
+      next.addAll(strokes.getRange(start, strokes.length));
       strokes = next;
-      changed();
     }
-    return touched;
+    changed();
+    return true;
   }
 
   bool eraseWhole(Offset a, Offset b, double radius) {
     final hit = Rect.fromPoints(a, b).inflate(radius), gestures = <String>{};
-    for (final s in strokes) {
-      if (!editable(s.layer) || !strokeVisible(s) || !s.bounds.overlaps(hit))
+    for (final s in inkIn(hit)) {
+      if (!editable(s.layer) || !strokeVisible(s))
         continue;
       if (s.points.length == 1 &&
           _distanceToSegment(s.points.first.p, a, b) <= radius + s.width / 2)
@@ -892,10 +1113,9 @@ class StudyDocument extends ChangeNotifier {
     }
 
     final hit = <String>{};
-    for (final s in strokes) {
+    for (final s in inkIn(bounds)) {
       if (editable(s.layer) &&
           strokeVisible(s) &&
-          s.bounds.overlaps(bounds) &&
           s.points.any((p) => inside(p.p)))
         hit.add(s.gesture);
     }
@@ -913,8 +1133,7 @@ class StudyDocument extends ChangeNotifier {
       region = region.expandToInclude(Rect.fromPoints(p, p));
     final loop = Path()..addPolygon(polygon, true);
     final hit = <String>{};
-    for (final s in strokes.where(strokeVisible)) {
-      if (!s.bounds.overlaps(region)) continue;
+    for (final s in inkIn(region).where(strokeVisible)) {
       final intersection = Path.combine(
         PathOperation.intersect,
         loop,
@@ -922,8 +1141,9 @@ class StudyDocument extends ChangeNotifier {
       );
       if (!intersection.getBounds().isEmpty) hit.add(s.gesture);
     }
+    if (hit.isEmpty) return {};
     return strokes
-        .where((s) => strokeVisible(s) && hit.contains(s.gesture))
+        .where((s) => hit.contains(s.gesture) && strokeVisible(s))
         .map((s) => s.id)
         .toSet();
   }

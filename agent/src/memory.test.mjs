@@ -3,7 +3,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { checkPath, hashOf, MAX_FILE, MemoryStore, memoryTools, sensitiveKind } from "./memory.mjs";
+import { checkPath, hashOf, MAX_FILE, MemoryStore, courseMemoryPath, memoryTools, sensitiveKind } from "./memory.mjs";
 
 async function store() {
 	const dir = await mkdtemp(join(tmpdir(), "coursive-memory-"));
@@ -111,6 +111,28 @@ test("tools report changes and consolidation gets no delete", async () => {
 		assert.match(read.content[0].text, new RegExp(hashOf("hi")));
 		await by.memory_delete.execute("3", { path: "notes/a.md" });
 		assert.deepEqual(seen, ["created", "deleted"]);
+	} finally {
+		await done();
+	}
+});
+
+test("course conversations read global preferences and only their own course", async () => {
+	const { s, done } = await store();
+	try {
+		await s.write("preferences.md", "先画时间线");
+		await s.write("courses/os.md", "自己整理的考点");
+		await s.write(courseMemoryPath("本地课程 A"), "互斥复习");
+
+		const os = await s.prompt({ pinnedOnly: true, courseId: "os" });
+		assert.match(os, /先画时间线/);
+		assert.match(os, /自己整理的考点/);
+		assert.doesNotMatch(os, /互斥复习/);
+		const other = await s.prompt({ pinnedOnly: true, courseId: "本地课程 A" });
+		assert.match(other, /互斥复习/);
+		assert.doesNotMatch(other, /自己整理的考点/);
+		const chat = await s.prompt({ pinnedOnly: true, courseId: "z".repeat(129) });
+		assert.match(chat, /先画时间线/);
+		assert.doesNotMatch(chat, /自己整理的考点|互斥复习/);
 	} finally {
 		await done();
 	}

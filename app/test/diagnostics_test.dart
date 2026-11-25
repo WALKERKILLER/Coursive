@@ -108,7 +108,7 @@ void main() {
       api.backend = 'pdfkit';
       await tester.tap(find.text('重新检查'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('内置 PDFKit 组件缺失'), findsOneWidget);
+      expect(find.textContaining('内置 PDF 组件缺失'), findsOneWidget);
       expect(find.text('缺少组件：pdftotext'), findsNothing);
       api.backend = 'unsupported';
       await tester.tap(find.text('重新检查'));

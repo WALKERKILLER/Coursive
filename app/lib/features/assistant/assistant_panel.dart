@@ -13,6 +13,7 @@ import '../../core/plugins.dart';
 import '../../shell.dart';
 import '../../theme/prefs.dart';
 import '../../theme/tokens.dart';
+import '../../widgets/reading_selection_menu.dart';
 import '../../widgets/horizontal_scroller.dart';
 import '../../widgets/loading.dart';
 import '../../widgets/states.dart';
@@ -464,6 +465,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(MediaQuery.textScalerOf(context).scale(1) * prefs.chatTextScale)),
       child: SelectionArea(
+        contextMenuBuilder: readingSelectionMenu,
         child: ListView.builder(
           controller: _scroll,
           reverse: true,
@@ -892,24 +894,14 @@ class _ModelChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final providers = jsonProviders(a.models);
     final sel = a.selected;
     return MenuAnchor(
       menuChildren: [
-        for (final p in providers.where((p) => p['configured'] == true))
-          SubmenuButton(
-            leadingIcon: ProviderLogo(providerId: '${p['id']}', name: '${p['name']}', size: 22),
-            menuChildren: [
-              for (final m in (p['models'] as List).cast<Map>().where((m) => m['available'] == true).take(12))
-                MenuItemButton(
-                  leadingIcon: Icon(sel != null && sel['provider'] == p['id'] && sel['model'] == m['id'] ? Icons.check_rounded : null, size: 18),
-                  trailingIcon: m['reasoning'] == true ? const Icon(Icons.psychology_outlined, size: 16) : null,
-                  onPressed: () => a.setPrefs({'provider': p['id'], 'model': m['id']}),
-                  child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 260), child: Text('${m['name']}', overflow: TextOverflow.ellipsis)),
-                ),
-            ],
-            child: Text('${p['name']}'),
-          ),
+        MenuItemButton(
+          leadingIcon: const Icon(Icons.swap_horiz_rounded, size: 18),
+          onPressed: () => showModelPicker(context),
+          child: Text(l10n.modelsSearchAll),
+        ),
         if (sel?['reasoning'] == true) ...[
           const Divider(),
           if (context.isCompact)

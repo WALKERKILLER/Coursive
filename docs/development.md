@@ -50,3 +50,9 @@ Seeded governance files (AGENTS.md, CLAUDE.md, docs/, scripts/, .agents/skills/,
 ## Editing docs
 
 Follow [docs/AGENTS.md](AGENTS.md): one home per fact, tutorials vs references, hygiene checklist.
+
+### Windows PDF helper
+
+Windows installers include the PDF helper under `pdf-notes/` next to the app and daemon. Run `scripts/desktop/pack-windows-pdf.ps1` with Python 3.13 when packaging outside CI. The editor uses the same pypdf annotation format as macOS. [pypdfium2](https://pypdfium2.readthedocs.io/en/stable/python_api.html) renders pages and maps text coordinates to the displayed bitmap. The Windows build carries the dependencies with the helper.
+
+For strict integration coverage, compile the library and server test executables into a directory next to `pdf-notes/` and set `COURSIVE_REQUIRE_PDF_TESTS=1`.

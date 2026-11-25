@@ -1,14 +1,15 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../core/ink_erase.dart';
 import 'study_document.dart';
 
-Rect _paper(StudyCard card, double aspect) {
-  final height = card.collapsed ? card.expandedH : card.rect.height;
+Rect studyOriginalPaper(StudyCard card, double aspect) {
+  final height = card.collapsed ? card.expandedH : card.contentRect.height;
   final area = Rect.fromLTWH(
-    card.rect.left,
-    card.rect.top + 36,
-    card.rect.width,
+    card.contentRect.left,
+    card.contentRect.top + 36,
+    card.contentRect.width,
     math.max(1, height - (card.type == 'pdfdoc' ? 72 : 36)),
   );
   final width = math.min(area.width, area.height * aspect);
@@ -51,6 +52,78 @@ StudyStroke _reanchor(
 }
 
 extension StudyPDFColumn on StudyDocument {
+  void erasePDFInk(
+    StudyCard card,
+    int page,
+    double aspect,
+    List<Offset> trail,
+    Size size,
+    double radius,
+    String mode,
+  ) {
+    final paper = studyOriginalPaper(card, aspect);
+    final eraser = InkEraser(trail, size, radius, mode);
+    final next = <StudyStroke>[];
+    var touched = false;
+    for (final s in strokes) {
+      if (s.anchor != card.id ||
+          !editable(s.layer) ||
+          !(s.page == page || (s.page == 0 && card.page == page))) {
+        next.add(s);
+        continue;
+      }
+      final box = s.bounds;
+      final bounds =
+          [box.topLeft, box.topRight, box.bottomLeft, box.bottomRight]
+              .map(card.contentPoint)
+              .map((p) => Rect.fromPoints(p, p))
+              .reduce((a, b) => a.expandToInclude(b));
+      final normalizedBounds = Rect.fromLTRB(
+        (bounds.left - paper.left) / paper.width,
+        (bounds.top - paper.top) / paper.height,
+        (bounds.right - paper.left) / paper.width,
+        (bounds.bottom - paper.top) / paper.height,
+      );
+      final fragments = eraser.clipSamples(
+        s.points,
+        position: (sample) {
+          final p = card.contentPoint(sample.p);
+          return Offset(
+            (p.dx - paper.left) / paper.width,
+            (p.dy - paper.top) / paper.height,
+          );
+        },
+        interpolate: InkPoint.lerp,
+        bounds: normalizedBounds,
+      );
+      if (fragments.length == 1 && identical(fragments.first, s.points)) {
+        next.add(s);
+        continue;
+      }
+      touched = true;
+      for (final f in fragments)
+        next.add(
+          StudyStroke(
+            id: studyId(),
+            layer: s.layer,
+            anchor: s.anchor,
+            page: s.page,
+            color: s.color,
+            width: s.width,
+            gesture: s.gesture,
+            brush: s.brush,
+            tool: s.tool,
+            points: f,
+          ),
+        );
+    }
+    if (touched) {
+      checkpoint();
+      strokes = next;
+      changed();
+    }
+  }
+
   List<StudyCard> pdfPages(String root) =>
       cards.where((c) => c.pdfColumn == root && c.type == 'pdf').toList()
         ..sort((a, b) => a.page.compareTo(b.page));
@@ -122,7 +195,8 @@ extension StudyPDFColumn on StudyDocument {
       );
       nextTop = after.rect.bottom + 24;
     }
-    final from = _paper(root, aspect), to = _paper(card, aspect);
+    final from = studyOriginalPaper(root, aspect),
+        to = studyOriginalPaper(card, aspect);
     strokes = [
       for (final s in strokes)
         if (s.anchor == root.id &&
@@ -153,8 +227,8 @@ extension StudyPDFColumn on StudyDocument {
             s,
             root.id,
             page.page,
-            _paper(page, page.pageAspect),
-            _paper(root, page.pageAspect),
+            studyOriginalPaper(page, page.pageAspect),
+            studyOriginalPaper(root, page.pageAspect),
           )
         else
           s,

@@ -48,9 +48,7 @@ extension _StudyShapeInteraction on StudyCanvasState {
       final pressure =
           _points.fold<double>(0, (a, b) => a + b.pressure) / _points.length;
       _shapePreview = [for (final p in shape.points) InkPoint(p, pressure)];
-      _prefix.clear();
-      _prefixEnd = 0;
-      _scene.value++;
+      _clearPrefix();
       _live.value++;
     });
   }
@@ -65,13 +63,13 @@ extension _StudyShapeInteraction on StudyCanvasState {
     _live.value++;
   }
 
-  void _commitShape() {
+  void _commitShape(int firstNew) {
     if (_shapePreview == null) return;
     final d = document!, original = document!.strokes.last;
     // The first checkpoint restores the actual freehand input; a second undo
     // removes that physical stroke. No shape-only fields enter the sync format.
     d.checkpoint();
-    d.strokes.removeWhere((s) => s.gesture == original.gesture);
+    d.strokes.removeRange(firstNew, d.strokes.length);
     d.strokes.addAll(
       StudyDocument.chunks(
         StudyStroke(

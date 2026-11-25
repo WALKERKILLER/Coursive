@@ -287,11 +287,10 @@ class Api {
     Stream<List<int>> data,
     int length,
   ) async {
-    final req = http.StreamedRequest('POST', uri(path, query))
+    final req = _UploadRequest(uri(path, query), data)
       ..headers['Authorization'] = 'Bearer $token'
       ..headers['Content-Type'] = 'application/octet-stream'
       ..contentLength = length;
-    unawaited(data.pipe(req.sink));
     final res = await http.Response.fromStream(
       await _client.send(req).timeout(const Duration(minutes: 10)),
     );
@@ -419,3 +418,17 @@ class Api {
 
 /// Go encodes empty slices as null; treat that as an empty list.
 List jsonList(dynamic v) => v is List ? v : const [];
+
+/// Let the HTTP client own the source subscription, including cancellation and
+/// errors. Picker byte streams can have a narrower element type at runtime.
+class _UploadRequest extends http.BaseRequest {
+  _UploadRequest(Uri uri, this.data) : super('POST', uri);
+
+  final Stream<List<int>> data;
+
+  @override
+  http.ByteStream finalize() {
+    super.finalize();
+    return http.ByteStream(data.cast<List<int>>());
+  }
+}

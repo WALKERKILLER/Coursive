@@ -1,5 +1,7 @@
 part of 'study_canvas.dart';
 
+enum _QuickStudyAction { handout, outline }
+
 extension _StudyInteraction on StudyCanvasState {
   void _updateEraserCursor(Offset local) {
     _eraserCursor = local;
@@ -23,10 +25,14 @@ extension _StudyInteraction on StudyCanvasState {
 
   void _startErase(Offset local, Offset p) {
     _erasing = true;
-    _selectionReady = false;
+    if (_selectionReady || _selection.isNotEmpty) {
+      _update(() {
+        _selectionReady = false;
+        _selection.clear();
+      });
+    }
     _regionSelection = null;
     _detail.clear();
-    _selection.clear();
     _last = p;
     _eraserLasso.clear();
     if (_eraserMode == 'lasso') {
@@ -97,8 +103,7 @@ extension _StudyInteraction on StudyCanvasState {
         d.changed();
       }
       _points = [];
-      _prefix.clear();
-      _prefixEnd = 0;
+      _clearPrefix();
       _drawingPointer = null;
       _temporaryEraser = true;
       _startErase(local, _world(local));
@@ -114,6 +119,7 @@ extension _StudyInteraction on StudyCanvasState {
     final polygon = _lassoRectangle
         ? [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft]
         : List<Offset>.of(_lasso);
+    if (polygon.length < 3) return;
     _setRegionSelection(r, polygon);
     _quickAsk = false;
     _quickError = null;
@@ -132,16 +138,20 @@ extension _StudyInteraction on StudyCanvasState {
     final loop = Path()..addPolygon(polygon, true);
     for (final c in d.cards.where(
       (c) =>
-          c.type != 'conversation' &&
+          c.onCanvas &&
           d.visible(c.layer) &&
           _selectionKinds.contains(studyCardSelectionKind(c)),
     )) {
-      if (!r.contains(c.rect.topLeft) || !r.contains(c.rect.bottomRight))
+      final frame = c.visualBounds;
+      if (frame.left < r.left ||
+          frame.top < r.top ||
+          frame.right > r.right ||
+          frame.bottom > r.bottom)
         continue;
       // A free lasso's bounding rectangle is not its enclosed area.
       final outside = Path.combine(
         PathOperation.difference,
-        Path()..addRect(c.rect),
+        Path()..addPolygon(c.corners, true),
         loop,
       );
       if (outside.getBounds().isEmpty) _selection.add(c.id);
@@ -180,10 +190,12 @@ extension _StudyInteraction on StudyCanvasState {
   Rect? _boundsOfSelection() {
     final d = document!;
     final bounds = [
-      for (final s in d.strokes)
-        if (_detail.strokeIds.contains(s.id)) s.bounds,
-      for (final c in d.cards)
-        if (_selection.contains(c.id)) c.rect,
+      if (_detail.strokeIds.isNotEmpty)
+        for (final s in d.strokes)
+          if (_detail.strokeIds.contains(s.id)) s.bounds,
+      if (_selection.isNotEmpty)
+        for (final c in d.cards)
+          if (_selection.contains(c.id)) c.visualBounds,
     ];
     return bounds.isEmpty
         ? null
@@ -214,37 +226,31 @@ extension _StudyInteraction on StudyCanvasState {
     _selectionPolygon = [];
     _regionSelection = _selectionBounds;
     _detail.region = _selectionBounds;
-    _detail.objectId = '';
+    _detail.objectId = null;
     _cursor.value++;
     _update(() {});
   }
 
-  void _copySelection() {
+  void _duplicateSelection() {
     final d = document!;
-    _copiedCards = d.cards
-        .where((c) => _selection.contains(c.id) && c.type != 'lecture')
-        .map((c) => c.copy())
+    final bounds = _selectionBounds ?? _boundsOfSelection();
+    if (bounds == null) return;
+    final cards = d.cards
+        .where((c) => _selection.contains(c.id) && c.duplicable)
         .toList();
-    final parents = _copiedCards.map((c) => c.id).toSet();
-    _copiedInk = d.strokes
+    final cardIds = {for (final c in cards) c.id: studyId()};
+    final ink = d.strokes
         .where(
-          (s) => _detail.strokeIds.contains(s.id) || parents.contains(s.anchor),
+          (s) =>
+              _detail.strokeIds.contains(s.id) || cardIds.containsKey(s.anchor),
         )
         .toList();
-    _copiedBounds = _selectionBounds;
-    _update(() {});
-  }
-
-  void _pasteSelection() {
-    final d = document!;
-    if (_copiedBounds == null || (_copiedInk.isEmpty && _copiedCards.isEmpty))
-      return;
-    if (d.cards.length + _copiedCards.length > 2000 ||
-        d.strokes.length + _copiedInk.length > 29000 ||
-        d.strokes.fold<int>(0, (n, s) => n + s.points.length) +
-                _copiedInk.fold<int>(0, (n, s) => n + s.points.length) >
+    if (cards.isEmpty && ink.isEmpty) return;
+    if (d.cards.length + cards.length > 2000 ||
+        d.strokes.length + ink.length > 29000 ||
+        d.inkPointCount + ink.fold<int>(0, (n, s) => n + s.points.length) >
             490000) {
-      _toast('画布内容已接近容量上限，请先整理后再粘贴');
+      _toast(l10n.studyCardLimit);
       return;
     }
     if (!d.editable(d.activeLayer)) {
@@ -252,26 +258,25 @@ extension _StudyInteraction on StudyCanvasState {
       return;
     }
     d.checkpoint();
-    final oldBounds = _copiedBounds!;
-    final delta = _visibleWorld.contains(oldBounds.center)
+    final direct = _tool != StudyTool.region;
+    final delta = _visibleWorld.contains(bounds.center)
         ? Offset(28 / d.zoom, 28 / d.zoom)
-        : _visibleWorld.center - oldBounds.center;
-    final cardIds = {for (final c in _copiedCards) c.id: studyId()};
-    final gestureIds = {for (final s in _copiedInk) s.gesture: studyId()};
+        : _visibleWorld.center - bounds.center;
+    final gestureIds = {for (final s in ink) s.gesture: studyId()};
     _detail.clear();
     _selection.clear();
-    for (final c in _copiedCards) {
+    for (final card in cards) {
       final copy = StudyCard.fromJson({
-        ...c.json(),
-        'id': cardIds[c.id],
-        'pdf_column': cardIds[c.pdfColumn] ?? '',
+        ...card.json(),
+        'id': cardIds[card.id],
+        'pdf_column': cardIds[card.pdfColumn] ?? '',
         'layer': d.activeLayer,
-      });
-      copy.rect = copy.rect.shift(delta);
+        'position_locked': false,
+      })..rect = card.rect.shift(delta);
       d.cards.add(copy);
       _selection.add(copy.id);
     }
-    for (final s in _copiedInk) {
+    for (final s in ink) {
       final copy = StudyStroke(
         id: studyId(),
         layer: d.activeLayer,
@@ -285,14 +290,16 @@ extension _StudyInteraction on StudyCanvasState {
         brush: s.brush,
       );
       d.strokes.add(copy);
-      _detail.strokeIds.add(copy.id);
+      if (!direct || !_selection.contains(copy.anchor)) {
+        _detail.strokeIds.add(copy.id);
+      }
     }
-    _tool = StudyTool.region;
+    _tool = direct ? StudyTool.select : StudyTool.region;
     _selectionBounds = _boundsOfSelection();
     _selectionPolygon = [];
-    _regionSelection = _selectionBounds;
-    _detail.region = _selectionBounds;
-    _selectionReady = true;
+    _regionSelection = direct ? null : _selectionBounds;
+    _detail.region = _regionSelection;
+    _selectionReady = !direct;
     d.changed();
   }
 
@@ -422,10 +429,9 @@ extension _StudyInteraction on StudyCanvasState {
   Future<void> _setQuickVision(bool on) async {
     _update(() {
       _quickImages = on;
-      _quickSnapshot = null;
       _quickError = null;
     });
-    if (on) await _previewQuickVision();
+    if (on && _quickSnapshot == null) await _previewQuickVision();
   }
 
   /// Takes the screenshot 「看图」 will send, so the learner sees it first.
@@ -454,13 +460,7 @@ extension _StudyInteraction on StudyCanvasState {
           _inputSurface.currentContext?.findRenderObject() as RenderBox?;
       if (surface == null || !surface.hasSize) return;
       final obstacles = <Rect>[];
-      for (final key in [
-        _dockKey,
-        _aiDockKey,
-        _zoomKey,
-        _shelfKey,
-        ..._stageKeys,
-      ]) {
+      for (final key in [_dockKey, _zoomKey, _shelfKey, ..._stageKeys]) {
         final box = key.currentContext?.findRenderObject() as RenderBox?;
         if (box != null && box.hasSize && box.attached) {
           obstacles.add(
@@ -478,19 +478,26 @@ extension _StudyInteraction on StudyCanvasState {
     final r = _selectionBounds;
     if (r == null) return null;
     final d = document!;
-    return studySelectionMenuRect(
+    final viewport = Rect.fromLTRB(
+      12,
+      _topBarsBottom + 12,
+      math.max(12, _viewport.width - 12),
+      math.max(_topBarsBottom + 12, _viewport.height - 12),
+    );
+    final size = Size(
+      math.min(_barWidth(_selectionButtons().length), viewport.width),
+      44,
+    );
+    final position = studyFloatingPosition(
       Rect.fromPoints(
         r.topLeft * d.zoom + d.camera,
         r.bottomRight * d.zoom + d.camera,
       ),
-      Rect.fromLTRB(
-        12,
-        _topBarsBottom + 8,
-        math.max(12, _viewport.width - 12),
-        math.max(_topBarsBottom + 8, _viewport.height - 12),
-      ),
+      viewport,
       _selectionObstacles,
+      size,
     );
+    return position == null ? null : position & size;
   }
 
   Widget _selectionToolbar({bool docked = false}) {
@@ -527,112 +534,124 @@ extension _StudyInteraction on StudyCanvasState {
     );
   }
 
-  /// Three verbs for a selection, with editing in a menu.
-  Widget _selectionBar(BuildContext context) {
-    final d = document!, r = _selectionBounds!;
+  double _barWidth(int count) => count * 44.0 + (widget.standalone ? 0 : 14);
+
+  List<Widget> _selectionButtons() {
     final ink = _detail.strokeIds.isNotEmpty;
-    // On a phone the secondary verbs keep their tooltips and drop their
-    // labels; anything still too wide scrolls inside the bar.
-    final compact = _viewport.width < 520;
-    return GlassSurface(
-      key: const ValueKey('study-selection-bar'),
-      radius: Corners.full,
-      depth: GlassDepth.float,
-      padding: const EdgeInsets.all(Space.xxs),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.max(0, _viewport.width - 24 - 2 * Space.xxs),
+    final duplicate = _canDuplicateSelection;
+    return [
+      if (!widget.standalone)
+        _BarAction(
+          label: l10n.studyAskAI,
+          icon: Icons.auto_awesome_outlined,
+          tooltip: l10n.studyAskHint,
+          onPressed: () => unawaited(_ask()),
         ),
-        child: IconButtonTheme(
-          // 44 dp keeps the touch target while five icons fit a phone.
-          data: compact
-              ? IconButtonThemeData(
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(44, 44),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                )
-              : IconButtonTheme.of(context),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _BarAction(
-                  label: l10n.studyAskAI,
-                  icon: Icons.auto_awesome_outlined,
-                  tooltip: l10n.studyAskHint,
-                  primary: true,
-                  onPressed: () => unawaited(_ask()),
+      if (!widget.standalone && !ink)
+        _BarAction(
+          icon: Icons.crop_rounded,
+          tooltip: l10n.studyExcerptHint,
+          onPressed: _selectionBusy
+              ? null
+              : () => unawaited(_captureRegionCard()),
+        ),
+      if (!widget.standalone && ((!duplicate && !ink) || _linkStart != null))
+        _BarAction(
+          icon: _linkStart == null
+              ? Icons.link_rounded
+              : Icons.add_link_rounded,
+          tooltip: _linkStart == null
+              ? l10n.studyRelateHint
+              : l10n.studyRelateHereHint,
+          onPressed: _selectionBusy
+              ? null
+              : () => _selectionJob(_linkSelection),
+        ),
+      if (ink)
+        PopupMenuButton<int>(
+          tooltip: l10n.studySelectionColor,
+          icon: const Icon(Icons.palette_outlined, size: 16),
+          itemBuilder: (_) => [
+            for (final c in _penPalette.take(20))
+              PopupMenuItem(
+                value: c,
+                child: Row(
+                  children: [
+                    Icon(Icons.circle, color: Color(c)),
+                    const SizedBox(width: 12),
+                    Text('#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}'),
+                  ],
                 ),
-                _BarAction(
-                  label: l10n.studyExcerpt,
-                  icon: Icons.crop_rounded,
-                  tooltip: l10n.studyExcerptHint,
-                  compact: compact,
-                  onPressed: _selectionBusy
-                      ? null
-                      : () => unawaited(_captureRegionCard()),
-                ),
-                _BarAction(
-                  label: _linkStart == null
-                      ? l10n.studyRelate
-                      : l10n.studyRelateHere,
-                  icon: _linkStart == null
-                      ? Icons.link_rounded
-                      : Icons.add_link_rounded,
-                  tooltip: _linkStart == null
-                      ? l10n.studyRelateHint
-                      : l10n.studyRelateHereHint,
-                  compact: compact,
-                  onPressed: _selectionBusy
-                      ? null
-                      : () => _selectionJob(_linkSelection),
-                ),
-                // Drag into the conversation, or tap, to attach the region's pixels.
-                _snapshotDragHandle(),
-                if (ink) ...[
-                  PopupMenuButton<int>(
-                    tooltip: '选区改色',
-                    icon: const Icon(Icons.palette_outlined, size: 20),
-                    itemBuilder: (_) => [
-                      for (final c in _penPalette.take(20))
-                        PopupMenuItem(
-                          value: c,
-                          child: Row(
-                            children: [
-                              Icon(Icons.circle, color: Color(c)),
-                              const SizedBox(width: 12),
-                              Text(
-                                '#${(c & 0xffffff).toRadixString(16).padLeft(6, '0')}',
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                    onSelected: (c) {
-                      d.checkpoint();
-                      _transformSelection(r, r, color: c);
-                    },
-                  ),
-                  PopupMenuButton<double>(
-                    tooltip: '选区粗细',
-                    icon: const Icon(Icons.line_weight, size: 20),
-                    itemBuilder: (_) => [
-                      for (final w in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
-                        PopupMenuItem(value: w, child: Text('${w.toInt()}')),
-                    ],
-                    onSelected: (w) {
-                      d.checkpoint();
-                      _transformSelection(r, r, width: w);
-                    },
-                  ),
-                ],
-                _selectionActions(),
-              ],
+              ),
+          ],
+          onSelected: (c) {
+            final r = _selectionBounds;
+            if (r == null) return;
+            document!.checkpoint();
+            _transformSelection(r, r, color: c);
+          },
+        ),
+      if (ink && !widget.standalone)
+        _BarAction(
+          icon: Icons.text_fields,
+          tooltip: l10n.studyRecognizeInk,
+          onPressed: _selectionBusy
+              ? null
+              : () => _selectionJob(_recognizeSelectedInk),
+        ),
+      if (duplicate)
+        _BarAction(
+          icon: Icons.copy_all_outlined,
+          tooltip: l10n.studyDuplicateCard,
+          onPressed: _selectionBusy ? null : _duplicateSelection,
+        ),
+      if (!widget.standalone) _snapshotDragHandle(),
+      _selectionActions(),
+    ];
+  }
+
+  Widget _selectionBar(BuildContext context) {
+    final chrome = StudyChrome.of(context);
+    final actions = _selectionButtons();
+    return SizedBox(
+      key: const ValueKey('study-selection-bar'),
+      height: 44,
+      width: math.min(
+        _barWidth(actions.length),
+        math.max(0, _viewport.width - 24),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            height: 32,
+            width: double.infinity,
+            child: Material(
+              elevation: _dark ? 0 : 1,
+              shadowColor: chrome.shadow,
+              surfaceTintColor: Colors.transparent,
+              color: chrome.surface,
+              shape: StadiumBorder(side: BorderSide(color: chrome.line)),
             ),
           ),
-        ),
+          Material(
+            type: MaterialType.transparency,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (i, action) in actions.indexed)
+                    SizedBox(
+                      width: i == 0 && !widget.standalone ? 58 : 44,
+                      height: 44,
+                      child: action,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -828,19 +847,28 @@ extension _StudyInteraction on StudyCanvasState {
                     style: tt.labelSmall?.copyWith(color: cs.outline),
                   ),
                 ),
-                // The chips above are the material it reads; 「看图」 is the consent.
-                TextButton.icon(
-                  key: const ValueKey('study-quick-outline'),
-                  onPressed: _quickSending
-                      ? null
-                      : () => _sendQuickQuestion(outline: true),
-                  icon: const Icon(
-                    Icons.format_list_bulleted_rounded,
-                    size: 16,
-                  ),
-                  label: Text(l10n.outlineQuick),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
+                PopupMenuButton<_QuickStudyAction>(
+                  key: const ValueKey('study-quick-create'),
+                  enabled: !_quickSending,
+                  onSelected: (action) => _sendQuickQuestion(action: action),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: _QuickStudyAction.handout,
+                      child: Text(l10n.studyQuickHandout),
+                    ),
+                    PopupMenuItem(
+                      value: _QuickStudyAction.outline,
+                      child: Text(l10n.outlineQuick),
+                    ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.sm),
+                    child: Row(
+                      children: [
+                        Text(l10n.studyQuickCreate, style: tt.labelLarge),
+                        const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -959,47 +987,46 @@ class _BoundChip extends StatelessWidget {
 /// A selection-bar verb; the primary one is filled.
 class _BarAction extends StatelessWidget {
   const _BarAction({
-    required this.label,
+    this.label,
+    this.color,
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.primary = false,
-    this.compact = false,
   });
-  final String label, tooltip;
+  final String? label;
+  final Color? color;
+  final String tooltip;
   final IconData icon;
   final VoidCallback? onPressed;
-  final bool primary, compact;
 
   @override
-  Widget build(BuildContext context) {
-    const size = Size(44, 44);
-    final shape = const StadiumBorder();
-    return Tooltip(
-      message: tooltip,
-      child: primary
-          ? FilledButton.tonalIcon(
-              onPressed: onPressed,
-              style: FilledButton.styleFrom(minimumSize: size, shape: shape),
-              icon: Icon(icon, size: 18),
-              label: Text(label),
-            )
-          : compact
-          ? IconButton(onPressed: onPressed, icon: Icon(icon, size: 18))
-          : TextButton.icon(
-              onPressed: onPressed,
-              style: TextButton.styleFrom(minimumSize: size, shape: shape),
-              icon: Icon(icon, size: 18),
-              label: Text(label),
-            ),
-    );
-  }
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onPressed,
+      customBorder: const StadiumBorder(),
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              if (label != null) ...[
+                const SizedBox(width: 3),
+                Text(label!, style: Theme.of(context).textTheme.labelSmall),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
-/// Places a floating control 8 dp off the anchor's top-right corner, below it
-/// when the top is covered, and 12 dp inside the window.
-/// After tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
-/// and the M3 floating toolbar guidance (https://m3.material.io/components/toolbars/guidelines).
+/// Keeps selection controls next to the visible selection and clear of other docks.
+/// Based on tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
+/// and Material 3's floating toolbar (https://m3.material.io/components/toolbars/guidelines).
 class _FloatingLayout extends SingleChildLayoutDelegate {
   _FloatingLayout(this.anchor, this.topInset, this.obstacles);
   final Rect anchor;
@@ -1033,7 +1060,7 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
       gap: gap,
     );
     if (free != null) return free;
-    final x = (anchor.right - child.width).clamp(
+    final x = (anchor.center.dx - child.width / 2).clamp(
       edge,
       math.max(edge, size.width - child.width - edge),
     );
@@ -1108,8 +1135,9 @@ class _InteractionFeedback extends CustomPainter {
 
     final loop = s._erasing ? s._eraserLasso : s._lasso;
     if (loop.length > 1 && !(s._lassoRectangle && !s._erasing)) {
-      final path = Path()..addPolygon(loop.map(screen).toList(), true);
-      canvas.drawPath(path, Paint()..color = state.chrome.accentWash);
+      final path = Path()..addPolygon(loop.map(screen).toList(), s._erasing);
+      if (s._erasing)
+        canvas.drawPath(path, Paint()..color = state.chrome.accentWash);
       dash(path);
     } else {
       final r =

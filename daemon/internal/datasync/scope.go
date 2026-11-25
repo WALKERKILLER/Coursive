@@ -248,7 +248,14 @@ func (r Roots) retainIdentity() (func() error, error) {
 	roots := []string{r.Library, r.Data}
 	infos := make([]os.FileInfo, len(roots))
 	for i, root := range roots {
-		info, err := os.Stat(root)
+		// Capture the identity through an open handle so Windows cannot
+		// resolve the original identity lazily after the path is replaced.
+		dir, err := os.Open(root)
+		if err != nil {
+			return nil, err
+		}
+		info, err := dir.Stat()
+		dir.Close()
 		if err != nil {
 			return nil, err
 		}

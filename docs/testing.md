@@ -18,6 +18,7 @@ Name the behavior or invariant at risk before writing a test. Choose the lowest 
 - **Go (daemon)**: `*_test.go` beside the owning package. External services are replaced by `net/http/httptest` servers inside the test; fixtures live in the test file or `t.TempDir()`. CI adds `-race`.
 - **Source providers**: the daemon side of the protocol is tested against a fake provider executable built in the test; each provider tests its own platform client against recorded or fake servers in its plugin repository, never against a live account in CI.
 - **Flutter (app)**: `app/test/*_test.dart`, run by `flutter test`. Pages take an injectable fetch function or a stubbed API so widget tests need no daemon.
+- **Dense canvas**: [the widget benchmark](../app/benchmark/dense_canvas_test.dart) checks that erasing, writing, panning and zooming work in a mixed-media document. Its warm p95 budgets measure widget-driver elapsed time. Device input latency and frame timing use profiling on the device.
 - **Agent host**: colocated `src/*.test.mjs` files run by `node --test`, with fixtures in `os.tmpdir()`.
 - **Brand assets**: [check-brand-assets.mjs](../scripts/check-brand-assets.mjs) proves the exports were generated from the current master.
 - **Absent tiers**: there is no app–daemon process integration test and no end-to-end test against live external services; live checks are manual. Each migrated module records its own absent tiers here.

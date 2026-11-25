@@ -74,13 +74,13 @@ export class ModelPipeline {
 		for (const fn of this.listeners) fn();
 	}
 
-	/** Resolve the selected model, falling back to the first usable one. */
+	/** Use the first available model only before a user makes a choice. */
 	async currentModel() {
 		const rt = this.runtime;
 		const { provider, model } = this.prefs;
 		const available = await rt.getAvailable();
 		const picked = provider && model ? available.find((m) => m.provider === provider && m.id === model) : undefined;
-		return picked ?? available[0];
+		return provider || model ? picked : available[0];
 	}
 
 	/** The configured vision model, when it is usable and accepts images. */
@@ -131,7 +131,7 @@ export class ModelPipeline {
 		return {
 			providers,
 			apis: APIS,
-			selected: cur ? { provider: cur.provider, model: cur.id, reasoning: !!cur.reasoning, vision: (cur.input ?? []).includes("image") } : null,
+			selected: cur ? { provider: cur.provider, model: cur.id, reasoning: !!cur.reasoning, vision: (cur.input ?? []).includes("image"), available: true } : (this.prefs.provider && this.prefs.model ? { provider: this.prefs.provider, model: this.prefs.model, available: false } : null),
 			vision_ready: !!(await this.visionModel()),
 			prefs: this.prefs,
 			catalog_updated: this.catalog.fetchedAt || null,

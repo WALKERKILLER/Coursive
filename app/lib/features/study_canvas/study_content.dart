@@ -118,6 +118,16 @@ class StudyBlock {
     hint: '${m['hint'] ?? ''}',
     answer: '${m['answer'] ?? ''}',
   );
+  StudyBlock copy() => StudyBlock(
+    type: type,
+    text: text,
+    items: items,
+    columns: columns,
+    rows: List.of(rows),
+    language: language,
+    hint: hint,
+    answer: answer,
+  );
   String get plainText => [
     text,
     ...items,

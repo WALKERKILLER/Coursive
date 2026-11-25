@@ -16,6 +16,7 @@ import '../../l10n/l10n.dart';
 import '../player/player_page.dart';
 import '../practice/quiz.dart';
 import 'note_reader.dart';
+import 'notebooks.dart';
 import '../../shell.dart';
 import 'catalog_browser.dart';
 
@@ -114,6 +115,10 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   void _open(Map<String, dynamic> item) {
+    if (item['canvas_id'] != null) {
+      openNotebook(context, item['canvas_id'] as String, item['name'] as String);
+      return;
+    }
     if ('${item['note_id'] ?? ''}'.isNotEmpty) {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -142,11 +147,9 @@ class _LibraryPageState extends State<LibraryPage> {
         floatingActionButton: PageFab(
           child: FloatingActionButton.extended(
             heroTag: null,
-            onPressed: () =>
-                Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const NotePage())),
-            icon: const Icon(Icons.edit_note_rounded),
-            label: Text(l10n.libraryWriteNote),
+            onPressed: () => createDocument(context, _courseId),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.documentCreate),
           ),
         ),
         body: CustomScrollView(

@@ -23,6 +23,14 @@ const bad = (message, status = 400) => Object.assign(new Error(message), { statu
 
 export const hashOf = (text) => createHash("sha256").update(text).digest("hex").slice(0, 12);
 
+export function courseMemoryPath(courseId) {
+	if (typeof courseId !== "string" || !courseId.trim() || courseId.length > 128)
+		return null;
+	const slug = /^[a-z0-9][a-z0-9_-]{0,63}$/.test(courseId) && !courseId.startsWith("id-hash-")
+		? courseId : "id-hash-" + createHash("sha256").update(courseId).digest("hex").slice(0, 48);
+	return `courses/${slug}.md`;
+}
+
 export function checkPath(path) {
 	if (typeof path !== "string" || !PATH.test(path)) {
 		throw bad(`记忆文件路径无效：${String(path).slice(0, 80)}。可用 profile.md、preferences.md、routines/<名>.md、courses/<课程id>.md、notes/<名>.md（名称用小写字母、数字、- 和 _）`);
@@ -149,7 +157,19 @@ export class MemoryStore {
 		});
 	}
 
-	async save(path, content, old) {
+	async markCorrection(path) {
+		const target = join(this.dir,path+".edited");
+		await writeFile(target+".tmp", String(Date.now()), {mode:0o600});
+		await rename(target+".tmp",target);
+	}
+
+	async save(path, content, old, evidenceSince, correction=false) {
+		if (evidenceSince !== undefined) {
+			try {
+				const updated = Number(await readFile(join(this.dir,path+".edited"),"utf8"));
+				if (!Number.isFinite(updated) || evidenceSince <= updated) throw bad("这段学习记录早于手动更正，保留当前记忆。",409);
+			} catch (error) { if (error.code !== "ENOENT") throw error; }
+		}
 		if (Buffer.byteLength(content) > MAX_FILE) throw bad(`单个记忆文件最多 ${MAX_FILE / 1024} KB，请精简或拆分`);
 		guard(content);
 		const files = await this.list();
@@ -158,6 +178,7 @@ export class MemoryStore {
 		if (total > MAX_TOTAL) throw bad(`记忆总量最多 ${MAX_TOTAL / 1024} KB，请先精简`);
 		const abs = join(this.dir, path);
 		await mkdir(dirname(abs), { recursive: true, mode: 0o700 });
+		if (correction && old !== null && evidenceSince === undefined && content !== old) await this.markCorrection(path);
 		const tmp = `${abs}.tmp`;
 		await writeFile(tmp, content, { mode: 0o600 });
 		await rename(tmp, abs);
@@ -165,17 +186,17 @@ export class MemoryStore {
 	}
 
 	/** Creates or replaces a file; replacing needs the hash the writer read. */
-	write(path, content, baseHash) {
+	write(path, content, baseHash, evidenceSince) {
 		checkPath(path);
 		return this.serial(async () => {
 			const old = await this.current(path);
 			if (old !== null && baseHash !== hashOf(old)) throw this.conflict(path, old);
-			return this.save(path, String(content ?? ""), old);
+			return this.save(path, String(content ?? ""), old, evidenceSince, true);
 		});
 	}
 
 	/** Replaces the one occurrence of oldText. */
-	edit(path, oldText, newText, baseHash) {
+	edit(path, oldText, newText, baseHash, evidenceSince) {
 		checkPath(path);
 		return this.serial(async () => {
 			const old = await this.current(path);
@@ -183,17 +204,17 @@ export class MemoryStore {
 			if (baseHash !== undefined && baseHash !== hashOf(old)) throw this.conflict(path, old);
 			const n = oldText ? old.split(oldText).length - 1 : 0;
 			if (n !== 1) throw bad(n === 0 ? `${path} 里没有找到要替换的原文` : `原文在 ${path} 里出现了 ${n} 次，请多带一些上下文`);
-			return this.save(path, old.replace(oldText, () => String(newText ?? "")), old);
+			return this.save(path, old.replace(oldText, () => String(newText ?? "")), old, evidenceSince, true);
 		});
 	}
 
-	append(path, text) {
+	append(path, text, evidenceSince) {
 		checkPath(path);
 		return this.serial(async () => {
 			const old = await this.current(path);
 			const base = old ?? "";
 			const sep = base && !base.endsWith("\n") ? "\n" : "";
-			const r = await this.save(path, `${base}${sep}${String(text ?? "").trim()}\n`, old);
+			const r = await this.save(path, `${base}${sep}${String(text ?? "").trim()}\n`, old,evidenceSince);
 			return { ...r, action: old === null ? "created" : "appended" };
 		});
 	}
@@ -202,6 +223,7 @@ export class MemoryStore {
 		checkPath(path);
 		return this.serial(async () => {
 			if ((await this.current(path)) === null) throw bad(`没有记忆文件 ${path}`, 404);
+			await this.markCorrection(path);
 			await rm(join(this.dir, path));
 			return { path, action: "deleted" };
 		});
@@ -212,13 +234,12 @@ export class MemoryStore {
 	 * full (MAX_PINNED together, cut at a line), then an index of the rest
 	 * unless pinnedOnly.
 	 */
-	async prompt({ pinnedOnly = false } = {}) {
-		const files = await this.list();
+	async prompt({ pinnedOnly = false, courseId } = {}) {
+		const files = pinnedOnly ? [] : await this.list();
 		let pinned = "";
 		for (const p of PINNED) {
-			const f = files.find((x) => x.path === p);
-			if (!f) continue;
-			const content = await readFile(join(this.dir, p), "utf8");
+			const content = await this.current(p);
+			if (!content) continue;
 			pinned += `<memory path="${p}">\n${content.trim()}\n</memory>\n`;
 		}
 		if (Buffer.byteLength(pinned) > MAX_PINNED) {
@@ -231,11 +252,40 @@ export class MemoryStore {
 			}
 			pinned = `${lines.join("\n")}\n…(其余部分用 memory_read 读取)\n`;
 		}
+		const path = courseMemoryPath(courseId);
+		if (path) {
+			const content = await this.current(path);
+			if (content?.trim()) pinned += `\n<memory path="${path}">\n${content.trim().slice(0, 2500)}\n</memory>\n`;
+		}
 		const rest = pinnedOnly ? [] : files.filter((f) => !PINNED.includes(f.path)).slice(0, MAX_INDEX_LINES);
 		const index = rest.map((f) => `- ${f.path}${f.title ? ` · ${f.title}` : ""}${f.description ? ` — ${f.description}` : ""}${f.when ? `（适用：${f.when}）` : ""} · ${new Date(f.updated).toLocaleDateString("sv-SE")}`);
 		if (!pinned && !index.length) return "";
 		return [pinned.trim(), index.length ? `其他记忆文件（需要时用 memory_read 读取）：\n${index.join("\n")}` : ""].filter(Boolean).join("\n\n");
 	}
+}
+
+/** Course chat can save a verbatim, explicitly scoped request from the actual student turn. */
+export function learningMemoryTool(store, conv, onChange) {
+	return {
+		name:"remember_learning_request", label:"记住学习偏好",
+		description:"Save the student's explicit course goal or standing preference from their current message. Quote the complete request exactly; repeated questions alone do not qualify.",
+		parameters:Type.Object({quote:Type.String(),scope:Type.Union([Type.Literal("course"),Type.Literal("global")])}),
+		execute:async (_id,{quote,scope})=>{
+			const line=conv.lastUser?.trim();
+			if (!line || quote!==line || line.length>350 || /[\r\n]/.test(line)) throw bad("请用一句话明确说明想记住的偏好。");
+			const global=/^(?:请)?(?:记住[，,:： ]*)?(?:我(?:学什么|所有课|每门课)|以后|今后|无论哪门课|所有课程|跨课程|请一直|always\b)/i.test(line);
+			if (scope==="global" ? !global : !/(这门课|这节课|本课|我想|希望|记住|我喜欢|prefer|remember)/i.test(line)) throw bad("请先确认这项偏好的适用范围。");
+			const path=scope==="global"?"preferences.md":courseMemoryPath(conv.course_id);
+			if(!path) throw bad("请从课程会话设置本课目标。");
+			const content=await store.current(path) ?? "";
+			const entry="- "+line;
+			if(!content.split("\n").includes(entry)){
+				const r=await store.write(path,content.trimEnd()+(content.trim()?"\n":"")+entry+"\n",hashOf(content));
+				onChange?.(r);
+			}
+			return text("已记在"+(scope==="global"?"全局偏好":"本课记忆")+"。");
+		},
+	};
 }
 
 // ---- tools ----
@@ -246,7 +296,7 @@ const text = (t, details = {}) => ({ content: [{ type: "text", text: t }], detai
  * Memory tools over store. onChange receives each change ({path, action});
  * without allowDelete there is no memory_delete (consolidation).
  */
-export function memoryTools(store, { allowDelete = true, onChange = () => {} } = {}) {
+export function memoryTools(store, { allowDelete = true, onChange = () => {}, evidenceSince } = {}) {
 	const changed = (r) => {
 		onChange(r);
 		return text(`已${{ created: "新建", updated: "更新", appended: "追加到", deleted: "删除" }[r.action]} ${r.path}${r.hash ? `（版本 ${r.hash}）` : ""}`, { memory: r });
@@ -279,21 +329,21 @@ export function memoryTools(store, { allowDelete = true, onChange = () => {} } =
 			description:
 				"Create a memory file, or replace one (pass base_hash from memory_read). Start with front matter: ---\\ntitle: …\\ndescription: …\\n--- (routines also `when: …`). Never store secrets, ID or card numbers, phone numbers or passwords.",
 			parameters: Type.Object({ path: pathParam, content: Type.String(), base_hash: Type.Optional(Type.String()) }),
-			execute: async (_id, { path, content, base_hash }) => changed(await store.write(path, content, base_hash)),
+			execute: async (_id, { path, content, base_hash }) => changed(await store.write(path, content, base_hash, evidenceSince)),
 		},
 		{
 			name: "memory_edit",
 			label: "修改记忆",
 			description: "Replace one exact passage in a memory file (it must occur once).",
 			parameters: Type.Object({ path: pathParam, old: Type.String(), new: Type.String(), base_hash: Type.Optional(Type.String()) }),
-			execute: async (_id, p) => changed(await store.edit(p.path, p.old, p.new, p.base_hash)),
+			execute: async (_id, p) => changed(await store.edit(p.path, p.old, p.new, p.base_hash, evidenceSince)),
 		},
 		{
 			name: "memory_append",
 			label: "追加记忆",
 			description: "Append lines to a memory file, creating it if needed.",
 			parameters: Type.Object({ path: pathParam, text: Type.String() }),
-			execute: async (_id, { path, text: t }) => changed(await store.append(path, t)),
+			execute: async (_id, { path, text: t }) => changed(await store.append(path, t, evidenceSince)),
 		},
 	];
 	if (allowDelete) {

@@ -60,6 +60,32 @@ extension _StudySelectionTools on StudyCanvasState {
     );
   }
 
+  bool get _canDuplicateSelection =>
+      _detail.strokeIds.isNotEmpty ||
+      document!.cards.any(
+        (c) => _selection.contains(c.id) && c.duplicable,
+      );
+
+  Future<void> _setSelectionWidth() async {
+    final w = await showDialog<double>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.studySelectionWidth),
+        children: [
+          for (final width in [1.0, 2.0, 3.0, 5.0, 8.0, 12.0])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, width),
+              child: Text('${width.toInt()}'),
+            ),
+        ],
+      ),
+    );
+    if (!mounted || w == null || _selectionBounds == null) return;
+    final r = _selectionBounds!;
+    document!.checkpoint();
+    _transformSelection(r, r, width: w);
+  }
+
   /// Editing actions for a selection, behind the bar's 「…」.
   Widget _selectionActions() {
     final content = _selection.isNotEmpty || _detail.strokeIds.isNotEmpty;
@@ -68,30 +94,37 @@ extension _StudySelectionTools on StudyCanvasState {
       key: const ValueKey('study-selection-actions'),
       tooltip: l10n.studySelectionMore,
       enabled: !_selectionBusy,
-      icon: Icon(_selectionBusy ? Icons.hourglass_top : Icons.more_horiz),
+      icon: Icon(
+        _selectionBusy ? Icons.hourglass_top : Icons.more_horiz,
+        size: 17,
+      ),
       itemBuilder: (_) => [
-        PopupMenuItem(value: 'copy', enabled: content, child: const Text('复制')),
-        PopupMenuItem(
-          value: 'paste',
-          enabled: _copiedBounds != null,
-          child: const Text('粘贴'),
-        ),
+        if (ink && !widget.standalone)
+          PopupMenuItem(value: 'excerpt', child: Text(l10n.studyExcerpt)),
+        if (content && !widget.standalone && _linkStart == null)
+          PopupMenuItem(value: 'relate', child: Text(l10n.studyRelate)),
+        if (ink) PopupMenuItem(value: 'width', child: Text(l10n.studySelectionWidth)),
         PopupMenuItem(
           value: 'duplicate',
-          enabled: content,
-          child: const Text('副本'),
+          enabled: _canDuplicateSelection,
+          child: Text(l10n.studyDuplicateCard),
         ),
         const PopupMenuDivider(),
         PopupMenuItem(value: 'rotate', child: Text(l10n.studyRotateSelection)),
         PopupMenuItem(
+          value: 'upright',
+          enabled: _selection.length == 1,
+          child: Text(l10n.studyRestoreUpright),
+        ),
+        CheckedPopupMenuItem(
+          value: 'angle-snap',
+          checked: _angleSnapping,
+          child: Text(l10n.studyAngleSnapping),
+        ),
+        PopupMenuItem(
           value: 'shape',
           enabled: ink,
           child: Text(l10n.studyEditShape),
-        ),
-        PopupMenuItem(
-          value: 'recognize',
-          enabled: ink,
-          child: Text(l10n.studyRecognizeInk),
         ),
         if (_linkStart != null)
           PopupMenuItem(
@@ -106,25 +139,40 @@ extension _StudySelectionTools on StudyCanvasState {
         PopupMenuItem(
           value: 'delete',
           enabled: content,
-          child: const Text('删除'),
+          child: Text(l10n.commonDelete),
         ),
         PopupMenuItem(value: 'clear', child: Text(l10n.studySelectionClear)),
       ],
       onSelected: (value) {
         switch (value) {
-          case 'copy':
-            _copySelection();
-          case 'paste':
-            _pasteSelection();
           case 'duplicate':
-            _copySelection();
-            _pasteSelection();
+            _duplicateSelection();
           case 'rotate':
             _selectionJob(_rotateSelected);
+          case 'upright':
+            final d = document!;
+            final card = d.cards.where((c) => _selection.contains(c.id)).single;
+            final session = StudyTransformSession(
+              d,
+              Set.of(_selection),
+              {},
+              pivot: card.rect.center,
+            );
+            session.preview(angle: -StudyCardTransform(card).angle);
+            session.commit();
+            _scene.value++;
+            _update(() {});
+          case 'angle-snap':
+            _update(() => _angleSnapping = !_angleSnapping);
+            unawaited(_saveLayout());
           case 'shape':
             _selectionJob(_editSelectedShape);
-          case 'recognize':
-            _selectionJob(_recognizeSelectedInk);
+          case 'excerpt':
+            unawaited(_captureRegionCard());
+          case 'relate':
+            _selectionJob(_linkSelection);
+          case 'width':
+            unawaited(_setSelectionWidth());
           case 'cancel-link':
             _update(() {
               _linkStart = null;
@@ -328,6 +376,8 @@ extension _StudySelectionTools on StudyCanvasState {
     _linkStartBounds = null;
     await flush();
   }
+
+  Widget _rotationHandle() => _transformFrame();
 
   Future<void> _rotateSelected() async {
     final d = document!;

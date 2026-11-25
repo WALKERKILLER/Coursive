@@ -245,6 +245,10 @@ extension _StudyShelf on StudyCanvasState {
           .cast<String, dynamic>(),
     );
     if (!mounted) return null;
+    if (!widget.standalone && note.lectureId == widget.ctl.lectureId && RegExp(r'^lesson-[a-f0-9]{32}$').hasMatch(id)) {
+      return StudyCard(id: studyId(), type: 'text', layer: document!.activeLayer, generation: 'lesson-note',
+        documentId: id, rect: Rect.fromCenter(center: at, width: 540, height: 500), title: note.title, text: note.body);
+    }
     final blocks = studyBlocksFromMarkdown(note.body);
     return StudyCard(
       id: studyId(),

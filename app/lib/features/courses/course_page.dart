@@ -16,6 +16,7 @@ import '../../widgets/states.dart';
 import '../assistant/assistant_panel.dart';
 import '../player/player_page.dart';
 import '../lms/lms_course.dart';
+import '../library/notebooks.dart';
 import '../plugins/plugin_views.dart';
 import 'courses_page.dart';
 import 'download_sheet.dart';
@@ -281,6 +282,18 @@ class _CoursePageState extends State<CoursePage> {
                         resume: resume,
                         resumeStarted: resume != null && resume.positionMs > 0,
                         onResume: resume == null ? null : () => _open(resume!),
+                      ),
+                    ),
+                  ),
+                ),
+              if (course != null)
+                SliverToBoxAdapter(
+                  child: ContentWidth(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: pad),
+                      child: CourseDocuments(
+                        key: ValueKey(widget.courseId),
+                        courseId: widget.courseId,
                       ),
                     ),
                   ),
@@ -808,7 +821,7 @@ class _LectureTileState extends State<_LectureTile> {
                             Text(
                               [
                                 l10n.lectureOrdinal(widget.ordinal),
-                                fmtLectureDate(d),
+                                if (d != null) fmtLectureDate(d),
                                 if (l.durationS > 0) fmtDuration(l.durationS),
                                 if (l.room.isNotEmpty) l.room,
                                 if (disabled)
@@ -899,7 +912,7 @@ class _DateBlock extends StatelessWidget {
         borderRadius: BorderRadius.circular(Corners.md),
       ),
       child: date == null
-          ? Icon(Icons.event_outlined, color: cs.onPrimaryContainer)
+          ? Icon(Icons.play_circle_outline, color: cs.onPrimaryContainer)
           : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

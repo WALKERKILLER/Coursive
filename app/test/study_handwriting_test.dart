@@ -135,7 +135,7 @@ void main() {
       );
       await t.pumpAndSettle();
       expect(d.camera, const Offset(130, 65));
-      expect(find.text('副本'), findsNothing);
+      expect(find.text('创建副本'), findsNothing);
       await t.tap(find.byKey(const ValueKey('study-tool-pen')));
       await t.pumpAndSettle();
       await t.tap(find.byTooltip('收起笔盒'));
@@ -143,7 +143,7 @@ void main() {
       await t.tap(find.byTooltip('展开笔盒'));
       await t.pumpAndSettle();
       expect(d.strokes, isEmpty);
-      expect(find.text('副本'), findsNothing);
+      expect(find.text('创建副本'), findsNothing);
       expect(t.takeException(), isNull);
       await close(t);
     },
@@ -285,12 +285,11 @@ void main() {
       );
       await t.tap(find.byTooltip('选区改色'));
       await t.pumpAndSettle();
+      expect(find.text('#000000'), findsOneWidget);
       await t.tap(find.text('#e65365'));
       await t.pumpAndSettle();
       expect(current.strokes.single.color, 0xffe65365);
-      await t.tap(find.byKey(const ValueKey('study-selection-actions')));
-      await t.pumpAndSettle();
-      await t.tap(find.text('副本'));
+      await t.tap(find.byTooltip('创建副本'));
       await t.pumpAndSettle();
       expect(current.strokes.length, 2);
       current.undo();
@@ -318,7 +317,6 @@ void main() {
         );
       final key = await fixture.open(t, fixture.FixtureApi(d.json()));
       final cardFinder = find.byKey(const ValueKey('study-card/text'));
-      final element = t.element(cardFinder), widget = t.widget(cardFinder);
       final g1 = await t.startGesture(
         const Offset(350, 600),
         pointer: 31,
@@ -329,6 +327,8 @@ void main() {
         pointer: 32,
         kind: ui.PointerDeviceKind.touch,
       );
+      await t.pump(); // Reader scrolling freezes once when the second finger joins.
+      final element = t.element(cardFinder), widget = t.widget(cardFinder);
       for (var i = 1; i <= 10; i++) {
         await g2.moveTo(Offset(550 + i * 10, 600));
         await t.pump(const Duration(milliseconds: 16));

@@ -12,10 +12,16 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class MainActivity : FlutterActivity() {
     private var stylus: StylusBridge? = null
+    // Bound live PDF parsers and raster buffers across all canvas readers.
+    private val pdfNotesExecutor = Executors.newSingleThreadExecutor()
+
+    // Accessed only on the platform thread, including completion callbacks.
+    private val pdfJobs = mutableMapOf<Int, Pair<java.util.concurrent.Future<*>, MethodChannel.Result>>()
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         val handled = super.dispatchTouchEvent(event)
@@ -34,6 +40,9 @@ class MainActivity : FlutterActivity() {
     override fun onPause() { stylus?.reset(); super.onPause() }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pdfJobs.values.forEach { (job, _) -> job.cancel(true) }
+        pdfJobs.clear()
+        pdfNotesExecutor.shutdownNow()
         stylus?.dispose(); stylus = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -46,6 +55,7 @@ class MainActivity : FlutterActivity() {
     private var dartReady = false
 
     // A "saveAs" waiting for the system's create-document screen.
+    private var configuredTree: String? = null
     private var folderPicking: MethodChannel.Result? = null
     private var saving: Pair<File, MethodChannel.Result>? = null
 
@@ -71,6 +81,25 @@ class MainActivity : FlutterActivity() {
 
     private fun onAndroid(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
+            "cancelPDFNotes" -> {
+                pdfJobs.remove(call.argument<Int>("requestId"))?.let { (job, pending) ->
+                    job.cancel(true)
+                    pending.error("cancelled", "PDF operation cancelled", null)
+                }
+                result.success(null)
+            }
+            "pdfNotes" -> {
+                val id = call.argument<Int>("requestId")!!
+                val job = pdfNotesExecutor.submit {
+                    try {
+                        val value = AndroidPdfNotes.run(this, call)
+                        runOnUiThread { pdfJobs.remove(id)?.second?.success(value) }
+                    } catch (e: Exception) {
+                        runOnUiThread { pdfJobs.remove(id)?.second?.error("pdf", e.message, null) }
+                    }
+                }
+                pdfJobs[id] = job to result
+            }
             "info" -> result.success(
                 mapOf(
                     "nativeLibraryDir" to applicationInfo.nativeLibraryDir,
@@ -123,12 +152,13 @@ class MainActivity : FlutterActivity() {
                 }
             }
             "pickSyncFolder" -> {
+                configuredTree = call.argument<String>("configuredTree")
                 folderPicking?.success(null);folderPicking=result
                 val pick=Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 try { startActivityForResult(pick, FOLDER_REQUEST) } catch (e:Exception) { folderPicking=null;result.error("folder",e.message,null) }
             }
             "syncFolderBridge" -> {
-                val saved=getSharedPreferences("coursive-folder",MODE_PRIVATE).getString("uri",null)
+                val saved = call.argument<String>("tree")
                 try { result.success(if(saved==null) null else SyncFolderBridge.open(this,android.net.Uri.parse(saved))) } catch(e:Exception) { result.error("folder","文件夹授权已失效，请重新选择",null) }
             }
             "keepAlive" -> {
@@ -154,8 +184,7 @@ class MainActivity : FlutterActivity() {
             if(resultCode!=RESULT_OK || tree==null) { result.success(null);return }
             try {
                 contentResolver.takePersistableUriPermission(tree, (data?.flags ?: 0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
-                getSharedPreferences("coursive-folder",MODE_PRIVATE).edit().putString("uri",tree.toString()).apply()
-                result.success(SyncFolderBridge.open(this,tree))
+                result.success(SyncFolderBridge.open(this, tree, keep = configuredTree))
             } catch(e:Exception) { result.error("folder",e.message,null) };return
         }
         if (requestCode != SAVE_REQUEST) return

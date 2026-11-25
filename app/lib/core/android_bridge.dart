@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 abstract final class AndroidBridge {
   static const _ch = MethodChannel('coursive/android');
   static Map<String, dynamic>? _info;
+  static Future<T?> pdfNotes<T>(String op, String source, String output, {int? page, Map? edit, required int requestId}) =>
+      _ch.invokeMethod<T>('pdfNotes', {'op': op, 'source': source, 'output': output, 'page': page, 'edit': edit, 'requestId':requestId});
+  static Future<void> cancelPDFNotes(int requestId) => _ch.invokeMethod<void>('cancelPDFNotes', {'requestId':requestId});
 
   /// nativeLibraryDir, filesDir, cacheDir, abi, sdk.
   static Future<Map<String, dynamic>> info() async =>
@@ -35,10 +38,12 @@ abstract final class AndroidBridge {
       }) ??
       false;
 
-  static Future<Map<String, dynamic>?> pickSyncFolder() =>
-      _ch.invokeMapMethod<String, dynamic>('pickSyncFolder');
-  static Future<Map<String, dynamic>?> syncFolderBridge() =>
-      _ch.invokeMapMethod<String, dynamic>('syncFolderBridge');
+  static Future<Map<String, dynamic>?> pickSyncFolder(String? configuredTree) =>
+      _ch.invokeMapMethod<String, dynamic>('pickSyncFolder', {
+        'configuredTree': configuredTree,
+      });
+  static Future<Map<String, dynamic>?> syncFolderBridge(String tree) =>
+      _ch.invokeMapMethod<String, dynamic>('syncFolderBridge', {'tree': tree});
 
   /// Keeps the app running in the background with a notification.
   static Future<void> keepAlive(bool on, {String? text}) =>

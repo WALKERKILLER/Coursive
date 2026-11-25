@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -23,8 +25,9 @@ import '../../l10n/l10n.dart';
 /// column, and the sources a reference points to (recording, slide or
 /// courseware) in a supporting pane — a bottom sheet on narrow windows.
 class NotePage extends StatefulWidget {
-  const NotePage({super.key, this.noteId});
+  const NotePage({super.key, this.noteId, this.courseId = ''});
   final String? noteId;
+  final String courseId;
   @override
   State<NotePage> createState() => _NotePageState();
 }
@@ -192,6 +195,7 @@ class _NotePageState extends State<NotePage> {
                             padding: const EdgeInsets.fromLTRB(Space.xl, 0, Space.xl, Space.xl),
                             child: NoteEditor(
                               note: n,
+                              courseId: widget.courseId,
                               edit: true,
                               onSaved: (saved) => _set(saved),
                               onClose: n == null ? null : () => setState(() => _editing = false),
@@ -478,7 +482,7 @@ Future<(CoursewareFile, String)> loadParsedCourseware(Api api, String lectureId,
   if (!f.parsed) throw Exception(l10n.coursewareNotParsed);
   final res = await http.get(Uri.parse(api.fileUrl(f.mdPath)));
   if (res.statusCode != 200) throw Exception(l10n.coursewareReadFailed(res.statusCode));
-  return (f, res.body);
+  return (f, utf8.decode(res.bodyBytes));
 }
 
 /// A courseware passage in the supporting pane, opened at [query].

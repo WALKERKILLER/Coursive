@@ -12,8 +12,10 @@ Future<void> lasso(WidgetTester t, Rect rect, {bool tool = true}) async {
   if (tool) {
     await t.tap(find.byKey(const ValueKey('study-tool-region')));
     await t.pumpAndSettle();
+    await t.tap(find.byTooltip('矩形框选'));
+    await t.pumpAndSettle();
   }
-  // The region tool draws a rectangle by default.
+  // Rectangle mode is explicit.
   final origin = t.getTopLeft(find.byKey(const ValueKey('study-input')));
   final g = await t.startGesture(
     origin + rect.topLeft,
@@ -50,15 +52,15 @@ StudyDocument page() => StudyDocument()
 
 void main() {
   testWidgets(
-    'the bar sits off the top-right corner and flips below near the top',
+    'the bar sits centered above the selection and flips below near the top',
     (t) async {
       await fixture.open(t, fixture.FixtureApi(page().json()));
       await lasso(t, const Rect.fromLTRB(280, 400, 560, 560));
       final bar = find.byKey(const ValueKey('study-selection-bar'));
       expect(bar, findsOneWidget);
       expect(find.text('问 AI'), findsOneWidget);
-      expect(find.text('摘录'), findsOneWidget);
-      expect(find.text('关联'), findsOneWidget);
+      expect(find.byTooltip(l10n.studyExcerptHint), findsOneWidget);
+      expect(find.byTooltip(l10n.studyRelateHint), findsOneWidget);
       expect(
         find.text('复制'),
         findsNothing,
@@ -66,10 +68,10 @@ void main() {
       );
       var r = t.getRect(bar);
       expect(r.bottom, closeTo(400 - 8, .5));
-      expect(r.right, closeTo(560, .5));
-      expect(r.height, greaterThanOrEqualTo(44));
+      expect(r.center.dx, closeTo(420, .5));
+      expect(r.size, const Size(234, 44));
 
-      await lasso(t, const Rect.fromLTRB(230, 60, 560, 300), tool: false);
+      await lasso(t, const Rect.fromLTRB(230, 100, 560, 300), tool: false);
       r = t.getRect(bar);
       expect(
         r.top,

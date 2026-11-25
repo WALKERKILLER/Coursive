@@ -118,6 +118,14 @@ class PluginStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get supportsLessonStudy => active.any((item) {
+    if (item['id'] != 'course-tutor') return false;
+    final parts = (item['version'] as String? ?? '').split('.');
+    final major = int.tryParse(parts.first) ?? 0;
+    final minor = parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0;
+    return major > 0 || minor >= 3;
+  });
+
   /// Contributions of active plugins. [kind] is a key of `contributes`.
   List<PluginEntry> entries(String kind, {String? surface, String? scope}) => [
         for (final p in active)

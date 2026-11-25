@@ -37,6 +37,29 @@ type StudyPDFPage struct {
 	Boxes  []StudyTextBox `json:"boxes"`
 }
 
+// stageStudyPDF gives a renderer that cannot inherit descriptors a private
+// copy of the already checked input. It never reopens the original by name.
+func stageStudyPDF(source io.Reader, output string, limit int64) (string, error) {
+	file := filepath.Join(output, "source.pdf")
+	dst, err := os.OpenFile(file, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return "", err
+	}
+	n, copyErr := io.Copy(dst, io.LimitReader(source, limit+1))
+	closeErr := dst.Close()
+	if copyErr == nil {
+		copyErr = closeErr
+	}
+	if copyErr == nil && n > limit {
+		copyErr = ErrStudyLimit
+	}
+	if copyErr != nil {
+		os.Remove(file)
+		return "", copyErr
+	}
+	return file, nil
+}
+
 // Each request renders exactly one page. Images and text have independent bounded outputs.
 func renderStudyPage(ctx context.Context, source, output string, page int, files ...*os.File) (StudyPDFPage, error) {
 	var out StudyPDFPage
@@ -51,12 +74,24 @@ func renderStudyPage(ctx context.Context, source, output string, page int, files
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		exe, e := os.Executable()
 		if e != nil {
 			return out, e
 		}
-		_, e = run(ctx, filepath.Join(filepath.Dir(exe), "coursive-study-pdf"), source, output, strconv.Itoa(page))
+		if runtime.GOOS == "windows" {
+			// Windows cannot inherit an ExtraFiles descriptor. Stage the validated
+			// handle in the existing private render directory.
+			if len(files) > 0 {
+				source, e = stageStudyPDF(files[0], output, StudyAssetLimit)
+				if e != nil {
+					return out, e
+				}
+			}
+			_, e = studyPDFCommand(ctx, filepath.Join(filepath.Dir(exe), "pdf-notes", "coursive-pdf-notes.exe"), "study", source, output, strconv.Itoa(page))
+		} else {
+			_, e = run(ctx, filepath.Join(filepath.Dir(exe), "coursive-study-pdf"), source, output, strconv.Itoa(page))
+		}
 		if e != nil {
 			return out, e
 		}
@@ -145,24 +180,44 @@ func renderStudyPage(ctx context.Context, source, output string, page int, files
 	return out, nil
 }
 func (l *Library) StudyPDFPage(ctx context.Context, lecture, source string, page int) (StudyPDFPage, error) {
+	return l.canvasPDFPage(ctx, lecture, source, page, false)
+}
+
+func (l *Library) NotebookPDFPage(ctx context.Context, id, source string, page int) (StudyPDFPage, error) {
+	return l.canvasPDFPage(ctx, id, source, page, true)
+}
+
+func (l *Library) canvasPDFPage(ctx context.Context, id, source string, page int, notebook bool) (StudyPDFPage, error) {
 	var out StudyPDFPage
 	if page < 1 || page > 5000 || path.Base(source) != "source.pdf" {
 		return out, ErrStudyInvalid
 	}
-	f, e := l.StudySource(ctx, lecture, source)
-	if e != nil {
-		return out, e
+	var root *os.Root
+	var canvasDir string
+	var e error
+	if notebook {
+		root, canvasDir, e = l.notebookRoot(id)
+	} else {
+		l.studyMu.Lock()
+		root, canvasDir, e = l.studyRoot(ctx, id)
+		l.studyMu.Unlock()
 	}
-	defer f.Close()
-	root, e := os.OpenRoot(l.Root)
 	if e != nil {
 		return out, e
 	}
 	defer root.Close()
+	if !strings.HasPrefix(source, canvasDir+"/study-assets/") {
+		return out, ErrStudyInvalid
+	}
+	f, e := openStudySource(root, canvasDir, source)
+	if e != nil {
+		return out, e
+	}
+	defer f.Close()
 	dir := path.Dir(source)
 	cached := dir + "/page-" + strconv.Itoa(page) + ".json"
 	if b, e := root.ReadFile(cached); e == nil && len(b) < 2<<20 {
-		if json.Unmarshal(b, &out) == nil {
+		if json.Unmarshal(b, &out) == nil && out.File == dir+"/page-"+strconv.Itoa(page)+".png" {
 			if _, e = root.Stat(out.File); e == nil {
 				return out, nil
 			}
@@ -203,11 +258,9 @@ func (l *Library) StudyPDFPage(ctx context.Context, lecture, source string, page
 	}
 	var candidates []cachedPage
 	pinned := map[string]bool{out.File: true}
-	if lec, err := l.Store.Lecture(ctx, lecture); err == nil {
-		if doc, err := readStudy(root, lec.Dir+"/study-canvas.json"); err == nil {
-			for _, o := range doc.Objects {
-				pinned[o.Path] = true
-			}
+	if doc, err := readStudy(root, canvasDir+"/study-canvas.json"); err == nil {
+		for _, o := range doc.Objects {
+			pinned[o.Path] = true
 		}
 	}
 	for _, entry := range entries {
