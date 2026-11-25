@@ -45,7 +45,7 @@ void main() {
     await tester.tap(find.text('自动'));
     await tester.pumpAndSettle();
     expect(find.text('改动先生成卡片，由你应用'), findsOneWidget);
-    expect(find.text('删除文件在两种模式下都会先问你'), findsOneWidget);
+    expect(find.text('永久删除、覆盖原件和批量修改都会先问你'), findsOneWidget);
     await tester.tap(find.text('询问'));
     await tester.pumpAndSettle();
     expect(mode, 'ask');
