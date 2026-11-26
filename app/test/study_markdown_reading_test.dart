@@ -990,7 +990,11 @@ void main() {
       await t.enterText(input, '这是什么意思？');
       await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
       await t.pumpAndSettle();
-      expect(api.request?['question'], '「process and」\n这是什么意思？');
+      expect(api.request?['question'], '这是什么意思？');
+      expect(api.request?['selected_excerpt'], {
+        'object_id': a.objectId,
+        'text': 'process and',
+      });
       expect(
         api.conversations[aside.conversationId]?['turns'].single['question'],
         '这是什么意思？',

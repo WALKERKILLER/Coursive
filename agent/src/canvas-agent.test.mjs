@@ -321,3 +321,57 @@ test('geographic access denial is not reported as an expired credential',()=>{
  assert.match(canvasModelError({status:403,message:'private-key forbidden'}),/访问权限/);
  assert.match(canvasModelError({status:401,message:'private-key'}),/授权失效/);
 });
+
+test('a clarified question keeps the student wording and reads a cross-format quote only on demand', async () => {
+ const question='我意思是讲讲单核多核并发并行这几个概念掺在一起的时候';
+ const excerpt='并发和并行。异步 Asynchrony。';
+ const past={id:'first',state:'done',context_key:canvasContextKey(context()),question:'详细讲讲并发和并行的区别',answer:'前面提到了异步。'};
+ for(const legacy of [false,true]){
+  let rounds=0;
+  const runner=new CanvasRunner({
+   currentModel:async()=>({id:'fixture'}),
+   runtime:{completeSimple:async(_model,input)=>{
+    if(++rounds===1){
+     assert.equal(input.messages.at(-1).content[0].text,question);
+     assert.equal(input.messages.length,1);
+     assert(input.tools.some(t=>t.name==='read_previous_exchange'));
+     assert(!input.systemPrompt.includes(excerpt));
+     return message([tool('back','read_previous_exchange',{turns_back:1}),tool('lookup','get_canvas_context')]);
+    }
+    assert.deepEqual(JSON.parse(input.messages.at(-2).content[0].text),{student:past.question,assistant:past.answer});
+    assert.deepEqual(JSON.parse(input.messages.at(-1).content[0].text).selected_excerpt,{object_id:'pdf',text:excerpt});
+    return message([{type:'text',text:'单核可轮流推进两个线程，多核可同时执行。'}],'stop');
+   }},
+  },{call:async(_method,path)=>path.includes('/conversations/')?{turns:[past,{id:'now',question}]}:context()});
+  const request={lecture_id:'L',selection:{objects:['pdf']},turn_id:'now',conversation_id:'chat',question};
+  if(legacy)request.question='「'+excerpt+'」\n'+question;
+  else request.selected_excerpt={object_id:'pdf',text:excerpt};
+  const result=await settled(runner,(await runner.start(request)).id);
+  assert.equal(result.state,'done',result.error);
+  assert.deepEqual(result.evidence,[]);
+ }
+});
+
+test('selected-only conversations apply preferences and fetch profile only when requested',async()=>{
+ const reads=[];
+ let rounds=0;
+ const runner=new CanvasRunner({
+  currentModel:async()=>({id:'fixture'}),
+  runtime:{completeSimple:async(_model,input)=>{
+   if(++rounds===1){
+    assert(input.messages.at(-1).content[0].text.includes('先举例'));
+    assert(!JSON.stringify(input).includes('机械专业'));
+    return message([tool('p','recall_learning_context',{scope:'profile'}),tool('c','recall_learning_context',{scope:'course'}),tool('s','get_canvas_context')]);
+   }
+   const results=input.messages.filter(m=>m.role==='toolResult');
+   assert(JSON.stringify(results[0]).includes('机械专业'));
+   assert(results[1].isError);
+   assert(!JSON.stringify(results[2]).includes('未绑定的摘录'));
+   return message([{type:'text',text:'例子'}],'stop');
+  }},
+ },{call:async()=>context(),learningContext:async()=>({preferences:'先举例',recall:async kind=>{reads.push(kind);return '机械专业';}})});
+ const done=await settled(runner,(await runner.start({lecture_id:'L',question:'用我的专业举例',selection:{objects:['pdf']},selected_excerpt:{object_id:'unbound',text:'未绑定的摘录'}})).id);
+ assert.equal(done.state,'done',done.error);
+ assert.deepEqual(done.evidence,[]);
+ assert.deepEqual(reads,['profile']);
+});

@@ -866,7 +866,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     try {
       final selection = query;
       final passage = _asideAnchor;
-      final agentQuestion =
+      final needsExcerpt =
           passage != null &&
               passage.quote.isNotEmpty &&
               (selection['objects'] as List?)?.contains(passage.objectId) ==
@@ -875,16 +875,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
                   passage.objectId &&
               !(selection['selections'] as Map? ?? const {}).containsKey(
                 passage.objectId,
-              ) &&
-              !question.contains(passage.quote)
-          ? '「${passage.quote}」\n$question'
-          : question;
+              );
       final out = await owner.widget.api.startCanvasRun({
         'lecture_id': owner.widget.ctl.lectureId,
         'conversation_id': widget.card.conversationId,
         'task': ?task,
         'turn_id': turn['id'],
-        'question': agentQuestion,
+        'question': question,
+        if (needsExcerpt)
+          'selected_excerpt': {
+            'object_id': passage.objectId,
+            'text': passage.quote,
+          },
         if (context.read<AssistantController?>()?.explicitModelChoice case final choice?)
           'model_choice': {
             'provider': choice['provider'],

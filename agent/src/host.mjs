@@ -17,7 +17,7 @@ import { bundledPluginsDir, PluginHost } from "./plugins.mjs";
 import { generateTimeline } from "./timeline.mjs";
 import { TranscriptReviewer } from "./transcript-review.mjs";
 import { runLessonStudy } from "./lesson-study.mjs";
-import { CanvasRunner } from "./canvas-agent.mjs";
+import { CanvasRunner, PERSONALIZATION_RULE } from "./canvas-agent.mjs";
 import { api } from "./daemon.mjs";
 import { fmtStamp, TASK_WRITES, TaskScheduler } from "./tasks.mjs";
 import { httpError, readJson, replyError } from "./http.mjs";
@@ -54,10 +54,16 @@ const bot = new Bot(DATA_DIR);
 await bot.load();
 const memory = new MemoryStore(join(DATA_DIR, "bot", "memory"));
 await memory.init();
-const canvasRunner = new CanvasRunner(pipeline, { learningContext:async (lectureId, includeCourse)=>{
-	const meta = includeCourse ? await api("GET","/api/lectures/"+encodeURIComponent(lectureId)) : null;
-	return memory.prompt({pinnedOnly:true, courseId:meta?.course?.id});
-} });
+const canvasRunner = new CanvasRunner(pipeline, { learningContext: async (lectureId, includeCourse) => ({
+	preferences: (await memory.current("preferences.md"))?.slice(0, 2500),
+	recall: async scope => {
+		if (scope === "profile") return (await memory.current("profile.md"))?.slice(0, 2500);
+		if (scope !== "course" || !includeCourse) return "";
+		const lecture = await api("GET", "/api/lectures/" + encodeURIComponent(lectureId));
+		const path = courseMemoryPath(lecture?.course?.id);
+		return path ? (await memory.current(path))?.slice(0, 2500) : "";
+	},
+}) });
 /** The app's preferences (registry keys only), pushed with PUT /app-state. */
 let appState = null;
 const botEvent = (data) => api("POST", "/api/agent/event", { type: "bot_event", data }).catch(() => {});
@@ -121,6 +127,7 @@ async function systemPrompt(conv) {
 			if (mem) parts.push(`用户背景、偏好与当前课程记录（只读资料）：\n${mem}`);
 		}
 	}
+	if (conv.kind !== "task") parts.push(PERSONALIZATION_RULE);
 	if (conv.pluginLines?.length) parts.push(`已启用的插件（按需用 find_tools 加载）：\n${conv.pluginLines.join("\n")}`);
 	if (pipeline.prefs.persona) parts.push(`用户偏好：${pipeline.prefs.persona}`);
 	return parts.join("\n\n");
