@@ -264,6 +264,18 @@ extension _StudyEvidence on StudyCanvasState {
 
   /// A short locator: page, time range, region or ink.
   String _evidenceLocator(Map evidence) {
+    // Saved classroom references carry their verified interval in the link.
+    // Use the same interval the source reader opens, including for older turns.
+    if (evidence['teaching_ref'] case final String link) {
+      final target = CoursiveRef.parse(link);
+      if (target is TimeRef) {
+        final start = target.startMs ?? target.seconds * 1000;
+        final end = target.endMs;
+        return end != null && end > start
+            ? '${fmtClock(start)}–${fmtClock(end)}'
+            : fmtClock(start);
+      }
+    }
     final a = StudyAnchor.fromJson(evidence['anchor'] as Map? ?? const {});
     return switch ('${evidence['kind']}') {
       'timestamped_transcript' =>
