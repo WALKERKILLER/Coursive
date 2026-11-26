@@ -498,6 +498,10 @@ void main() {
       expect(card.collapsed, isTrue);
       expect(card.rect.width, lessThan(width));
       expect(card.rect.height, lessThan(50));
+      final title = inCard(find.byWidgetPredicate(
+        (widget) => widget is RichText && widget.text.toPlainText() == '进程笔记',
+      ));
+      expect(t.renderObject<RenderParagraph>(title).didExceedMaxLines, isFalse);
       await t.tap(inCard(find.byTooltip('展开模块')));
       await t.pumpAndSettle();
       expect(card.rect.width, width);

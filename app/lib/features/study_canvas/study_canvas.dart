@@ -87,6 +87,7 @@ enum StudyTool { pan, select, pen, highlighter, eraser, region }
 
 const double _cardHeaderHeight = 36;
 const double _asideCollapsedHeight = 40;
+const double _passageActionWidth = 40;
 const double _asideOpeningHeight = 160;
 const double _asideMinHeight = 120;
 const double _asideMaxHeight = 440;
@@ -2487,8 +2488,8 @@ class StudyCanvasState extends State<StudyCanvas>
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
     )..layout(maxWidth: 288);
-    // Header padding, conversation icon, and the visible 32px actions.
-    final chrome = Space.md + 16 + Space.sm * 2 + 32 * (card.sources.isEmpty ? 2 : 3);
+    // Reserve the same button widths the header lays out on every platform.
+    final chrome = Space.md + 16 + Space.sm * 2 + _passageActionWidth * (card.sources.isEmpty ? 2 : 3);
     final width = math.min(expanded, title.width.ceilToDouble() + chrome + 2);
     title.dispose();
     if ((width * card.contentScale - card.contentRect.width).abs() > .01) {
@@ -2599,17 +2600,21 @@ class StudyCanvasState extends State<StudyCanvas>
         width: selected ? 2 : 1,
       ),
     );
-    Widget action(String tooltip, IconData icon, VoidCallback? onPressed) =>
-        IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          iconSize: 16,
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-          padding: EdgeInsets.zero,
-          color: cs.onSurfaceVariant,
-          icon: Icon(icon),
-        );
+    Widget action(String tooltip, IconData icon, VoidCallback? onPressed) {
+      final button = IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        iconSize: 16,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+        padding: EdgeInsets.zero,
+        color: cs.onSurfaceVariant,
+        icon: Icon(icon),
+      );
+      return c.passageLinked
+          ? SizedBox(width: _passageActionWidth, child: button)
+          : button;
+    }
     final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
     final aside = c.passageAside;
     final fitAside = !c.collapsed && c.fitsAsideHeight;
