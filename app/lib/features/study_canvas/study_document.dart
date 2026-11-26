@@ -79,6 +79,20 @@ class StudyCard {
   bool collapsed;
   bool positionLocked;
   double expandedH;
+  // A folded aside is drawn at its title width. The saved frame keeps the
+  // unfolded layout width so opening an older canvas needs no migration.
+  double? unfoldedLayoutWidth;
+
+  Rect withLayoutWidth(double width) {
+    final worldWidth = width * contentScale;
+    final delta = (worldWidth - contentRect.width) / 2;
+    final angle = rotation + quarterTurns * math.pi / 2;
+    return Rect.fromCenter(
+      center: rect.center + Offset(delta * math.cos(angle), delta * math.sin(angle)),
+      width: quarterTurns.isEven ? worldWidth : rect.width,
+      height: quarterTurns.isEven ? rect.height : worldWidth,
+    );
+  }
   int page, pageCount, quarterTurns;
   double rotation, contentScale;
   double pageAspect;
@@ -134,7 +148,7 @@ class StudyCard {
           source.toLowerCase().endsWith('.markdown'));
   bool get passageAside => type == 'conversation' && generation == 'markdown-aside';
   // For asides, a zero saved expanded height means fit the content.
-  bool get fitsAsideHeight => passageAside && expandedH == 0;
+  bool get fitsAsideHeight => passageLinked && expandedH == 0;
   bool get passageNote => type == 'text' && generation == 'markdown-annotation';
   bool get passageLinked => passageAside || passageNote;
   bool get onCanvas => type != 'conversation' || passageAside;
@@ -234,15 +248,19 @@ class StudyCard {
     blocks: [for (final block in blocks) block.copy()],
     sources: List.of(sources),
     responses: Map.of(responses),
-  );
-  Map<String, dynamic> json() => {
+  )..unfoldedLayoutWidth = unfoldedLayoutWidth;
+  Map<String, dynamic> json() {
+    final frame = collapsed && unfoldedLayoutWidth != null
+        ? withLayoutWidth(unfoldedLayoutWidth!)
+        : rect;
+    return {
     'id': id,
     'type': type,
     'layer': layer,
-    'x': rect.left,
-    'y': rect.top,
-    'w': rect.width,
-    'h': rect.height,
+    'x': frame.left,
+    'y': frame.top,
+    'w': frame.width,
+    'h': frame.height,
     'title': title,
     if (!linkedNote) 'text': text,
     'path': path,
@@ -267,7 +285,8 @@ class StudyCard {
     'responses': responses,
     'blocks': blocks.map((b) => b.json()).toList(),
     'sources': sources.map((a) => a.json()).toList(),
-  };
+    };
+  }
 }
 
 class InkPoint {

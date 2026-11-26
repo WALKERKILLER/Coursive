@@ -1992,6 +1992,11 @@ class StudyCanvasState extends State<StudyCanvas>
       );
     final d = document;
     if (d == null) return const Center(child: CircularProgressIndicator());
+    for (final card in d.cards) {
+      if (card.passageLinked && card.collapsed && card.unfoldedLayoutWidth == null) {
+        _fitFoldedAside(card);
+      }
+    }
     _enabledPlugins = _activePlugins();
     _hasCanvasTools = _canvasToolContributions(context).isNotEmpty;
     return LayoutBuilder(
@@ -2466,8 +2471,41 @@ class StudyCanvasState extends State<StudyCanvas>
     );
   }
 
+  String _asideLabel(StudyCard card) {
+    final question = _threadSummary[card.id]?['first'] as String?;
+    return question == null || question.isEmpty
+        ? l10n.studyHandoutAside
+        : '${l10n.studyHandoutAside} · $question';
+  }
+
+  void _fitFoldedAside(StudyCard card) {
+    card.rect = StudyCardTransform(card).withLayoutHeight(_asideCollapsedHeight);
+    final expanded = card.unfoldedLayoutWidth ??= card.contentRect.width / card.contentScale;
+    final title = TextPainter(
+      text: TextSpan(text: card.passageNote ? card.title : _asideLabel(card), style: Theme.of(context).textTheme.labelLarge),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout(maxWidth: 288);
+    // Header padding, conversation icon, and the visible 32px actions.
+    final chrome = Space.md + 16 + Space.sm * 2 + 32 * (card.sources.isEmpty ? 2 : 3);
+    final width = math.min(expanded, title.width.ceilToDouble() + chrome + 2);
+    title.dispose();
+    if ((width * card.contentScale - card.contentRect.width).abs() > .01) {
+      card.rect = card.withLayoutWidth(width);
+    }
+  }
+
   void _setCardCollapsed(StudyCard card, bool collapsed) {
-    if (card.passageAside) {
+    if (card.passageLinked) {
+      if (collapsed && _editingPassage == card.id) {
+        _editingPassage = null;
+        _passageEditCheckpoint = null;
+      }
+      if (!collapsed && card.unfoldedLayoutWidth != null) {
+        card.rect = card.withLayoutWidth(card.unfoldedLayoutWidth!);
+        card.unfoldedLayoutWidth = null;
+      }
       card.rect = StudyCardTransform(card).withLayoutHeight(
         collapsed
             ? _asideCollapsedHeight
@@ -2476,6 +2514,7 @@ class StudyCanvasState extends State<StudyCanvas>
             : card.expandedH / card.contentScale,
       );
       card.collapsed = collapsed;
+      if (collapsed) _fitFoldedAside(card);
       return;
     }
     if (collapsed) card.expandedH = card.rect.height;
@@ -2502,7 +2541,7 @@ class StudyCanvasState extends State<StudyCanvas>
     }
     final transform = StudyCardTransform(card);
     final rect = transform.withLayoutHeight(
-      (_cardHeaderHeight + bodyHeight).clamp(_asideMinHeight, _asideMaxHeight),
+      (_cardHeaderHeight + bodyHeight).clamp(card.passageNote ? _cardHeaderHeight + 24 : _asideMinHeight, _asideMaxHeight),
     );
     final fittedHeight = card.quarterTurns.isEven ? rect.height : rect.width;
     if ((card.contentRect.height - fittedHeight).abs() <= .5 * card.contentScale) {
@@ -2517,6 +2556,34 @@ class StudyCanvasState extends State<StudyCanvas>
     });
     _scene.value++;
   }
+
+  Widget _plainCardText(StudyCard c) => SingleChildScrollView(
+    key: ValueKey('${c.id}:$_cardTextEpoch'),
+    padding: EdgeInsets.all(c.passageNote ? Space.md : 20),
+    child: Align(
+      alignment: Alignment.topLeft,
+      child: SelectableText(
+        c.text,
+        onSelectionChanged: (selection, cause) {
+          if (!selection.isCollapsed) {
+            _selection
+              ..clear()
+              ..add(c.id);
+            _detail.clear();
+            _detail
+              ..objectId = c.id
+              ..start = selection.start
+              ..end = selection.end;
+          }
+        },
+        style: TextStyle(
+          fontSize: 16,
+          height: 1.65,
+          color: StudyChrome.of(context).paperInk,
+        ),
+      ),
+    ),
+  );
 
   Widget _card(StudyCard c) {
     final d = document!,
@@ -2569,7 +2636,7 @@ class StudyCanvasState extends State<StudyCanvas>
             Icons.link,
             () => _focusSource(source),
           ),
-      if (aside && !c.fitsAsideHeight && !c.collapsed && d.canTransformCard(c))
+      if (c.passageLinked && !c.fitsAsideHeight && !c.collapsed && d.canTransformCard(c))
         (
           l10n.studyCardFitContent,
           Icons.fit_screen_outlined,
@@ -2579,7 +2646,7 @@ class StudyCanvasState extends State<StudyCanvas>
             d.changed();
           },
         ),
-      if (!aside && !pdfColumn && c.quarterTurns == 0)
+      if (!c.passageLinked && !pdfColumn && c.quarterTurns == 0)
         (
           c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
@@ -2601,6 +2668,21 @@ class StudyCanvasState extends State<StudyCanvas>
           Icons.edit_outlined,
           () => _editKnowledge(c),
         ),
+      if (c.passageNote) ...[
+        (l10n.studyEditAnnotation, Icons.edit_outlined, () {
+          if (c.collapsed) {
+            d.checkpoint();
+            _setCardCollapsed(c, false);
+            d.changed();
+          }
+          _update(() {
+            _editingPassage = c.id;
+            _passageEditCheckpoint = null;
+          });
+        }),
+        (l10n.studyThreadNew, Icons.add_comment_outlined,
+            () => _chooseConversation(c, newConversation: true)),
+      ],
       if (c.type == 'text' && !c.passageNote)
         (
           c.markdownReader ? l10n.studyEditMarkdown : l10n.studyEditText,
@@ -2658,11 +2740,12 @@ class StudyCanvasState extends State<StudyCanvas>
                 child: Row(
                   children: [
                     const SizedBox(width: Space.md),
-                    if (c.type != 'text') ...[
+                    if (c.type != 'text' || c.passageNote) ...[
                       Icon(
                         switch (c.type) {
                           'lecture' || 'video' => Icons.smart_display_outlined,
                           'conversation' => Icons.forum_outlined,
+                          'text' => Icons.sticky_note_2_outlined,
                           'image' => Icons.image_outlined,
                           'note' ||
                           'explanation' ||
@@ -2682,13 +2765,7 @@ class StudyCanvasState extends State<StudyCanvas>
                           ? ValueListenableBuilder<int>(
                               valueListenable: _threadTick,
                               builder: (_, _, _) {
-                                final question =
-                                    _threadSummary[c.id]?['first'] as String?;
-                                return titleLabel(
-                                  question == null || question.isEmpty
-                                      ? l10n.studyHandoutAside
-                                      : '${l10n.studyHandoutAside} · $question',
-                                );
+                                return titleLabel(_asideLabel(c));
                               },
                             )
                           : titleLabel(
@@ -2750,7 +2827,7 @@ class StudyCanvasState extends State<StudyCanvas>
                             Icons.reply_rounded,
                             () => _focusSource(c.sources.first),
                           ),
-                        if (aside)
+                        if (c.passageLinked)
                           action(
                             c.collapsed
                                 ? l10n.studyCardExpand
@@ -2764,22 +2841,7 @@ class StudyCanvasState extends State<StudyCanvas>
                               d.changed();
                             },
                           ),
-                        if (c.passageNote)
-                          action(
-                            _editingPassage == c.id
-                                ? l10n.commonSave
-                                : l10n.studyEditAnnotation,
-                            _editingPassage == c.id
-                                ? Icons.check
-                                : Icons.edit_outlined,
-                            () => _update(() {
-                              _editingPassage = _editingPassage == c.id
-                                  ? null
-                                  : c.id;
-                              _passageEditCheckpoint = null;
-                            }),
-                          ),
-                        if (c.type != 'conversation')
+                        if (c.type != 'conversation' && !c.passageNote)
                           Draggable<String>(
                             data: c.id,
                             feedback: Material(
@@ -2874,7 +2936,7 @@ class StudyCanvasState extends State<StudyCanvas>
             ),
             Expanded(
               child: OverflowBox(
-                alignment: aside ? Alignment.topCenter : Alignment.center,
+                alignment: c.passageLinked ? Alignment.topCenter : Alignment.center,
                 minHeight: fitAside
                     ? 0
                     : c.collapsed
@@ -2910,7 +2972,10 @@ class StudyCanvasState extends State<StudyCanvas>
                           'visuals': <Map<String,dynamic>>[],
                         }),
                       ),
-                      'text' when c.passageNote && _editingPassage == c.id => _passageEditor(c),
+                      'text' when c.passageNote => _AnnotationMeasure(
+                        onHeight: (height) => _fitAsideHeight(c, height),
+                        child: _editingPassage == c.id ? _passageEditor(c) : _plainCardText(c),
+                      ),
                       'conversation' => _ThreadNode(owner: this, card: c),
                       'lecture' => Column(
                         children: [
@@ -3018,39 +3083,13 @@ class StudyCanvasState extends State<StudyCanvas>
                           },
                         ),
                       ),
-                      _ => SingleChildScrollView(
-                        key: ValueKey('${c.id}:$_cardTextEpoch'),
-                        padding: const EdgeInsets.all(20),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: SelectableText(
-                            c.text,
-                            onSelectionChanged: (selection, cause) {
-                              if (!selection.isCollapsed) {
-                                _selection
-                                  ..clear()
-                                  ..add(c.id);
-                                _detail.clear();
-                                _detail
-                                  ..objectId = c.id
-                                  ..start = selection.start
-                                  ..end = selection.end;
-                              }
-                            },
-                            style: TextStyle(
-                              fontSize: 16,
-                              height: 1.65,
-                              color: chrome.paperInk,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _ => _plainCardText(c),
                     },
                   ),
                 ),
               ),
             ),
-            if (!aside)
+            if (!c.passageLinked)
               SizedBox(
                 height: 16,
                 child: Align(

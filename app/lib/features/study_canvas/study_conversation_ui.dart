@@ -439,6 +439,18 @@ class _ConversationBodyState extends State<_ConversationBody> {
     if (mapEquals(owner._threadSummary[widget.card.id], summary)) return;
     owner._threadSummary[widget.card.id] = summary;
     owner._threadTick.value++;
+    if (widget.card.collapsed && widget.card.passageAside) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.card.collapsed) return;
+        owner._update(() {
+          owner._fitFoldedAside(widget.card);
+          if (owner._selection.contains(widget.card.id)) {
+            owner._selectionBounds = owner._boundsOfSelection();
+          }
+        });
+        owner._scene.value++;
+      });
+    }
   }
 
   Future<bool> save() async {

@@ -209,7 +209,7 @@ class StudyTransformSession {
       final height = card.contentRect.height;
       card.expandedH =
           resizedFrame != null &&
-              old.passageAside &&
+              old.passageLinked &&
               (height - old.contentRect.height).abs() > .5
           ? height
           : old.expandedH * _scale;

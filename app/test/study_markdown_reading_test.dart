@@ -353,6 +353,8 @@ void main() {
     await t.pumpAndSettle();
     expect(aside.collapsed, isTrue);
     expect(aside.rect.height, 40);
+    expect(aside.rect.width, lessThan(expanded.width));
+    expect(aside.rect.topLeft, expanded.topLeft);
     expect(input, findsNothing);
     expect(questionTitle, findsOneWidget);
     expect(await reopened.currentState!.flush(), isTrue);
@@ -462,7 +464,7 @@ void main() {
         generation: 'markdown-annotation',
         title: '进程笔记',
         text: '进程',
-        rect: const Rect.fromLTWH(240, 100, 410, 84),
+        rect: const Rect.fromLTWH(240, 100, 410, 350),
         sources: [
           StudyAnchor(
             id: 'source-range',
@@ -479,15 +481,43 @@ void main() {
       final frame = find.byKey(const ValueKey('study-card/annotation'));
       Finder inCard(Finder matching) =>
           find.descendant(of: frame, matching: matching);
-      for (final label in ['返回原文', '编辑注释', '新对话', '更多']) {
+      for (final label in ['返回原文', '收起', '更多']) {
         expect(inCard(find.byTooltip(label)), findsOneWidget);
       }
       expect(inCard(find.byIcon(Icons.notes_rounded)), findsNothing);
       expect(inCard(find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
 
       final d = key.currentState!.document!;
+      final card = d.cards.singleWhere((c) => c.passageNote);
+      expect(inCard(find.byTooltip('编辑注释')), findsNothing);
+      expect(inCard(find.byTooltip('新对话')), findsNothing);
+      expect(card.rect.height, lessThan(120));
+      final width = card.rect.width;
+      await t.tap(inCard(find.byTooltip('收起')));
+      await t.pumpAndSettle();
+      expect(card.collapsed, isTrue);
+      expect(card.rect.width, lessThan(width));
+      expect(card.rect.height, lessThan(50));
+      await t.tap(inCard(find.byTooltip('展开模块')));
+      await t.pumpAndSettle();
+      expect(card.rect.width, width);
+      expect(card.rect.height, lessThan(120));
+      await t.tap(inCard(find.byTooltip('更多')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('编辑注释'));
+      await t.pumpAndSettle();
+      await t.enterText(annotationInput(), List.filled(24, '多行注释').join('\n'));
+      await t.pumpAndSettle();
+      expect(card.rect.height, inInclusiveRange(300, 440));
+      await t.enterText(annotationInput(), '短注释');
+      await t.tap(inCard(find.byTooltip('保存')));
+      await t.pumpAndSettle();
+      expect(card.rect.height, lessThan(120));
+      expect(card.text, '短注释');
       for (var i = 0; i < 2; i++) {
-        await t.tap(inCard(find.byTooltip('新对话')));
+        await t.tap(inCard(find.byTooltip('更多')));
+        await t.pumpAndSettle();
+        await t.tap(find.text('新对话'));
         await t.pumpAndSettle();
       }
       expect(

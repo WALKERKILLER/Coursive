@@ -241,34 +241,78 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       d.cards.add(note);
       d.changed();
     }
+    if (note.collapsed) {
+      d.checkpoint();
+      _setCardCollapsed(note, false);
+      d.changed();
+    }
     _passageEditCheckpoint = null;
     _editingPassage = note.id;
     _revealCard(note);
   }
 
   Widget _passageEditor(StudyCard card) => Padding(
-    padding: const EdgeInsets.all(Space.md),
-    child: TextFormField(
-      key: ObjectKey(card),
-      initialValue: card.text,
-      autofocus: true,
-      expands: true,
-      maxLines: null,
-      maxLength: 2000,
-      textAlignVertical: TextAlignVertical.top,
-      decoration: InputDecoration.collapsed(hintText: l10n.studyAnnotationHint),
-      onChanged: (value) {
-        final d = document!;
-        if (!d.editable(card.layer) || !d.cards.contains(card)) return;
-        if (_passageEditCheckpoint != card.id) {
-          d.checkpoint();
-          _passageEditCheckpoint = card.id;
-        }
-        card.text = value;
-        d.changed();
-      },
+    padding: const EdgeInsets.all(Space.sm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: TextFormField(
+          key: ObjectKey(card),
+          initialValue: card.text,
+          autofocus: true,
+          minLines: 1,
+          maxLines: null,
+          maxLength: 2000,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+          decoration: InputDecoration.collapsed(hintText: l10n.studyAnnotationHint),
+          onChanged: (value) {
+            final d = document!;
+            if (!d.editable(card.layer) || !d.cards.contains(card)) return;
+            if (_passageEditCheckpoint != card.id) {
+              d.checkpoint();
+              _passageEditCheckpoint = card.id;
+            }
+            card.text = value;
+            d.changed();
+          },
+        )),
+        IconButton(
+          tooltip: l10n.commonSave,
+          icon: const Icon(Icons.check, size: 18),
+          onPressed: () => _update(() {
+            _editingPassage = null;
+            _passageEditCheckpoint = null;
+          }),
+        ),
+      ],
     ),
   );
+}
+
+class _AnnotationMeasure extends SingleChildRenderObjectWidget {
+  const _AnnotationMeasure({required this.onHeight, required super.child});
+  final ValueChanged<double> onHeight;
+
+  @override
+  _AnnotationMeasureBox createRenderObject(BuildContext context) => _AnnotationMeasureBox(onHeight);
+  @override
+  void updateRenderObject(BuildContext context, _AnnotationMeasureBox box) => box.onHeight = onHeight;
+}
+
+class _AnnotationMeasureBox extends RenderProxyBox {
+  _AnnotationMeasureBox(this.onHeight);
+  ValueChanged<double> onHeight;
+  double? reported;
+  @override
+  void performLayout() {
+    super.performLayout();
+    final height = size.height;
+    if (reported == height) return;
+    reported = height;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (attached && reported == height) onHeight(height);
+    });
+  }
 }
 
 class _SelectableMarkdownPassage extends StatefulWidget {
