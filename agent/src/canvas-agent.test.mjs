@@ -151,7 +151,7 @@ test('restored conversation can be estimated by the shipped SDK before a follow-
  });
 
 // Grounded answers (spec 0027): the host issues every citation ID.
-import { assembleAnswer, documentPassages, transcriptLines, stripMarkers } from './canvas-agent.mjs';
+import { assembleAnswer, playbackLinks, documentPassages, transcriptLines, stripMarkers } from './canvas-agent.mjs';
 test('passages keep UTF-16 offsets for Chinese and emoji text',()=>{
  const text='缓存命中 😀 很快。未命中时需要读取主存！Why? It is slower.';
  const parts=documentPassages(text);
@@ -374,4 +374,15 @@ test('selected-only conversations apply preferences and fetch profile only when 
  assert.equal(done.state,'done',done.error);
  assert.deepEqual(done.evidence,[]);
  assert.deepEqual(reads,['profile']);
+});
+
+test('a linked recording remains clickable when the model cites only a chapter',()=>{
+ const timed={id:'e1',kind:'timestamped_transcript',teaching_ref:'coursive://lecture/lec?v=1&start_ms=4798000&end_ms=4802000'};
+ const chapter={id:'e2',kind:'exact_text'};
+ const issued=new Map([['e1',timed],['e2',chapter]]);
+ const refs=[{evidence_id:'e1'},{evidence_id:'e2'},{evidence_id:'forged'}];
+ const answer=assembleAnswer(playbackLinks(refs,issued)+'章节概述 [[e:e2]]',issued);
+ assert.match(answer.answer,/01:19:58 \[\[e:e1\]\]/);
+ assert.deepEqual(answer.evidence,[timed,chapter]);
+ assert.equal(playbackLinks([],issued),'');
 });

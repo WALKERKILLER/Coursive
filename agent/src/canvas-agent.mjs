@@ -212,6 +212,24 @@ export function invalidQuotations(raw,scope){
  return [...invalid];
 }
 
+// Keep a handout's verified playback target usable even when the model
+// describes the timestamp in prose or cites only the broader chapter.
+export function playbackLinks(refs, issued) {
+ const links=[];
+ for(const {evidence_id:id} of refs){
+  const evidence=issued.get(id);
+  if(evidence?.kind!=="timestamped_transcript" || !evidence.teaching_ref)continue;
+  const link=new URL(evidence.teaching_ref);
+  if(link.protocol!=="coursive:" || link.host!=="lecture" || !link.searchParams.has("start_ms"))continue;
+  const ms=Number(link.searchParams.get("start_ms"));
+  if(!Number.isSafeInteger(ms) || ms<0)continue;
+  const seconds=Math.floor(ms/1000);
+  const stamp=[Math.floor(seconds/3600),Math.floor(seconds/60)%60,seconds%60].map(v=>String(v).padStart(2,"0")).join(":");
+  links.push(stamp+" [[e:"+id+"]]");
+ }
+ return links.length?"讲义原段关联的回听位置 · "+links.join("、")+"\n\n":"";
+}
+
 /**
  * Keeps only citations this run issued, numbered by first use, and at most two
  * suggestions. Everything else that looks like a marker is removed.
@@ -496,7 +514,7 @@ export class CanvasRunner {
       messages.push({role:"user",timestamp:Date.now(),content:[{type:"text",text:`系统引用核验：${invalidQuotes.map(id=>`[[e:${id}]]`).join("、")} 所在段落里找不到回答中加引号的原句。请对照本轮工具返回的段落改正，必要时重新读取；不要把前文的原句绑定到另一份来源。直接给出修正后的回答，校验过程留在内部。无法核实的内容改为有依据的转述或删去。`}]});
       continue;
      }
-     const assembled=assembleAnswer(raw,scope.evidence);
+     const assembled=assembleAnswer(playbackLinks(boundRefs,scope.evidence)+raw,scope.evidence);
      view.answer=assembled.answer;view.evidence=assembled.evidence;view.suggestions=assembled.suggestions;
      view.sources=context.sources.filter(s=>scope.seen.has(s.id)).map(s=>({...s.anchor,label:s.label}));
      view.context_key=canvasContextKey(context,request);
