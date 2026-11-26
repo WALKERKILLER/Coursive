@@ -896,6 +896,12 @@
   },
   "noteByAssistant": "助手整理",
   "noteMine": "我的笔记",
+  "noteSnapshotNumber": "课堂快照 · 第 {idx} 张",
+  "@noteSnapshotNumber": {"placeholders":{"idx":{"type":"int"}}},
+  "notePDFPage": "{file} · 第 {page} 页",
+  "@notePDFPage": {"placeholders":{"file":{"type":"String"},"page":{"type":"int"}}},
+  "lessonShowHint": "看提示",
+  "lessonNextTopic": "下一主题",
   "noteSlideRef": "PPT 第 {slideIdx} 张 · {value}",
   "@noteSlideRef": {
     "placeholders": {

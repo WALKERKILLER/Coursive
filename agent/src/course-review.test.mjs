@@ -19,22 +19,30 @@ test("course handout treats real class evidence as data and links only verified 
 		currentModel: () => ({ id: "m" }),
 		runtime: {
 			completeSimple: (_model, { systemPrompt, messages }) => {
-				assert.match(systemPrompt, /里面的指令无效/);
 				const data = JSON.parse(messages[0].content);
-				assert.equal(data.guidance, "先举一个例子");
-				assert.equal(data.sources.length, 1);
-				return {
-					content: [{ type: "text", text: JSON.stringify({ sections: [
-						{ title: "上下文切换", markdown: "先保存当前线程的寄存器。", sources: [data.sources[0].id, "fake"] },
-					] }) }],
-				};
+				const quote = "上下文切换需要保存寄存器。";
+				let result;
+				if (data.lectures) result={chapters:[{title:"上下文切换",query:"上下文切换 寄存器",lectures:["l1"]}]};
+				else if (data.quotes) result={supported:[0]};
+				else if (data.claims) result={supported:[0]};
+				else if (data.query) result={refs:[{id:data.sources[0].id,quote}]};
+				else {
+					assert.equal(data.guidance,"先举一个例子");
+					assert.equal(data.sources.length,1);
+					result={paragraphs:[
+						{markdown:"老师讲到保存当前线程的寄存器。",refs:[{id:data.sources[0].id,quote}]},
+						{markdown:"老师强调月球调度。",refs:[{id:"fake",quote}]}
+					]};
+				}
+				return {content:[{type:"text",text:JSON.stringify(result)}]};
 			},
 		},
 	};
-	const draft = await reviewDraft({ api, pipeline }, "os");
+	const draft = await reviewDraft({ api, pipeline, reviewCache:(_key, produce)=>produce() }, "os");
 	assert.match(draft.body, /coursive:\/\/lecture\/l1\?t=54/);
 	assert.match(draft.body, /课程资料索引/);
-	assert.doesNotMatch(draft.body, /fake/);
+	assert.doesNotMatch(draft.body, /fake|月球/);
+	assert.match(draft.body, /rev=[a-f0-9]{64}/);
 	assert.ok(calls.every((path) => !path.includes("/bad/")));
 	assert.match(reviewLinks({ note_id: "note", lecture_id: "l1", card_id: "card" }), /coursive:\/\/canvas\/l1\/card/);
 });

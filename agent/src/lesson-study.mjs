@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readLessonSlide } from "./vision.mjs";
+import { supportedClaims, verifiedLookup } from "./teaching-lookup.mjs";
+import { transcriptIndex } from "./teaching-evidence.mjs";
 import { entryFrom } from "./usage.mjs";
 
 const hash = text => createHash("sha256").update(text).digest("hex");
@@ -27,7 +29,8 @@ function transcriptSources(lectureId, segments) {
     if (!w || w.text.length + row.text.length > 720) {
       w={pos:Math.floor(row.start_ms/1000), text:"", rows:[]}; windows.push(w);
     }
-    w.rows.push({at:w.text.length + (w.text?1:0), seconds:Math.floor(row.start_ms/1000)});
+    w.rows.push({at:w.text.length + (w.text?1:0), seconds:Math.floor(row.start_ms/1000),
+      ...(Number.isFinite(row.end_ms) && row.end_ms>row.start_ms ? {startMs:row.start_ms,endMs:row.end_ms} : {})});
     w.text += (w.text?"\n":"") + row.text.trim();
   }
   return windows.map(w => source(lectureId, "transcript", w.text.slice(0,850), "课堂录音 · "+w.pos+" 秒",
@@ -84,27 +87,17 @@ const readRole = name => {
   return /教材|参考书|textbook|reading/iu.test(name) ? "supplement" : "courseware";
 };
 
-function rankTranscript(windows, query) {
-  const terms = [...new Set(query.toLowerCase().split(/[\s,，。；、/|]+/u).filter(value => value.length > 1))];
-  return windows.map(item => {
-    const text = item.text.toLowerCase();
-    const offsets = terms.map(term=>({at:text.indexOf(term),weight:term.length})).filter(match=>match.at>=0);
-    const best = offsets.sort((a,b)=>b.weight-a.weight)[0];
-    const seconds = best ? item.segments.findLast(row=>row.at<=best.at)?.seconds : undefined;
-    return {item,seconds,score:offsets.reduce((sum, match)=>sum+match.weight,0)};
-  }).filter(hit=>hit.score>0).sort((a,b)=>b.score-a.score).slice(0,3);
-}
-
 // All input paths are bound to the lecture before the model can request a lookup.
-export async function lectureEvidence(call, lectureId, readSlide) {
+export async function lectureEvidence(call, lectureId, readSlide, verify, {localSlides=false}={}) {
   const base = "/api/lectures/" + enc(lectureId);
   const [segments, files, slides] = await Promise.all([
     call("GET", base+"/transcript"), call("GET", base+"/courseware"),
-    call("GET", base+"/slides").catch(() => []),
+    call("GET", base+(localSlides?"/slides?local=1":"/slides")).catch(() => []),
   ]);
   const windows = transcriptSources(lectureId, segments);
+  let searchTranscript;
   const parsed = new Map((files ?? []).filter(f => f.parse?.state === "done").map(f => [f.path,f]));
-  const pictures = (slides ?? []).filter(s => Number.isInteger(s.idx) && Number.isFinite(s.t_sec))
+  const pictures = (slides ?? []).filter(s => Number.isInteger(s.idx))
     .sort((a,b) => a.t_sec-b.t_sec);
   const inspected = new Map();
   let lookups = 0, figures = 0, failed = 0, signal;
@@ -119,8 +112,10 @@ export async function lectureEvidence(call, lectureId, readSlide) {
     if (!readSlide || figures >= 6 || signal.aborted) return null;
     figures++;
     try {
-      const text = (await readSlide(base+"/slides/"+slide.idx+"/image",signal))?.trim().slice(0, 1100);
+      const image = await readSlide(base+"/slides/"+slide.idx+"/image",signal);
+      const text = (typeof image==="string" ? image : image?.text)?.trim().slice(0, 1100);
       const item = text ? source(lectureId,"slide",text,"课件截图 "+slide.idx,"coursive://slide/"+enc(lectureId)+"/"+slide.idx,slide.idx) : null;
+      if (item && image?.imageHash) item.imageHash=image.imageHash;
       inspected.set(slide.idx,item);
       return item;
     } catch {
@@ -138,12 +133,13 @@ export async function lectureEvidence(call, lectureId, readSlide) {
     } catch { failed++; }
     return null;
   }
-  async function lookup(query, {visual = false, seconds} = {}) {
+  async function lookup(query, {visual = false, seconds, question} = {}) {
     if (typeof query !== "string" || !query.trim() || query.length > 140 || ++lookups > 10) return [];
-    const ranked = rankTranscript(windows,query);
-    const matches = ranked.map(hit=>hit.item);
+    searchTranscript ??= transcriptIndex(windows);
+    const ranked = searchTranscript(query);
+    const matches = ranked.map(hit=>({...hit.item, position:hit.seconds, link:"coursive://lecture/"+enc(lectureId)+"?t="+hit.seconds}));
     const near = Number.isFinite(seconds) ? windows.findLast(w => w.position <= seconds) : null;
-    if (near && !matches.includes(near)) matches.push(near);
+    if (near && !matches.some(x=>x.id===near.id)) matches.push(near);
     const hits = parsed.size
       ? await call("GET", base+"/courseware/search?limit=8&q="+enc(query)).catch(() => { failed++; return []; })
       : [];
@@ -162,10 +158,26 @@ export async function lectureEvidence(call, lectureId, readSlide) {
         const active = pictures.findLast(s => s.t_sec <= second);
         if (active && second - active.t_sec <= 150) slidesForTopic.push(active);
       }
-      if (!anchors.length && !windows.length) slidesForTopic.push(...sample(pictures,3));
+      if (!slidesForTopic.length) slidesForTopic.push(...sample(pictures,3));
     }
-    for (const picture of new Set(slidesForTopic)) excerpts.push(await see(picture));
-    return [...matches,...excerpts.filter(Boolean)];
+    for (const picture of new Set(slidesForTopic)) {
+      const slide = await see(picture);
+      if (!slide) continue;
+      excerpts.push(slide);
+      if (!parsed.size) continue;
+      const result = await call("GET",base+"/courseware/displayed-page?visible="+enc(slide.text)).catch(()=>null);
+      const page = result?.match;
+      if (!parsed.has(page?.file) || !Number.isInteger(page.page) || page.page<1 ||
+          !page.text || !/^[a-f0-9]{64}$/.test(page.revision)) continue;
+      const url = new URL("coursive://courseware/"+enc(lectureId));
+      url.searchParams.set("file",page.file);
+      url.searchParams.set("page",String(page.page));
+      url.searchParams.set("slide",String(picture.idx));
+      url.searchParams.set("index_rev",page.revision);
+      excerpts.push(source(lectureId,"courseware",page.text,page.name+" · 第"+page.page+"页",url.href,page.page,undefined,"displayed_page"));
+    }
+    const candidates=[...matches,...excerpts.filter(Boolean)];
+    return verify ? verify(question || query,candidates) : candidates;
   }
   return {
     catalog,
@@ -188,7 +200,7 @@ export async function lectureEvidence(call, lectureId, readSlide) {
 }
 
 export async function runLessonStudy({plugins,memory,pipeline,call},lectureId,input) {
-  if (!idPattern.test(lectureId) || !["open","status","attempt","position","answer","revise"].includes(input?.action))
+  if (!idPattern.test(lectureId) || !["open","status","attempt","position","answer","revise","hint","skip"].includes(input?.action))
     throw Error("无效的课程学习请求。");
   if (input.action==="answer" && (!idPattern.test(input.submissionId??"") || !idPattern.test(input.questionId??"") || typeof input.answer!=="string"))
     throw Error("请从当前题目提交答案。");
@@ -205,11 +217,14 @@ export async function runLessonStudy({plugins,memory,pipeline,call},lectureId,in
   const deadline = AbortSignal.timeout(330000);
   return rec.mod.lessonStudy.run(dir,{...input,course:course.id,lecture:lectureId,title:lecture.title||course.title,
     memory: needsMemory ? await memory.prompt({pinnedOnly:true,courseId:course.id}) : ""},{
+    skillTracking:true,
+    supportedClaims:claims=>{plugin(); return supportedClaims(pipeline,claims,deadline);},
     materials:()=>lectureMaterials(call,lectureId,(path,signal)=>readLessonSlide(pipeline,path,signal)),
     evidence:()=>{
       plugin();
       return lectureEvidence((...args)=>{ plugin(); return call(...args); }, lectureId,
-        (path,signal)=>{ plugin(); return readLessonSlide(pipeline,path,signal); });
+        (path,signal)=>{ plugin(); return readLessonSlide(pipeline,path,signal,true); },
+        (query,items)=>{plugin();return verifiedLookup(pipeline,query,items,deadline);});
     },
     model:async (systemPrompt,payload)=>{
       plugin();

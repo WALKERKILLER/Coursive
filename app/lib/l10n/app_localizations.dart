@@ -2518,6 +2518,30 @@ abstract class AppLocalizations {
   /// **'我的笔记'**
   String get noteMine;
 
+  /// No description provided for @noteSnapshotNumber.
+  ///
+  /// In zh, this message translates to:
+  /// **'课堂快照 · 第 {idx} 张'**
+  String noteSnapshotNumber(int idx);
+
+  /// No description provided for @notePDFPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{file} · 第 {page} 页'**
+  String notePDFPage(String file, int page);
+
+  /// No description provided for @lessonShowHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'看提示'**
+  String get lessonShowHint;
+
+  /// No description provided for @lessonNextTopic.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一主题'**
+  String get lessonNextTopic;
+
   /// No description provided for @noteSlideRef.
   ///
   /// In zh, this message translates to:

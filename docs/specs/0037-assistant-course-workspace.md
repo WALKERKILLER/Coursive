@@ -16,6 +16,8 @@ The host stages native commands and library writes in Ask mode. Editing an origi
 
 Course review saves an editable Markdown note under the course’s selected lecture, then pins one reference to it on the chosen lecture canvas. The canonical note and card have stable identities. Retry repairs a missing card, preserves existing content and reports a conflict if the target identity belongs to another object. Card geometry and existing ink remain user-owned. The model organizes course material and writes the explanation using verified source IDs. The host produces the links. The user can change the teaching instructions from assistant preferences. When only part of the course is readable, the handout identifies its coverage.
 
+The host builds a concept outline from the available lecture catalogs and checkpoints each completed chapter under the selected model and its source revisions. Reopening the saved note bypasses generation. Explicit revision presents the proposed change for confirmation against the exact body read. Changing writing preferences can reuse the evidence cache.
+
 ## Plan
 
 Register typed pi tools, reuse daemon library commands and route active canvas commands through Flutter’s player and transform handlers.

@@ -324,6 +324,8 @@ class _LessonReaderState extends State<_LessonReader> {
             ),
           ),
         ),
+        if (pending is Map && pending['hints'] is List && (pending['hints'] as List).isNotEmpty)
+          Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:Text((pending['hints'] as List).last.toString())),
         if (widget.state['feedback'] case final String feedback)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -344,13 +346,18 @@ class _LessonReaderState extends State<_LessonReader> {
                 onPressed: widget.busy ? null : widget.open,
                 child: Text(l10n.lessonStudyStart),
               ),
-            if (pending is Map)
+            if (pending is Map && widget.state['recommendedNext']!=true)
               Flexible(
                 child: TextButton(
                   onPressed: widget.busy ? null : () => _answer(pending),
                   child: Text(l10n.lessonPractice),
                 ),
               ),
+            if (pending is Map && widget.state['skillTracking']==true) ...[
+              if (widget.state['recommendedNext']!=true && ((pending['hints'] as List?)?.length??0)<2)
+                IconButton(tooltip:l10n.lessonShowHint,icon:const Icon(Icons.lightbulb_outline),onPressed:widget.busy?null:()=>widget.action('hint',{'questionId':pending['id']})),
+              TextButton(onPressed:widget.busy?null:()=>widget.action('skip',{'questionId':pending['id']}),child:Text(l10n.lessonNextTopic)),
+            ],
             const Spacer(),
             if (widget.state.isNotEmpty)
               IconButton(

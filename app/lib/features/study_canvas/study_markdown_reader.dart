@@ -116,7 +116,7 @@ extension _StudyMarkdownEditing on StudyCanvasState {
 
   void _openMarkdownReference(CoursiveRef ref) {
     final lectureId = widget.ctl.lectureId;
-    if (ref is TimeRef &&
+    if (ref is TimeRef && ref.quote == null &&
         (ref.lectureId.isEmpty || ref.lectureId == lectureId)) {
       widget.ctl.seekTo(ref.seconds * 1000);
       final d = document!;

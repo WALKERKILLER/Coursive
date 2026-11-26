@@ -350,6 +350,21 @@ func (s *Server) testMinerU(_ http.ResponseWriter, r *http.Request) (any, error)
 
 // searchCourseware searches the parsed courseware of a lecture, or of its
 // whole course with scope=course.
+func (s *Server) classroomPagePreview(_ http.ResponseWriter, r *http.Request) (any, error) {
+	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	return s.Lib.PreviewClassroomPage(r.Context(), r.PathValue("id"), q.Get("file"), q.Get("rev"), page)
+}
+
+func (s *Server) displayedCoursewarePage(_ http.ResponseWriter, r *http.Request) (any, error) {
+	text := r.URL.Query().Get("visible")
+	if len(text) == 0 || len(text) > 8192 {
+		return nil, badRequest("快照文字长度无效")
+	}
+	match, err := s.Lib.DisplayedPDFPage(r.Context(), r.PathValue("id"), text)
+	return map[string]any{"match": match}, err
+}
+
 func (s *Server) searchCourseware(_ http.ResponseWriter, r *http.Request) (any, error) {
 	ctx, id, q := r.Context(), r.PathValue("id"), r.URL.Query()
 	ids := []string{id}

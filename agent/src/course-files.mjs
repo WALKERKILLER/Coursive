@@ -111,11 +111,24 @@ export function courseFileTools(deps, conv, act) {
 			name: "prepare_course_review",
 			label: "生成课程复习讲义",
 			description: "Use for a user's request to organize course material into a review handout, save editable Markdown and pin that file to the canvas. Includes an organized course material index. Use this single tool rather than creating an extra note or moving unnamed originals. On retry it reuses the existing file and card.",
-			parameters: Type.Object({ course_id: courseField }),
+			parameters: Type.Object({ course_id: courseField, revise: Type.Optional(Type.Boolean({description:"Regenerate an existing handout only on explicit request. Show the student the proposed edits."})) }),
 			execute: async (_id, p, signal) => {
 				if (!/讲义|handout/i.test(conv.lastUser ?? "")) throw Error("需要用户请求复习讲义");
 				const course_id = await courseId(p.course_id);
-				const { lecture_id, body, existing, subtitle } = await reviewDraft(deps, course_id, signal, conv.context?.lecture_id);
+				const revise = p.revise === true;
+				if (revise && !/重写|重做|修订|再生成|重新|更新|改写|revise|rewrite|regenerate/i.test(conv.lastUser ?? "")) throw Error("需要用户明确要求修订已有讲义");
+				const { lecture_id, body, existing, subtitle, previous } = await reviewDraft(deps, course_id, signal, conv.context?.lecture_id, revise);
+				if (previous) {
+					if (body === previous.body) return output({unchanged:true,note_id:previous.id,lecture_id});
+					const before = previous.body.split("\n"), after = body.split("\n");
+					let first=0, oldEnd=before.length, newEnd=after.length;
+					while (first<oldEnd && first<newEnd && before[first]===after[first]) first++;
+					while (oldEnd>first && newEnd>first && before[oldEnd-1]===after[newEnd-1]) { oldEnd--; newEnd--; }
+					const lines = [...before.slice(first,oldEnd).map(line=>"− "+line),...after.slice(first,newEnd).map(line=>"+ "+line)];
+					return act({kind:"save_note",title:"修订「"+previous.title+"」",forceConfirm:true,lines,
+						op:{type:"save_note",note:{id:previous.id,course_id,lecture_id,title:previous.title,body,base_body:previous.body,source:previous.source}},
+						doneTitle:"已修订复习讲义",said:()=>"已保存到原讲义。"});
+				}
 				return act({
 					kind: "course_review", title: `保存并添加「${subtitle} · 复习讲义」`,
 					doneTitle: existing ? "已打开已有复习讲义" : "复习讲义已保存并添加到画布",

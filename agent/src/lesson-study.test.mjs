@@ -35,6 +35,7 @@ test("topic lookup reads full-lecture matches and opens only scoped files and fr
    {lecture_id:"other",file:doc,offset:100},{lecture_id:"L",file:"unknown",offset:0},
    {lecture_id:"L",file:doc,offset:53},{lecture_id:"L",file:doc,offset:99},{lecture_id:"L",file:exam,offset:3},
   ];
+  if(u.pathname.endsWith("/displayed-page"))return {match:null};
   reads.push([u.searchParams.get("path"),u.searchParams.get("offset")]);
   return {text:"实际读取的原文"};
  };

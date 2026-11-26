@@ -1,3 +1,4 @@
+import { digest } from "./teaching-evidence.mjs";
 import { Type } from "typebox";
 import { documentPassages, neutralize } from "./canvas-agent.mjs";
 
@@ -13,6 +14,7 @@ export const COURSE_TOOLS = [
 		parameters: Type.Object({
 			source_id: Type.String({ maxLength: 100 }),
 			offset: Type.Optional(Type.Integer({ minimum: 0 })),
+			classroom_question: Type.Optional(Type.String({minLength:1,maxLength:500,description:"查找老师在哪里讲到本问题时，填写需要课堂原文支持的问题。"})),
 			limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 12000 })),
 		}, { additionalProperties: false }),
 	},
@@ -21,7 +23,8 @@ export const COURSE_TOOLS = [
 // Candidate IDs are scoped to this run. A model cannot nominate another course,
 // an arbitrary filesystem path, or reuse evidence from a previous answer.
 export class CanvasCourseSources {
-	constructor(call, base) {
+	constructor(call, base, verify) {
+		this.verify=verify;
 		this.call = call;
 		this.base = base;
 		this.candidates = new Map();
@@ -63,7 +66,19 @@ export class CanvasCourseSources {
 		scope.seen.add(id);
 		// Each passage keeps its own rune range, so a click re-reads exactly the
 		// cited sentence and the daemon can recover its page or transcript time.
-		const passages = documentPassages(text).map(p => {
+		let ranges=documentPassages(text);
+		if (this.verify && args.classroom_question) {
+			const candidates=ranges.map((p,i)=>({id:id+"-"+i,text:p.text,fingerprint:digest(p.text),kind:"excerpt",
+				link:"coursive://lecture/"+encodeURIComponent(result.lecture_id),position:offset}));
+			const verified=await this.verify(args.classroom_question,candidates,signal);
+			const exact=new Set(verified.map(row=>row.verifiedQuote));
+			ranges=ranges.flatMap(p=>[...exact].flatMap(quote=>{
+				const at=p.text.indexOf(quote);
+				if(at<0 || p.text.indexOf(quote,at+1)>=0 || text.indexOf(quote)!==text.lastIndexOf(quote))return [];
+				return [{start:p.start+at,text:quote}];
+			}));
+		}
+		const passages = ranges.map(p => {
 			const start = offset + [...text.slice(0, p.start)].length, end = start + [...p.text].length;
 			const anchor = {
 				id: result.id, workspace_id: "", object_id: "", kind: timed ? "video" : result.page ? "pdf" : "text",

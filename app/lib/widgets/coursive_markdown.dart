@@ -24,15 +24,17 @@ sealed class CoursiveRef {
     final u = Uri.tryParse(url);
     // coursive-app:// is the same link as exported for other programs.
     if (u == null || (u.scheme != 'coursive' && u.scheme != 'coursive-app')) return null;
+    final verified = u.queryParameters['v'] == '1';
+    final quote = verified ? u.queryParameters['q'] : null;
     final t = TimeLink.parse(url);
-    if (t != null) return TimeRef(t.lectureId, t.seconds);
+    if (t != null) return TimeRef(t.lectureId, t.seconds, quote: quote, startMs: int.tryParse(u.queryParameters['start_ms'] ?? ''), endMs: int.tryParse(u.queryParameters['end_ms'] ?? ''));
     final seg = u.pathSegments;
     if (u.host == 'slide' && seg.length >= 2) {
       final idx = int.tryParse(seg[1]);
-      return idx == null ? null : SlideRef(seg[0], idx);
+      return idx == null ? null : SlideRef(seg[0], idx, snapshotOnly: verified, imageRevision: u.queryParameters['image_rev']);
     }
     if (u.host == 'courseware' && seg.isNotEmpty) {
-      return CoursewareRef(seg[0], u.queryParameters['file'] ?? '', u.queryParameters['q'] ?? '');
+      return CoursewareRef(seg[0], u.queryParameters['file'] ?? '', u.queryParameters['q'] ?? '', verified: verified, page: int.tryParse(u.queryParameters['page'] ?? ''), indexRevision: u.queryParameters['index_rev']);
     }
     if (u.host == 'lecture' && seg.isNotEmpty) return LectureRef(seg[0]);
     if (u.host == 'note' && seg.length == 1) return NoteRef(seg[0]);
@@ -43,19 +45,26 @@ sealed class CoursiveRef {
 }
 
 class TimeRef extends CoursiveRef {
-  const TimeRef(this.lectureId, this.seconds);
+  const TimeRef(this.lectureId, this.seconds, {this.quote, this.startMs, this.endMs});
+  final String? quote;
+  final int? startMs, endMs;
   final String lectureId; // empty: the lecture in context
   final int seconds;
 }
 
 class SlideRef extends CoursiveRef {
-  const SlideRef(this.lectureId, this.idx);
+  const SlideRef(this.lectureId, this.idx, {this.snapshotOnly = false, this.imageRevision});
+  final bool snapshotOnly;
+  final String? imageRevision;
   final String lectureId;
   final int idx;
 }
 
 class CoursewareRef extends CoursiveRef {
-  const CoursewareRef(this.lectureId, this.file, this.query);
+  const CoursewareRef(this.lectureId, this.file, this.query, {this.verified=false, this.page, this.indexRevision});
+  final int? page;
+  final String? indexRevision;
+  final bool verified;
   final String lectureId, file, query;
 }
 

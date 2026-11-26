@@ -1415,6 +1415,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noteMine => '我的笔记';
 
   @override
+  String noteSnapshotNumber(int idx) {
+    return '课堂快照 · 第 $idx 张';
+  }
+
+  @override
+  String notePDFPage(String file, int page) {
+    return '$file · 第 $page 页';
+  }
+
+  @override
+  String get lessonShowHint => '看提示';
+
+  @override
+  String get lessonNextTopic => '下一主题';
+
+  @override
   String noteSlideRef(Object slideIdx, Object value) {
     return 'PPT 第 $slideIdx 张 · $value';
   }

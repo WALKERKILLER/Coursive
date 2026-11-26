@@ -19,6 +19,10 @@ For supported plugins the host provides a short lecture overview and bounded top
 
 The tutor first chooses teaching questions, then reads the material that can answer them. An explanation paragraph may cite more than one excerpt. Classroom examples, supplemental examples and self-tests carry their respective labels. Source links use the original asset identity and location. A saved handout and its outstanding exercise open without new model calls. The optional lookup service preserves access for plugins with the original contract.
 
+Versioned citations carry the quoted text and its source revision. A transcript link includes the measured utterance interval when available. A snapshot link opens the image. The lecture-scoped `courseware/displayed-page` lookup accepts visible text and returns a unique PDF page with its file digest. The reader opens `courseware/page-preview` against that digest. Ambiguous visual matches produce an empty result. Course-scope canvas reads can check an explicit classroom question against the material authorized by the current search.
+
+A compatible tutor records the assessed skill, question, rubric, answer, quotation and hint status on submission. Historic missing hint status is unknown. Two successive correct answers to distinct questions on a skill, both independently completed, qualify the student for a next-topic recommendation. Students can request a hint or skip ahead explicitly. The reading position and side conversations have no assessment effects.
+
 ## Plan
 
 Use the existing pi model pipeline, note library, grounded selection runner and course-tutor workspace. See [the ownership decision](../decisions/0043-lesson-study.md).

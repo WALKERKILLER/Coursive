@@ -335,6 +335,8 @@ func (s *Server) Handler() http.Handler {
 	h("DELETE /api/lectures/{id}/courseware", s.deleteCourseware)
 	h("GET /api/lectures/{id}/courseware/text", s.coursewareText)
 	h("GET /api/lectures/{id}/courseware/search", s.searchCourseware)
+	h("GET /api/lectures/{id}/courseware/displayed-page", s.displayedCoursewarePage)
+	h("GET /api/lectures/{id}/courseware/page-preview", s.classroomPagePreview)
 	h("POST /api/courses/{id}/review-handout", s.courseReview)
 	h("POST /api/courses/{id}/canvas-note", s.linkCourseNote)
 	h("POST /api/courses/{id}/material-folder", s.courseFolder)
@@ -661,7 +663,13 @@ func (s *Server) localVideoStream(r *http.Request, id string) *playStream {
 // files) so the player can show slides while streaming.
 func (s *Server) slides(_ http.ResponseWriter, r *http.Request) (any, error) {
 	ctx, id := r.Context(), r.PathValue("id")
-	sl, err := s.lectureSlides(ctx, id)
+	var sl []store.Slide
+	var err error
+	if r.URL.Query().Get("local") == "1" {
+		sl, err = s.St.Slides(ctx, id)
+	} else {
+		sl, err = s.lectureSlides(ctx, id)
+	}
 	if err != nil {
 		return nil, err
 	}

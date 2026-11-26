@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
@@ -316,9 +317,10 @@ class SourcePane extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = ref;
     return switch (r) {
-      TimeRef() => _MomentSource(lectureId: r.lectureId.isNotEmpty ? r.lectureId : lectureId, ms: r.seconds * 1000, onClose: onClose),
-      SlideRef() => _MomentSource(lectureId: r.lectureId, slideIdx: r.idx, onClose: onClose),
-      CoursewareRef() => CoursewareSource(lectureId: r.lectureId, file: r.file, query: r.query, onClose: onClose),
+      TimeRef() => _MomentSource(lectureId: r.lectureId.isNotEmpty ? r.lectureId : lectureId, ms: r.startMs ?? r.seconds * 1000, endMs: r.endMs, quote: r.quote, onClose: onClose),
+      SlideRef() => _MomentSource(lectureId: r.lectureId, slideIdx: r.idx, snapshotOnly: r.snapshotOnly, imageRevision: r.imageRevision, onClose: onClose),
+      CoursewareRef() when r.page!=null && r.indexRevision!=null => _ClassroomPage(ref:r,onClose:onClose),
+      CoursewareRef() => CoursewareSource(lectureId: r.lectureId, file: r.file, query: r.query, verified: r.verified, page: r.page, indexRevision:r.indexRevision, onClose: onClose),
       // Lectures and files open in place of a pane (openRef).
       LectureRef() || FileRef() || NoteRef() || CanvasRef() => const SizedBox.shrink(),
     };
@@ -348,9 +350,11 @@ class _PaneHeader extends StatelessWidget {
 }
 
 class _MomentSource extends StatefulWidget {
-  const _MomentSource({required this.lectureId, this.ms, this.slideIdx, this.onClose});
+  const _MomentSource({required this.lectureId, this.ms, this.endMs, this.slideIdx, this.quote, this.imageRevision, this.snapshotOnly = false, this.onClose});
   final String lectureId;
-  final int? ms, slideIdx;
+  final int? ms, endMs, slideIdx;
+  final String? quote, imageRevision;
+  final bool snapshotOnly;
   final VoidCallback? onClose;
   @override
   State<_MomentSource> createState() => _MomentSourceState();
@@ -361,10 +365,10 @@ class _MomentSourceState extends State<_MomentSource> {
 
   Future<(Slide?, List<Segment>, int)> _load() async {
     final api = context.read<AppState>().api;
-    final slides = jsonList(await api.get('/api/lectures/${widget.lectureId}/slides').catchError((_) => <dynamic>[]))
+    final slides = widget.quote != null ? <Slide>[] : (jsonList(await api.get('/api/lectures/${widget.lectureId}/slides').catchError((_) => <dynamic>[]))
         .map((e) => Slide((e as Map).cast<String, dynamic>()))
         .toList()
-      ..sort((a, b) => a.tSec.compareTo(b.tSec));
+      ..sort((a, b) => a.tSec.compareTo(b.tSec)));
     final keys = slides.any((s) => s.isKey) ? slides.where((s) => s.isKey).toList() : slides;
     Slide? slide;
     var ms = widget.ms ?? 0;
@@ -376,10 +380,27 @@ class _MomentSourceState extends State<_MomentSource> {
         if (s.tSec * 1000 <= ms + 5000) slide = s;
       }
     }
-    final from = (ms - 30000).clamp(0, 1 << 40), to = ms + 90000;
+    if (widget.snapshotOnly) {
+      if (slide == null) throw Exception(l10n.studyCitationUnavailable);
+      if (widget.imageRevision != null) {
+        final url = slideImageUrl(api.baseUrl,api.token,widget.lectureId,slide.idx);
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200 || sha256.convert(response.bodyBytes).toString() != widget.imageRevision) {
+          throw Exception(l10n.studyCitationUnavailable);
+        }
+      }
+      return (slide, <Segment>[], ms);
+    }
+    final from = (ms - 30000).clamp(0, 1 << 40), to = (widget.endMs ?? (ms+90000)).clamp(ms+90000,ms+300000);
     final segs = jsonList(await api.get('/api/lectures/${widget.lectureId}/transcript', {'from_ms': '$from', 'to_ms': '$to'}).catchError((_) => <dynamic>[]))
         .map((e) => Segment((e as Map).cast<String, dynamic>()))
         .toList();
+    if (widget.quote case final String quote) {
+      final start = segs.indexWhere((s) => s.startMs == ms || (widget.endMs == null && s.startMs ~/ 1000 == ms ~/ 1000));
+      if (start < 0 || !segs.skip(start).takeWhile((s) => widget.endMs == null || s.startMs < widget.endMs!).map((s)=>s.text.trim()).join('\n').contains(quote)) {
+        throw Exception(l10n.studyCitationUnavailable);
+      }
+    }
     return (slide, segs, ms);
   }
 
@@ -396,11 +417,11 @@ class _MomentSourceState extends State<_MomentSource> {
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _PaneHeader(
             icon: widget.slideIdx != null ? Icons.slideshow_outlined : Icons.graphic_eq_rounded,
-            title: widget.slideIdx != null ? l10n.noteSlideRef(widget.slideIdx!, fmtClock(ms)) : l10n.noteAudioRef(fmtClock(ms)),
+            title: widget.snapshotOnly ? l10n.noteSnapshotNumber(widget.slideIdx!) : widget.slideIdx != null ? l10n.noteSlideRef(widget.slideIdx!, fmtClock(ms)) : l10n.noteAudioRef(fmtClock(ms)),
             onClose: widget.onClose,
           ),
           Expanded(
-            child: d == null
+            child: snap.hasError ? ErrorState(error: snap.error!) : d == null
                 ? const CenteredLoader()
                 : ListView(padding: const EdgeInsets.fromLTRB(Space.lg, Space.xs, Space.lg, Space.lg), children: [
                     if (d.$1 != null) ...[
@@ -423,16 +444,16 @@ class _MomentSourceState extends State<_MomentSource> {
                       ),
                       Padding(
                         padding: const EdgeInsets.only(top: Space.xs, bottom: Space.lg),
-                        child: Text(l10n.noteSlideAt(d.$1!.idx, fmtClock(d.$1!.tSec * 1000)), style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
+                        child: Text(widget.snapshotOnly ? l10n.noteSnapshotNumber(d.$1!.idx) : l10n.noteSlideAt(d.$1!.idx, fmtClock(d.$1!.tSec * 1000)), style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
                       ),
                     ],
-                    FilledButton.tonalIcon(
+                    if (!widget.snapshotOnly) FilledButton.tonalIcon(
                       onPressed: () => seekOrOpen(context, widget.lectureId, ms ~/ 1000),
                       icon: const Icon(Icons.play_arrow_rounded),
                       label: Text(l10n.notePlayFrom(fmtClock(ms))),
                     ),
                     const SizedBox(height: Space.lg),
-                    if (d.$2.isEmpty)
+                    if (d.$2.isEmpty && !widget.snapshotOnly)
                       Text(l10n.noteNoTranscriptHere, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant))
                     else
                       for (final s in d.$2) _SegmentLine(seg: s, current: s.startMs <= ms && ms < s.endMs, lectureId: widget.lectureId),
@@ -494,16 +515,56 @@ Future<(CoursewareFile, String)> loadParsedCourseware(Api api, String lectureId,
 }
 
 /// A courseware passage in the supporting pane, opened at [query].
+class _ClassroomPage extends StatefulWidget {
+  const _ClassroomPage({required this.ref,this.onClose});
+  final CoursewareRef ref;
+  final VoidCallback? onClose;
+  @override
+  State<_ClassroomPage> createState()=>_ClassroomPageState();
+}
+class _ClassroomPageState extends State<_ClassroomPage> {
+  late final _page = _load();
+  Future<Uint8List> _load() async {
+    final ref=widget.ref;
+    final result=await context.read<AppState>().api.get('/api/lectures/${Uri.encodeComponent(ref.lectureId)}/courseware/page-preview',{
+      'file':ref.file,'page':'${ref.page}','rev':ref.indexRevision!,
+    }) as Map;
+    return base64Decode(result['png'] as String);
+  }
+  @override
+  Widget build(BuildContext context) {
+    final ref=widget.ref;
+    return Column(children:[
+      _PaneHeader(icon:Icons.picture_as_pdf_outlined,title:l10n.notePDFPage(p.posix.basename(ref.file),ref.page!),onClose:widget.onClose),
+      Expanded(child:FutureBuilder(future:_page,builder:(context,snapshot) {
+        if(snapshot.hasError)return ErrorState(error:snapshot.error!);
+        if(snapshot.data==null)return const CenteredLoader();
+        return InteractiveViewer(child:Image.memory(snapshot.data!,fit:BoxFit.contain));
+      })),
+    ]);
+  }
+}
 class CoursewareSource extends StatefulWidget {
-  const CoursewareSource({super.key, required this.lectureId, required this.file, this.query = '', this.onClose});
+  const CoursewareSource({super.key, required this.lectureId, required this.file, this.query = '', this.verified = false, this.page, this.indexRevision, this.onClose});
   final String lectureId, file, query;
+  final bool verified;
+  final int? page;
+  final String? indexRevision;
   final VoidCallback? onClose;
   @override
   State<CoursewareSource> createState() => _CoursewareSourceState();
 }
 
 class _CoursewareSourceState extends State<CoursewareSource> {
-  late final _data = loadParsedCourseware(context.read<AppState>().api, widget.lectureId, widget.file);
+  late final _data = _load();
+  Future<(CoursewareFile,String)> _load() async {
+    final api = context.read<AppState>().api;
+    final parsed = await loadParsedCourseware(api,widget.lectureId,widget.file);
+    if (widget.verified && widget.query.isNotEmpty && !parsed.$2.contains(widget.query)) {
+      throw Exception(l10n.studyCitationUnavailable);
+    }
+    return parsed;
+  }
   final _reader = MdReaderController();
 
   @override
@@ -521,7 +582,7 @@ class _CoursewareSourceState extends State<CoursewareSource> {
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           _PaneHeader(
             icon: Icons.description_outlined,
-            title: d?.$1.name ?? l10n.assetCourseware,
+            title: d == null ? l10n.assetCourseware : widget.page == null ? d.$1.name : l10n.notePDFPage(d.$1.name,widget.page!),
             onClose: widget.onClose,
             trailing: d == null
                 ? null
@@ -677,7 +738,7 @@ void openRef(BuildContext context, CoursiveRef ref, {String lectureId = '', void
     openLibraryFile(context, ref.path);
     return;
   }
-  if (ref is TimeRef) {
+  if (ref is TimeRef && ref.quote == null) {
     if (onSeek != null) {
       onSeek(ref);
     } else {
