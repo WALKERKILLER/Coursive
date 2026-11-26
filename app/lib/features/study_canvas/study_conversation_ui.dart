@@ -373,7 +373,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (!mounted) return;
       data = Map<String, dynamic>.from(value as Map);
       data!['draft_attachments'] ??= <dynamic>[];
-      data!['context_scope'] ??= 'selected';
+      data!['context_scope'] ??= widget.card.passageAside && !owner.widget.standalone && (data!['revision'] ?? 0) == 0 ? 'course' : 'selected';
       final draft = '${data!['draft'] ?? ''}', passage = _asideAnchor;
       // Earlier builds placed their suggested question in the editable draft.
       final generatedDraft =
@@ -1116,7 +1116,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       pendingSnapshots: pendingSnapshots,
       contextScope: scope,
       onContextScope:
-          ready && !busy && !widget.card.passageAside ? setCourseScope : null,
+          ready && !busy && !owner.widget.standalone ? setCourseScope : null,
       onSnapshotRetry: attachSnapshot,
       onRemoveAttachment: (a) {
         setState(() => attachments.remove(a));

@@ -187,7 +187,7 @@ extension _StudyEvidence on StudyCanvasState {
       return _EvidenceView.invalid(l10n.studyEvidenceStale);
     }
     // A course passage is checked against its file when it is followed.
-    if (evidence['course_source'] is Map) return const _EvidenceView(null, []);
+    if (evidence['teaching_ref'] is String || evidence['course_source'] is Map) return const _EvidenceView(null, []);
     if (a.workspaceId.isNotEmpty && a.workspaceId != widget.ctl.lectureId) {
       return _EvidenceView.invalid(l10n.studyEvidenceOtherLecture);
     }
@@ -287,6 +287,13 @@ extension _StudyEvidence on StudyCanvasState {
   Future<void> _followEvidence(Map evidence) async {
     final d = document;
     if (d == null) return;
+    if (evidence['teaching_ref'] case final String link) {
+      final ref = CoursiveRef.parse(link);
+      if (ref is TimeRef || ref is SlideRef || ref is CoursewareRef) {
+        openRef(context, ref!, lectureId: widget.ctl.lectureId, onPlay: _playReadingReference);
+      }
+      return;
+    }
     if (evidence['course_source'] is Map) {
       return _followCourseEvidence(evidence);
     }
@@ -386,6 +393,7 @@ extension _StudyEvidence on StudyCanvasState {
         widget.ctl.seekTo(a.timeStartMs);
         unawaited(widget.ctl.player.pause());
       } else {
+        _activeLocalVideo = card.id;
         final local = _localVideoKeys[card.id]?.currentState;
         mark.videoBefore =
             local?.positionMs ??
@@ -662,7 +670,7 @@ class _CitationMarkState extends State<_CitationMark> {
         : owner._evidenceView(widget.evidence).problem;
     final active = _hover || _focus || _pinned;
     final mark = AnimatedContainer(
-      duration: Motion.short3,
+      duration: Motion.durationOf(context, Motion.short3),
       constraints: BoxConstraints(minWidth: size * 1.05),
       padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: .5),
       decoration: BoxDecoration(

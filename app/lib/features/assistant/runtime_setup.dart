@@ -147,7 +147,7 @@ class _RuntimeSetupCardState extends State<RuntimeSetupCard> {
               ),
               const SizedBox(height: Space.md),
               AnimatedSize(
-                duration: Motion.medium2,
+                duration: Motion.durationOf(context, Motion.medium2),
                 curve: Motion.emphasized,
                 child: st.running
                     ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

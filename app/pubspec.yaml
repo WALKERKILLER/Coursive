@@ -33,6 +33,7 @@ dependencies:
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.14.1
   window_manager: ^0.5.2
+  desktop_drop: ^0.8.0
 
 dev_dependencies:
   flutter_test:

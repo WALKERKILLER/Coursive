@@ -380,12 +380,12 @@ class _ProviderSetupPageState extends State<ProviderSetupPage> {
                       padding: const EdgeInsets.symmetric(vertical: Space.sm),
                       child: Row(children: [
                         Text(l10n.commonAdvanced, style: tt.labelLarge?.copyWith(color: cs.primary)),
-                        AnimatedRotation(turns: _advanced ? 0.5 : 0, duration: Motion.medium1, child: Icon(Icons.expand_more_rounded, color: cs.primary)),
+                        AnimatedRotation(turns: _advanced ? 0.5 : 0, duration: Motion.durationOf(context, Motion.medium1), child: Icon(Icons.expand_more_rounded, color: cs.primary)),
                       ]),
                     ),
                   ),
                   AnimatedSize(
-                    duration: Motion.medium2,
+                    duration: Motion.durationOf(context, Motion.medium2),
                     curve: Motion.emphasized,
                     child: !_advanced
                         ? const SizedBox(width: double.infinity)
@@ -424,7 +424,7 @@ class _ProviderSetupPageState extends State<ProviderSetupPage> {
         child: Row(children: [
           Expanded(
             child: AnimatedSwitcher(
-              duration: Motion.medium1,
+              duration: Motion.durationOf(context, Motion.medium1),
               child: _test == null
                   ? Text(
                       _builtin ? l10n.providerTestsOnSave : l10n.providerChosenModels(_chosen.length),
@@ -598,7 +598,7 @@ class _Step extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             AnimatedContainer(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               width: 28,
               height: 28,
               decoration: BoxDecoration(color: done ? cs.primary : cs.secondaryContainer, shape: BoxShape.circle),

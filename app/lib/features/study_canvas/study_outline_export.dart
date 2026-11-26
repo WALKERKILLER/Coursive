@@ -262,7 +262,7 @@ class _OutlinePdfDialogState extends State<_OutlinePdfDialog> {
             child: AspectRatio(
               aspectRatio: format.width / format.height,
               child: AnimatedSwitcher(
-                duration: Motion.medium1,
+                duration: Motion.durationOf(context, Motion.medium1),
                 child: DecoratedBox(
                   key: ValueKey(
                     '${_layout.hashCode}-$_number-${_page?.length}',

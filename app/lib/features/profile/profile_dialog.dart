@@ -137,7 +137,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               // The six picks share the row; each ring takes 10 px around its avatar.
               final size = math.min(52.0, (box.maxWidth - Space.xs * (_ideas.length - 1)) / _ideas.length - 10);
               return AnimatedSwitcher(
-                duration: Motion.medium2,
+                duration: Motion.durationOf(context, Motion.medium2),
                 child: Row(
                   key: ValueKey(_ideas.first),
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -163,7 +163,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
               onSelectionChanged: (s) => p.update((x) => x.frame = s.first),
             ),
             AnimatedSize(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Motion.emphasized,
               alignment: Alignment.topCenter,
               child: toned
@@ -218,11 +218,11 @@ class _EditableAvatarState extends State<_EditableAvatar> {
           onTap: widget.onTap,
           child: AnimatedScale(
             scale: _hover ? 1.04 : 1,
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             child: Stack(clipBehavior: Clip.none, children: [
               AnimatedSwitcher(
-                duration: Motion.medium2,
+                duration: Motion.durationOf(context, Motion.medium2),
                 switchInCurve: Motion.emphasizedDecelerate,
                 transitionBuilder: (c, a) => ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: c)),
                 child: KeyedSubtree(key: ValueKey(context.select<UserProfile, Object>((p) => (p.kind, p.value, p.frame))), child: const UserAvatar(size: 104)),
@@ -257,7 +257,7 @@ class _Pick extends StatelessWidget {
       onTap: onTap,
       radius: 32,
       child: AnimatedContainer(
-        duration: Motion.medium1,
+        duration: Motion.durationOf(context, Motion.medium1),
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: selected ? cs.primary : Colors.transparent, width: 2)),
         child: child,
@@ -281,7 +281,7 @@ class _ToneDot extends StatelessWidget {
         onTap: onTap,
         radius: 22,
         child: AnimatedContainer(
-          duration: Motion.medium1,
+          duration: Motion.durationOf(context, Motion.medium1),
           width: 32,
           height: 32,
           decoration: BoxDecoration(
@@ -313,7 +313,7 @@ Future<String?> _showLinkDialog(BuildContext context, {required bool qq}) {
           width: 360,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             AnimatedSwitcher(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               child: preview.isEmpty
                   ? Container(
                       key: const ValueKey(0),
@@ -418,7 +418,7 @@ Future<String?> showEmojiPicker(BuildContext context, {String initial = ''}) {
             SizedBox(
               height: 200,
               child: AnimatedSwitcher(
-                duration: Motion.medium1,
+                duration: Motion.durationOf(context, Motion.medium1),
                 child: GridView.builder(
                   key: ValueKey(group),
                   gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 48, mainAxisSpacing: 4, crossAxisSpacing: 4),

@@ -379,7 +379,7 @@ class _DataSettingsState extends State<DataSettings> {
                   : (v) => setState(() => _media = v),
             ),
             AnimatedSize(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Motion.emphasized,
               alignment: Alignment.topCenter,
               child: !busy

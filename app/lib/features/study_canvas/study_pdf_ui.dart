@@ -216,20 +216,22 @@ class _CanvasPdfState extends State<_CanvasPdf> {
       if (!s.hasData) return const Center(child: CircularProgressIndicator());
       _doc = s.data!;
       _scheduleFollow();
+      final reading = widget.owner._focusedMaterial?.id == widget.card.id;
+      final zoom = reading ? 1.0 : widget.owner.document!.zoom * widget.card.contentScale;
       return PDFDock(
         key: _reader,
         freezeScroll: widget.owner._pdfPinching,
-        embedded: true,
+        embedded: !reading,
         shapeAssist:
             widget.owner._presets[widget.owner._presetIndex].shapeAssist,
         pressureThreshold: widget.owner._pressureEraser
             ? widget.owner._pressureThreshold
             : null,
-        canvasZoom: widget.owner.document!.zoom * widget.card.contentScale,
+        canvasZoom: zoom,
         pdf: s.data!,
-        horizontal: widget.card.pdfPaged,
+        horizontal: widget.card.pdfPaged || (reading && widget.root != null),
         firstPage: widget.card.page,
-        singlePage: widget.root == null ? null : widget.card.page,
+        singlePage: reading || widget.root == null ? null : widget.card.page,
         allowMouseInk:
             widget.owner._ink ||
             widget.owner._tool == StudyTool.eraser,
@@ -240,11 +242,12 @@ class _CanvasPdfState extends State<_CanvasPdf> {
         squareTip: widget.owner._brush.squareTip,
         marker: widget.owner._brush.family == 'highlighter',
         eraseMode: widget.owner._eraserMode,
-        eraseRadius: widget.owner._eraserSize / (widget.owner.document!.zoom * widget.card.contentScale),
+        eraseRadius: widget.owner._eraserSize / zoom,
         onTool: (eraser) =>
             widget.owner._chooseTool(eraser ? StudyTool.eraser : StudyTool.pen),
         onEraseLegacy: _eraseLegacy,
         onPage: (page) {
+          if (widget.root != null || widget.card.page == page) return;
           widget.card.page = page;
           widget.owner.document!.changed();
         },

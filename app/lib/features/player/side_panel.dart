@@ -255,7 +255,7 @@ class _MaterialsTabState extends State<_MaterialsTab>
         ),
         Expanded(
           child: AnimatedSwitcher(
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             switchInCurve: Motion.emphasizedDecelerate,
             child: slides
                 ? _SlidesTab(key: const ValueKey('ppt'), ctl: ctl)
@@ -420,7 +420,7 @@ class _SlidesTabState extends State<_SlidesTab>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             AnimatedContainer(
-                              duration: Motion.medium2,
+                              duration: Motion.durationOf(context, Motion.medium2),
                               curve: Motion.emphasized,
                               padding: EdgeInsets.all(on ? 3 : 0),
                               decoration: BoxDecoration(
@@ -448,7 +448,7 @@ class _SlidesTabState extends State<_SlidesTab>
                                           opacity: frame == null && !sync
                                               ? 0
                                               : 1,
-                                          duration: Motion.medium1,
+                                          duration: Motion.durationOf(context, Motion.medium1),
                                           child: child,
                                         ),
                                     errorBuilder: (_, _, _) => ColoredBox(
@@ -838,7 +838,7 @@ class _TranscriptTabState extends State<_TranscriptTab>
                   final row = KeyedSubtree(
                     key: _keys.putIfAbsent(i, GlobalKey.new),
                     child: AnimatedContainer(
-                      duration: Motion.medium1,
+                      duration: Motion.durationOf(context, Motion.medium1),
                       curve: Motion.emphasized,
                       margin: const EdgeInsets.only(bottom: 2),
                       decoration: BoxDecoration(

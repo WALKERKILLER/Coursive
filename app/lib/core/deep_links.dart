@@ -63,7 +63,7 @@ class DeepLinks {
       if (t != null) {
         seekOrOpen(context, id, t);
       } else {
-        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: id)));
+        Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: id, startInCanvas: true)));
       }
     }
     if (links.isNotEmpty && (Platform.isLinux || Platform.isWindows || Platform.isMacOS)) {

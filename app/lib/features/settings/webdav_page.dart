@@ -463,7 +463,7 @@ class _WebDavPageState extends State<WebDavPage> {
           ),
           const SizedBox(height: Space.sm),
           AnimatedSize(
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             alignment: Alignment.topCenter,
             child: running

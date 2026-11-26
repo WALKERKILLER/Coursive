@@ -4,14 +4,13 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -20,7 +19,7 @@ import '../../core/api.dart';
 import '../../core/clipboard_files.dart';
 import '../../core/ink_curve.dart';
 import '../../core/format.dart';
-import '../../core/models.dart';
+import '../../core/models.dart' hide Source;
 import '../../core/plugins.dart';
 import '../../core/ui_slots.dart';
 import '../../theme/glass.dart';
@@ -30,7 +29,10 @@ import '../../widgets/pickers.dart';
 import '../../widgets/reading_selection_menu.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
-import '../library/note_reader.dart' show openRef;
+import '../player/player_page.dart' show PlayerPage;
+import '../player/player_view.dart';
+import '../../theme/prefs.dart';
+import '../library/note_reader.dart' show NotePage, openRef;
 import '../plugins/canvas_fallback.dart';
 import '../plugins/plugin_actions.dart' show PluginViewPatch;
 import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
@@ -66,6 +68,7 @@ part 'study_shelf_ui.dart';
 part 'study_brush_ui.dart';
 part 'study_interaction.dart';
 part 'study_markdown_reader.dart';
+part 'study_material_reader.dart';
 part 'study_lesson.dart';
 part 'study_conversation_ui.dart';
 part 'study_pdf_ui.dart';
@@ -100,6 +103,7 @@ class StudyCanvas extends StatefulWidget {
     required this.video,
     required this.panel,
     required this.onClassic,
+    this.buildLectureReader,
     this.pdfLibraryRoot,
     this.openCanvasPDF = DockPDF.open,
     this.readClipboardFiles = readMacClipboardFiles,
@@ -109,6 +113,8 @@ class StudyCanvas extends StatefulWidget {
     this.startLesson = false,
     this.initialCardId,
     this.onInitialCardShown,
+    this.onNewCanvas,
+    this.seedLessonMaterials = false,
   }) : _player = ctl,
        notebookId = null,
        title = null;
@@ -129,10 +135,13 @@ class StudyCanvas extends StatefulWidget {
        panel = const SizedBox.shrink(),
        onAsk = null,
        onClassic = null,
+       buildLectureReader = null,
        fullscreen = false,
        startLesson = false,
        initialCardId = null,
-       onInitialCardShown = null;
+       onInitialCardShown = null,
+       onNewCanvas = null,
+       seedLessonMaterials = false;
   final String? notebookId, title;
   bool get standalone => notebookId != null;
   String get draftKey => standalone
@@ -148,7 +157,9 @@ class StudyCanvas extends StatefulWidget {
   final LecturePlayer? _player;
   LecturePlayer get ctl => _player!;
   final Widget video, panel;
-  final VoidCallback? onClassic;
+  final Widget Function(VoidCallback close)? buildLectureReader;
+  final VoidCallback? onClassic, onNewCanvas;
+  final bool seedLessonMaterials;
   final String? pdfLibraryRoot;
   final Future<List<String>> Function() readClipboardFiles;
   final Future<DockPDF> Function(String, String) openCanvasPDF;
@@ -164,6 +175,13 @@ class StudyCanvas extends StatefulWidget {
 class StudyCanvasState extends State<StudyCanvas>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   Future<void> openLesson() => _openLesson();
+  StudyCard? _focusedMaterial;
+  bool get readingDocument => _focusedMaterial != null && _focusedMaterial?.type != 'lecture';
+  StudyCard? _returnToMaterial;
+  final _documentReaders = <String, GlobalKey>{};
+  final _materialReaders = <String, GlobalKey>{};
+  var _seedingMaterials = false;
+  int? _initialMaterialsEdit;
 
   /// Theme-derived chrome colours for the whole workspace.
   StudyChrome get chrome => StudyChrome.of(context);
@@ -370,7 +388,9 @@ class StudyCanvasState extends State<StudyCanvas>
   final _detail = StudySelection();
   final _capture = GlobalKey();
   final _dockKey = GlobalKey(), _zoomKey = GlobalKey();
-  String? _previewVideoId;
+  bool _multipleLocalVideos = false;
+  String? _activeLocalVideo, _previewVideoId;
+  bool _openingVideo = false;
   final _localVideoKeys = <String, GlobalKey<_LocalVideoState>>{};
   final _localVideoTimes = <String, int>{};
   Rect? _regionSelection, _sourceHighlight;
@@ -523,14 +543,18 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _wholeCardSelected =>
       _selection.isNotEmpty && _detail.objectId == null;
 
-  Future<void> _load({Map? synced}) async {
+  Future<void> _load({Map? synced, int? replacingSeed}) async {
     try {
       final data = synced ?? await widget.load();
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       final draft = prefs.getString(widget.draftKey);
       if (!mounted) return;
-      if (synced != null && _editingCanvas) return;
+      if (replacingSeed != null) {
+        if (document?.edit != replacingSeed || _pointers.isNotEmpty) return;
+      } else if (synced != null && _editingCanvas) {
+        return;
+      }
       final d = StudyDocument.fromJson(data as Map);
       if (draft != null) {
         document?.dispose();
@@ -547,6 +571,8 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       document?.dispose();
       document = d;
+      _focusedMaterial = d.cards.where((c) => c.id == _focusedMaterial?.id).firstOrNull;
+      _returnToMaterial = d.cards.where((c) => c.id == _returnToMaterial?.id).firstOrNull;
       _adoptThreads(d);
       if (!widget.standalone && !_lessonStarted && (widget.startLesson || d.cards.any((c)=>c.lessonNote))) {
         _lessonStarted = true;
@@ -554,7 +580,12 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       d.addListener(_changed);
       _savedEdit = d.edit;
+      _initialMaterialsEdit = null;
       if (!widget.standalone) unawaited(_refreshLinkedNotes(d));
+      if (widget.seedLessonMaterials && synced == null &&
+          d.revision == 0 && d.baseHash.isEmpty) {
+        unawaited(_seedLessonMaterials(d));
+      }
       final initial = widget.initialCardId;
       if (initial != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -683,6 +714,11 @@ class StudyCanvasState extends State<StudyCanvas>
         } on ApiError catch (e) {
           if (e.status != 409 || retries++ >= 2) rethrow;
           final remote = await widget.load() as Map;
+          if (edit == _initialMaterialsEdit && mounted) {
+            // A first-open layout may race a newer canvas from another device.
+            await _load(synced: remote, replacingSeed: edit);
+            if (!identical(document, d)) return true;
+          }
           if (widget.standalone) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString(widget.draftKey, jsonEncode(d.json()));
@@ -725,7 +761,13 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   /// The system back action first returns from a followed citation.
-  bool returnFromSource() => document != null && _goBack();
+  bool returnFromSource() {
+    if (_focusedMaterial != null && !widget.fullscreen) {
+      _closeMaterialReader();
+      return true;
+    }
+    return document != null && _goBack();
+  }
 
   // macOS text-selection shortcuts can consume Paste before the player Focus
   // receives it. Route only the active canvas gesture before normal dispatch.
@@ -736,6 +778,7 @@ class StudyCanvasState extends State<StudyCanvas>
         !mounted ||
         document == null ||
         widget.fullscreen ||
+        _focusedMaterial != null ||
         ModalRoute.of(context)?.isCurrent != true) {
       return KeyEventResult.ignored;
     }
@@ -772,6 +815,12 @@ class StudyCanvasState extends State<StudyCanvas>
       return false;
     final k = e.logicalKey;
     final keys = HardwareKeyboard.instance;
+    if (_focusedMaterial != null) {
+      if (widget.fullscreen) return false;
+      if (k != LogicalKeyboardKey.escape) return false;
+      _closeMaterialReader();
+      return true;
+    }
     // Esc steps back one level: composer, selection, then a followed citation.
     if (k == LogicalKeyboardKey.escape) {
       if (_quickAsk) {
@@ -1501,7 +1550,7 @@ class StudyCanvasState extends State<StudyCanvas>
     _cameraChanged();
   }
 
-  void _fit() {
+  void _fit({bool animate = true}) {
     final d = document!;
     final cards = d.cards.where(
       (a) => a.onCanvas && d.visible(a.layer),
@@ -1519,7 +1568,14 @@ class StudyCanvasState extends State<StudyCanvas>
         )
         .clamp(.05, 1.5)
         .toDouble();
-    _flyTo(_viewport.center(Offset.zero) - r.center * zoom, zoom);
+    final camera = _viewport.center(Offset.zero) - r.center * zoom;
+    if (animate) {
+      _flyTo(camera, zoom);
+    } else {
+      d.camera = camera;
+      d.zoom = zoom;
+      _cameraChanged();
+    }
   }
 
   void _toast(String s) {
@@ -1643,6 +1699,7 @@ class StudyCanvasState extends State<StudyCanvas>
     String? courseware,
     bool wholeCourse = false,
     bool fromClipboard = false,
+    List<XFile> dropped = const [],
     Offset? at,
   }) async {
     if (_importing) return;
@@ -1656,7 +1713,14 @@ class StudyCanvasState extends State<StudyCanvas>
       _status = l10n.studyImporting;
     });
     try {
-      final files = <XFile>[];
+      final files = dropped.where((file) {
+        final suffix = filePath.extension(file.name).toLowerCase();
+        return suffix.isNotEmpty && _fileExtensions.contains(suffix.substring(1));
+      }).toList();
+      if (dropped.isNotEmpty && files.isEmpty) {
+        _toast(l10n.studyShelfUnsupported);
+        return;
+      }
       if (fromClipboard) {
         final paths = await widget.readClipboardFiles();
         for (final path in paths.toSet()) {
@@ -1670,12 +1734,12 @@ class StudyCanvasState extends State<StudyCanvas>
           if (mounted && paths.isNotEmpty) _toast(l10n.studyShelfUnsupported);
           return;
         }
-      } else if (courseware == null) {
-        final file = await openFile(acceptedTypeGroups: [
+      } else if (courseware == null && dropped.isEmpty) {
+        final selected = await openFiles(acceptedTypeGroups: [
           XTypeGroup(label: l10n.studyMaterials, extensions: _fileExtensions),
         ]);
-        if (file == null) return;
-        files.add(file);
+        if (selected.isEmpty) return;
+        files.addAll(selected);
       }
       if (!mounted || document != d) return;
       final center = at ?? _world(_viewport.center(Offset.zero));
@@ -1980,7 +2044,6 @@ class StudyCanvasState extends State<StudyCanvas>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.fullscreen) return widget.video;
     if (_loadError != null)
       return Center(
         child: Column(
@@ -2014,13 +2077,15 @@ class StudyCanvasState extends State<StudyCanvas>
         if (_selectionToolbarDocked) {
           _viewport = Size(size.maxWidth, math.max(0, size.maxHeight - 56));
         }
-        return Column(
+        final reader = _focusedMaterial;
+        final previousReader = _returnToMaterial;
+        final canvas = Column(
           children: [
             Expanded(
               child: GlassBackdropScope(
                 enabled:
                     defaultTargetPlatform != TargetPlatform.android ||
-                    !_writing,
+                    (!_writing && !_pdfPinching),
                 child: _canvas(d),
               ),
             ),
@@ -2028,6 +2093,33 @@ class StudyCanvasState extends State<StudyCanvas>
               SizedBox(height: 56, child: _selectionToolbar(docked: true)),
           ],
         );
+        final overlay = widget.fullscreen
+            ? widget.video
+            : reader != null ? _materialReader(reader) : null;
+        return Stack(fit: StackFit.expand, children: [
+          TickerMode(enabled: overlay == null, child: ExcludeFocus(
+            excluding: overlay != null,
+            child: Offstage(
+              offstage: overlay != null,
+              child: DropTarget(
+                enable: overlay == null && !_importing &&
+                    ModalRoute.isCurrentOf(context) == true,
+                onDragDone: (details) {
+                  final files = details.files.whereType<DropItemFile>().toList();
+                  if (files.isNotEmpty) {
+                    unawaited(_importDroppedFiles(files, _world(details.localPosition)));
+                  }
+                },
+                child: canvas,
+              ),
+            ),
+          )),
+          if (previousReader != null)
+            TickerMode(enabled: false, child: ExcludeFocus(
+              child: Offstage(offstage: true, child: _materialReader(previousReader)),
+            )),
+          if (overlay != null) overlay,
+        ]);
       },
     );
   }
@@ -2055,17 +2147,39 @@ class StudyCanvasState extends State<StudyCanvas>
 
   Widget _canvas(StudyDocument d) {
     final view = _visibleWorld;
-    _previewVideoId = d.cards.where((card) => card.type == 'video' && !card.collapsed &&
-        d.visible(card.layer) && card.visualBounds.overlaps(view)).firstOrNull?.id;
+    final videos = d.cards.where((c) => c.type == 'video');
+    _multipleLocalVideos = videos.take(2).length == 2;
+    _previewVideoId = _multipleLocalVideos ? null : videos.where((card) =>
+        !card.collapsed && d.visible(card.layer) && card.visualBounds.overlaps(view)).firstOrNull?.id;
     final cardIds = d.cards.map((c) => c.id).toSet();
     _cardHeaderActions.removeWhere((id, _) => !cardIds.contains(id));
     _pdfBodies.removeWhere((id, _) => !cardIds.contains(id));
     _localVideoKeys.removeWhere((id, _) => !cardIds.contains(id));
+    _documentReaders.removeWhere((id, _) => !cardIds.contains(id));
     _localVideoTimes.removeWhere((id, _) => !cardIds.contains(id));
     final stage = _visibleWorld.inflate(
       math.max(_viewport.width, _viewport.height) / d.zoom,
     );
     _stageRect = stage;
+    // Budget the temporary textures together. Very large or offscreen cards
+    // stay live, as do video and interactive conversations.
+    var remainingPixels = 6 * 1024 * 1024.0;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    Widget cardContents(StudyCard c) {
+      final child = _card(c);
+      if (defaultTargetPlatform != TargetPlatform.android ||
+          !(c.type == 'text' || c.type == 'pdf' || c.type == 'pdfdoc')) {
+        return child;
+      }
+      final size = c.contentRect.size / c.contentScale;
+      final pixels = size.width * size.height * pixelRatio * pixelRatio;
+      final capture = _pdfPinching && c.visualBounds.overlaps(view) &&
+          pixels <= remainingPixels &&
+          size.longestSide * pixelRatio <= 4096;
+      if (capture) remainingPixels -= pixels;
+      return _PinchCardPreview(active: capture, child: child);
+    }
+
     return RepaintBoundary(
       key: _inputSurface,
       child: ClipRect(
@@ -2216,7 +2330,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                                     height:
                                                         c.contentRect.height /
                                                         c.contentScale,
-                                                    child: _card(c),
+                                                    child: cardContents(c),
                                                   ),
                                                 ),
                                               ),
@@ -2247,6 +2361,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                                 _inlinePDF,
                                                 _dark,
                                               );
+                                              if (ink.isEmpty) return const SizedBox.shrink();
                                               final tail = preview
                                                   ? 0
                                                   : ink.length ~/ 64 * 64;
@@ -2791,6 +2906,9 @@ class StudyCanvasState extends State<StudyCanvas>
                       ),
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_canOpenMaterial(c))
+                          action(l10n.studyOpenMaterial, Icons.open_in_full_rounded,
+                            () => _openMaterialReader(c)),
                         if (_inlinePDF && c.type == 'pdfdoc')
                           PopupMenuButton<String>(
                             tooltip: l10n.pdfCardView,
@@ -2959,16 +3077,7 @@ class StudyCanvasState extends State<StudyCanvas>
                         _tool == StudyTool.region ||
                         (_tool == StudyTool.pan && c.readingSurface),
                     child: switch (c.type) {
-                      'pdfdoc' when _inlinePDF && !c.collapsed => _CanvasPdf(
-                        key: _pdfBodies.putIfAbsent(
-                          c.id,
-                          () => GlobalKey<_CanvasPdfState>(),
-                        ),
-                        owner: this,
-                        card: c,
-                      ),
-                      'pdfdoc' when _inlinePDF => const SizedBox.shrink(),
-                      'pdfdoc' => _PDFBody(owner: this, card: c),
+                      'pdfdoc' => _cardMaterial(c),
                       'conversation' when c.passageAside => _ConversationBody(
                         key: _conversationKeys.putIfAbsent(c.id, () => GlobalKey<_ConversationBodyState>()),
                         owner: this, card: c, active: false,
@@ -2985,7 +3094,7 @@ class StudyCanvasState extends State<StudyCanvas>
                       'lecture' => Column(
                         children: [
                           Expanded(
-                            child: _snapshotVideo(c, _videoInput(widget.video)),
+                            child: _cardMaterial(c),
                           ),
                           TextButton.icon(
                             key: const ValueKey('study-video-shelf'),
@@ -3009,17 +3118,7 @@ class StudyCanvasState extends State<StudyCanvas>
                           ),
                         ],
                       ),
-                      'pdf' when _pdfPageCard(c) => _CanvasPdf(
-                        key: _pdfBodies.putIfAbsent(
-                          c.id,
-                          () => GlobalKey<_CanvasPdfState>(),
-                        ),
-                        owner: this,
-                        card: c,
-                        root: document!.cards.firstWhere(
-                          (p) => p.id == c.pdfColumn,
-                        ),
-                      ),
+                      'pdf' when _pdfPageCard(c) => _cardMaterial(c),
                       'image' || 'pdf' => Image(
                         image: ResizeImage(
                           NetworkImage(widget.api.fileUrl(c.path)),
@@ -3031,37 +3130,8 @@ class StudyCanvasState extends State<StudyCanvas>
                         errorBuilder: (_, error, stack) =>
                             Center(child: Text(l10n.studyImageFailed)),
                       ),
-                      'video' => _snapshotVideo(
-                        c,
-                        _videoInput(
-                          _LocalVideo(
-                            key: _localVideoKeys.putIfAbsent(
-                              c.id,
-                              () => GlobalKey<_LocalVideoState>(),
-                            ),
-                            url: c.path.isEmpty
-                                ? widget.api.studyMediaUrl(
-                                    widget.ctl.lectureId,
-                                    c.id,
-                                  )
-                                : widget.api.fileUrl(c.path),
-                            prepare: flush,
-                            preview: _previewVideoId == c.id || _bookmarks.lastOrNull?.video == c.id,
-                            initialMs: _localVideoTimes[c.id] ?? 0,
-                            onPosition: (ms) => _localVideoTimes[c.id] = ms,
-                          ),
-                        ),
-                      ),
-                      'text' when c.lessonNote => _lessonReader(c),
-                      'text' when c.readerCard => SingleChildScrollView(
-                        key: PageStorageKey('study-reader/${c.id}'),
-                        primary: false,
-                        physics: _pdfPinching
-                            ? const NeverScrollableScrollPhysics()
-                            : null,
-                        padding: const EdgeInsets.all(18),
-                        child: _markdownPassage(c, c.text),
-                      ),
+                      'video' => _cardMaterial(c),
+                      'text' when c.markdownReader => _cardMaterial(c),
                       'note' ||
                       'explanation' ||
                       'knowledge' ||
@@ -3121,12 +3191,16 @@ class _LocalVideo extends StatefulWidget {
     required this.url,
     required this.initialMs,
     required this.prepare,
+    required this.focused,
+    required this.api,
+    required this.title,
     required this.preview,
     required this.onPosition,
   });
-  final String url;
+  final String url, title;
+  final Api api;
   final int initialMs;
-  final bool preview;
+  final bool preview, focused;
   final Future<bool> Function() prepare;
   final ValueChanged<int> onPosition;
   @override
@@ -3134,14 +3208,12 @@ class _LocalVideo extends StatefulWidget {
 }
 
 class _LocalVideoState extends State<_LocalVideo> {
-  late final player = Player();
-  late final controller = VideoController(player);
-  StreamSubscription? _errors;
+  LecturePlayer? _session;
   StreamSubscription? _positions;
-  bool _failed = false;
+  bool _failed = false, _fullscreen = false;
   Future<bool>? _ready;
-  bool get isPlaying => _ready != null && player.state.playing;
-  int? get positionMs => _ready == null ? null : player.state.position.inMilliseconds;
+  bool get isPlaying => _session?.playing == true;
+  int? get positionMs => _session?.positionMs;
 
   @override
   void initState() {
@@ -3155,28 +3227,17 @@ class _LocalVideoState extends State<_LocalVideo> {
     if (widget.preview && _ready == null) _ensureOpen();
   }
 
-  Future<bool> _ensureOpen() => _ready ??= _subscribeAndOpen();
-  Future<bool> _subscribeAndOpen() {
-    _errors = player.stream.error.listen((error) {
-      if (mounted) setState(() => _failed = true);
-    });
-    _positions = player.stream.position.listen(
-      (p) => widget.onPosition(p.inMilliseconds),
-    );
-    return _open();
-  }
-
+  Future<bool> _ensureOpen() => _ready ??= _open();
   Future<bool> _open() async {
     try {
-      // The media route resolves saved canvas objects. Publishing the reference
-      // must finish before the player requests its authenticated URL.
       if (!await widget.prepare()) throw const FormatException('Save failed');
       if (!mounted) return false;
-      await controller.platform.future;
+      final prefs = context.read<UiPrefs?>() ?? await UiPrefs.load();
       if (!mounted) return false;
-      await player.open(Media(widget.url), play: false);
-      if (mounted && widget.initialMs > 0)
-        await player.seek(Duration(milliseconds: widget.initialMs));
+      final ctl = _session ??= LecturePlayer(api: widget.api, lectureId: '', prefs: prefs);
+      _positions ??= ctl.player.stream.position.listen((p) => widget.onPosition(p.inMilliseconds));
+      await ctl.openMaterial(Source(label: widget.title, uri: widget.url, local: true), widget.initialMs);
+      if (mounted) setState(() {});
       return mounted && !_failed;
     } catch (_) {
       if (mounted) setState(() => _failed = true);
@@ -3184,21 +3245,42 @@ class _LocalVideoState extends State<_LocalVideo> {
     }
   }
 
+  Future<void> pause() async => _session?.pause();
+
+  Future<void> play() async {
+    if (await _ensureOpen() && mounted) await _session?.player.play();
+  }
+
   Future<void> seekPaused(int milliseconds) async {
     final pending = _ensureOpen();
     if (mounted) setState(() {});
     if (!await pending || !mounted || _failed)
       throw FormatException(l10n.studyVideoUnavailable);
-    await player.seek(Duration(milliseconds: milliseconds));
-    await player.pause();
+    await _session!.player.seek(Duration(milliseconds: milliseconds));
+    await _session!.pause();
   }
 
   @override
   void dispose() {
-    _errors?.cancel();
     _positions?.cancel();
-    if (_ready != null) unawaited(player.dispose());
+    if (_session case final ctl?) unawaited(ctl.close());
     super.dispose();
+  }
+
+  Future<void> _openFullscreen() async {
+    if (_fullscreen || _session == null) return;
+    setState(() => _fullscreen = true);
+    try {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (route) => Scaffold(backgroundColor: Colors.black, body: PlayerView(
+          ctl: _session!, fullscreen: true,
+          onBack: () => Navigator.pop(route), onFullscreen: () => Navigator.pop(route),
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _fullscreen = false);
+    }
   }
 
   @override
@@ -3209,48 +3291,31 @@ class _LocalVideoState extends State<_LocalVideo> {
           onPressed: () async {
             final pending = _ensureOpen();
             setState(() {});
-            if (await pending && mounted) await player.play();
+            if (await pending && mounted) await _session!.player.play();
           },
         ))
       : !_failed
-      ? MaterialDesktopVideoControlsTheme(
-          normal: const MaterialDesktopVideoControlsThemeData(
-            modifyVolumeOnScroll: false,
-            playAndPauseOnTap: false,
-            toggleFullscreenOnDoublePress: false,
-            primaryButtonBar: [],
-            topButtonBar: [],
-            buttonBarHeight: 48,
-            seekBarContainerHeight: 36,
-            bottomButtonBarMargin: EdgeInsets.zero,
-          ),
-          fullscreen: const MaterialDesktopVideoControlsThemeData(),
-          child: MaterialVideoControlsTheme(
-            normal: const MaterialVideoControlsThemeData(
-              volumeGesture: false,
-              brightnessGesture: false,
-              seekGesture: false,
-              seekOnDoubleTap: false,
-              speedUpOnLongPress: false,
-              primaryButtonBar: [],
-              topButtonBar: [],
-              bottomButtonBar: [
-                MaterialPlayOrPauseButton(),
-                MaterialPositionIndicator(),
-                Spacer(),
-                MaterialFullscreenButton(),
-              ],
-              buttonBarHeight: 48,
-              seekBarContainerHeight: 36,
-              bottomButtonBarMargin: EdgeInsets.zero,
-            ),
-            fullscreen: const MaterialVideoControlsThemeData(),
-            child: VideoCardHoldRegion(
-              bottomControlsHeight: 84,
-              child: Video(controller: controller),
-            ),
-          ),
-        )
+      ? _session == null || _fullscreen
+          ? const SizedBox.shrink()
+          : widget.focused
+          ? CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.keyK): () => _session!.player.playOrPause(),
+                const SingleActivator(LogicalKeyboardKey.space): () => _session!.player.playOrPause(),
+                const SingleActivator(LogicalKeyboardKey.keyF): _openFullscreen,
+              },
+              child: Focus(autofocus: true, child: PlayerView(
+                ctl: _session!, fullscreen: false, onBack: null,
+                onFullscreen: _openFullscreen,
+              )),
+            )
+          : PlayerView(
+              ctl: _session!,
+              embedded: true,
+              fullscreen: false,
+              onBack: null,
+              onFullscreen: _openFullscreen,
+            )
       : Center(child: Text(l10n.studyLocalVideoError));
 }
 
@@ -3263,6 +3328,40 @@ Color studyPaperTone(int color, ColorScheme cs) =>
         cs.surfaceContainerLow,
       )
     : Color(color);
+
+/// Reuse the card pixels only while two fingers move the camera. Its live
+/// widget tree stays mounted so scroll position, selection and editing survive.
+class _PinchCardPreview extends StatefulWidget {
+  const _PinchCardPreview({required this.active, required this.child});
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_PinchCardPreview> createState() => _PinchCardPreviewState();
+}
+
+class _PinchCardPreviewState extends State<_PinchCardPreview> {
+  late final _controller = SnapshotController(allowSnapshotting: widget.active);
+
+  @override
+  void didUpdateWidget(_PinchCardPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.allowSnapshotting = widget.active;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SnapshotWidget(
+    controller: _controller,
+    mode: SnapshotMode.permissive,
+    child: widget.child,
+  );
+}
 
 class _Paper extends CustomPainter {
   _Paper({

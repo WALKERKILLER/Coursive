@@ -405,7 +405,7 @@ class _ShapeOption extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(Corners.lg),
         child: AnimatedContainer(
-          duration: Motion.medium2,
+          duration: Motion.durationOf(context, Motion.medium2),
           curve: Motion.emphasized,
           width: 80,
           padding: const EdgeInsets.symmetric(vertical: Space.sm),

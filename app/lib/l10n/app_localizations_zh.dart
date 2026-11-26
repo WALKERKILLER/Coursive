@@ -6748,6 +6748,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyConversationEmpty => '围绕指定资料持续提问，回答和整理结果都保留在此对话中。';
 
   @override
+  String get studyOpenMaterial => '展开阅读或播放';
+
+  @override
+  String get studyCreateBlankCanvas => '新建空白画布';
+
+  @override
   String get studyOpenCanvas => '打开画布';
 
   @override

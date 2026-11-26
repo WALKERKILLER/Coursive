@@ -547,7 +547,7 @@ class _ModelCard extends StatelessWidget {
       l10n.asrModelCer(bench['cer']),
     ];
     return AnimatedContainer(
-      duration: Motion.medium1,
+      duration: Motion.durationOf(context, Motion.medium1),
       curve: Motion.standard,
       decoration: BoxDecoration(
         color: active ? cs.secondaryContainer : cs.surfaceContainerLow,
@@ -586,7 +586,7 @@ class _ModelCard extends StatelessWidget {
                 const SizedBox(height: Space.xs),
                 Text(facts.join(' · '), style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant)),
                 AnimatedSize(
-                  duration: Motion.medium2,
+                  duration: Motion.durationOf(context, Motion.medium2),
                   curve: Motion.emphasized,
                   alignment: Alignment.topCenter,
                   child: focused || running || failed

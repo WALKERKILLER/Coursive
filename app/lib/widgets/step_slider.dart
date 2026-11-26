@@ -186,7 +186,7 @@ class _StepSliderState<T> extends State<StepSlider<T>> with SingleTickerProvider
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: Space.xs, vertical: Space.xxs),
                       child: AnimatedDefaultTextStyle(
-                        duration: Motion.short3,
+                        duration: Motion.durationOf(context, Motion.short3),
                         style: (tt.labelMedium ?? const TextStyle()).copyWith(
                           color: i == _shown ? (_enabled ? active : label) : label,
                           fontWeight: i == _shown ? FontWeight.w600 : FontWeight.w400,

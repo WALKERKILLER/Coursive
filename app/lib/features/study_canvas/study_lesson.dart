@@ -137,11 +137,12 @@ extension _StudyLesson on StudyCanvasState {
     }
   }
 
-  Widget _lessonReader(StudyCard card) {
+  Widget _lessonReader(StudyCard card, {Widget? readingPage}) {
     final active = _lessonState['noteId'] == card.documentId;
     return _LessonReader(
       key: ValueKey(card.id),
-      body: _markdownPassage(card, card.text),
+      body: readingPage ?? _markdownPassage(card, card.text),
+      fullPage: readingPage != null,
       state: active ? _lessonState : const {},
       busy: _lessonBusy,
       action: _lessonAction,
@@ -154,12 +155,14 @@ class _LessonReader extends StatefulWidget {
   const _LessonReader({
     super.key,
     required this.body,
+    required this.fullPage,
     required this.state,
     required this.busy,
     required this.action,
     required this.open,
   });
   final Widget body;
+  final bool fullPage;
   final Map<String, dynamic> state;
   final bool busy;
   final Future<void> Function(String, Map<String, dynamic>) action;
@@ -312,7 +315,7 @@ class _LessonReaderState extends State<_LessonReader> {
     return Column(
       children: [
         Expanded(
-          child: NotificationListener<ScrollEndNotification>(
+          child: widget.fullPage ? widget.body : NotificationListener<ScrollEndNotification>(
             onNotification: _scrollEnd,
             child: SingleChildScrollView(
               controller: scroll,

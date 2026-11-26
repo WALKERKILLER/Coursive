@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:coursive/core/api.dart';
 import 'package:coursive/features/library/note_reader.dart';
 import 'package:coursive/widgets/md_reader.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -166,6 +167,53 @@ void main() {
     await t.tap(find.text('去第二个分页', findRichText: true));
     await t.pumpAndSettle();
     expect(find.text('第二个标题的正文。', findRichText: true).hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('far headings stay reachable across uneven chapter heights', (t) async {
+    final controller = MdReaderController();
+    final md = StringBuffer();
+    for (var i = 0; i < 80; i++) {
+      md.writeln('## 章节 $i');
+      md.writeln(i == 32 ? List.filled(200, '较长的一章。').join('\n\n') : '正文 $i');
+    }
+    final doc = MdDoc(md.toString());
+    final saved = <Map<String, dynamic>>[];
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarkdownReader(doc: doc, controller: controller, onBookmark: saved.add)),
+    ));
+    for (final target in [55, 19, 64, 79, 1, 32, 36, 62]) {
+      saved.clear();
+      controller.jumpToSection(target);
+      await t.pumpAndSettle();
+      expect(find.text('章节 $target', findRichText: true).hitTestable(),
+          findsOneWidget, reason: 'jump to section $target');
+      expect(saved, hasLength(1));
+      if (target == 79) expect(controller.current, target);
+    }
+    controller.jumpToSection(3);
+    controller.jumpToSection(48);
+    await t.pumpAndSettle();
+    expect(find.text('章节 48', findRichText: true).hitTestable(), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets('wheel input takes over a pending search jump', (t) async {
+    final controller = MdReaderController();
+    final doc = MdDoc(List.generate(100, (i) => '## Part $i\n\nBody $i').join('\n\n'));
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: MarkdownReader(doc: doc, controller: controller))));
+    final pos = t.state<ScrollableState>(find.byType(Scrollable).first).position;
+    expect(controller.reveal('Body 90'), isTrue);
+    await t.sendEventToBinding(const PointerScrollEvent(
+      position: Offset(200, 200), scrollDelta: Offset(0, -160),
+    ));
+    final userOffset = pos.pixels;
+    await t.pumpAndSettle();
+    expect(pos.pixels, closeTo(userOffset, 1));
+    await t.pump(const Duration(seconds: 2));
+    expect(pos.pixels, closeTo(userOffset, 1));
+    await t.pumpWidget(const SizedBox());
+    controller.dispose();
   });
 
   testWidgets('missing local headings do not invoke the external link route', (t) async {

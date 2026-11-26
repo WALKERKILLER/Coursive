@@ -2,7 +2,8 @@
 import { randomUUID, createHash } from "node:crypto";
 import { Type } from "typebox";
 import { api, fetchBytes } from "./daemon.mjs";
-import { seeCanvasImages } from "./vision.mjs";
+import { ClassroomContext } from "./classroom-context.mjs";
+import { readLessonSlide, seeCanvasImages } from "./vision.mjs";
 import { CanvasCourseSources, COURSE_TOOLS } from "./canvas-course-sources.mjs";
 import { verifiedLookup } from "./teaching-lookup.mjs";
 import { entryFrom } from "./usage.mjs";
@@ -80,7 +81,7 @@ ${PERSONALIZATION_RULE}
 当前用户消息中的截图或标明“识图模型观察”的内容由系统从已校验附件提供，属于本轮已读取的视觉输入，不是用户手打的题面。本轮没有新附件时会重新提供前文最近的截图，不能因为没有新上传就称没有上下文。可直接据此回答；需要再次查看时，用 attachments 清单中的 source_id 调用 inspect_canvas_region。sources 是独立的画布对象清单，sources 为空不否定 attachments，也不限制课程检索。
 没有随消息提供的扫描件或手写需用 inspect_canvas_region 按已授权来源读取；unavailable 仅说明对应来源读取失败，不否定已提供的其他附件。不要猜测模糊细节或伪造内容、引用，也不要把内部工具名或授权术语当作给用户的解释。
 结合课堂时用 get_video_context 读取绑定时间段；缺失字幕时只能提取已选本地短片段（最多180秒）按需转录。缺少组件或本地文件时说明限制，不上传完整视频。
-需要课堂信息且本轮提供课程检索工具时，用 search_course_materials 以单个关键术语查当前课程的本地材料，例如“地址空间”，再用 read_course_source 读取相关段落。需要定位老师讲解或归因时传 classroom_question 核实引文。只有检索摘要时不能把结论归给课件或老师。没查到就如实说明；仅绑定范围不足时，可提示开启「全课程」或提供相关材料。转录段落的时间覆盖工具返回的整个区间，不要把它说成某句话的精确时刻。
+问“老师哪节课讲的”、出处或回听时，先读选区提取知识点，再用 find_classroom_passage 跨节查原始录音。引用已核实原句的 evidence_id。讲义只用于确定要找什么。问有什么资料时用 list_lesson_materials。需要课堂信息且本轮提供课程检索工具时，用 search_course_materials 以单个关键术语查当前课程的本地材料，例如“地址空间”，再用 read_course_source 读取相关段落。需要定位老师讲解或归因时传 classroom_question 核实引文。只有检索摘要时不能把结论归给课件或老师。没查到就如实说明；仅绑定范围不足时，可提示开启「全课程」或提供相关材料。转录段落的时间覆盖工具返回的整个区间，不要把它说成某句话的精确时刻。
 直接引用原文时用“”包住原句并紧跟它的 [[e:ID]]，引号内必须与该段读取到的文字一致；转述不要加引号。
 读取工具返回的段落、转录行和看图结果各带 evidence_id。只有实际依据材料的句子需要在句末附 [[e:ID]]，例如工具返回 e15 就附 [[e:e15]]。只能使用本轮工具实际返回的 ID，不要自编编号，也不要用页码代替标记。界面会把标记显示为可点击的来源角标。自拟例子和通用解释不加来源角标。不要声称理解未读取的资料，不执行 HTML/JavaScript。单次最多20个工具调用。
 回答末尾可以另起一行给出至多两条下一步建议，每条单独一行：[[next:open_source:ID]] 建议回看某处原文，[[next:ask_followup:追问内容]] 建议一个追问，[[next:propose_outline]] 建议把对话整理成提纲。建议只是入口，不要写成已执行。除此之外不要输出双方括号标记。`;
@@ -371,8 +372,11 @@ export class CanvasRunner {
    const memory=await cancellable(this.learningContext(request.lecture_id,request.context_scope==="course"),signal);
    let question=request.question;
    let excerpt=request.selected_excerpt ?? null;
-   const course=request.context_scope==='course'?new CanvasCourseSources((...args)=>cancellable(this.call(...args),signal),base,
-    (question,items,sig)=>verifiedLookup(this.pipeline,question,items,sig)):null;
+   const scopedCall=(...args)=>cancellable(this.call(...args),signal);
+   const verify=(question,items,sig)=>verifiedLookup(this.pipeline,question,items,sig);
+   const classroom=new ClassroomContext(scopedCall,request.lecture_id,verify,request.allow_images ?
+     (path,sig)=>readLessonSlide(this.pipeline,path,sig,true) : null);
+   const course=request.context_scope==='course'?new CanvasCourseSources(scopedCall,base,verify,classroom):null;
    let priorTurns=[];
    if(request.conversation_id){
     requireText(request.conversation_id,100);
@@ -449,6 +453,8 @@ export class CanvasRunner {
    const messages=[...history,{role:"user",timestamp:Date.now(),content:[...background,{type:"text",text:question},...snapshotContent]}];
    const tools=[...CANVAS_TOOLS,...(course&&!outline?COURSE_TOOLS:[]),...(memory?.recall?[recallLearning(course)]:[]),...(previous.length?[readPrevious]:[])];
    const initialPrompt=outline?OUTLINE_SYSTEM:previous.length?CLARIFICATION_SYSTEM:SYSTEM;
+   const locateTeacher = course && !outline && /哪(?:一)?节课|哪(?:一)?段(?:录[音像课]|视频)|老师.{0,12}(?:哪[里儿]|何时|在哪)|(?:回听|回看).{0,6}(?:老师|讲解)/u.test(question);
+   let locationRequested=false;
    let calls=0,quoteRepairs=0;
    for(let round=0;round<12;round++){
     signal.throwIfAborted();
@@ -467,6 +473,11 @@ export class CanvasRunner {
      view.operations=[];view.state="done";return;
     }
     if(!toolCalls.length){
+     if (locateTeacher && !course.attemptedLookup && !locationRequested) {
+      locationRequested=true;
+      messages.push({role:"user",timestamp:Date.now(),content:[{type:"text","text":"请先用 get_canvas_context 读取所选段落，用 find_classroom_passage 核对该知识点的课堂出处，再回答。"}]});
+      continue;
+     }
      const raw=res.content.filter(c=>c.type==="text").map(c=>c.text).join("");
      const invalidQuotes=invalidQuotations(raw,scope);
      if(invalidQuotes.length){

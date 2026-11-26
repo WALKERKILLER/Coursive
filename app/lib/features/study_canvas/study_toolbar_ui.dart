@@ -256,8 +256,8 @@ extension _StudyToolbars on StudyCanvasState {
           _connectionSettings();
         case 'export':
           exportRecovery();
-        case 'classic':
-          widget.onClassic?.call();
+        case 'new-canvas':
+          widget.onNewCanvas?.call();
       }
     },
     itemBuilder: (_) => [
@@ -284,10 +284,8 @@ extension _StudyToolbars on StudyCanvasState {
       const PopupMenuItem(value: 'brush', child: Text('画笔与橡皮设置')),
       const PopupMenuItem(value: 'links', child: Text('管理知识关联')),
       const PopupMenuItem(value: 'export', child: Text('导出画布副本')),
-      if (!widget.standalone) ...[
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'classic', child: Text(l10n.studyExitCanvas)),
-      ],
+      if (widget.onNewCanvas != null)
+        PopupMenuItem(value: 'new-canvas', child: Text(l10n.studyCreateBlankCanvas)),
     ],
   );
 

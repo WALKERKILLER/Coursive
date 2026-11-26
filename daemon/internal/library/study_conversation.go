@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -35,6 +36,7 @@ type StudyEvidence struct {
 	Anchor   StudyAnchor `json:"anchor"`
 	// CourseSource identifies a passage read through course scope (spec 0029);
 	// the app re-reads and revalidates it on click instead of storing its text.
+	TeachingRef  string             `json:"teaching_ref,omitempty"`
 	CourseSource *StudyCourseSource `json:"course_source,omitempty"`
 }
 
@@ -117,6 +119,28 @@ func validStudyTurnResult(raw json.RawMessage) bool {
 		if !studyEvidenceID.MatchString(e.ID) || issued[e.ID] || len(e.SourceID) > 120 || len(e.Label) > 400 || !validStudyAnchor(e.Anchor) ||
 			(e.CourseSource != nil && (e.CourseSource.Text != "" || !validStudyCourseSource(*e.CourseSource))) {
 			return false
+		}
+		if e.TeachingRef != "" {
+			u, err := url.Parse(e.TeachingRef)
+			if err != nil || len(e.TeachingRef) > 8192 || u.Scheme != "coursive" || u.User != nil || u.Query().Get("v") != "1" {
+				return false
+			}
+			ids := strings.Split(strings.TrimPrefix(u.Path, "/"), "/")
+			if ids[0] != e.Anchor.SourceLectureID || !validStudyID(ids[0]) {
+				return false
+			}
+			switch u.Host {
+			case "lecture", "courseware":
+				if len(ids) != 1 {
+					return false
+				}
+			case "slide":
+				if len(ids) != 2 {
+					return false
+				}
+			default:
+				return false
+			}
 		}
 		issued[e.ID] = true
 		switch e.Kind {

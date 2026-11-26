@@ -14,6 +14,11 @@ class _MarkdownPassage {
 
   bool matches(StudyAnchor anchor) {
     if (anchor.quote != quote) return false;
+    if (range != null && anchor.end > anchor.start &&
+        anchor.fingerprint.replaceFirst(RegExp(r'^source-'), '') ==
+            fingerprint.replaceFirst(RegExp(r'^source-'), '')) {
+      return anchor.start == range!.start && anchor.end == range!.end;
+    }
     if (anchor.fingerprint == fingerprint) return anchor.id == locator;
     if (anchor.fingerprint == 'source-$fingerprint' && range != null) {
       return anchor.start == range!.start && anchor.end == range!.end;
@@ -53,11 +58,11 @@ extension _StudyMarkdownEditing on StudyCanvasState {
     return _markdownMarks[card.id]?[block] ?? const [];
   }
 
-  Widget _markdownPassage(StudyCard card, String body, {int block = -1}) {
-    final content = CoursiveMarkdown(
+  Widget _markdownPassage(StudyCard card, String body, {int block = -1, int? sectionOffset, Widget? rendered}) {
+    final content = rendered ?? CoursiveMarkdown(
       body,
       lectureId: widget.standalone ? '' : widget.ctl.lectureId,
-      onRef: widget.standalone ? null : (ref) => _openMarkdownReference(ref),
+      onRef: _openMarkdownReference,
       linkDecorationStyle: TextDecorationStyle.dashed,
       baseDir: card.originalPath.isEmpty
           ? ''
@@ -79,6 +84,8 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       card: card,
       block: block,
       body: body,
+      sectionOffset: sectionOffset,
+      sourceText: sectionOffset == null ? null : card.text,
       selectable: selectable,
       marks: marks,
       findNote: (p) => document!.cards
@@ -90,19 +97,26 @@ extension _StudyMarkdownEditing on StudyCanvasState {
           )
           .firstOrNull,
       edit: card.markdownReader ? (p) => _text(card, p.range) : null,
-      annotate: (p, note) => _annotatePassage(card, p, note),
+      annotate: (p, note) {
+        if (sectionOffset != null) _closeMaterialReader();
+        _annotatePassage(card, p, note);
+      },
       linkedAsides: (p) => document!.cards.where(
         (c) =>
             c.passageAside &&
             document!.visible(c.layer) &&
             c.sources.any((a) => a.objectId == card.id && p.matches(a)),
       ),
-      reveal: _revealCard,
+      reveal: (target) {
+        if (sectionOffset != null) _closeMaterialReader();
+        _revealCard(target);
+      },
       evidence: _evidenceFocus,
       onPassageMissing: () => _toast(l10n.studyEvidenceStale),
       aside: widget.standalone
           ? null
           : (p) {
+              if (sectionOffset != null) _closeMaterialReader();
               final anchor = _passageAnchor(card, p);
               _startConversation(
                 beside: card,
@@ -115,22 +129,22 @@ extension _StudyMarkdownEditing on StudyCanvasState {
   }
 
   void _openMarkdownReference(CoursiveRef ref) {
-    final lectureId = widget.ctl.lectureId;
-    if (ref is TimeRef && ref.quote == null &&
-        (ref.lectureId.isEmpty || ref.lectureId == lectureId)) {
-      widget.ctl.seekTo(ref.seconds * 1000);
-      final d = document!;
-      final video = d.cards
-          .where((c) => c.type == 'lecture' && d.visible(c.layer))
-          .firstOrNull;
-      if (video != null) {
-        _revealCard(video);
-      } else {
-        widget.onClassic?.call();
-      }
+    final lectureId = widget.standalone ? '' : widget.ctl.lectureId;
+    if (_focusedMaterial != null || widget.standalone) {
+      openRef(
+        context, ref, lectureId: lectureId,
+        onSeek: (time) => _playReadingReference(
+          time.lectureId.isEmpty ? lectureId : time.lectureId,
+          time.seconds * 1000,
+        ),
+        onPlay: _playReadingReference,
+      );
       return;
     }
-    openRef(context, ref, lectureId: lectureId);
+    openRef(context, ref, lectureId: lectureId,
+      onSeek: (time) => _playReadingReference(time.lectureId.isEmpty ? lectureId : time.lectureId, time.seconds * 1000),
+      onPlay: _playReadingReference,
+    );
   }
 
   // Keep exact anchors in the unchanged prefix and suffix of a source edit.
@@ -191,7 +205,7 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       StudyAnchor(
         id: passage.locator,
         objectId: source.id,
-        workspaceId: widget.ctl.lectureId,
+        workspaceId: widget.notebookId ?? widget.ctl.lectureId,
         kind: source.type,
         start: passage.range?.start ?? 0,
         end: passage.range?.end ?? 0,
@@ -319,6 +333,8 @@ class _SelectableMarkdownPassage extends StatefulWidget {
   const _SelectableMarkdownPassage({
     super.key,
     required this.card,
+    this.sectionOffset,
+    this.sourceText,
     required this.block,
     required this.body,
     required this.selectable,
@@ -336,6 +352,8 @@ class _SelectableMarkdownPassage extends StatefulWidget {
   final StudyCard card;
   final String body;
   final int block;
+  final int? sectionOffset;
+  final String? sourceText;
   final bool selectable;
   final List<_MarkdownMark> marks;
   final Widget child;
@@ -546,8 +564,8 @@ class _SelectableMarkdownPassageState
   }
 
   TextRange? _renderedRange(StudyAnchor anchor, String rendered) {
-    final hash = _fingerprint ??= outlineNoteHash(widget.body);
-    if (anchor.fingerprint == hash) {
+    final hash = _fingerprint ??= outlineNoteHash(widget.sourceText ?? widget.body);
+    if (widget.sectionOffset == null && anchor.fingerprint == hash) {
       final parts = anchor.id.split('-');
       final start = int.tryParse(parts.elementAtOrNull(2) ?? '');
       final end = int.tryParse(parts.elementAtOrNull(3) ?? '');
@@ -584,16 +602,16 @@ class _SelectableMarkdownPassageState
     return null;
   }
 
-  int get _sourceBase => widget.block < 0
+  int get _sourceBase => widget.sectionOffset ?? (widget.block < 0
       ? 0
       : widget.card.blocks
             .take(widget.block)
-            .fold<int>(0, (n, b) => n + b.plainText.length + 1);
+            .fold<int>(0, (n, b) => n + b.plainText.length + 1));
 
   @override
   void didUpdateWidget(_SelectableMarkdownPassage old) {
     super.didUpdateWidget(old);
-    if (old.body != widget.body) {
+    if (old.body != widget.body || old.sectionOffset != widget.sectionOffset || old.sourceText != widget.sourceText) {
       _fingerprint = null;
       _lastPassage = null;
       _quote = '';
@@ -642,7 +660,9 @@ class _SelectableMarkdownPassageState
     return _lastPassage = _MarkdownPassage(
       _quote,
       locator,
-      _fingerprint ??= outlineNoteHash(body),
+      widget.sectionOffset != null
+          ? 'source-${_fingerprint ??= outlineNoteHash(widget.sourceText ?? widget.body)}'
+          : _fingerprint ??= outlineNoteHash(body),
       exact,
     );
   }

@@ -254,11 +254,11 @@ class _MonthCalendarState extends State<_MonthCalendar> {
             if (v.abs() > 200) _shift(v < 0 ? 1 : -1);
           },
           child: AnimatedSize(
-            duration: Motion.medium4,
+            duration: Motion.durationOf(context, Motion.medium4),
             curve: Motion.emphasized,
             alignment: Alignment.topCenter,
             child: AnimatedSwitcher(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               switchInCurve: Motion.emphasizedDecelerate,
               transitionBuilder: (c, a) => FadeTransition(
                 opacity: a,
@@ -278,7 +278,7 @@ class _MonthCalendarState extends State<_MonthCalendar> {
               onPressed: widget.onToggle,
               icon: AnimatedRotation(
                 turns: widget.collapsed ? 0 : 0.5,
-                duration: Motion.medium2,
+                duration: Motion.durationOf(context, Motion.medium2),
                 child: Icon(Icons.expand_more_rounded, color: cs.onSurfaceVariant),
               ),
             ),
@@ -317,7 +317,7 @@ class _DayCell extends StatelessWidget {
         onTap: onTap,
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           AnimatedContainer(
-            duration: Motion.medium1,
+            duration: Motion.durationOf(context, Motion.medium1),
             curve: Motion.emphasized,
             width: 34,
             height: 34,
@@ -435,7 +435,7 @@ class _DayRow extends StatelessWidget {
               Text(l10n.weekdayName(weekdayNames[day.weekday - 1]), style: tt.labelMedium?.copyWith(color: today ? cs.primary : cs.onSurfaceVariant)),
               const SizedBox(height: 2),
               AnimatedContainer(
-                duration: Motion.medium1,
+                duration: Motion.durationOf(context, Motion.medium1),
                 width: 40,
                 height: 40,
                 alignment: Alignment.center,

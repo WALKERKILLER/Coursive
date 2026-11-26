@@ -36,7 +36,7 @@ class CourseGlyph extends StatelessWidget {
     final spec = CourseArtSpec.of(course.id.isEmpty ? course.rawTitle : course.id);
     return TweenAnimationBuilder<double>(
       tween: Tween(end: hover ? 1 : 0),
-      duration: Motion.long2,
+      duration: Motion.durationOf(context, Motion.long2),
       curve: Motion.emphasized,
       builder: (_, t, _) => CustomPaint(size: Size.square(size), painter: _GlyphPainter(spec, s, t)),
     );
@@ -279,7 +279,7 @@ class JobProgressLine extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
       TweenAnimationBuilder<double>(
         tween: Tween(end: job.state == 'queued' ? 0 : job.progress),
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         curve: Motion.standard,
         builder: (_, v, _) => LinearProgressIndicator(value: job.state == 'queued' ? null : v, borderRadius: BorderRadius.circular(4)),
       ),

@@ -91,7 +91,7 @@ class _CoursePageState extends State<CoursePage> {
   }
 
   void _open(Lecture l) => Navigator.of(context, rootNavigator: true)
-      .push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: l.id)))
+      .push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: l.id, startInCanvas: true)))
       .then((_) => _load(quiet: true));
 
   @override
@@ -172,7 +172,7 @@ class _CoursePageState extends State<CoursePage> {
                 pinned: true,
                 backgroundColor: base.colorScheme.surfaceContainerLowest,
                 title: AnimatedSwitcher(
-                  duration: Motion.short4,
+                  duration: Motion.durationOf(context, Motion.short4),
                   child: _selecting
                       ? Text(
                           l10n.courseSelectedCount(_sel.length),
@@ -357,7 +357,7 @@ class _CoursePageState extends State<CoursePage> {
                                   ),
                             icon: AnimatedRotation(
                               turns: newestFirst ? 0 : 0.5,
-                              duration: Motion.medium2,
+                              duration: Motion.durationOf(context, Motion.medium2),
                               curve: Motion.emphasized,
                               child: const Icon(
                                 Icons.arrow_downward_rounded,
@@ -468,7 +468,7 @@ class _CoursePageState extends State<CoursePage> {
             visible: _selecting,
             child: AnimatedScale(
               scale: _selecting ? 1 : 0,
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: _selecting
                   ? Motion.emphasizedDecelerate
                   : Motion.emphasizedAccelerate,
@@ -555,7 +555,7 @@ class _HeaderState extends State<_Header> with SingleTickerProviderStateMixin {
           borderRadius: BorderRadius.circular(Corners.xl),
           child: TweenAnimationBuilder<double>(
             tween: Tween(end: _hover ? 1 : 0),
-            duration: Motion.long4,
+            duration: Motion.durationOf(context, Motion.long4),
             curve: Motion.emphasized,
             builder: (_, t, _) => AnimatedBuilder(
               animation: _spin,
@@ -760,7 +760,7 @@ class _LectureTileState extends State<_LectureTile> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: AnimatedContainer(
-          duration: Motion.medium1,
+          duration: Motion.durationOf(context, Motion.medium1),
           curve: Motion.emphasized,
           decoration: BoxDecoration(
             color: widget.selected
@@ -790,7 +790,7 @@ class _LectureTileState extends State<_LectureTile> {
                   child: Row(
                     children: [
                       AnimatedSwitcher(
-                        duration: Motion.short4,
+                        duration: Motion.durationOf(context, Motion.short4),
                         transitionBuilder: (c, a) =>
                             ScaleTransition(scale: a, child: c),
                         child: widget.selecting
@@ -854,7 +854,7 @@ class _LectureTileState extends State<_LectureTile> {
                               ),
                             ],
                             AnimatedSize(
-                              duration: Motion.medium2,
+                              duration: Motion.durationOf(context, Motion.medium2),
                               curve: Motion.emphasized,
                               child: active.isEmpty
                                   ? const SizedBox(width: double.infinity)

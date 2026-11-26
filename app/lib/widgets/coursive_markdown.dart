@@ -447,7 +447,7 @@ class _MdImage extends StatelessWidget {
               child: Image.network(
                 url,
                 fit: BoxFit.contain,
-                frameBuilder: (_, child, frame, sync) => AnimatedOpacity(opacity: frame == null && !sync ? 0 : 1, duration: Motion.medium1, child: child),
+                frameBuilder: (_, child, frame, sync) => AnimatedOpacity(opacity: frame == null && !sync ? 0 : 1, duration: Motion.durationOf(context, Motion.medium1), child: child),
                 errorBuilder: (_, _, _) => Container(
                   padding: const EdgeInsets.all(Space.md),
                   color: cs.surfaceContainerHighest,

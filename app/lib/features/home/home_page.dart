@@ -215,7 +215,7 @@ class _HomePageState extends State<HomePage> {
                             Navigator.of(context, rootNavigator: true).push(
                               MaterialPageRoute(
                                 builder: (_) =>
-                                    PlayerPage(lectureId: _recent[i].id),
+                                    PlayerPage(lectureId: _recent[i].id, startInCanvas: true),
                               ),
                             ),
                         children: [
@@ -435,7 +435,7 @@ class _Welcome extends StatelessWidget {
           ],
         ),
         AnimatedSize(
-          duration: Motion.medium4,
+          duration: Motion.durationOf(context, Motion.medium4),
           curve: Motion.emphasized,
           alignment: Alignment.topLeft,
           child: showQuote
@@ -471,11 +471,11 @@ class _AvatarButtonState extends State<_AvatarButton> {
         onTap: () => showProfileDialog(context),
         child: AnimatedRotation(
           turns: _hover ? -0.02 : 0,
-          duration: Motion.medium2,
+          duration: Motion.durationOf(context, Motion.medium2),
           curve: Motion.emphasized,
           child: AnimatedScale(
             scale: _hover ? 1.06 : 1,
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             child: UserAvatar(size: widget.size),
           ),
@@ -566,11 +566,11 @@ class _QuoteLineState extends State<_QuoteLine>
                   onTap: () => _load(refresh: true),
                   child: AnimatedScale(
                     scale: _hover ? 1.08 : 1,
-                    duration: Motion.medium2,
+                    duration: Motion.durationOf(context, Motion.medium2),
                     curve: Motion.emphasized,
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(end: _hover ? 1 : 0),
-                      duration: Motion.long2,
+                      duration: Motion.durationOf(context, Motion.long2),
                       curve: Motion.emphasized,
                       builder: (_, h, _) => AnimatedBuilder(
                         animation: _spin,
@@ -614,7 +614,7 @@ class _QuoteLineState extends State<_QuoteLine>
           child: Padding(
             padding: const EdgeInsets.only(top: 2),
             child: AnimatedSwitcher(
-              duration: Motion.medium4,
+              duration: Motion.durationOf(context, Motion.medium4),
               switchInCurve: Motion.emphasizedDecelerate,
               switchOutCurve: Motion.emphasizedAccelerate,
               transitionBuilder: (c, a) => FadeTransition(

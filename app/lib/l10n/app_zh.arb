@@ -4165,6 +4165,8 @@
   "folderSyncUsingCourseSync": "当前按课程同步；整库 WebDAV 同步尚未启用",
   "folderSyncSettingsGroup": "课程同步",
   "studyConversationEmpty": "围绕指定资料持续提问，回答和整理结果都保留在此对话中。",
+  "studyOpenMaterial": "展开阅读或播放",
+  "studyCreateBlankCanvas": "新建空白画布",
   "studyOpenCanvas": "打开画布",
   "studyExitCanvas": "退出画布",
   "studyThreadTitle": "对话 {n}",

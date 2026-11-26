@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -45,11 +46,12 @@ ThemeData buildTheme(ColorScheme cs, UiPrefs p) {
     extensions: [GlassStyle(enabled: p.glass && p.contrast != ContrastLevel.high)],
     textTheme: text,
     scaffoldBackgroundColor: cs.surface,
-    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+    pageTransitionsTheme: const _CoursiveTransitions(builders: {
       TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
-      TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
-      TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
-      TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.linux: _DesktopFade(),
+      TargetPlatform.windows: _DesktopFade(),
+      TargetPlatform.macOS: _DesktopFade(),
     }),
     appBarTheme: AppBarTheme(
       backgroundColor: cs.surface,
@@ -178,4 +180,32 @@ ThemeData buildTheme(ColorScheme cs, UiPrefs p) {
       ),
     ),
   );
+}
+
+class _CoursiveTransitions extends PageTransitionsTheme {
+  const _CoursiveTransitions({required super.builders});
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context,
+      Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    if (MediaQuery.disableAnimationsOf(context) && !route.popGestureInProgress) {
+      // Keep the platform gesture recognizer mounted even when transitions are instant.
+      return super.buildTransitions(route, context, kAlwaysCompleteAnimation, kAlwaysDismissedAnimation, child);
+    }
+    return super.buildTransitions(route, context, animation, secondaryAnimation, child);
+  }
+}
+
+class _DesktopFade extends PageTransitionsBuilder {
+  const _DesktopFade();
+  @override
+  Duration get transitionDuration => Motion.short4;
+  @override
+  Duration get reverseTransitionDuration => Motion.short3;
+
+  @override
+  Widget buildTransitions<T>(PageRoute<T> route, BuildContext context,
+      Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    return FadeTransition(opacity: animation.drive(CurveTween(curve: Motion.standard)), child: child);
+  }
 }

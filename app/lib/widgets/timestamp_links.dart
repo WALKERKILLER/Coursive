@@ -116,7 +116,7 @@ class _TimestampChipState extends State<TimestampChip> {
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
-            duration: Motion.short4,
+            duration: Motion.durationOf(context, Motion.short4),
             curve: Motion.standard,
             margin: const EdgeInsets.symmetric(horizontal: 1),
             padding: const EdgeInsets.fromLTRB(4, 1, 7, 1),

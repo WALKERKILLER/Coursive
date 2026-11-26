@@ -21,7 +21,7 @@ function sample(items, count) {
   return Array.from({length:count}, (_,i) => items[Math.round(i*(items.length-1)/(count-1))]);
 }
 
-function transcriptSources(lectureId, segments) {
+export function transcriptSources(lectureId, segments) {
   const windows = [];
   for (const row of segments ?? []) {
     if (!row.text?.trim() || !Number.isFinite(row.start_ms)) continue;

@@ -47,6 +47,10 @@ extension _StudySourceNavigation on StudyCanvasState {
       final page = (source['page'] as num? ?? 0).toInt();
       final exactPDF = source['kind'] == 'pdf' && page > 0;
       final video = source['video_path'] != null;
+      if (video && (source['time_end_ms'] as num? ?? 0) > (source['time_start_ms'] as num? ?? 0)) {
+        await _playReadingReference(lecture, (source['time_start_ms'] as num? ?? 0).toInt());
+        return;
+      }
       final excerpt = !video && !exactPDF;
       final identity = excerpt
           ? 'excerpt:${source['id']}:${source['offset']}:${source['end']}:${source['fingerprint']}'

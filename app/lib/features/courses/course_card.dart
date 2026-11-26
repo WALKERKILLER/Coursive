@@ -29,7 +29,7 @@ class _CourseCardState extends State<CourseCard> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: Motion.medium1,
+        duration: Motion.durationOf(context, Motion.medium1),
         curve: Motion.emphasized,
         decoration: BoxDecoration(
           color: _hover ? Color.alphaBlend(s.primary.withValues(alpha: 0.06), cs.surfaceContainer) : cs.surfaceContainer,
@@ -60,7 +60,7 @@ class _CourseCardState extends State<CourseCard> {
                         borderRadius: BorderRadius.circular(Corners.xl - Space.xs),
                         child: TweenAnimationBuilder<double>(
                           tween: Tween(end: _hover ? 1 : 0),
-                          duration: Motion.long4,
+                          duration: Motion.durationOf(context, Motion.long4),
                           curve: Motion.emphasized,
                           builder: (_, t, _) => CourseArt(course: c, t: t),
                         ),

@@ -18,6 +18,7 @@ import '../assistant/assistant_panel.dart';
 import 'lecture_player.dart';
 import 'player_view.dart';
 import 'side_panel.dart';
+import '../library/notebooks.dart' show createBlankCanvas;
 import '../study_canvas/study_canvas.dart';
 import '../study_canvas/study_canvas_surface.dart';
 import '../../l10n/l10n.dart';
@@ -53,10 +54,17 @@ void seekOrOpen(BuildContext context, String lectureId, int seconds) {
 }
 
 class PlayerPage extends StatefulWidget {
-  const PlayerPage({super.key, required this.lectureId, this.startMs, this.canvasCardId});
+  const PlayerPage({
+    super.key,
+    required this.lectureId,
+    this.startMs,
+    this.canvasCardId,
+    this.startInCanvas = false,
+  });
   final String lectureId;
   final int? startMs;
   final String? canvasCardId;
+  final bool startInCanvas;
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
@@ -66,8 +74,7 @@ class _PlayerPageState extends State<PlayerPage> {
   final _view = GlobalKey<PlayerViewState>();
   final _focus = FocusNode(debugLabel: 'player');
   bool _fullscreen = false;
-  // The classic player opens first; the canvas is entered on request.
-  late bool _canvasMode = widget.canvasCardId != null;
+  late bool _canvasMode = widget.startInCanvas || widget.canvasCardId != null;
   bool _allowPop = false, _startLesson = false;
   String? _initialCanvasCard;
   final _canvas = GlobalKey<StudyCanvasState>();
@@ -75,6 +82,7 @@ class _PlayerPageState extends State<PlayerPage> {
   StreamSubscription? _sub;
   late final PlayerHub _hub;
   bool _resumeShown = false;
+  PlayerHandle? _previousPlayer;
 
   // Arrow-key hold → speed boost (Kazumi style).
   Timer? _holdTimer;
@@ -88,11 +96,13 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     final app = context.read<AppState>();
     _hub = context.read<PlayerHub>();
+    _previousPlayer = _hub.value;
     _initialCanvasCard = widget.canvasCardId;
     ctl = LecturePlayer(
       api: app.api,
       lectureId: widget.lectureId,
       initialPositionMs: widget.startMs,
+      opensInCanvas: _canvasMode,
       prefs: context.read<UiPrefs>(),
     );
     ctl.canvasCommand = (op) async {
@@ -101,8 +111,7 @@ class _PlayerPageState extends State<PlayerPage> {
     };
     ctl.addListener(_onCtl);
     ctl.load().then((_) {
-      if (!mounted) return;
-      _hub.value = ctl;
+      if (mounted && ModalRoute.isCurrentOf(context) == true) _hub.value = ctl;
     });
     _sub = app.events.listen((e) {
       final d = e['data'];
@@ -153,7 +162,11 @@ class _PlayerPageState extends State<PlayerPage> {
     _holdTimer?.cancel();
     _focus.dispose();
     ctl.removeListener(_onCtl);
-    if (_hub.value == ctl) _hub.value = null;
+    if (_hub.value == ctl) {
+      final previous = _previousPlayer;
+      _hub.value = previous != null && _playerRoutes[previous]?.isActive == true
+          ? previous : null;
+    }
     if (_fullscreen) _setFullscreen(false);
     ctl.close();
     super.dispose();
@@ -189,6 +202,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_typing()) return KeyEventResult.ignored;
     if (_canvasMode && (_canvas.currentState?.handleKey(e) ?? false))
       return KeyEventResult.handled;
+    if (_canvas.currentState?.readingDocument == true) return KeyEventResult.ignored;
     final prefs = context.read<UiPrefs>();
     final k = e.logicalKey;
     final v = _view.currentState;
@@ -301,75 +315,9 @@ class _PlayerPageState extends State<PlayerPage> {
     a.send(text);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= 900;
-    return ListenableBuilder(
-      listenable: ctl,
-      builder: (context, _) {
-        final l = ctl.lecture;
-        Widget body;
-        if (ctl.loading) {
-          body = ColoredBox(
-            color: Colors.black,
-            child: CenteredLoader(label: l10n.playerPreparing),
-          );
-        } else if (ctl.loadError != null) {
-          body = Scaffold(
-            appBar: AppBar(),
-            body: ErrorState(error: ctl.loadError!, onRetry: ctl.load),
-          );
-        } else {
-          final view = PlayerView(
-            key: _view,
-            embedded: _canvasMode && !_fullscreen,
-            ctl: ctl,
-            fullscreen: _fullscreen,
-            onFullscreen: () => _setFullscreen(!_fullscreen),
-            onBack: _leave,
-            panelOpen: wide ? _panel : null,
-            onTogglePanel: wide && !_fullscreen
-                ? () => setState(() => _panel = !_panel)
-                : null,
-            onCanvas: _canvasMode
-                ? null
-                : () => setState(() { _startLesson=false; _canvasMode=true; }),
-          );
-          final panel = PlayerSidePanel(
-            ctl: ctl,
-            onAsk: _ask,
-            onStudy: () { if (_canvasMode) { _canvas.currentState?.openLesson(); } else { setState(() { _startLesson=true; _canvasMode=true; }); } },
-            assistant: const AssistantPanel(docked: true, embedded: true),
-          );
-          if (_canvasMode) {
-            body = StudyCanvasSurface(
-              prefs: context.watch<UiPrefs>(),
-              fullscreen: _fullscreen,
-              child: StudyCanvas(
-                key: _canvas,
-                startLesson: _startLesson,
-                initialCardId: _initialCanvasCard,
-                onInitialCardShown: () => _initialCanvasCard = null,
-                pdfLibraryRoot: context.read<AppState>().daemon.libraryRoot,
-                api: ctl.api,
-                ctl: ctl,
-                video: view,
-                panel: panel,
-                fullscreen: _fullscreen,
-                onClassic: _classic,
-                onBack: _leave,
-                onAsk: (text) {
-                  ctl.panelTab.value = 'assistant';
-                  _ask(text);
-                },
-              ),
-            );
-          } else if (_fullscreen) {
-            body = view;
-          } else if (wide) {
-            body = Row(
+  Widget _classicLayout(double width, ColorScheme cs, Widget view, Widget panel) {
+    if (width >= 900) {
+      return Row(
               children: [
                 Expanded(
                   child: Padding(
@@ -386,7 +334,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 ),
                 AnimatedSize(
-                  duration: Motion.medium4,
+                  duration: Motion.durationOf(context, Motion.short4),
                   curve: Motion.emphasized,
                   child: SizedBox(
                     width: _panel ? (width >= 1400 ? 440 : 380) : 0,
@@ -406,17 +354,98 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
               ],
             );
-          } else {
-            body = SafeArea(
-              child: Column(
-                children: [
-                  AspectRatio(aspectRatio: 16 / 9, child: view),
-                  Expanded(
-                    child: ColoredBox(color: cs.surface, child: panel),
-                  ),
-                ],
+    }
+    return SafeArea(
+      child: LayoutBuilder(builder: (context, size) => Column(
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: size.maxHeight * .60),
+            child: AspectRatio(aspectRatio: 16 / 9, child: view),
+          ),
+          Expanded(child: ColoredBox(color: cs.surface, child: panel)),
+        ],
+      )),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final width = MediaQuery.sizeOf(context).width;
+    final wide = width >= 900;
+    return ListenableBuilder(
+      listenable: ctl,
+      builder: (context, _) {
+        final l = ctl.lecture;
+        Widget body;
+        if (ctl.loading) {
+          body = ColoredBox(
+            color: Colors.black,
+            child: CenteredLoader(label: l10n.playerPreparing),
+          );
+        } else if (ctl.loadError != null || (!_canvasMode && ctl.mediaError != null)) {
+          body = Scaffold(
+            appBar: AppBar(),
+            body: ErrorState(error: (ctl.loadError ?? ctl.mediaError)!, onRetry: ctl.load),
+          );
+        } else {
+          PlayerView playerView({VoidCallback? closeReader}) => PlayerView(
+            key: _view,
+            embedded: closeReader == null && _canvasMode && !_fullscreen,
+            ctl: ctl,
+            fullscreen: _fullscreen,
+            onFullscreen: () => _setFullscreen(!_fullscreen),
+            onBack: closeReader ?? () {
+              if (!_fullscreen && (_canvas.currentState?.returnFromSource() ?? false)) return;
+              unawaited(_leave());
+            },
+            panelOpen: wide ? _panel : null,
+            onTogglePanel: wide && !_fullscreen
+                ? () => setState(() => _panel = !_panel)
+                : null,
+          );
+          final view = playerView();
+          final panel = PlayerSidePanel(
+            ctl: ctl,
+            onAsk: _ask,
+            onStudy: () { if (_canvasMode) { _canvas.currentState?.returnFromSource(); _canvas.currentState?.openLesson(); } else { setState(() { _startLesson=true; _canvasMode=true; }); } },
+            assistant: const AssistantPanel(docked: true, embedded: true),
+          );
+          if (_canvasMode) {
+            body = StudyCanvasSurface(
+              prefs: context.watch<UiPrefs>(),
+              fullscreen: _fullscreen,
+              child: StudyCanvas(
+                key: _canvas,
+                startLesson: _startLesson,
+                seedLessonMaterials: widget.startInCanvas,
+                initialCardId: _initialCanvasCard,
+                onInitialCardShown: () => _initialCanvasCard = null,
+                pdfLibraryRoot: context.read<AppState>().daemon.libraryRoot,
+                api: ctl.api,
+                ctl: ctl,
+                video: view,
+                buildLectureReader: (close) => _classicLayout(
+                  width, cs, playerView(closeReader: close), panel,
+                ),
+                panel: panel,
+                fullscreen: _fullscreen,
+                onClassic: _classic,
+                onNewCanvas: () async {
+                  if (!await _flushCanvas() || !context.mounted) return;
+                  await createBlankCanvas(context, ctl.lecture!.courseId);
+                },
+                onBack: _leave,
+                onAsk: (text) {
+                  ctl.panelTab.value = 'assistant';
+                  _ask(text);
+                },
               ),
             );
+          } else if (_fullscreen) {
+            body = view;
+          } else {
+            body = _classicLayout(width, cs, view, panel);
           }
         }
         return PopScope(

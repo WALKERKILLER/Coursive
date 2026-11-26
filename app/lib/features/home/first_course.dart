@@ -264,7 +264,7 @@ class _Constellation extends StatelessWidget {
                 i,
                 AnimatedRotation(
                   turns: lifted ? turn : 0,
-                  duration: Motion.long2,
+                  duration: Motion.durationOf(context, Motion.long2),
                   curve: Motion.emphasized,
                   child: CustomPaint(
                     painter: _TilePainter(shape, fill),

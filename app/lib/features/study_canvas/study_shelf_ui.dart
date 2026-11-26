@@ -48,7 +48,7 @@ extension _StudyShelf on StudyCanvasState {
       _topBarsBottom + 8,
     );
     return AnimatedPositioned(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       curve: Motion.emphasized,
       left: side ? (tab == null ? -360 : Space.md) : Space.sm,
       right: side ? null : Space.sm,
@@ -137,7 +137,7 @@ extension _StudyShelf on StudyCanvasState {
       card = switch (a.kind) {
         'segments' => _transcriptCard(a.data as List<Segment>, at),
         'quiz' => await _practiceCard(a.data as String, at),
-        'note' => await _noteCard(a.data as String, at),
+        'note' => await _noteCard(a.data as String, at: at),
         _ => null,
       };
     } catch (e) {
@@ -239,22 +239,34 @@ extension _StudyShelf on StudyCanvasState {
     );
   }
 
-  Future<StudyCard?> _noteCard(String id, Offset at) async {
+  Future<StudyCard?> _noteCard(String id, {Offset? at}) async {
+    final d = document!;
     final note = Note(
       ((await widget.api.get('/api/notes/${Uri.encodeComponent(id)}')) as Map)
           .cast<String, dynamic>(),
     );
-    if (!mounted) return null;
-    if (!widget.standalone && note.lectureId == widget.ctl.lectureId && RegExp(r'^lesson-[a-f0-9]{32}$').hasMatch(id)) {
-      return StudyCard(id: studyId(), type: 'text', layer: document!.activeLayer, generation: 'lesson-note',
-        documentId: id, rect: Rect.fromCenter(center: at, width: 540, height: 500), title: note.title, text: note.body);
+    if (!mounted || document != d) return null;
+    final center = at ?? Offset.zero;
+    if (!widget.standalone && note.courseId == widget.ctl.course?.id) {
+      final lesson = note.lectureId == widget.ctl.lectureId &&
+          RegExp(r'^lesson-[a-f0-9]{32}$').hasMatch(id);
+      return StudyCard(
+        id: studyId(),
+        type: 'text',
+        layer: d.activeLayer,
+        generation: lesson ? 'lesson-note' : 'linked-note',
+        documentId: id,
+        rect: Rect.fromCenter(center: center, width: 540, height: 500),
+        title: note.title,
+        text: note.body,
+      );
     }
     final blocks = studyBlocksFromMarkdown(note.body);
     return StudyCard(
       id: studyId(),
       type: 'note',
       layer: document!.activeLayer,
-      rect: Rect.fromCenter(center: at, width: 480, height: 420),
+      rect: Rect.fromCenter(center: center, width: 480, height: 420),
       title: note.title.isEmpty ? l10n.studyShelfNotes : note.title,
       blocks: blocks.isEmpty ? [StudyBlock(type: 'paragraph')] : blocks,
     );
@@ -568,7 +580,7 @@ class _ShelfState extends State<_Shelf> {
                         child: Column(
                           children: [
                             AnimatedContainer(
-                              duration: Motion.short4,
+                              duration: Motion.durationOf(context, Motion.short4),
                               curve: Motion.emphasized,
                               width: 48,
                               height: 30,
@@ -608,7 +620,7 @@ class _ShelfState extends State<_Shelf> {
           ),
           Expanded(
             child: AnimatedSwitcher(
-              duration: Motion.short4,
+              duration: Motion.durationOf(context, Motion.short4),
               child: KeyedSubtree(
                 key: ValueKey(widget.tab),
                 child: switch (widget.tab) {

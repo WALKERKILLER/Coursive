@@ -3,6 +3,16 @@ import { Type } from "typebox";
 import { documentPassages, neutralize } from "./canvas-agent.mjs";
 
 export const COURSE_TOOLS = [
+  {
+    name: "list_lesson_materials",
+    description: "列出本节完整录像、带时码转写、讲义和课件的位置，以及本课其他节次。省略 lecture_id 表示当前节次。",
+    parameters: Type.Object({lecture_id: Type.Optional(Type.String({maxLength:100}))}, {additionalProperties:false}),
+  },
+  {
+    name: "find_classroom_passage",
+    description: "找老师在哪讲过具体内容。query 填选区或对话里的概念，question 填需核实的知识点。省略 lecture_id 时检索本课程各节录音；传已列出的节次可查该节及投影课件。引用返回的 evidence_id。",
+    parameters: Type.Object({query: Type.String({minLength:1,maxLength:140}),question: Type.String({minLength:1,maxLength:500}),lecture_id: Type.Optional(Type.String({maxLength:100})),visual:Type.Optional(Type.Boolean())},{additionalProperties:false}),
+  },
 	{
 		name: "search_course_materials",
 		description: "按一个关键术语（例如“地址空间”）检索当前课程本地材料，最多12项；再读候选原文核对，搜索摘要不能作为证据。",
@@ -23,7 +33,8 @@ export const COURSE_TOOLS = [
 // Candidate IDs are scoped to this run. A model cannot nominate another course,
 // an arbitrary filesystem path, or reuse evidence from a previous answer.
 export class CanvasCourseSources {
-	constructor(call, base, verify) {
+	constructor(call, base, verify, classroom) {
+    this.classroom = classroom;
 		this.verify=verify;
 		this.call = call;
 		this.base = base;
@@ -32,7 +43,22 @@ export class CanvasCourseSources {
 
 	async execute(name, args, signal, scope) {
 		signal?.throwIfAborted();
-		if (name === "search_course_materials") {
+		if (name === "list_lesson_materials") return this.classroom.inventory(args.lecture_id);
+    if (name === "find_classroom_passage") {
+      if (!args.query?.trim() || args.query.length > 140 || !args.question?.trim() || args.question.length > 500) throw Error("查询范围无效");
+      this.attemptedLookup = true;
+      const hits = await this.classroom.find(args.query, args.question, args.lecture_id, !!args.visual, signal);
+      return {passages: hits.map(hit => {
+        const stamp = hit.kind === "transcript";
+        const anchor = {id:hit.id, kind:stamp ? "video" : "text", source_lecture_id:hit.lectureId,
+          fingerprint:hit.fingerprint, quote:hit.verifiedQuote};
+        const label = hit.label;
+        scope.texts.set(hit.id,hit.verifiedQuote);
+        return { evidence_id:scope.issue({id:hit.id,label},stamp ? "timestamped_transcript" : "exact_text",anchor,{teaching_ref:hit.link}),
+          lecture_id:hit.lectureId, label, text:neutralize(hit.verifiedQuote) };
+      })};
+    }
+    if (name === "search_course_materials") {
 			const items = await this.call("POST", this.base + "/sources/search", { query: args.query });
 			signal?.throwIfAborted();
 			if (!Array.isArray(items) || items.length > 12) throw new Error("课程检索结果无效");

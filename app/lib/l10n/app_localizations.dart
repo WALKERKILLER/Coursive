@@ -11751,6 +11751,18 @@ abstract class AppLocalizations {
   /// **'围绕指定资料持续提问，回答和整理结果都保留在此对话中。'**
   String get studyConversationEmpty;
 
+  /// No description provided for @studyOpenMaterial.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开阅读或播放'**
+  String get studyOpenMaterial;
+
+  /// No description provided for @studyCreateBlankCanvas.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建空白画布'**
+  String get studyCreateBlankCanvas;
+
   /// No description provided for @studyOpenCanvas.
   ///
   /// In zh, this message translates to:

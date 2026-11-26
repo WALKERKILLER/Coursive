@@ -127,7 +127,7 @@ class _ProposalCardState extends State<ProposalCard> {
       _ => (l10n.proposalPending, Icons.pending_outlined),
     };
     return AnimatedContainer(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       curve: Motion.emphasized,
       constraints: const BoxConstraints(maxWidth: 520),
       decoration: BoxDecoration(
