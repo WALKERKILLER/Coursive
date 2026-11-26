@@ -133,6 +133,20 @@ async function writeChapter(chapter, sources, modelCall, guidance, verify) {
 	};
 }
 
+// A chapter checkpoint can contain several quotes from the same retrieval window.
+// Its versioned links carry each quote's exact destination, even in older drafts.
+function renderChapter({ body }) {
+	return body.replace(/^课堂出处 · .*$/gm, (line) =>
+		line.replace(/\[课堂录音 · \d+ 秒\]\(coursive:\/\/lecture\/[^)\s]+\)/g, (link) => {
+			const target = link.slice(link.indexOf("](") + 2, -1);
+			const seconds = new URL(target).searchParams.get("t");
+			return /^\d+$/.test(seconds ?? "")
+				? "[课堂录音 · " + seconds + " 秒](" + target + ")"
+				: link;
+		}),
+	);
+}
+
 export async function reviewDraft(
 	{ api, pipeline, reviewCache = diskCache },
 	courseId,
@@ -289,7 +303,7 @@ export async function reviewDraft(
 	if (!drafts.some((d) => d.cited))
 		throw Error("讲义没有可核实的课堂出处。已完成章节可在重试时复用。");
 	const body = [
-		...drafts.map((d) => d.body),
+		...drafts.map(renderChapter),
 		"## 课程资料索引",
 		index.join("\n"),
 		...(gaps.length ? ["## 资料覆盖", gaps.join("。") + "。"] : []),

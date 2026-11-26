@@ -40,6 +40,15 @@ test("course handout treats real class evidence as data and links only verified 
 	};
 	const draft = await reviewDraft({ api, pipeline, reviewCache:(_key, produce)=>produce() }, "os");
 	assert.match(draft.body, /coursive:\/\/lecture\/l1\?t=54/);
+	const cachedDraft = await reviewDraft({
+		api, pipeline, reviewCache: (key, produce) => key[3] === "chapter"
+			? { cited: true, body: "原文\n\n课堂出处 · [课堂录音 · 54 秒](coursive://lecture/l1?t=98&start_ms=98000) · [课堂录音 · 54 秒](coursive://lecture/l1?t=59)" }
+			: produce(),
+	}, "os");
+	assert.match(cachedDraft.body, /课堂录音 · 98 秒/);
+	assert.match(cachedDraft.body, /课堂录音 · 59 秒/);
+	assert.doesNotMatch(cachedDraft.body, /课堂录音 · 54 秒/);
+
 	assert.match(draft.body, /课程资料索引/);
 	assert.doesNotMatch(draft.body, /fake|月球/);
 	assert.match(draft.body, /rev=[a-f0-9]{64}/);
