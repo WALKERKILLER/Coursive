@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/walkerkiller/coursive/daemon/internal/store"
 )
@@ -73,6 +74,9 @@ func TestCourseFilesOrganizeUndoAndReindex(t *testing.T) {
 	}
 	if _, err := os.Stat(l.Abs(asset.Path)); err != nil {
 		t.Fatal("preview changed the source", err)
+	}
+	if _, err := os.Stat(l.Abs(courseBatchDir)); !os.IsNotExist(err) {
+		t.Fatalf("preview persisted a receipt: %v", err)
 	}
 	moved := dir + "/courseware/新讲义.pdf"
 	if got, err := l.CommitCourseFileBatch(ctx, batch.ID, false); err != nil || got.State != "applied" {
@@ -195,5 +199,38 @@ func TestCourseFileBatchRefusesStaleAndOutOfScopeChanges(t *testing.T) {
 	}
 	if b, err := os.ReadFile(l.Abs(active.Path)); err != nil || string(b) != "new edit after move" {
 		t.Fatal("new content was lost", err)
+	}
+}
+
+func TestCourseReceiptRetention(t *testing.T) {
+	root, err := os.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := ensureReceiptDir(root); err != nil {
+		t.Fatal(err)
+	}
+	old, fresh := courseReceiptPath(NewID()), courseReceiptPath(NewID())
+	for _, name := range []string{old, fresh, courseBatchDir + "/keep.txt"} {
+		if err := root.WriteFile(name, []byte("receipt"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	past := now.Add(-31 * 24 * time.Hour)
+	if err := root.Chtimes(old, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if err := pruneCourseReceipts(root, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := root.Stat(old); !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, name := range []string{fresh, courseBatchDir + "/keep.txt"} {
+		if _, err := root.Stat(name); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

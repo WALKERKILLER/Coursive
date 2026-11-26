@@ -126,16 +126,21 @@ func (s *Server) patchSchedule(_ http.ResponseWriter, r *http.Request) (any, err
 		return nil, err
 	}
 	var p struct {
-		Kind     *string `json:"kind"`
-		Title    *string `json:"title"`
-		Detail   *string `json:"detail"`
-		DueDate  *string `json:"due_date"`
-		DueTime  *string `json:"due_time"`
-		CourseID *string `json:"course_id"`
-		Done     *bool   `json:"done"`
+		Base     *store.ScheduleItem `json:"base"`
+		Kind     *string             `json:"kind"`
+		Title    *string             `json:"title"`
+		Detail   *string             `json:"detail"`
+		DueDate  *string             `json:"due_date"`
+		DueTime  *string             `json:"due_time"`
+		CourseID *string             `json:"course_id"`
+		Done     *bool               `json:"done"`
 	}
 	if err := decode(r, &p); err != nil {
 		return nil, err
+	}
+	before := it
+	if base := p.Base; base != nil && (base.Source != it.Source || base.Kind != it.Kind || base.CourseID != it.CourseID || base.Title != it.Title || base.DueDate != it.DueDate || base.DueTime != it.DueTime || base.Done != it.Done) {
+		return nil, apiError{http.StatusConflict, "日程已变化，请重新查看"}
 	}
 	set := func(dst *string, v *string) {
 		if v != nil {
@@ -154,8 +159,12 @@ func (s *Server) patchSchedule(_ http.ResponseWriter, r *http.Request) (any, err
 	if err := checkItem(&it); err != nil {
 		return nil, err
 	}
-	if err := s.St.PutScheduleItem(ctx, it); err != nil {
+	changed, err := s.St.UpdateScheduleItem(ctx, before, it)
+	if err != nil {
 		return nil, err
+	}
+	if !changed {
+		return nil, apiError{http.StatusConflict, "日程已变化，请重新查看"}
 	}
 	s.scheduleChanged(ctx, id)
 	return s.St.ScheduleItem(ctx, id)
@@ -353,7 +362,8 @@ func (s *Server) testMinerU(_ http.ResponseWriter, r *http.Request) (any, error)
 func (s *Server) classroomPagePreview(_ http.ResponseWriter, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	page, _ := strconv.Atoi(q.Get("page"))
-	return s.Lib.PreviewClassroomPage(r.Context(), r.PathValue("id"), q.Get("file"), q.Get("rev"), page)
+	out, err := s.Lib.PreviewClassroomPage(r.Context(), r.PathValue("id"), q.Get("file"), q.Get("rev"), page)
+	return out, studyError(err)
 }
 
 func (s *Server) displayedCoursewarePage(_ http.ResponseWriter, r *http.Request) (any, error) {
@@ -362,7 +372,7 @@ func (s *Server) displayedCoursewarePage(_ http.ResponseWriter, r *http.Request)
 		return nil, badRequest("快照文字长度无效")
 	}
 	match, err := s.Lib.DisplayedPDFPage(r.Context(), r.PathValue("id"), text)
-	return map[string]any{"match": match}, err
+	return map[string]any{"match": match}, studyError(err)
 }
 
 func (s *Server) searchCourseware(_ http.ResponseWriter, r *http.Request) (any, error) {

@@ -80,6 +80,13 @@ test("proposals apply once, undo once and expire", async () => {
 		await bot.transition(p.id, ["applied"], "undone", async () => ({ ok: true }), (s) => s);
 		await assert.rejects(bot.transition(p.id, ["applied"], "undone", null, (s) => s), (e) => e.status === 409);
 
+		const material = await bot.propose({ kind: "course_files", title: "整理资料", op: {type:"course_files", id:"batch"} });
+		await assert.rejects(bot.transition(material.id, ["pending"], "applied", async () => {
+			throw Object.assign(new Error("资料正在同步，请稍后重试"), {status:409});
+		}, s => s));
+		assert.equal(bot.proposal(material.id).state,"pending");
+		assert.equal((await bot.transition(material.id, ["pending"], "applied", async () => ({ok:true}), s=>s)).state,"applied");
+
 		const failing = await bot.propose({ kind: "task", title: "t", op: { type: "task" } });
 		await assert.rejects(bot.transition(failing.id, ["pending"], "applied", async () => {
 			throw new Error("boom");

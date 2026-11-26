@@ -29,6 +29,20 @@ export async function resolveWorkspaceCourse(api, conv, requested) {
 	return requested || active;
 }
 
+/** Both manual notes and generated handouts use the same checked reverse edit. */
+export function noteRevision(note, previousBody) {
+	const before = previousBody.split("\n"), after = note.body.split("\n");
+	let first = 0, oldEnd = before.length, newEnd = after.length;
+	while (first < oldEnd && first < newEnd && before[first] === after[first]) first++;
+	while (oldEnd > first && newEnd > first && before[oldEnd-1] === after[newEnd-1]) { oldEnd--; newEnd--; }
+	return {
+		forceConfirm: true,
+		lines: [note.title, ...before.slice(first,oldEnd).map(line => "− " + line), ...after.slice(first,newEnd).map(line => "+ " + line)],
+		op: { type: "save_note", note: { ...note, base_body: previousBody } },
+		undo: { type: "save_note", note: { ...note, body: previousBody, base_body: note.body } },
+	};
+}
+
 export function courseFileTools(deps, conv, act) {
 	const { api } = deps;
 	const courseId = (requested) => resolveWorkspaceCourse(api, conv, requested);
@@ -102,7 +116,7 @@ export function courseFileTools(deps, conv, act) {
 				const course_id = await courseId(p.course_id);
 				return act({
 					kind: "course_files", title: `新建课程文件夹「${p.name}」`, doneTitle: `课程文件夹「${p.name}」已就绪`,
-					lines: [`课程导入目录／${p.name}`], op: { type: "course_folder", course_id, name: p.name },
+					forceConfirm: true, lines: [`课程导入目录／${p.name}`, "创建后无法在聊天中撤销"], op: { type: "course_folder", course_id, name: p.name },
 					said: (result) => `已创建 ${result.path}`,
 				});
 			},
@@ -120,19 +134,14 @@ export function courseFileTools(deps, conv, act) {
 				const { lecture_id, body, existing, subtitle, previous } = await reviewDraft(deps, course_id, signal, conv.context?.lecture_id, revise);
 				if (previous) {
 					if (body === previous.body) return output({unchanged:true,note_id:previous.id,lecture_id});
-					const before = previous.body.split("\n"), after = body.split("\n");
-					let first=0, oldEnd=before.length, newEnd=after.length;
-					while (first<oldEnd && first<newEnd && before[first]===after[first]) first++;
-					while (oldEnd>first && newEnd>first && before[oldEnd-1]===after[newEnd-1]) { oldEnd--; newEnd--; }
-					const lines = [...before.slice(first,oldEnd).map(line=>"− "+line),...after.slice(first,newEnd).map(line=>"+ "+line)];
-					return act({kind:"save_note",title:"修订「"+previous.title+"」",forceConfirm:true,lines,
-						op:{type:"save_note",note:{id:previous.id,course_id,lecture_id,title:previous.title,body,base_body:previous.body,source:previous.source}},
+					const note = { id:previous.id, course_id, lecture_id, title:previous.title, body, source:previous.source };
+					return act({kind:"save_note",title:"修订「"+previous.title+"」", ...noteRevision(note, previous.body),
 						doneTitle:"已修订复习讲义",said:()=>"已保存到原讲义。"});
 				}
 				return act({
 					kind: "course_review", title: `保存并添加「${subtitle} · 复习讲义」`,
 					doneTitle: existing ? "已打开已有复习讲义" : "复习讲义已保存并添加到画布",
-					lines: [existing ? "复用课程里的原讲义" : "新建课程 Markdown 讲义和课程资料索引", "在节次画布上添加同一份讲义的引用"],
+					forceConfirm: true, lines: [existing ? "复用课程里的原讲义" : "新建课程 Markdown 讲义和课程资料索引", "在节次画布上添加同一份讲义的引用", "讲义和画布引用无法在聊天中一起撤销"],
 					op: { type: "course_review", course_id, lecture_id, body },
 					said: (result) => `已准备好讲义和画布入口。请在回复中原样保留两个应用链接。
 ${reviewLinks(result)}`,
@@ -152,7 +161,7 @@ ${reviewLinks(result)}`,
 				if (note.course_id !== course_id || lecture.lecture?.course_id !== course_id) throw Error("只能把本课笔记添加到本课画布");
 				return act({
 					kind: "canvas_note", title: `添加「${note.title}」到画布`, doneTitle: "笔记已添加到画布",
-					lines: [String(lecture.lecture.title ?? p.lecture_id)],
+					forceConfirm: true, lines: [String(lecture.lecture.title ?? p.lecture_id), "添加后可在画布中移除引用，聊天中无法撤销"],
 					op: { type: "canvas_note", course_id, note_id: p.note_id, lecture_id: p.lecture_id },
 					said: reviewLinks,
 				});

@@ -279,3 +279,31 @@ test("open_page needs the id its target names", async () => {
 		await done();
 	}
 });
+
+test("workspace tools disclose irreversible writes and preserve later card moves", async () => {
+	const conv = {course_id:"c1", context:{lecture_id:"l1", study_canvas:"yes"}, lastUser:"新建文件夹，将笔记添加到画布，打开复习讲义，移动卡片"};
+	const card = {id:"card",title:"笔记",x:10,y:20};
+	const note = {id:"note",title:"笔记",course_id:"c1",lecture_id:"l1"};
+	const {courseReviewId}=await import("./course-review.mjs");
+	const {tools,bot,calls,deps,done}=await setup({conv, daemon:{
+		"GET /api/lectures/l1":{lecture:{course_id:"c1"}},
+		"GET /api/lectures/l1/study-canvas":{objects:[card],base_hash:"current"},
+		"GET /api/notes/note":note,
+		["GET /api/notes/"+courseReviewId("c1")]:note,
+		"GET /api/courses/c1/lectures":{course:{id:"c1",title:"课程"},lectures:[{id:"l1",course_id:"c1"}]},
+	}});
+	try {
+		for (const [name,args] of [["create_course_folder",{name:"习题"}],["prepare_course_review",{}],["pin_course_note",{note_id:"note",lecture_id:"l1"}]]) {
+			const result=await tools[name].execute("1",args);
+			assert.equal(result.details.proposal.state,"pending");
+			assert.match(result.details.proposal.lines.join(" "),/无法.*撤销/);
+		}
+		assert.ok(calls.every(call=>call.method==="GET"));
+		const result=await tools.canvas_control.execute("2",{action:"move",card_id:"card",x:30,y:40});
+		const undo=bot.proposal(result.details.app.proposal_id).undo;
+		await assert.rejects(runOp(undo,deps),/位置已变化/);
+		Object.assign(card,{x:30,y:40});
+		const reverse=(await runOp(undo,deps)).app_op;
+		assert.deepEqual([reverse.x,reverse.y,reverse.base_hash],[10,20,"current"]);
+	} finally {await done();}
+});

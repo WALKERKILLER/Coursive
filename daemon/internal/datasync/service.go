@@ -67,6 +67,31 @@ func (s *Service) WithLibraryWrite(write func() error) error {
 	return write()
 }
 
+// WaitForLibraryWrite lets a confirmed material operation follow a short sync
+// round. Long-running syncs still return a retryable conflict.
+func (s *Service) WaitForLibraryWrite(ctx context.Context, write func() error) error {
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	retry := time.NewTicker(50 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if s.runMu.TryLock() {
+			defer s.runMu.Unlock()
+			return write()
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return ErrBusy
+		case <-retry.C:
+		}
+	}
+}
+
 type config struct {
 	Kind        string           `json:"kind,omitempty"`
 	LocalFolder string           `json:"local_folder,omitempty"`

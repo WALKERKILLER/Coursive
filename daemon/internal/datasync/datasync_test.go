@@ -458,3 +458,29 @@ func TestCanvasConversationBackupRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestConfirmedWriteWaitsForSyncAndHonoursCancellation(t *testing.T) {
+	var s Service
+	s.runMu.Lock()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.WaitForLibraryWrite(ctx, func() error { t.Error("canceled write executed"); return nil }); err != context.Canceled {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.WaitForLibraryWrite(context.Background(), func() error { return nil }) }()
+	select {
+	case <-done:
+		t.Fatal("write entered an active sync")
+	case <-time.After(75 * time.Millisecond):
+	}
+	s.runMu.Unlock()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("write did not resume")
+	}
+}

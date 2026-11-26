@@ -14,7 +14,7 @@ The resident and course assistants can list, search and read local course materi
 
 The batch supports renaming, moving between lectures in one course, archiving courseware, importing from the course's intake directory, and exact edits to Markdown. Course recordings, generated subtitles, derived PDF assets and library metadata remain owned by their app workflows. Imported or moved files may be opened under their established references. Explicitly authorized Markdown patches keep the note ID and update its index. File contents are evidence for organization as requested by the student.
 
-The daemon rechecks source versions and target availability at apply and undo. A change that would replace a newer file fails without committing the batch. The daemon journals file and index changes together, publishes a refresh after commit and keeps the committed operation for undo. Sync publishes complete local changes. Permanent deletion remains subject to the existing separate operation rule.
+The daemon rechecks source versions and target availability at apply and undo. A change that would replace a newer file fails without committing the batch. The daemon journals file and index changes together, publishes a refresh after commit and keeps the committed operation for undo. Previews live in daemon memory for up to an hour. After a daemon restart the assistant can generate a fresh preview. Applied receipts support undo for thirty days. Recovery preserves ambiguous paths and records the conflict separately so other writes can proceed. Sync publishes complete local changes. Permanent deletion remains subject to the existing separate operation rule.
 
 ## Plan
 

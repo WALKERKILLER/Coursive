@@ -105,7 +105,7 @@ func (s *Server) Handler() http.Handler {
 				writeErr(w, err)
 				return
 			}
-			if s.Data != nil && r.Method != "GET" && !strings.HasPrefix(r.URL.Path, "/api/sync") && !strings.HasPrefix(r.URL.Path, "/api/data") {
+			if s.Data != nil && r.Method != "GET" && pattern != "POST /api/courses/{id}/material-files/batches" && !strings.HasPrefix(r.URL.Path, "/api/sync") && !strings.HasPrefix(r.URL.Path, "/api/data") {
 				s.Data.Soon(s.Ctx)
 			}
 			if v != nil {

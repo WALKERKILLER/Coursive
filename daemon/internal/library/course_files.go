@@ -288,9 +288,18 @@ func (l *Library) PreviewCourseFiles(ctx context.Context, courseID string, edits
 			}
 		}
 	}
-	if err := createCourseBatch(root, r); err != nil {
-		return CourseFileBatch{}, err
+	if l.pendingCourseBatches == nil {
+		l.pendingCourseBatches = make(map[string]courseFileReceipt)
 	}
+	for id, proposal := range l.pendingCourseBatches {
+		if time.Since(time.Unix(proposal.Created, 0)) >= time.Hour {
+			delete(l.pendingCourseBatches, id)
+		}
+	}
+	if len(l.pendingCourseBatches) >= 32 {
+		return CourseFileBatch{}, fileProblem("待处理批次已满，请稍后重试")
+	}
+	l.pendingCourseBatches[r.ID] = r
 	return r.CourseFileBatch, nil
 }
 
@@ -485,16 +494,12 @@ func patchSnippet(text string) string {
 
 func courseReceiptPath(id string) string { return courseBatchDir + "/" + id + ".json" }
 
-func createCourseBatch(root *os.Root, r courseFileReceipt) error {
+func ensureReceiptDir(root *os.Root) error {
 	if err := root.Mkdir(courseBatchDir, 0700); err != nil && !os.IsExist(err) {
 		return err
 	}
 	if info, err := root.Lstat(courseBatchDir); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return ErrStudyInvalid
 	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-	return writeStudyBytes(root, courseReceiptPath(r.ID), b)
+	return nil
 }

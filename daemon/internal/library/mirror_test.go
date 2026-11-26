@@ -114,3 +114,85 @@ func TestReindexWaitsForMirroredWrites(t *testing.T) {
 	l.mirrorMu.Unlock()
 	<-done
 }
+
+func TestAmbiguousMoveRetainsBothFilesAndRecoversOtherWrites(t *testing.T) {
+	l, _ := openLib(t)
+	ctx := context.Background()
+	root, err := os.OpenRoot(l.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := root.MkdirAll("courses/c/courseware", 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.WriteFile("courses/c/courseware/old.pdf", []byte("classroom"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := l.beginMirror()
+	m.j.BatchID = NewID()
+	if err := m.move(root, "courses/c/courseware/old.pdf", "courses/c/courseware/new.pdf"); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.WriteFile("courses/c/courseware/old.pdf", []byte("peer edit"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	separate := l.beginMirror()
+	if err := separate.replaceRooted(root, "courses/c/temporary.md", nil, []byte("pending")); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := l.recoverMirrors(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, want := range map[string]string{"courses/c/courseware/old.pdf": "peer edit", "courses/c/courseware/new.pdf": "classroom"} {
+		if b, e := root.ReadFile(name); e != nil || string(b) != want {
+			t.Fatalf("%s: %q %v", name, b, e)
+		}
+	}
+	if _, err := root.Stat("courses/c/temporary.md"); !os.IsNotExist(err) {
+		t.Fatal("unrelated rollback", err)
+	}
+	if _, err := root.Stat(journalDir + "/" + m.j.BatchID + ".conflict"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.CommitCourseFileBatch(ctx, m.j.BatchID, false); !errors.Is(err, ErrStudyConflict) {
+		t.Fatal(err)
+	}
+}
+
+func TestRootedRollbackAfterPartialLink(t *testing.T) {
+	l, _ := openLib(t)
+	root, err := os.OpenRoot(l.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	const oldName, newName = "courses/demo/original.md", "courses/demo/copy.md"
+	if err := root.MkdirAll("courses/demo", 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.WriteFile(oldName, []byte("before"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m := l.beginMirror()
+	if err := m.replaceRooted(root, oldName, []byte("before"), []byte("updated")); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.record(journalEntry{Path: oldName, MoveTo: newName}); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.Link(oldName, newName); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.recoverMirrors(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := root.ReadFile(oldName); err != nil || string(b) != "before" {
+		t.Fatal(string(b), err)
+	}
+	if _, err := root.Stat(newName); !os.IsNotExist(err) {
+		t.Fatal("duplicate link survived", err)
+	}
+}

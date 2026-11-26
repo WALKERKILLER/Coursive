@@ -40,6 +40,7 @@ type journalEntry struct {
 
 type journal struct {
 	Token   string         `json:"token"`
+	BatchID string         `json:"batch_id,omitempty"`
 	Entries []journalEntry `json:"entries"`
 }
 
@@ -199,7 +200,13 @@ func (l *Library) restoreEntry(e journalEntry) error {
 			if before == nil && after == nil && os.SameFile(beforeInfo, afterInfo) {
 				return root.Remove(e.MoveTo)
 			}
-			return fmt.Errorf("both or neither path exists for move %q to %q", e.Path, e.MoveTo)
+			if before != nil && !os.IsNotExist(before) {
+				return before
+			}
+			if after != nil && !os.IsNotExist(after) {
+				return after
+			}
+			return fmt.Errorf("%w: ambiguous move %q to %q", ErrStudyConflict, e.Path, e.MoveTo)
 		}
 		if e.Existed {
 			return writeStudyBytes(root, e.Path, e.Old)
@@ -241,6 +248,9 @@ func (l *Library) recoverMirrors(ctx context.Context) error {
 	}
 	for _, d := range ents {
 		p := filepath.Join(dir, d.Name())
+		if strings.HasSuffix(d.Name(), ".conflict") {
+			continue
+		}
 		if !strings.HasSuffix(d.Name(), ".json") {
 			os.Remove(p) // an interrupted journal write; its file change never started
 			continue
@@ -258,10 +268,26 @@ func (l *Library) recoverMirrors(ctx context.Context) error {
 			return err
 		}
 		if !ok {
+			var conflict error
 			for i := len(j.Entries) - 1; i >= 0; i-- {
 				if err := l.restoreEntry(j.Entries[i]); err != nil {
+					if errors.Is(err, ErrStudyConflict) {
+						conflict = err
+						continue
+					}
 					return fmt.Errorf("restore %s: %w", j.Entries[i].Path, err)
 				}
+			}
+			if conflict != nil {
+				owner := j.BatchID
+				if !courseBatchID.MatchString(owner) {
+					owner = j.Token
+				}
+				if err := os.Rename(p, filepath.Join(dir, owner+".conflict")); err != nil {
+					return err
+				}
+				log.Printf("mirror journal %s: retained conflicting files: %v", j.Token, conflict)
+				continue
 			}
 			log.Printf("mirror journal %s: restored %d file(s) of an unfinished write", j.Token, len(j.Entries))
 		}

@@ -479,6 +479,9 @@ class AssistantController extends ChangeNotifier {
     b.details = {...?b.details, 'app': {...?b.appOp, 'undone': true}};
     final result = (r['result'] as Map?)?.cast<String, dynamic>();
     if (result?['app'] is Map) _appOps.add({'op': 'prefs', 'set': result!['app'], 'silent': true});
+    if (result?['app_op'] is Map) {
+      _appOps.add((result!['app_op'] as Map).cast<String, dynamic>());
+    }
     notifyListeners();
   }
 

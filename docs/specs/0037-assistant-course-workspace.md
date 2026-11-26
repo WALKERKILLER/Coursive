@@ -14,6 +14,8 @@ The pi host provides Coursive commands for the active course or a course the stu
 
 The host stages native commands and library writes in Ask mode. Editing an original, changing several files or records, permanent deletion and external sharing always require user confirmation. A pending or dismissed proposal has no library effects. The confirmation identifies the affected files or records. Applying a proposal revalidates the original version, ownership and destination. Material operations follow [0036](0036-course-material-tools.md).
 
+The course tools are `list_course_files`, `read_course_file`, `organize_course_files`, `create_course_folder`, `prepare_course_review` and `pin_course_note`. A personal schedule edit shows the old and new values and checks ownership and the affected fields at apply and undo. Revising a note or handout shows changed lines and checks the expected body in both directions. Moving a card offers a reverse move while its position matches. Creating a note or folder, pinning a reference, preparing a handout and dispatching a resize or PDF view/page command require a confirmation that describes the limits of chat undo.
+
 Course review saves an editable Markdown note under the course’s selected lecture, then pins one reference to it on the chosen lecture canvas. The canonical note and card have stable identities. Retry repairs a missing card, preserves existing content and reports a conflict if the target identity belongs to another object. Card geometry and existing ink remain user-owned. The model organizes course material and writes the explanation using verified source IDs. The host produces the links. The user can change the teaching instructions from assistant preferences. When only part of the course is readable, the handout identifies its coverage.
 
 The host builds a concept outline from the available lecture catalogs and checkpoints each completed chapter under the selected model and its source revisions. Reopening the saved note bypasses generation. Explicit revision presents the proposed change for confirmation against the exact body read. Changing writing preferences can reuse the evidence cache.
@@ -28,4 +30,4 @@ Verify the course review and retry, unchanged student edits, source navigation, 
 
 ## Evidence
 
-[Agent operation tests](../../agent/src/operate.test.mjs), [source grounding tests](../../agent/src/course-review.test.mjs) and [authenticated library tests](../../daemon/internal/server/course_files_test.go) cover confirmations, course ownership and retry.
+[Note and schedule tests](../../agent/src/workspace-writes.test.mjs), [agent operation tests](../../agent/src/operate.test.mjs), [source grounding tests](../../agent/src/course-review.test.mjs) and [authenticated library tests](../../daemon/internal/server/course_files_test.go) cover confirmations, course ownership and retry.

@@ -41,6 +41,20 @@ func (s *Store) PutScheduleItem(ctx context.Context, it ScheduleItem) error {
 	return err
 }
 
+// UpdateScheduleItem applies a validated patch only while its input fields still
+// match, including when a second client edits the item within the same second.
+func (s *Store) UpdateScheduleItem(ctx context.Context, before, after ScheduleItem) (bool, error) {
+	result, err := s.DB.ExecContext(ctx, `UPDATE schedule SET kind=?,title=?,detail=?,due_date=?,due_time=?,course_id=?,done=?,updated_at=?
+		WHERE id=? AND source=? AND kind=? AND title=? AND detail=? AND due_date=? AND due_time=? AND course_id=? AND done=?`,
+		after.Kind, after.Title, after.Detail, after.DueDate, after.DueTime, after.CourseID, after.Done, now(),
+		before.ID, before.Source, before.Kind, before.Title, before.Detail, before.DueDate, before.DueTime, before.CourseID, before.Done)
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n == 1, err
+}
+
 // ScheduleQuery filters schedule items; empty fields match everything.
 type ScheduleQuery struct {
 	From, To  string // inclusive YYYY-MM-DD bounds

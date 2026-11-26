@@ -24,7 +24,8 @@ Every operate tool records what it did as a proposal (`<agent data>/bot/proposal
 - `list_downloads {state?, course_id?}`: counts by state and the jobs (active and failed by default) with progress and errors.
 - `manage_downloads {action: pause | resume | retry | cancel, job_ids?}`: cancel's undo queues the same lectures and kinds again.
 - `create_task` (was `propose_task`): created at once; the undo deletes it.
-- `toggle_plugin`, `manage_course`: at once, undo restores the previous state.
+- `manage_course` restores the previous course settings on undo. Students manage plugins in the app.
+- Course material commands and their confirmation rules follow [0037](0037-assistant-course-workspace.md).
 - `delete_files {lecture_ids (≤ 50), kinds}`: always a card; deleting has no undo. Older cards with `lecture_id` still apply.
 - `open_page`, `player`, `read_settings`, `sync_courses`: unchanged.
 
@@ -40,7 +41,7 @@ The system prompt of the bot, course agents and chats tells the model to finish 
 3. Amend 0007 and `AGENTS.md`.
 
 ## Verification
-- `node --test`: settings applied at once with their undo across app, coursive-daemon and assistant; ask mode making cards with no coursive-daemon write; download selection by dates and latest, skipping local kinds, grouping by needed kinds, undo cancelling only new jobs; cancel and its requeue undo; deletion always a card and older cards still applying; task and plugin undo; `list_downloads` output.
+- `node --test`: settings applied at once with their undo across app, coursive-daemon and assistant; ask mode making cards with no coursive-daemon write; download selection by dates and latest, skipping local kinds, grouping by needed kinds, undo cancelling only new jobs; cancel and its requeue undo; deletion always a card and older cards still applying; task undo; `list_downloads` output.
 - Widget tests: the approval chip's menu switches the mode; the header shows the bot name in full on a phone and falls back to icons with tooltips when it does not fit.
 - Live: in 自动, "下载<课程>最近两节的转写" starts the jobs in one turn and 撤销 cancels them; in 询问 the same request shows a card and starts nothing until applied; "删掉第 1 节的视频" shows a confirmation card in both modes.
 

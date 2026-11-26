@@ -60,6 +60,12 @@ func TestCourseFileRoutesAndFormerFileURL(t *testing.T) {
 	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &inspected) != nil || len(inspected.Version) != 64 {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	for query, code := range map[string]int{"page=abc&rev=" + inspected.Version: 400, "page=1&rev=" + strings.Repeat("0", 64): 409} {
+		got := call("GET", "/api/lectures/l/courseware/page-preview?file="+url.QueryEscape(a.Path)+"&"+query, "", true)
+		if got.Code != code {
+			t.Fatalf("page preview %s: %d, want %d", query, got.Code, code)
+		}
+	}
 	body, _ := json.Marshal(map[string]any{"edits": []library.CourseFileEdit{
 		{Op: "rename", Path: a.Path, Name: "新名.pdf", Version: inspected.Version},
 	}})
@@ -154,5 +160,42 @@ func TestCourseReviewReusesOriginalNoteAndCard(t *testing.T) {
 	res, err := lib.StudyContext(ctx, "first", library.StudyContextRequest{Revision: d.Revision, Objects: []string{created["card_id"]}})
 	if err != nil || len(res.Sources) != 1 || !strings.Contains(res.Sources[0].Text, "我的补充") {
 		t.Fatalf("selection did not read the latest canonical note: %+v %v", res.Sources, err)
+	}
+}
+
+func TestStaleScheduleApprovalPreservesUserEdit(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "library.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	before := store.ScheduleItem{ID: "exam", Source: "user", Kind: "exam", Title: "Exam", DueDate: "2026-12-01"}
+	if err := st.PutScheduleItem(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	newer := before
+	newer.Title = "Rescheduled exam"
+	if err := st.PutScheduleItem(ctx, newer); err != nil {
+		t.Fatal(err)
+	}
+	after := before
+	after.DueDate = "2026-12-05"
+	if changed, err := st.UpdateScheduleItem(ctx, before, after); err != nil || changed {
+		t.Fatal(changed, err)
+	}
+	body, err := json.Marshal(map[string]any{"base": before, "due_date": after.DueDate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("PATCH", "/api/schedule/exam", strings.NewReader(string(body)))
+	r.SetPathValue("id", "exam")
+	_, err = (&Server{St: st}).patchSchedule(httptest.NewRecorder(), r)
+	if e, ok := err.(apiError); !ok || e.Code != 409 {
+		t.Fatal(err)
+	}
+	current, err := st.ScheduleItem(ctx, "exam")
+	if err != nil || current.Title != newer.Title || current.DueDate != before.DueDate {
+		t.Fatal(current, err)
 	}
 }

@@ -10,7 +10,7 @@ import { api, get } from "./daemon.mjs";
 import { checkQuiz, QUIZ_PLAYBOOK } from "./practice.mjs";
 import { TASK_WRITES } from "./tasks.mjs";
 import { draftTimeline } from "./timeline.mjs";
-import { resolveWorkspaceCourse } from "./course-files.mjs";
+import { noteRevision, resolveWorkspaceCourse } from "./course-files.mjs";
 import { seeImages } from "./vision.mjs";
 
 export const clock = (ms) => {
@@ -489,8 +489,11 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 				}
 				return extra.act({
 					kind: "save_note", title: `${old ? "覆盖" : "新建"}笔记「${note.title}」`,
-					doneTitle: "笔记已保存", lines: [old?.path || course_id || "本地资料库"],
-					op: { type: "save_note", note }, forceConfirm: !!old,
+					doneTitle: "笔记已保存",
+					...(old ? noteRevision(note, old.body) : {
+						forceConfirm: true, lines: [course_id || "本地资料库", "创建后无法在聊天中撤销"],
+						op: { type: "save_note", note },
+					}),
 					said: ({note: n}) => `已保存[笔记「${n.title}」](coursive://note/${enc(n.id)})，文件：${n.path}`,
 				});
 			},
@@ -606,10 +609,17 @@ export function createTools(conv, pluginGroups = {}, extra = {}) {
 						op: { type: "delete_schedule", id, base: JSON.stringify(it) }, said: () => `已删除「${it.title}」`,
 					});
 				}
+				if (!extra.act && it.source !== "agent") throw Error("修改原日程需要用户通过确认卡应用");
+				if (it.source === "lms" && Object.keys(patch).some(key => key !== "done")) throw Error("平台日程仅可修改完成状态");
+				if (patch.title !== undefined) patch.title = patch.title.trim();
+				const original = Object.fromEntries(Object.keys(patch).map(key => [key, it[key]]));
+				const expected = Object.fromEntries(["source","kind","course_id","title","due_date","due_time","done"].map(key => [key, it[key]]));
 				if (extra.act) return extra.act({
+					forceConfirm: it.source !== "agent",
+					undo: { type: "edit_schedule", id, patch: original, expected: {...expected, ...patch} },
 					kind: "schedule", title: `修改日程「${it.title}」`, doneTitle: "日程已更新",
-					lines: Object.entries(patch).map(([key, value]) => `${key}：${value}`),
-					op: { type: "edit_schedule", id, patch }, said: () => `已更新「${it.title}」`,
+					lines: Object.entries(patch).map(([key, value]) => `${key}：${it[key]} → ${value}`),
+					op: { type: "edit_schedule", id, patch, expected }, said: () => `已更新「${it.title}」`,
 				});
 				const r = await api("PATCH", `/api/schedule/${enc(id)}`, patch);
 				return text(`已更新「${r.title}」${r.due_date} ${weekday(r.due_date)}${r.done ? "（已完成）" : ""}`, { schedule: r });

@@ -110,8 +110,19 @@ export async function runOp(op, deps) {
 			if (!item || item.source !== "agent" || JSON.stringify(item) !== op.base) throw bad("这条日程已修改，请重新查看");
 			return deps.api("DELETE", `/api/schedule/${enc(op.id)}`);
 		}
-		case "edit_schedule":
-			return deps.api("PATCH", `/api/schedule/${enc(op.id)}`, op.patch);
+		case "edit_schedule": {
+			const item = (await deps.api("GET", "/api/schedule")).find(row => row.id === op.id);
+			if (!op.expected || !item || Object.entries(op.expected).some(([key, value]) => item[key] !== value))
+				throw bad("日程已变化或操作卡已过期，请重新查看", 409);
+			return deps.api("PATCH", `/api/schedule/${enc(op.id)}`, item.source === "lms" ? op.patch : {...op.patch, base:op.expected});
+		}
+		case "restore_card_position": {
+			const d = await deps.api("GET", `/api/lectures/${enc(op.lecture_id)}/study-canvas`);
+			const card = d.objects?.find(c => c.id === op.card_id);
+			if (!card || card.position_locked || card.x !== op.expected.x || card.y !== op.expected.y)
+				throw bad("卡片位置已变化，请在画布中查看", 409);
+			return { app_op: {op:"canvas", action:"move", card_id:op.card_id, lecture_id:op.lecture_id, x:op.x, y:op.y, base_hash:d.base_hash ?? ""} };
+		}
 		case "save_outline": {
 			const path = `/api/lectures/${enc(op.lecture_id)}/timeline`;
 			if (JSON.stringify(await deps.api("GET", path)) !== op.base) throw bad("大纲已修改，请重新读取");
@@ -228,7 +239,8 @@ export function operateTools(deps, conv) {
 	const act = operationAct(deps);
 	const asking = () => deps.pipeline.prefs.approval === "ask";
 
-	const command = (op, title, lines = []) => act({
+	const command = (op, title, lines = [], options = {}) => act({
+		...options,
 		kind: "native_command", title, doneTitle: `已发送：${title}`, lines,
 		op: { type: "native_command", command: op }, said: () => `已发送应用指令「${title}」`,
 	});
@@ -338,7 +350,10 @@ export function operateTools(deps, conv) {
 				if (p.action === "pdf_page" && (!Number.isInteger(p.page) || p.page < 1 || p.page > target.page_count)) throw bad("页码超出文档范围");
 				if (p.action === "pdf_view" && !["scroll", "paged", "column"].includes(p.view)) throw bad("阅读视图无效");
 				const action = { move: "移动", resize: "调整大小", pdf_page: `翻到第 ${p.page} 页：`, pdf_view: "切换 PDF 视图：" }[p.action];
-				return command({ op: "canvas", ...p, lecture_id, base_hash: d.base_hash ?? "" }, `${action}「${target.title}」`);
+				const reversible = p.action === "move";
+				return command({ op: "canvas", ...p, lecture_id, base_hash: d.base_hash ?? "" }, `${action}「${target.title}」`,
+					reversible ? [] : ["聊天中无法撤销此项画布操作"],
+					reversible ? {undo: {type:"restore_card_position", lecture_id, card_id:p.card_id, x:target.x, y:target.y, expected:{x:p.x,y:p.y}}} : {forceConfirm:true});
 			},
 		},
 		{

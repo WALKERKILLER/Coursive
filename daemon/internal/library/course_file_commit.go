@@ -21,7 +21,10 @@ func readCourseReceipt(root *os.Root, id string) (courseFileReceipt, []byte, err
 		return r, nil, ErrStudyInvalid
 	}
 	dir, err := root.Lstat(courseBatchDir)
-	if err != nil || !dir.IsDir() || dir.Mode()&os.ModeSymlink != 0 {
+	if err != nil {
+		return r, nil, err
+	}
+	if !dir.IsDir() || dir.Mode()&os.ModeSymlink != 0 {
 		return r, nil, ErrStudyInvalid
 	}
 	rel := courseReceiptPath(id)
@@ -59,9 +62,27 @@ func (l *Library) CommitCourseFileBatch(ctx context.Context, id string, undo boo
 		return CourseFileBatch{}, err
 	}
 	defer root.Close()
-	r, previous, err := readCourseReceipt(root, id)
-	if err != nil {
-		return r.CourseFileBatch, err
+	if !courseBatchID.MatchString(id) {
+		return CourseFileBatch{}, ErrStudyInvalid
+	}
+	if err := pruneCourseReceipts(root, time.Now()); err != nil {
+		return CourseFileBatch{}, err
+	}
+	if _, err := root.Lstat(journalDir + "/" + id + ".conflict"); err == nil {
+		return CourseFileBatch{}, fileChanged("恢复时发现路径冲突，已保留文件")
+	} else if !os.IsNotExist(err) {
+		return CourseFileBatch{}, err
+	}
+	r, pending := l.pendingCourseBatches[id]
+	var previous []byte
+	if !pending {
+		r, previous, err = readCourseReceipt(root, id)
+		if os.IsNotExist(err) {
+			return r.CourseFileBatch, fileChanged("批次已失效，请重新预览")
+		}
+		if err != nil {
+			return r.CourseFileBatch, err
+		}
 	}
 	want, result := "pending", "applied"
 	if undo {
@@ -130,12 +151,16 @@ func (l *Library) CommitCourseFileBatch(ctx context.Context, id string, undo boo
 			return r.CourseFileBatch, err
 		}
 	}
+	if err := ensureReceiptDir(root); err != nil {
+		return r.CourseFileBatch, err
+	}
 	r.State = result
 	receipt, err := json.Marshal(r)
 	if err != nil {
 		return r.CourseFileBatch, err
 	}
 	mirror := l.beginMirror()
+	mirror.j.BatchID = id
 	err = l.Store.CommitCourseFiles(ctx, mirror.token(), assets, notes, func() error {
 		for _, c := range changes {
 			hash, _, err := courseFileVersion(root, c.From)
@@ -170,6 +195,8 @@ func (l *Library) CommitCourseFileBatch(ctx context.Context, id string, undo boo
 	mirror.finish(ctx, err)
 	if err != nil {
 		r.State = want
+	} else {
+		delete(l.pendingCourseBatches, id)
 	}
 	return r.CourseFileBatch, err
 }
@@ -352,4 +379,44 @@ func (l *Library) OpenFormerCourseware(ctx context.Context, rel string) (*os.Fil
 		return nil, ErrStudyInvalid
 	}
 	return courseFileOpen(root, target)
+}
+
+// The receipt contains original note text. Retain the undo data for thirty
+// days after the last committed transition, including for legacy receipts.
+func pruneCourseReceipts(root *os.Root, now time.Time) error {
+	dir, err := root.Lstat(courseBatchDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !dir.IsDir() || dir.Mode()&os.ModeSymlink != 0 {
+		return ErrStudyInvalid
+	}
+	entries, err := root.Open(courseBatchDir)
+	if err != nil {
+		return err
+	}
+	defer entries.Close()
+	files, err := entries.ReadDir(-1)
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		id, ok := strings.CutSuffix(f.Name(), ".json")
+		if !ok || !courseBatchID.MatchString(id) || !f.Type().IsRegular() {
+			continue
+		}
+		st, err := f.Info()
+		if err != nil {
+			return err
+		}
+		if now.Sub(st.ModTime()) > 30*24*time.Hour {
+			if err := root.Remove(courseReceiptPath(id)); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	return nil
 }

@@ -60,12 +60,12 @@ Tools (group `operate`, loaded with `find_tools`; `open_page` is a core bot tool
 - `manage_course {course_id, pinned?, hidden?, alias?, color?}`: applied at once with 撤销.
 - `sync_courses`: refreshes the course list from the platform.
 - `propose_task {name, prompt, schedule, writes?, budget_usd?}`: validated like `POST /tasks`; a card.
-- `toggle_plugin {id, enabled}`: an installed plugin; a card. Installing opens the marketplace page instead.
+Plugin installation and enablement belong to the application UI.
 Notes, outlines, schedule items and quizzes use the existing tool groups and their guards.
 
 ### Proposals
 - `<agent data>/bot/proposals.json` (0600, last 200): `{id, kind, title, lines, op, undo?, state: pending|applied|dismissed|failed|expired|undone, created, result?}`. `op` is built by the host from validated tool input; the model never supplies a path or a request. Pending proposals expire after 7 days.
-- A tool that proposes returns `details.proposal = {id, kind, title, lines, state}`. The app shows a card with 应用 and 忽略; `POST /proposals/{id}/apply` runs `op` in the host (coursive-daemon calls, task creation, plugin switch, preferences; app preferences return `{app: …}` for the app to apply) and returns `{state, result}`; `POST /proposals/{id}/dismiss`; `POST /proposals/{id}/undo` runs `undo` of an applied proposal and marks it `undone`. Applying or undoing twice is refused (409); `GET /proposals/{id}` returns its state. `GET /sessions/{id}` returns each proposal's current state.
+- A tool that proposes returns `details.proposal = {id, kind, title, lines, state}`. The app shows a card with 应用 and 忽略; `POST /proposals/{id}/apply` runs `op` in the host (coursive-daemon calls, task creation, preferences; app preferences return `{app: …}` for the app to apply) and returns `{state, result}`; `POST /proposals/{id}/dismiss`; `POST /proposals/{id}/undo` runs `undo` of an applied proposal and marks it `undone`. Applying or undoing twice is refused (409); `GET /proposals/{id}` returns its state. `GET /sessions/{id}` returns each proposal's current state.
 - Immediate operations (low-risk settings, course changes, download pause/resume/retry) are recorded as applied proposals with their `undo`, so 撤销 uses the same route.
 
 ### App

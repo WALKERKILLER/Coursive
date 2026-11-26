@@ -39,7 +39,8 @@ type Library struct {
 	tpl   Templates
 
 	// mirrorMu serializes mirrored writes, recovery and Reindex (mirror.go).
-	mirrorMu sync.Mutex
+	mirrorMu             sync.Mutex
+	pendingCourseBatches map[string]courseFileReceipt // protected by mirrorMu
 
 	// exportMu keeps exports to the same vault from interleaving.
 	exportMu sync.Mutex
@@ -57,6 +58,11 @@ func Open(root string, st *store.Store) (*Library, error) {
 	l.mirrorMu.Lock()
 	if err := l.recoverMirrors(context.Background()); err != nil {
 		log.Printf("library: %v", err)
+	} else if dir, err := os.OpenRoot(root); err == nil {
+		if err := pruneCourseReceipts(dir, time.Now()); err != nil {
+			log.Printf("expire course receipts: %v", err)
+		}
+		dir.Close()
 	}
 	l.mirrorMu.Unlock()
 	if n, err := l.RepairTranscripts(context.Background()); err != nil {

@@ -65,7 +65,7 @@ func (s *Server) commitCourseFiles(r *http.Request, undo bool) (any, error) {
 	if s.Data == nil {
 		err = write()
 	} else {
-		err = s.Data.WithLibraryWrite(write)
+		err = s.Data.WaitForLibraryWrite(r.Context(), write)
 	}
 	if err != nil {
 		return nil, courseFileError(err)
