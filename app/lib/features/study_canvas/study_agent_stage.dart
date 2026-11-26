@@ -1381,7 +1381,8 @@ class _StageViewState extends State<_StageView>
           passage == null ||
           (s['anchor'] as Map?)?['object_id'] != passage.objectId,
     );
-    final showScope = widget.onContextScope != null || widget.contextScope == 'course';
+    final showScope = widget.thread?.passageAside != true &&
+        (widget.onContextScope != null || widget.contextScope == 'course');
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) {
         if (details.data is! String && details.data is! StudySelectionDrop)

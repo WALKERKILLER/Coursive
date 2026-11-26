@@ -309,11 +309,6 @@ void main() {
       findsNothing,
     );
     final input = find.descendant(of: frame, matching: find.byType(TextField));
-    await t.tap(find.descendant(of: frame, matching: find.byTooltip('更多')));
-    await t.pumpAndSettle();
-    await t.tap(find.text('全课程'));
-    await t.pumpAndSettle();
-    expect(find.text('全课程'), findsNothing);
     await t.enterText(input, '进程是什么？');
     await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
     await t.pumpAndSettle();

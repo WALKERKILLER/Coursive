@@ -41,14 +41,8 @@ export class CanvasCourseSources {
 		this.candidates = new Map();
 	}
 
-	async execute(name, args, signal, scope) {
-		signal?.throwIfAborted();
-		if (name === "list_lesson_materials") return this.classroom.inventory(args.lecture_id);
-    if (name === "find_classroom_passage") {
-      if (!args.query?.trim() || args.query.length > 140 || !args.question?.trim() || args.question.length > 500) throw Error("查询范围无效");
-      this.attemptedLookup = true;
-      const hits = await this.classroom.find(args.query, args.question, args.lecture_id, !!args.visual, signal);
-      return {passages: hits.map(hit => {
+  issue(hits, scope) {
+    return hits.map(hit => {
         const stamp = hit.kind === "transcript";
         const anchor = {id:hit.id, kind:stamp ? "video" : "text", source_lecture_id:hit.lectureId,
           fingerprint:hit.fingerprint, quote:hit.verifiedQuote};
@@ -56,7 +50,17 @@ export class CanvasCourseSources {
         scope.texts.set(hit.id,hit.verifiedQuote);
         return { evidence_id:scope.issue({id:hit.id,label},stamp ? "timestamped_transcript" : "exact_text",anchor,{teaching_ref:hit.link}),
           lecture_id:hit.lectureId, label, text:neutralize(hit.verifiedQuote) };
-      })};
+      });
+  }
+
+	async execute(name, args, signal, scope) {
+		signal?.throwIfAborted();
+		if (name === "list_lesson_materials") return this.classroom.inventory(args.lecture_id);
+    if (name === "find_classroom_passage") {
+      if (!args.query?.trim() || args.query.length > 140 || !args.question?.trim() || args.question.length > 500) throw Error("查询范围无效");
+      this.attemptedLookup = true;
+      const hits = await this.classroom.find(args.query, args.question, args.lecture_id, !!args.visual, signal);
+      return {passages: this.issue(hits, scope)};
     }
     if (name === "search_course_materials") {
 			const items = await this.call("POST", this.base + "/sources/search", { query: args.query });

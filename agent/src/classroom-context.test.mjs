@@ -27,3 +27,20 @@ test("material inventory and transcript search stay within the active course", a
   await context.find("进程","进程");
   assert.equal(calls.filter(p=>p.endsWith("/transcript")).length,1);
 });
+
+test("a rendered selection can recover the verified timestamp directly below it", async () => {
+  const link="coursive://lecture/N?v=1&t=3&start_ms=3000&end_ms=4500&q=example";
+  const markdown="- **程序**：指令。\n- **进程**：实例。\n\n[回听]("+link+")\n\n# 下一节";
+  const c=new ClassroomContext(async (_,p)=>{
+    if(p==="/api/lectures/L")return {course:{id:"C"},lecture:{course_id:"C"}};
+    if(p==="/api/courses/C/lectures")return {lectures:[{id:"L"},{id:"N"}]};
+    if(p.startsWith("/api/library/"))return [];
+    assert.equal(p,"/api/lectures/N/transcript?from_ms=3000&to_ms=4500");
+    return [{start_ms:3000,end_ms:4500,text:"example"}];
+  },"L");
+  const selection="程序：指令。进程：实例。";
+  assert.equal((await c.linked(markdown,selection))[0].verifiedQuote,"example");
+  assert.deepEqual(await c.linked(markdown+"\n\n"+markdown, selection),[]);
+  assert.deepEqual(await c.linked(markdown.replace("q=example","q=wrong"),selection),[]);
+  assert.deepEqual(await c.linked(markdown.replace("lecture/N","lecture/Z"),selection),[]);
+});

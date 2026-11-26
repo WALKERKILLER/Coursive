@@ -454,6 +454,16 @@ export class CanvasRunner {
    const tools=[...CANVAS_TOOLS,...(course&&!outline?COURSE_TOOLS:[]),...(memory?.recall?[recallLearning(course)]:[]),...(previous.length?[readPrevious]:[])];
    const initialPrompt=outline?OUTLINE_SYSTEM:previous.length?CLARIFICATION_SYSTEM:SYSTEM;
    const locateTeacher = course && !outline && /哪(?:一)?节课|哪(?:一)?段(?:录[音像课]|视频)|老师.{0,12}(?:哪[里儿]|何时|在哪)|(?:回听|回看).{0,6}(?:老师|讲解)/u.test(question);
+   let boundRefs=[];
+   if (locateTeacher && allowedExcerpt) {
+    const selected=context.sources.find(s=>s.anchor?.object_id===allowedExcerpt.object_id);
+    if (selected?.text) {
+     try {
+      boundRefs=course.issue(await classroom.linked(selected.text,allowedExcerpt.text),scope);
+      if (boundRefs.length) messages.at(-1).content.push({type:"text",text:"选中段落已关联的课堂出处（宿主按本课节次核对）。给出可回听的引用。投影只表示讲义链接到此图，未识图时不可描述图像细节。转写可能有漏字。资料："+JSON.stringify(boundRefs)});
+     } catch(e) { signal.throwIfAborted(); trace("resolve_lesson_links","unavailable"); }
+    }
+   }
    let locationRequested=false;
    let calls=0,quoteRepairs=0;
    for(let round=0;round<12;round++){
@@ -473,7 +483,7 @@ export class CanvasRunner {
      view.operations=[];view.state="done";return;
     }
     if(!toolCalls.length){
-     if (locateTeacher && !course.attemptedLookup && !locationRequested) {
+     if (locateTeacher && !boundRefs.length && !course.attemptedLookup && !locationRequested) {
       locationRequested=true;
       messages.push({role:"user",timestamp:Date.now(),content:[{type:"text","text":"请先用 get_canvas_context 读取所选段落，用 find_classroom_passage 核对该知识点的课堂出处，再回答。"}]});
       continue;
