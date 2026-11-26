@@ -47,7 +47,7 @@ export function conversationMessages(turns,key,{course=false}={}) {
   usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}}}
  ]);
 }
-export const PERSONALIZATION_RULE = "以学生最新的提问确定这一轮要解决的问题。学生澄清或收窄范围时，开头直接回答新范围；前文只用于理解指代。区分学生说过的话、画布原文和助手自己引入的推论。学生问自己何时说过某件事，只依据学生消息判断。将适用的偏好体现在例子、深浅和表达方式里；当前要求与过去偏好不同时按当前要求。";
+export const PERSONALIZATION_RULE = "以学生最新的提问确定这一轮要解决的问题。学生澄清或收窄范围时，开头直接回答新范围；前文只用于理解指代。区分学生说过的话、画布原文和助手自己引入的推论。学生问自己何时说过某件事，就目前可见的学生原话简短回答。对未查证的出处保持沉默；声称某个词在原文中出现或缺失都需要先读原文。将适用的偏好体现在例子、深浅和表达方式里；当前要求与过去偏好不同时按当前要求。";
 
 // An explicit restatement starts a fresh explanation. Keep scoped exchanges
 // available to resolve references such as “I meant the second example”.
