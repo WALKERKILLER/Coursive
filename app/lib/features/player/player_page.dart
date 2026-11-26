@@ -92,6 +92,7 @@ class _PlayerPageState extends State<PlayerPage> {
     ctl = LecturePlayer(
       api: app.api,
       lectureId: widget.lectureId,
+      initialPositionMs: widget.startMs,
       prefs: context.read<UiPrefs>(),
     );
     ctl.canvasCommand = (op) async {
@@ -101,7 +102,6 @@ class _PlayerPageState extends State<PlayerPage> {
     ctl.addListener(_onCtl);
     ctl.load().then((_) {
       if (!mounted) return;
-      if (widget.startMs != null) ctl.seekTo(widget.startMs!);
       _hub.value = ctl;
     });
     _sub = app.events.listen((e) {

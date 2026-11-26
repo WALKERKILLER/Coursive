@@ -26,6 +26,22 @@ class Source {
   final Map<String, String> headers;
 }
 
+/// Decide the initial media offset before opening the native player.
+int playbackStartMs({
+  int? requested,
+  required int saved,
+  required int duration,
+  required bool autoResume,
+}) {
+  if (requested != null) {
+    if (requested < 0) return 0;
+    return duration > 0 && requested > duration ? duration : requested;
+  }
+  return autoResume && saved > 10000 && (duration == 0 || saved < duration - 30000)
+      ? saved
+      : 0;
+}
+
 /// Owns the media_kit players and everything the player UI shows.
 class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   Future<bool> Function(Map<String, dynamic>)? canvasCommand;
@@ -33,6 +49,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     required this.api,
     required this.lectureId,
     required this.prefs,
+    this.initialPositionMs,
   }) {
     _subs.addAll([
       player.stream.position.listen((p) {
@@ -99,6 +116,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   @override
   final String lectureId;
   final UiPrefs prefs;
+  final int? initialPositionMs;
 
   late final _watch = ActivityTracker.instance?.clock(
     'watch',
@@ -219,14 +237,13 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
       loading = false;
       notifyListeners();
 
-      final durMs = duration.inMilliseconds;
-      final start =
-          prefs.autoResume &&
-              resumeMs > 10000 &&
-              (durMs == 0 || resumeMs < durMs - 30000)
-          ? resumeMs
-          : 0;
-      resumedFrom = start;
+      final start = playbackStartMs(
+        requested: initialPositionMs,
+        saved: resumeMs,
+        duration: duration.inMilliseconds,
+        autoResume: prefs.autoResume,
+      );
+      resumedFrom = initialPositionMs == null ? start : 0;
       await _open(source!, Duration(milliseconds: start));
       await player.setRate(prefs.defaultSpeed);
       unawaited(_loadSide());
