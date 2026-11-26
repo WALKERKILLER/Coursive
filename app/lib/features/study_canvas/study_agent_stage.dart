@@ -1240,6 +1240,11 @@ class _StageViewState extends State<_StageView>
                         ? CoursiveMarkdown(answer)
                         : CoursiveMarkdown(
                             studyEvidenceMarkdown(answer, evidence),
+                            verifiedLinks: {
+                              for (final item in evidence)
+                                if (item['teaching_ref'] case final String url)
+                                  url: () => owner._followEvidence(item),
+                            },
                             evidenceBuilder: (id, _) {
                               final i = evidence.indexWhere(
                                 (e) => '${e['id']}' == id,

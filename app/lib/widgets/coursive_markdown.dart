@@ -318,6 +318,7 @@ class CoursiveMarkdown extends StatelessWidget {
     this.animation = GptMarkdownAnimation.none,
     this.codeBuilder,
     this.evidenceBuilder,
+    this.verifiedLinks = const {},
     this.linkDecorationStyle,
   });
 
@@ -345,6 +346,9 @@ class CoursiveMarkdown extends StatelessWidget {
   /// Renders a `coursive-evidence:<id>` link (a host-issued citation) inline.
   final Widget Function(String id, String label)? evidenceBuilder;
 
+  /// Host-verified destinations in a grounded answer, including table links.
+  final Map<String, VoidCallback> verifiedLinks;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -370,6 +374,11 @@ class CoursiveMarkdown extends StatelessWidget {
         ),
       ),
       onLinkTap: (url, _) {
+        final follow = verifiedLinks[url];
+        if (follow != null) {
+          follow();
+          return;
+        }
         if (url.startsWith(_evidenceScheme)) return;
         if (url.startsWith('#')) {
           final fragment = _decodeFragment(url);

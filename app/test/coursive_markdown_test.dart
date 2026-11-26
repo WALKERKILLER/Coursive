@@ -136,6 +136,21 @@ void main() {
     expect(CoursiveRef.parse('https://example.com'), isNull);
   });
 
+  testWidgets('a saved answer table follows its checked recording link', (t) async {
+    const url = 'coursive://lecture/L3?v=1&t=4798&q=%E8%BF%90&start_ms=4798000&end_ms=4802000';
+    var followed = 0;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: CoursiveMarkdown(
+        '| 出处 | 回听 |\n|---|---|\n| 课堂原声 | [01:19:58]($url) |',
+        verifiedLinks: {url: () => followed++},
+      )),
+    ));
+    await t.tap(find.textContaining('01:19:58', findRichText: true));
+    await t.pump();
+    expect(followed, 1);
+    expect(find.text('这个链接无法打开'), findsNothing);
+  });
+
   testWidgets('every link in a message responds to a tap', (t) async {
     final refs = <CoursiveRef>[];
     await t.pumpWidget(MaterialApp(
