@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -33,10 +34,13 @@ type journalEntry struct {
 	Path    string `json:"path"` // library-relative, slash separated
 	Existed bool   `json:"existed"`
 	Old     []byte `json:"old,omitempty"`
+	MoveTo  string `json:"move_to,omitempty"`
+	Rooted  bool   `json:"rooted,omitempty"`
 }
 
 type journal struct {
 	Token   string         `json:"token"`
+	BatchID string         `json:"batch_id,omitempty"`
 	Entries []journalEntry `json:"entries"`
 }
 
@@ -69,14 +73,53 @@ func (m *mirrorTx) replace(path string, v any) (func(), error) {
 // remove journals path's current content, then deletes it.
 func (m *mirrorTx) remove(path string) (func(), error) { return m.change(path, nil, true) }
 
+func (m *mirrorTx) record(e journalEntry) error {
+	m.j.Entries = append(m.j.Entries, e)
+	if err := m.save(); err != nil {
+		m.j.Entries = m.j.Entries[:len(m.j.Entries)-1]
+		return err
+	}
+	return nil
+}
+
+func (m *mirrorTx) move(root *os.Root, from, to string) error {
+	info, err := root.Lstat(from)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() && !info.IsDir() {
+		return ErrStudyInvalid
+	}
+	if err := vacantCoursePath(root, to); err != nil {
+		return err
+	}
+	if err := m.record(journalEntry{Path: from, MoveTo: to}); err != nil {
+		return err
+	}
+	if info.Mode().IsRegular() {
+		// Link reserves the new name without replacing another file, including
+		// a file created between the occupancy check and the move.
+		if err := root.Link(from, to); err != nil {
+			return err
+		}
+		return root.Remove(from)
+	}
+	return root.Rename(from, to)
+}
+
+func (m *mirrorTx) replaceRooted(root *os.Root, rel string, before, after []byte) error {
+	if err := m.record(journalEntry{Path: rel, Existed: before != nil, Old: before, Rooted: true}); err != nil {
+		return err
+	}
+	return writeStudyBytes(root, rel, after)
+}
+
 func (m *mirrorTx) change(path string, b []byte, remove bool) (func(), error) {
 	old, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	m.j.Entries = append(m.j.Entries, journalEntry{Path: m.l.Rel(path), Existed: err == nil, Old: old})
-	if err := m.save(); err != nil {
-		m.j.Entries = m.j.Entries[:len(m.j.Entries)-1]
+	if err := m.record(journalEntry{Path: m.l.Rel(path), Existed: err == nil, Old: old}); err != nil {
 		return nil, err
 	}
 	if remove {
@@ -133,6 +176,46 @@ func (m *mirrorTx) finish(ctx context.Context, err error) {
 }
 
 func (l *Library) restoreEntry(e journalEntry) error {
+	if e.MoveTo != "" || e.Rooted {
+		root, err := os.OpenRoot(l.Root)
+		if err != nil {
+			return err
+		}
+		defer root.Close()
+		if e.MoveTo != "" {
+			if err := checkedStudyDir(root, path.Dir(e.Path), false); err != nil {
+				return err
+			}
+			if err := checkedStudyDir(root, path.Dir(e.MoveTo), false); err != nil {
+				return err
+			}
+			beforeInfo, before := root.Lstat(e.Path)
+			afterInfo, after := root.Lstat(e.MoveTo)
+			if before == nil && os.IsNotExist(after) {
+				return nil
+			}
+			if os.IsNotExist(before) && after == nil {
+				return root.Rename(e.MoveTo, e.Path)
+			}
+			if before == nil && after == nil && os.SameFile(beforeInfo, afterInfo) {
+				return root.Remove(e.MoveTo)
+			}
+			if before != nil && !os.IsNotExist(before) {
+				return before
+			}
+			if after != nil && !os.IsNotExist(after) {
+				return after
+			}
+			return fmt.Errorf("%w: ambiguous move %q to %q", ErrStudyConflict, e.Path, e.MoveTo)
+		}
+		if e.Existed {
+			return writeStudyBytes(root, e.Path, e.Old)
+		}
+		if err := root.Remove(e.Path); !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
 	p := l.Abs(e.Path)
 	if !e.Existed {
 		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -165,6 +248,9 @@ func (l *Library) recoverMirrors(ctx context.Context) error {
 	}
 	for _, d := range ents {
 		p := filepath.Join(dir, d.Name())
+		if strings.HasSuffix(d.Name(), ".conflict") {
+			continue
+		}
 		if !strings.HasSuffix(d.Name(), ".json") {
 			os.Remove(p) // an interrupted journal write; its file change never started
 			continue
@@ -182,10 +268,26 @@ func (l *Library) recoverMirrors(ctx context.Context) error {
 			return err
 		}
 		if !ok {
+			var conflict error
 			for i := len(j.Entries) - 1; i >= 0; i-- {
 				if err := l.restoreEntry(j.Entries[i]); err != nil {
+					if errors.Is(err, ErrStudyConflict) {
+						conflict = err
+						continue
+					}
 					return fmt.Errorf("restore %s: %w", j.Entries[i].Path, err)
 				}
+			}
+			if conflict != nil {
+				owner := j.BatchID
+				if !courseBatchID.MatchString(owner) {
+					owner = j.Token
+				}
+				if err := os.Rename(p, filepath.Join(dir, owner+".conflict")); err != nil {
+					return err
+				}
+				log.Printf("mirror journal %s: retained conflicting files: %v", j.Token, conflict)
+				continue
 			}
 			log.Printf("mirror journal %s: restored %d file(s) of an unfinished write", j.Token, len(j.Entries))
 		}

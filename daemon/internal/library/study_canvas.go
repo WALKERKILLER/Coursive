@@ -49,6 +49,7 @@ type StudyObject struct {
 	W               float64           `json:"w"`
 	H               float64           `json:"h"`
 	Title           string            `json:"title"`
+	HeaderTitle     string            `json:"header_title,omitempty"`
 	Text            string            `json:"text,omitempty"`
 	Path            string            `json:"path,omitempty"`
 	Source          string            `json:"source,omitempty"`
@@ -322,7 +323,7 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 		if a.PDFColumn != "" && !validStudyID(a.PDFColumn) {
 			return invalid("PDF 列标识")
 		}
-		if !validStudyID(a.ID) || ids[a.ID] || !layers[a.Layer] || !finite(a.X) || !finite(a.Y) || !finite(a.W) || !finite(a.H) || a.W < 24 || a.H < 24 || a.W > 100000 || a.H > 100000 || len(a.Title) > 960 || len(a.Text) > 800000 || !utf8.ValidString(a.Text) || !asset(a.Path) || !asset(a.Source) {
+		if !validStudyID(a.ID) || ids[a.ID] || !layers[a.Layer] || !finite(a.X) || !finite(a.Y) || !finite(a.W) || !finite(a.H) || a.W < 24 || a.H < 24 || a.W > 100000 || a.H > 100000 || len(a.Title) > 960 || len(a.HeaderTitle) > 960 || len(a.Text) > 800000 || !utf8.ValidString(a.Text) || !asset(a.Path) || !asset(a.Source) {
 			return invalid("卡片或素材引用")
 		}
 		if a.Type == "conversation" && !validStudyID(a.ConversationID) {
@@ -359,9 +360,6 @@ func validateStudy(d StudyDocument, root *os.Root, dir string, standalone bool) 
 	}
 	if standalone && lectures != 0 {
 		return invalid("独立画布包含录课")
-	}
-	if !standalone && lectures != 1 {
-		return invalid("须保留一张课次视频卡片")
 	}
 	n := 0
 	for _, a := range d.Strokes {

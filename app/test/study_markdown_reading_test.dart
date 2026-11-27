@@ -51,6 +51,8 @@ Future<void> selectWord(WidgetTester t, int from, int to) async {
 
 class _AsideApi extends fixture.FixtureApi {
   _AsideApi(super.doc);
+  String? answer;
+
   @override
   Future<dynamic> studyContext(String id, Map<String, dynamic> query) async {
     final result = await super.studyContext(id, query) as Map;
@@ -63,9 +65,31 @@ class _AsideApi extends fixture.FixtureApi {
   @override
   Future<dynamic> canvasRun(String id) async => {
     'state': 'done',
-    'answer': '旁问回答：${request!['question']}',
+    'answer': answer ?? '旁问回答：${request!['question']}',
     'context_key': 'test',
+    'schema_version': 2,
+    'evidence': [],
   };
+}
+
+class _LinkedHandoutApi extends fixture.FixtureApi {
+  _LinkedHandoutApi(super.doc, this.body);
+  String body;
+
+  @override
+  Future<dynamic> get(String path, [Map<String, String>? query]) async {
+    if (path != '/api/notes/handout') return super.get(path, query);
+    return {'body': body, 'course_id': 'test-course', 'id': 'handout'};
+  }
+
+  @override
+  Future<dynamic> put(String path, Object value) async {
+    final update = value as Map;
+    expect(path, '/api/notes');
+    expect(update['base_body'], body);
+    body = update['body'] as String;
+    return {...update};
+  }
 }
 
 Finder annotationInput() => find.descendant(
@@ -77,6 +101,173 @@ void main() {
     expect(imported('assets/source.md').readerCard, isTrue);
     expect(StudyCard.fromJson(imported().json()).markdownReader, isTrue);
     expect(imported('assets/source.txt').markdownReader, isFalse);
+  });
+
+  testWidgets('new text edits inline and cancels without an empty card', (t) async {
+    final api = _AsideApi(sheet().json());
+    final key = await fixture.open(t, api);
+    final doc = key.currentState!.document!;
+    final initialCount = doc.cards.length;
+    final field = find.byKey(const ValueKey('study-inline-text'));
+    final insert = find.byTooltip('插入文字笔记');
+    await t.tap(insert);
+    await t.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(t.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    await t.enterText(field, '取消这份草稿');
+    await t.tap(find.byTooltip('取消'));
+    await t.pumpAndSettle();
+    expect(doc.cards.length, initialCount);
+    await t.tap(insert);
+    await t.pumpAndSettle();
+    await t.enterText(field, '课堂笔记\n保存第二行');
+    await t.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await t.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await t.pumpAndSettle();
+    expect(field, findsNothing);
+    expect(doc.cards.length, initialCount + 1);
+    expect(doc.cards.last.text, '课堂笔记\n保存第二行');
+    expect(await key.currentState!.flush(), isTrue);
+    expect(StudyDocument.fromJson(api.doc).cards.last.text, doc.cards.last.text);
+    await close(t);
+  });
+
+  testWidgets('a linked handout can be edited twice across a canvas refresh', (t) async {
+    final source = imported()..generation = 'linked-note'..documentId = 'handout';
+    final api = _LinkedHandoutApi((sheet()..cards.add(source)).json(), source.text);
+    final key = await fixture.open(t, api);
+    final doc = key.currentState!.document!;
+    final editor = find.byKey(const ValueKey('study-inline-text'));
+    Future<void> edit() async {
+      final frame = find.byKey(const ValueKey('study-card/md'));
+      await t.tap(find.descendant(of: frame, matching: find.byTooltip('更多')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('编辑 Markdown'));
+      await t.pumpAndSettle();
+    }
+    await edit();
+    final first = '${source.text}第一次编辑';
+    await t.enterText(editor, first);
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, first);
+    await edit();
+    expect(t.widget<TextField>(editor).controller!.text, first);
+    final second = '${first}再写几个字';
+    await t.enterText(editor, second);
+    // Undoing an unrelated layout change restores new instances of the same cards.
+    doc.checkpoint();
+    doc.undo();
+    await t.pumpAndSettle();
+    expect(editor, findsOneWidget);
+    expect(t.widget<TextField>(editor).controller!.text, second);
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, second);
+    await edit();
+    await t.enterText(editor, '我的草稿');
+    api.body = '外部修改';
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, '外部修改');
+    expect(t.widget<TextField>(editor).controller!.text, '我的草稿');
+    await t.tap(find.byTooltip('取消'));
+    await t.pumpAndSettle();
+    await edit();
+    expect(t.widget<TextField>(editor).controller!.text, '外部修改');
+    await close(t);
+  });
+
+  testWidgets('each new aside answer opens at its own first paragraph', (
+    t,
+  ) async {
+    final api = _AsideApi((sheet()..cards.add(imported())).json());
+    final key = await fixture.open(t, api);
+    await selectWord(t, 0, 7);
+    await t.tap(find.text('旁问'));
+    await t.pumpAndSettle();
+
+    final doc = key.currentState!.document!;
+    final aside = doc.cards.last;
+    final camera = doc.camera, zoom = doc.zoom;
+    final frame = find.byKey(ValueKey('study-card/${aside.id}'));
+    final messages = find.descendant(
+      of: frame,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.up,
+      ),
+    );
+    final input = find.descendant(of: frame, matching: find.byType(TextField));
+    final send = find.descendant(of: frame, matching: find.byTooltip('发送'));
+
+    for (final (question, opening) in [
+      ('什么是 PCB？', '第一则回答的开头。'),
+      ('它和上下文切换有什么关系？', '追问回答的开头。'),
+    ]) {
+      api.answer = [
+        opening,
+        for (var i = 1; i <= 40; i++) '用于模拟较长回复的第 $i 段。',
+      ].join('\n\n');
+      await t.enterText(input, question);
+      await t.tap(send);
+      await t.pumpAndSettle();
+
+      final top = t.getTopLeft(messages).dy;
+      final paragraph = find.descendant(
+        of: frame,
+        matching: find.text(opening, findRichText: true),
+      );
+      expect(t.getTopLeft(paragraph).dy - top, inInclusiveRange(0, 24));
+      expect(doc.camera, camera);
+      expect(doc.zoom, zoom);
+    }
+    await close(t);
+  });
+
+  testWidgets('a contents link scrolls only its own Markdown canvas card', (t) async {
+    const heading = '9. 按需分页、缺页异常与页面置换';
+    final text = '# 操作系统\n\n[去第九节](#9-按需分页缺页异常与页面置换)'
+        '\n\n${List.filled(35, '前面章节的内容。').join('\n\n')}'
+        '\n\n## $heading\n\n${List.filled(18, '分页的解释。').join('\n\n')}';
+    final duplicate = StudyCard(
+      id: 'other',
+      type: 'text',
+      layer: 'main',
+      source: 'assets/other.md',
+      title: '另一份讲义',
+      rect: const Rect.fromLTWH(810, 200, 530, 400),
+      text: text,
+    );
+    final api = fixture.FixtureApi(
+      (sheet()..cards.addAll([imported()..text = text, duplicate])).json(),
+    );
+    final key = await fixture.open(t, api);
+    final doc = key.currentState!.document!;
+    final camera = doc.camera, zoom = doc.zoom;
+    final source = find.byKey(const ValueKey('study-card/md'));
+    await t.tap(find.descendant(
+      of: source,
+      matching: find.text('去第九节', findRichText: true),
+    ));
+    await t.pumpAndSettle();
+    final cardScroll = find.descendant(of: source, matching: find.byType(Scrollable)).first;
+    expect(find.text('找不到链接指向的标题'), findsNothing);
+    expect(t.state<ScrollableState>(cardScroll).position.pixels, greaterThan(0));
+    expect(find.descendant(
+      of: source,
+      matching: find.text(heading, findRichText: true).hitTestable(),
+    ), findsOneWidget);
+    expect(find.descendant(
+      of: find.byKey(const ValueKey('study-card/other')),
+      matching: find.text('去第九节', findRichText: true).hitTestable(),
+    ), findsOneWidget);
+    expect(doc.camera, camera);
+    expect(doc.zoom, zoom);
+    expect(doc.edit, 0);
+    expect(find.text('这个链接无法打开'), findsNothing);
+    await close(t);
   });
 
   testWidgets(
@@ -147,14 +338,13 @@ void main() {
     await selectWord(t, 12, 19);
     await t.tap(find.text('编辑 Markdown'));
     await t.pumpAndSettle();
-    final editor = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    );
+    expect(find.byType(AlertDialog), findsNothing);
+    final editor = find.byKey(const ValueKey('study-inline-text'));
+    expect(t.widget<TextField>(editor).focusNode!.hasFocus, isTrue);
     final control = t.widget<TextField>(editor).controller!;
     expect(control.selection.textInside(control.text), 'process');
     await t.enterText(editor, '# 新标题\n\n$raw');
-    await t.tap(find.text('保存').last);
+    await t.tap(find.byTooltip('保存').last);
     await t.pumpAndSettle();
     expect(d.cards.first.text, startsWith('# 新标题'));
     expect(
@@ -192,6 +382,12 @@ void main() {
     final frame = find.byKey(ValueKey('study-card/${aside.id}'));
     expect(frame, findsOneWidget);
     expect(
+      find.descendant(of: frame, matching: find.byTooltip('旁问')),
+      findsOneWidget,
+    );
+    expect(aside.rect.height, lessThan(200));
+    expect(aside.expandedH, 0);
+    expect(
       find.descendant(of: frame, matching: find.text('所选原文')),
       findsNothing,
     );
@@ -211,8 +407,19 @@ void main() {
     await t.enterText(input, '进程是什么？');
     await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
     await t.pumpAndSettle();
+    final questionTitle = find.descendant(
+      of: frame,
+      matching: find.byTooltip('旁问 · 进程是什么？'),
+    );
+    expect(questionTitle, findsOneWidget);
     expect(api.request?['conversation_id'], aside.conversationId);
     expect(api.request?['question'], '进程是什么？');
+    expect(api.request?['context_scope'], 'course');
+    expect(find.byKey(const ValueKey('study-coverage')), findsNothing);
+    expect(
+      find.byKey(ValueKey('study-pin-answer-${api.request!['turn_id']}')),
+      findsOneWidget,
+    );
     expect(api.request?['selection']['selection'], {
       'object_id': 'md',
       'start': aside.sources.single.start,
@@ -231,6 +438,15 @@ void main() {
     );
     await t.pumpAndSettle();
     expect(aside.rect, before.shift(const Offset(36, 42)));
+    final expanded = aside.rect;
+    await t.tap(find.descendant(of: frame, matching: find.byTooltip('收起')));
+    await t.pumpAndSettle();
+    expect(aside.collapsed, isTrue);
+    expect(aside.rect.height, 40);
+    expect(aside.rect.width, lessThan(expanded.width));
+    expect(aside.rect.topLeft, expanded.topLeft);
+    expect(input, findsNothing);
+    expect(questionTitle, findsOneWidget);
     expect(await reopened.currentState!.flush(), isTrue);
     await close(t);
     api.conversations[aside.conversationId]!['query'] = {
@@ -241,11 +457,20 @@ void main() {
     final restored = again.currentState!.document!.cards.last;
     expect(restored.rect, aside.rect);
     expect(restored.conversationId, aside.conversationId);
-    expect(t.widget<TextField>(input).controller!.text, '我的旁问草稿');
+    expect(restored.collapsed, isTrue);
+    expect(questionTitle, findsOneWidget);
     await t.tap(find.descendant(of: frame, matching: find.byTooltip('返回原文')));
     await t.pumpAndSettle();
     await selectWord(t, 0, 7);
     await t.tap(find.text('打开旁问 1'));
+    await t.pumpAndSettle();
+    expect(restored.collapsed, isFalse);
+    expect(restored.rect, expanded);
+    expect(t.widget<TextField>(input).controller!.text, '我的旁问草稿');
+    await t.tap(find.descendant(of: frame, matching: find.byTooltip('更多')));
+    await t.pumpAndSettle();
+    expect(find.byIcon(Icons.check_box_outlined), findsOneWidget);
+    await t.tap(find.text('全课程'));
     await t.pumpAndSettle();
     expect(
       again.currentState!.document!.cards.where((c) => c.passageAside),
@@ -254,11 +479,66 @@ void main() {
     await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
     await t.pumpAndSettle();
     expect(api.request?['question'], '我的旁问草稿');
+    expect(api.request?['context_scope'], 'selected');
     expect(
       api.request?['selection']['selection']['start'],
       aside.sources.single.start,
     );
     expect(api.conversations[aside.conversationId]?['turns'], hasLength(2));
+    expect(questionTitle, findsOneWidget);
+    await close(t);
+  });
+
+  testWidgets('a long aside fits up to its scrollable height limit', (t) async {
+    final source = imported();
+    final aside = StudyCard(
+      id: 'aside',
+      type: 'conversation',
+      layer: 'main',
+      generation: 'markdown-aside',
+      conversationId: 'aside',
+      title: '旁问 · process',
+      rect: const Rect.fromLTWH(820, 200, 420, 160),
+      sources: [
+        StudyAnchor(
+          id: 'md-0-5-12',
+          objectId: source.id,
+          kind: 'text',
+          quote: 'process',
+        ),
+      ],
+    );
+    final api = _AsideApi((sheet()..cards.addAll([source, aside])).json());
+    api.conversations[aside.conversationId] = {
+      'revision': 1,
+      'query': {
+        'objects': [source.id],
+      },
+      'turns': [
+        {
+          'id': 'long',
+          'state': 'done',
+          'question': '「process」\n为什么？',
+          'answer': List.generate(40, (i) => '第 $i 段完整解释。').join('\n\n'),
+        },
+      ],
+    };
+    final key = await fixture.open(t, api);
+    final card = key.currentState!.document!.cards.last;
+    final frame = find.byKey(const ValueKey('study-card/aside'));
+    expect(find.byTooltip('旁问 · 为什么？'), findsOneWidget);
+    expect(find.byTooltip('旁问 · process'), findsNothing);
+    final list = find
+        .descendant(of: frame, matching: find.byType(ListView))
+        .first;
+    final scroll = t.widget<ListView>(list).controller!;
+    expect(card.rect.height, 440);
+    expect(scroll.position.maxScrollExtent, greaterThan(0));
+    expect(
+      find.descendant(of: frame, matching: find.byTooltip('发送')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(key.currentState!.document!.canUndo, isFalse);
     await close(t);
   });
 
@@ -274,7 +554,7 @@ void main() {
         generation: 'markdown-annotation',
         title: '进程笔记',
         text: '进程',
-        rect: const Rect.fromLTWH(240, 100, 410, 84),
+        rect: const Rect.fromLTWH(240, 100, 410, 350),
         sources: [
           StudyAnchor(
             id: 'source-range',
@@ -291,15 +571,47 @@ void main() {
       final frame = find.byKey(const ValueKey('study-card/annotation'));
       Finder inCard(Finder matching) =>
           find.descendant(of: frame, matching: matching);
-      for (final label in ['返回原文', '编辑注释', '新对话', '更多']) {
+      for (final label in ['返回原文', '收起', '更多']) {
         expect(inCard(find.byTooltip(label)), findsOneWidget);
       }
       expect(inCard(find.byIcon(Icons.notes_rounded)), findsNothing);
       expect(inCard(find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
 
       final d = key.currentState!.document!;
+      final card = d.cards.singleWhere((c) => c.passageNote);
+      expect(inCard(find.byTooltip('编辑注释')), findsNothing);
+      expect(inCard(find.byTooltip('新对话')), findsNothing);
+      expect(card.rect.height, lessThan(120));
+      final width = card.rect.width;
+      await t.tap(inCard(find.byTooltip('收起')));
+      await t.pumpAndSettle();
+      expect(card.collapsed, isTrue);
+      expect(card.rect.width, lessThan(width));
+      expect(card.rect.height, lessThan(50));
+      final title = inCard(find.byWidgetPredicate(
+        (widget) => widget is RichText && widget.text.toPlainText() == '进程笔记',
+      ));
+      expect(t.renderObject<RenderParagraph>(title).didExceedMaxLines, isFalse);
+      await t.tap(inCard(find.byTooltip('展开模块')));
+      await t.pumpAndSettle();
+      expect(card.rect.width, width);
+      expect(card.rect.height, lessThan(120));
+      await t.tap(inCard(find.byTooltip('更多')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('编辑注释'));
+      await t.pumpAndSettle();
+      await t.enterText(annotationInput(), List.filled(24, '多行注释').join('\n'));
+      await t.pumpAndSettle();
+      expect(card.rect.height, inInclusiveRange(300, 440));
+      await t.enterText(annotationInput(), '短注释');
+      await t.tap(inCard(find.byTooltip('保存')));
+      await t.pumpAndSettle();
+      expect(card.rect.height, lessThan(120));
+      expect(card.text, '短注释');
       for (var i = 0; i < 2; i++) {
-        await t.tap(inCard(find.byTooltip('新对话')));
+        await t.tap(inCard(find.byTooltip('更多')));
+        await t.pumpAndSettle();
+        await t.tap(find.text('新对话'));
         await t.pumpAndSettle();
       }
       expect(
@@ -358,6 +670,7 @@ void main() {
     'saved marks follow each occurrence when Markdown wraps and a note is removed',
     (t) async {
       final handout = imported();
+      handout.text += '\n\n[回到标题](#cpu)';
       final rawStart = handout.text.indexOf('process');
       final fingerprint = outlineNoteHash(handout.text);
       StudyCard mark(String id, int offset, bool note) => StudyCard(
@@ -408,12 +721,17 @@ void main() {
             ),
           )
           .first;
-      List<Rect> boxes(int start, int end) {
+      List<Rect> boxes(
+        int start,
+        int end, {
+        ui.BoxHeightStyle heightStyle = ui.BoxHeightStyle.tight,
+      }) {
         final paragraph = t.renderObject<RenderParagraph>(words);
         final transform = paragraph.getTransformTo(t.renderObject(overlay));
         return paragraph
             .getBoxesForSelection(
               TextSelection(baseOffset: start, extentOffset: end),
+              boxHeightStyle: heightStyle,
             )
             .map((box) => MatrixUtils.transformRect(transform, box.toRect()))
             .toList();
@@ -436,7 +754,7 @@ void main() {
       void verifyMarks({required bool hasNote}) {
         final (highlight, dash) = paths();
         final annotation = boxes(0, 7).first;
-        final aside = boxes(12, 19).first;
+        final aside = boxes(12, 19, heightStyle: ui.BoxHeightStyle.max).first;
         expect(highlight.contains(annotation.center), hasNote);
         expect(highlight.contains(aside.center), isFalse);
         expect(dash.getBounds().left, closeTo(aside.left, .01));
@@ -462,6 +780,92 @@ void main() {
       await close(t);
     },
   );
+
+  testWidgets('a Markdown aside draws one level dash pattern per line', (
+    t,
+  ) async {
+    const passage = '寄存器 Register 通过 EAX 保存当前状态。';
+    final handout = imported()..text = '**寄存器 Register** 通过 `EAX` 保存当前状态。';
+    final aside = StudyCard(
+      id: 'aside',
+      type: 'conversation',
+      layer: 'main',
+      generation: 'markdown-aside',
+      conversationId: 'aside',
+      rect: const Rect.fromLTWH(820, 200, 320, 200),
+      sources: [
+        StudyAnchor(
+          id: 'md-0-0-${passage.length}',
+          objectId: handout.id,
+          kind: 'text',
+          fingerprint: outlineNoteHash(handout.text),
+          quote: passage,
+        ),
+      ],
+    );
+    final key = await fixture.open(
+      t,
+      _AsideApi((sheet()..cards.addAll([handout, aside])).json()),
+    );
+    final source = find.byKey(const ValueKey('markdown/md/-1'));
+    final overlay = find
+        .descendant(
+          of: source,
+          matching: find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.foregroundPainter != null,
+          ),
+        )
+        .first;
+    final words = find
+        .descendant(
+          of: source,
+          matching: find.byWidgetPredicate(
+            (w) => w is RichText && w.text.toPlainText() == passage,
+          ),
+        )
+        .first;
+    List<Offset> dashStarts() {
+      final canvas = TestRecordingCanvas();
+      t
+          .widget<CustomPaint>(overlay)
+          .foregroundPainter!
+          .paint(canvas, t.getSize(overlay));
+      final drawUnderline = canvas.invocations
+          .where((call) => call.invocation.memberName == #drawPath)
+          .last;
+      final path =
+          drawUnderline.invocation.positionalArguments.first as ui.Path;
+      return [
+        for (final dash in path.computeMetrics())
+          dash.getTangentForOffset(0)!.position,
+      ];
+    }
+
+    final paragraph = t.renderObject<RenderParagraph>(words);
+    final selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: passage.length,
+    );
+    final tight = paragraph.getBoxesForSelection(selection);
+    expect(tight.map((b) => b.bottom).toSet(), hasLength(greaterThan(1)));
+    final dashes = dashStarts();
+    expect(dashes.map((p) => p.dy).toSet(), hasLength(1));
+    for (var i = 1; i < dashes.length; i++) {
+      expect(dashes[i].dx - dashes[i - 1].dx, closeTo(7, .01));
+    }
+
+    final doc = key.currentState!.document!;
+    doc.cards.first.rect = const Rect.fromLTWH(240, 200, 220, 400);
+    doc.changed();
+    await t.pumpAndSettle();
+    final lines = paragraph
+        .getBoxesForSelection(selection, boxHeightStyle: ui.BoxHeightStyle.max)
+        .map((b) => b.bottom)
+        .toSet();
+    expect(lines, hasLength(greaterThan(1)));
+    expect(dashStarts().map((p) => p.dy).toSet(), hasLength(lines.length));
+    await close(t);
+  });
 
   testWidgets(
     'returning from a note centers and highlights its specific Markdown occurrence',
@@ -676,7 +1080,11 @@ void main() {
       await t.enterText(input, '这是什么意思？');
       await t.tap(find.descendant(of: frame, matching: find.byTooltip('发送')));
       await t.pumpAndSettle();
-      expect(api.request?['question'], '「process and」\n这是什么意思？');
+      expect(api.request?['question'], '这是什么意思？');
+      expect(api.request?['selected_excerpt'], {
+        'object_id': a.objectId,
+        'text': 'process and',
+      });
       expect(
         api.conversations[aside.conversationId]?['turns'].single['question'],
         '这是什么意思？',

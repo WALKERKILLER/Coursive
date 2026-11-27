@@ -194,7 +194,7 @@ class _SourceSection extends StatelessWidget {
         const SizedBox(height: Space.xs),
         Text(status, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
         AnimatedSize(
-          duration: Motion.medium2,
+          duration: Motion.durationOf(context, Motion.medium2),
           curve: Motion.emphasized,
           child: syncing
               ? const Padding(

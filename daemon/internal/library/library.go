@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -38,7 +39,8 @@ type Library struct {
 	tpl   Templates
 
 	// mirrorMu serializes mirrored writes, recovery and Reindex (mirror.go).
-	mirrorMu sync.Mutex
+	mirrorMu             sync.Mutex
+	pendingCourseBatches map[string]courseFileReceipt // protected by mirrorMu
 
 	// exportMu keeps exports to the same vault from interleaving.
 	exportMu sync.Mutex
@@ -56,6 +58,11 @@ func Open(root string, st *store.Store) (*Library, error) {
 	l.mirrorMu.Lock()
 	if err := l.recoverMirrors(context.Background()); err != nil {
 		log.Printf("library: %v", err)
+	} else if dir, err := os.OpenRoot(root); err == nil {
+		if err := pruneCourseReceipts(dir, time.Now()); err != nil {
+			log.Printf("expire course receipts: %v", err)
+		}
+		dir.Close()
 	}
 	l.mirrorMu.Unlock()
 	if n, err := l.RepairTranscripts(context.Background()); err != nil {
@@ -370,6 +377,14 @@ func NewID() string {
 func (l *Library) SaveNote(ctx context.Context, n store.Note) (store.Note, error) {
 	l.mirrorMu.Lock()
 	defer l.mirrorMu.Unlock()
+	if n.ID != "" && !validStudyID(n.ID) {
+		return n, ErrStudyInvalid
+	}
+	root, err := os.OpenRoot(l.Root)
+	if err != nil {
+		return n, err
+	}
+	defer root.Close()
 	if n.CreateOnly && n.ID != "" {
 		if _, err := l.Store.Note(ctx, n.ID); err == nil {
 			return n, ErrStudyConflict
@@ -378,12 +393,22 @@ func (l *Library) SaveNote(ctx context.Context, n store.Note) (store.Note, error
 		}
 	}
 	if n.ID != "" && n.BaseBody != nil {
-		if old, err := l.Store.Note(ctx, n.ID); err == nil && old.Path != "" {
-			current, ok := parseNote(l.Abs(old.Path))
-			if !ok || current.Body != *n.BaseBody {
-				return n, ErrStudyConflict
-			}
+		old, err := l.Store.Note(ctx, n.ID)
+		if err != nil {
+			return n, ErrStudyConflict
 		}
+		if !validNoteDir(root, path.Dir(old.Path), false) {
+			return n, ErrStudyInvalid
+		}
+		info, err := root.Lstat(old.Path)
+		if err != nil || !info.Mode().IsRegular() {
+			return n, ErrStudyConflict
+		}
+		current, ok := parseNote(l.Abs(old.Path))
+		if !ok || current.Body != *n.BaseBody || (n.CourseID != "" && old.CourseID != n.CourseID) || old.LectureID != n.LectureID {
+			return n, ErrStudyConflict
+		}
+		n.Pinned = old.Pinned
 	}
 
 	if n.ID == "" {
@@ -420,16 +445,23 @@ func (l *Library) SaveNote(ctx context.Context, n store.Note) (store.Note, error
 		oldPath = old.Path
 	}
 	n.Path = dir + "/" + Sanitize(n.Title, "笔记") + "-" + n.ID + ".md"
-	if err := os.MkdirAll(l.Abs(dir), 0o755); err != nil {
+	if !validNoteDir(root, dir, true) {
+		return n, ErrStudyInvalid
+	}
+	if info, err := root.Lstat(n.Path); err == nil {
+		if !info.Mode().IsRegular() || n.CreateOnly || oldPath != n.Path {
+			return n, ErrStudyConflict
+		}
+	} else if !os.IsNotExist(err) {
 		return n, err
 	}
 	fm := fmt.Sprintf("---\nschema: coursive/note@1\nid: %s\ntitle: %q\ncourse_id: %q\nlecture_id: %q\nsource: %s\nupdated_at: %s\n---\n\n",
 		n.ID, n.Title, n.CourseID, n.LectureID, orDefault(n.Source, "user"), time.Now().Format(time.RFC3339))
-	if err := writeFileAtomicNote(l.Abs(n.Path), []byte(fm+strings.TrimLeft(n.Body, "\n"))); err != nil {
+	if err := writeStudyBytes(root, n.Path, []byte(fm+strings.TrimLeft(n.Body, "\n"))); err != nil {
 		return n, err
 	}
-	if oldPath != "" && oldPath != n.Path {
-		os.Remove(l.Abs(oldPath))
+	if oldPath != "" && oldPath != n.Path && validNoteDir(root, path.Dir(oldPath), false) {
+		root.Remove(oldPath)
 	}
 	if err := l.Store.PutNote(ctx, n); err != nil {
 		return n, err
@@ -441,6 +473,8 @@ func (l *Library) SaveNote(ctx context.Context, n store.Note) (store.Note, error
 }
 
 func (l *Library) DeleteNote(ctx context.Context, id string) error {
+	l.mirrorMu.Lock()
+	defer l.mirrorMu.Unlock()
 	n, err := l.Store.Note(ctx, id)
 	if err != nil {
 		return err
@@ -822,16 +856,16 @@ func SortedKinds(k []string) []string {
 	return k
 }
 
-func writeFileAtomicNote(p string, b []byte) error {
-	f, e := os.CreateTemp(filepath.Dir(p), ".note-*")
-	if e != nil {
-		return e
+func validNoteDir(root *os.Root, dir string, create bool) bool {
+	if dir == "notes" {
+		info, err := root.Lstat(dir)
+		if create && os.IsNotExist(err) {
+			err = root.Mkdir(dir, 0o700)
+			if err == nil {
+				info, err = root.Lstat(dir)
+			}
+		}
+		return err == nil && info.IsDir()
 	}
-	defer os.Remove(f.Name())
-	_, e = f.Write(b)
-	f.Close()
-	if e != nil {
-		return e
-	}
-	return os.Rename(f.Name(), p)
+	return strings.HasSuffix(dir, "/notes") && checkedStudyDir(root, dir, create) == nil
 }

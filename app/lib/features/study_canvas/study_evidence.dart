@@ -187,7 +187,7 @@ extension _StudyEvidence on StudyCanvasState {
       return _EvidenceView.invalid(l10n.studyEvidenceStale);
     }
     // A course passage is checked against its file when it is followed.
-    if (evidence['course_source'] is Map) return const _EvidenceView(null, []);
+    if (evidence['teaching_ref'] is String || evidence['course_source'] is Map) return const _EvidenceView(null, []);
     if (a.workspaceId.isNotEmpty && a.workspaceId != widget.ctl.lectureId) {
       return _EvidenceView.invalid(l10n.studyEvidenceOtherLecture);
     }
@@ -264,6 +264,18 @@ extension _StudyEvidence on StudyCanvasState {
 
   /// A short locator: page, time range, region or ink.
   String _evidenceLocator(Map evidence) {
+    // Saved classroom references carry their verified interval in the link.
+    // Use the same interval the source reader opens, including for older turns.
+    if (evidence['teaching_ref'] case final String link) {
+      final target = CoursiveRef.parse(link);
+      if (target is TimeRef) {
+        final start = target.startMs ?? target.seconds * 1000;
+        final end = target.endMs;
+        return end != null && end > start
+            ? '${fmtClock(start)}–${fmtClock(end)}'
+            : fmtClock(start);
+      }
+    }
     final a = StudyAnchor.fromJson(evidence['anchor'] as Map? ?? const {});
     return switch ('${evidence['kind']}') {
       'timestamped_transcript' =>
@@ -287,6 +299,13 @@ extension _StudyEvidence on StudyCanvasState {
   Future<void> _followEvidence(Map evidence) async {
     final d = document;
     if (d == null) return;
+    if (evidence['teaching_ref'] case final String link) {
+      final ref = CoursiveRef.parse(link);
+      if (ref is TimeRef || ref is SlideRef || ref is CoursewareRef) {
+        _openMarkdownReference(ref!);
+      }
+      return;
+    }
     if (evidence['course_source'] is Map) {
       return _followCourseEvidence(evidence);
     }
@@ -384,8 +403,9 @@ extension _StudyEvidence on StudyCanvasState {
       if (card.type == 'lecture') {
         mark.videoBefore = widget.ctl.position.value.inMilliseconds;
         widget.ctl.seekTo(a.timeStartMs);
-        unawaited(widget.ctl.player.pause());
+        unawaited(widget.ctl.pause());
       } else {
+        _activeLocalVideo = card.id;
         final local = _localVideoKeys[card.id]?.currentState;
         mark.videoBefore =
             local?.positionMs ??
@@ -510,8 +530,7 @@ extension _StudyEvidence on StudyCanvasState {
     final video = d.cards.where((c) => c.id == mark.video).firstOrNull;
     if (video != null) {
       if (video.type == 'lecture') {
-        final player = widget.ctl.player;
-        if (!player.state.playing &&
+        if (!widget.ctl.playing &&
             (widget.ctl.position.value.inMilliseconds - mark.videoAt).abs() <=
                 1500) {
           widget.ctl.seekTo(mark.videoBefore);
@@ -662,7 +681,7 @@ class _CitationMarkState extends State<_CitationMark> {
         : owner._evidenceView(widget.evidence).problem;
     final active = _hover || _focus || _pinned;
     final mark = AnimatedContainer(
-      duration: Motion.short3,
+      duration: Motion.durationOf(context, Motion.short3),
       constraints: BoxConstraints(minWidth: size * 1.05),
       padding: const EdgeInsets.symmetric(horizontal: 3.5, vertical: .5),
       decoration: BoxDecoration(
@@ -959,25 +978,26 @@ class _Provenance extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                parts.isEmpty
-                    ? l10n.studyCoverageNone
-                    : [
-                        l10n.studyCoverageLead(parts.join(' · ')),
-                        if (stale > 0) l10n.studyCoverageStale(stale),
-                      ].join(' · '),
-                key: const ValueKey('study-coverage'),
-                style: tt.labelSmall?.copyWith(
-                  color: stale > 0 ? cs.error : cs.onSurfaceVariant,
+        if (parts.isNotEmpty)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  [
+                    l10n.studyCoverageLead(parts.join(' · ')),
+                    if (stale > 0) l10n.studyCoverageStale(stale),
+                  ].join(' · '),
+                  key: const ValueKey('study-coverage'),
+                  style: tt.labelSmall?.copyWith(
+                    color: stale > 0 ? cs.error : cs.onSurfaceVariant,
+                  ),
                 ),
               ),
-            ),
-            ?trailing,
-          ],
-        ),
+              ?trailing,
+            ],
+          )
+        else if (trailing != null)
+          Align(alignment: AlignmentDirectional.centerEnd, child: trailing),
         if (next.isNotEmpty) ...[
           const SizedBox(height: Space.sm),
           Wrap(spacing: Space.xs, runSpacing: Space.xs, children: next),

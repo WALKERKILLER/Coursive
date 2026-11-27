@@ -4,14 +4,13 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
-import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -20,7 +19,7 @@ import '../../core/api.dart';
 import '../../core/clipboard_files.dart';
 import '../../core/ink_curve.dart';
 import '../../core/format.dart';
-import '../../core/models.dart';
+import '../../core/models.dart' hide Source;
 import '../../core/plugins.dart';
 import '../../core/ui_slots.dart';
 import '../../theme/glass.dart';
@@ -30,7 +29,11 @@ import '../../widgets/pickers.dart';
 import '../../widgets/reading_selection_menu.dart';
 import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
-import '../library/note_reader.dart' show openRef;
+import '../player/player_page.dart' show PlayerPage;
+import '../player/player_view.dart';
+import '../player/playback_focus.dart';
+import '../../theme/prefs.dart';
+import '../library/note_reader.dart' show NotePage, openRef;
 import '../plugins/canvas_fallback.dart';
 import '../plugins/plugin_actions.dart' show PluginViewPatch;
 import '../plugins/plugin_contributions.dart' show PluginViewPatchScope;
@@ -57,6 +60,7 @@ import 'study_input_router.dart';
 
 import 'package:val_latex_flutter/val_latex_flutter.dart' hide Segment;
 
+part 'study_assistant.dart';
 part 'study_agent_ui.dart';
 part 'study_snapshot_capture.dart';
 part 'study_source_navigation.dart';
@@ -65,6 +69,7 @@ part 'study_shelf_ui.dart';
 part 'study_brush_ui.dart';
 part 'study_interaction.dart';
 part 'study_markdown_reader.dart';
+part 'study_material_reader.dart';
 part 'study_lesson.dart';
 part 'study_conversation_ui.dart';
 part 'study_pdf_ui.dart';
@@ -84,6 +89,13 @@ part 'study_plugin_ui.dart';
 
 enum StudyTool { pan, select, pen, highlighter, eraser, region }
 
+const double _cardHeaderHeight = 36;
+const double _asideCollapsedHeight = 40;
+const double _passageActionWidth = 40;
+const double _asideOpeningHeight = 160;
+const double _asideMinHeight = 120;
+const double _asideMaxHeight = 440;
+
 class StudyCanvas extends StatefulWidget {
   const StudyCanvas({
     super.key,
@@ -92,6 +104,7 @@ class StudyCanvas extends StatefulWidget {
     required this.video,
     required this.panel,
     required this.onClassic,
+    this.buildLectureReader,
     this.pdfLibraryRoot,
     this.openCanvasPDF = DockPDF.open,
     this.readClipboardFiles = readMacClipboardFiles,
@@ -99,6 +112,10 @@ class StudyCanvas extends StatefulWidget {
     required this.onBack,
     this.fullscreen = false,
     this.startLesson = false,
+    this.initialCardId,
+    this.onInitialCardShown,
+    this.onNewCanvas,
+    this.seedLessonMaterials = false,
   }) : _player = ctl,
        notebookId = null,
        title = null;
@@ -119,8 +136,13 @@ class StudyCanvas extends StatefulWidget {
        panel = const SizedBox.shrink(),
        onAsk = null,
        onClassic = null,
+       buildLectureReader = null,
        fullscreen = false,
-       startLesson = false;
+       startLesson = false,
+       initialCardId = null,
+       onInitialCardShown = null,
+       onNewCanvas = null,
+       seedLessonMaterials = false;
   final String? notebookId, title;
   bool get standalone => notebookId != null;
   String get draftKey => standalone
@@ -136,13 +158,17 @@ class StudyCanvas extends StatefulWidget {
   final LecturePlayer? _player;
   LecturePlayer get ctl => _player!;
   final Widget video, panel;
-  final VoidCallback? onClassic;
+  final Widget Function(VoidCallback close)? buildLectureReader;
+  final VoidCallback? onClassic, onNewCanvas;
+  final bool seedLessonMaterials;
   final String? pdfLibraryRoot;
   final Future<List<String>> Function() readClipboardFiles;
   final Future<DockPDF> Function(String, String) openCanvasPDF;
   final VoidCallback onBack;
   final ValueChanged<String>? onAsk;
   final bool fullscreen, startLesson;
+  final String? initialCardId;
+  final VoidCallback? onInitialCardShown;
   @override
   State<StudyCanvas> createState() => StudyCanvasState();
 }
@@ -150,6 +176,13 @@ class StudyCanvas extends StatefulWidget {
 class StudyCanvasState extends State<StudyCanvas>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   Future<void> openLesson() => _openLesson();
+  StudyCard? _focusedMaterial;
+  bool get readingDocument => _focusedMaterial != null && _focusedMaterial?.type != 'lecture';
+  StudyCard? _returnToMaterial;
+  final _documentReaders = <String, GlobalKey>{};
+  final _materialReaders = <String, GlobalKey>{};
+  var _seedingMaterials = false;
+  int? _initialMaterialsEdit;
 
   /// Theme-derived chrome colours for the whole workspace.
   StudyChrome get chrome => StudyChrome.of(context);
@@ -185,11 +218,18 @@ class StudyCanvasState extends State<StudyCanvas>
     StudyDockEdge.right,
     .34,
   );
+  StudyCard? _textCard;
+  final _textInput = TextEditingController();
+  final _textFocus = FocusNode();
+  String _textBase = '';
+  int _textOpenRequest = 0;
+  bool _newText = false, _textSaving = false;
   String? _editingPassage, _passageEditCheckpoint;
   bool _dockSmall = false;
   final _penItemKeys = <int, GlobalKey>{};
   final _eraserKey = GlobalKey();
   final _eraserLasso = <Offset>[], _lasso = <Offset>[];
+  int? _cameraFrame;
   final _camera = ValueNotifier(0), _cursor = ValueNotifier(0);
 
   /// Carries the view to a new place instead of cutting to it; see [_flyTo].
@@ -356,8 +396,10 @@ class StudyCanvasState extends State<StudyCanvas>
   final _detail = StudySelection();
   final _capture = GlobalKey();
   final _dockKey = GlobalKey(), _zoomKey = GlobalKey();
-  String? _previewVideoId;
+  bool _multipleLocalVideos = false;
+  String? _activeLocalVideo, _previewVideoId;
   final _localVideoKeys = <String, GlobalKey<_LocalVideoState>>{};
+  final _recordings = <(String, String), Future<({int duration, int position})?>>{};
   final _localVideoTimes = <String, int>{};
   Rect? _regionSelection, _sourceHighlight;
   void _update(VoidCallback action) => setState(action);
@@ -446,9 +488,19 @@ class StudyCanvasState extends State<StudyCanvas>
       unawaited(_refreshFromSync());
     });
     _syncSubscription = widget.api.sse('/api/events').listen((e) {
+      final data = e['data'] as Map?;
+      if (e['type'] == 'notes_changed' && !widget.standalone) {
+        if (data?['card_id'] != null && data?['lecture_id'] == widget.ctl.lectureId) {
+          unawaited(_refreshFromSync());
+        }
+        final d = document;
+        if (data?['id'] is String && d != null) {
+          unawaited(_refreshLinkedNotes(d, noteId: data!['id'] as String));
+        }
+      }
       if (e['type'] == 'sync_done' &&
-          ((e['data'] as Map?)?['downloaded'] as num? ?? 0) > 0) {
-        unawaited(_refreshFromSync());
+          (data?['downloaded'] as num? ?? 0) > 0) {
+        unawaited(_refreshFromSync(refreshNotes: true));
       }
     }, onError: (_) {});
     unawaited(_titlebar(true));
@@ -484,6 +536,7 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   bool get _editingCanvas =>
+      _textCard != null ||
       _transformSession != null ||
       _lessonBusy ||
       _importing ||
@@ -499,14 +552,18 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _wholeCardSelected =>
       _selection.isNotEmpty && _detail.objectId == null;
 
-  Future<void> _load({Map? synced}) async {
+  Future<void> _load({Map? synced, int? replacingSeed}) async {
     try {
       final data = synced ?? await widget.load();
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       final draft = prefs.getString(widget.draftKey);
       if (!mounted) return;
-      if (synced != null && _editingCanvas) return;
+      if (replacingSeed != null) {
+        if (document?.edit != replacingSeed || _pointers.isNotEmpty || _textCard != null) return;
+      } else if (synced != null && _editingCanvas) {
+        return;
+      }
       final d = StudyDocument.fromJson(data as Map);
       if (draft != null) {
         document?.dispose();
@@ -523,6 +580,8 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       document?.dispose();
       document = d;
+      _focusedMaterial = d.cards.where((c) => c.id == _focusedMaterial?.id).firstOrNull;
+      _returnToMaterial = d.cards.where((c) => c.id == _returnToMaterial?.id).firstOrNull;
       _adoptThreads(d);
       if (!widget.standalone && !_lessonStarted && (widget.startLesson || d.cards.any((c)=>c.lessonNote))) {
         _lessonStarted = true;
@@ -530,6 +589,21 @@ class StudyCanvasState extends State<StudyCanvas>
       }
       d.addListener(_changed);
       _savedEdit = d.edit;
+      _initialMaterialsEdit = null;
+      if (!widget.standalone) unawaited(_refreshLinkedNotes(d));
+      if (widget.seedLessonMaterials && synced == null &&
+          d.revision == 0 && d.baseHash.isEmpty) {
+        unawaited(_seedLessonMaterials(d));
+      }
+      final initial = widget.initialCardId;
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || document != d) return;
+          final card = d.cards.where((card) => card.id == initial).firstOrNull;
+          if (card != null) _showAssistantCard(card);
+          widget.onInitialCardShown?.call();
+        });
+      }
       setState(() {
         _loadError = null;
         _status = l10n.studySaved;
@@ -539,14 +613,19 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
-  Future<void> _refreshFromSync() async {
+  Future<void> _refreshFromSync({bool refreshNotes = false}) async {
     if (_refreshing || !mounted) return;
     _refreshing = true;
     try {
       final remote = await widget.load() as Map;
       final d = document;
       if (d == null || !mounted) return;
-      if (remote['base_hash'] == d.baseHash) return;
+      if (remote['base_hash'] == d.baseHash) {
+        if (!widget.standalone && !_editingCanvas && refreshNotes) {
+          await _refreshLinkedNotes(d);
+        }
+        return;
+      }
       // Finish an edit already in progress. Its save rebases against the latest
       // revision, so the last saved whole canvas wins (ADR 0022).
       if (_editingCanvas) return;
@@ -583,6 +662,15 @@ class StudyCanvasState extends State<StudyCanvas>
 
   void _changed() {
     if (_disposed) return;
+    // Undo and canvas operations may replace card instances while preserving IDs.
+    final editing = _textCard;
+    if (editing != null && !_newText) {
+      _textCard = _liveTextCard(document!, editing) ?? editing;
+    }
+    final focused = _focusedMaterial;
+    if (focused != null && focused.markdownReader) {
+      _focusedMaterial = _liveTextCard(document!, focused);
+    }
     if (_selectionReady) {
       final strokes = document!.strokes.map((s) => s.id).toSet();
       final cards = document!.cards.map((c) => c.id).toSet();
@@ -605,11 +693,12 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_drawingPointer != null || _erasing || _dragCard != null) {
       _saveTimer = Timer(const Duration(seconds: 1), _saveWhenIdle);
     } else {
-      unawaited(flush());
+      unawaited(flush(commitEditor: false));
     }
   }
 
-  Future<bool> flush() async {
+  Future<bool> flush({bool commitEditor = true}) async {
+    if (commitEditor && !await _saveText()) return false;
     if (_transformSession != null) return false;
     _saveTimer?.cancel();
     for (final key in _pdfBodies.values.toList()) {
@@ -644,6 +733,11 @@ class StudyCanvasState extends State<StudyCanvas>
         } on ApiError catch (e) {
           if (e.status != 409 || retries++ >= 2) rethrow;
           final remote = await widget.load() as Map;
+          if (edit == _initialMaterialsEdit && mounted) {
+            // A first-open layout may race a newer canvas from another device.
+            await _load(synced: remote, replacingSeed: edit);
+            if (!identical(document, d)) return true;
+          }
           if (widget.standalone) {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString(widget.draftKey, jsonEncode(d.json()));
@@ -686,7 +780,13 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   /// The system back action first returns from a followed citation.
-  bool returnFromSource() => document != null && _goBack();
+  bool returnFromSource() {
+    if (_focusedMaterial != null && !widget.fullscreen) {
+      _closeMaterialReader();
+      return true;
+    }
+    return document != null && _goBack();
+  }
 
   // macOS text-selection shortcuts can consume Paste before the player Focus
   // receives it. Route only the active canvas gesture before normal dispatch.
@@ -697,6 +797,7 @@ class StudyCanvasState extends State<StudyCanvas>
         !mounted ||
         document == null ||
         widget.fullscreen ||
+        _focusedMaterial != null ||
         ModalRoute.of(context)?.isCurrent != true) {
       return KeyEventResult.ignored;
     }
@@ -733,6 +834,12 @@ class StudyCanvasState extends State<StudyCanvas>
       return false;
     final k = e.logicalKey;
     final keys = HardwareKeyboard.instance;
+    if (_focusedMaterial != null) {
+      if (widget.fullscreen) return false;
+      if (k != LogicalKeyboardKey.escape) return false;
+      _closeMaterialReader();
+      return true;
+    }
     // Esc steps back one level: composer, selection, then a followed citation.
     if (k == LogicalKeyboardKey.escape) {
       if (_quickAsk) {
@@ -794,9 +901,12 @@ class StudyCanvasState extends State<StudyCanvas>
     unawaited(_stylusEvents?.cancel());
     _fly.dispose();
     _holdCue.dispose();
+    if (_cameraFrame case final frame?) WidgetsBinding.instance.cancelFrameCallbackWithId(frame);
     _camera.dispose();
     _cursor.dispose();
     _threadTick.dispose();
+    _textInput.dispose();
+    _textFocus.dispose();
     _composerFocus.dispose();
     _idleInput.dispose();
     _quickInput.dispose();
@@ -826,8 +936,26 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _ink => _tool == StudyTool.pen || _tool == StudyTool.highlighter;
   bool get _writing =>
       _ink || _tool == StudyTool.eraser || _tool == StudyTool.region;
+  // Pointer samples can arrive several times before the display paints.
+  // Keep the world transform current for hit testing, publish once per vsync.
+  @visibleForTesting
+  Listenable get cameraUpdates => _camera;
+
+  void _queueCameraChange() {
+    document!.edit++;
+    if (_cameraFrame != null) return;
+    _cameraFrame = WidgetsBinding.instance.scheduleFrameCallback((_) {
+      _cameraFrame = null;
+      if (mounted && document != null) _publishCamera();
+    });
+  }
+
   void _cameraChanged() {
     document!.edit++;
+    _publishCamera();
+  }
+
+  void _publishCamera() {
     _camera.value++;
     final stage = _stageRect, view = _visibleWorld;
     if (stage == null ||
@@ -839,7 +967,7 @@ class StudyCanvasState extends State<StudyCanvas>
     _saveTimer = Timer(const Duration(milliseconds: 700), () {
       if (!mounted) return;
       setState(() {}); // Re-cull only after the gesture settles.
-      unawaited(flush());
+      unawaited(flush(commitEditor: false));
     });
   }
 
@@ -930,6 +1058,7 @@ class StudyCanvasState extends State<StudyCanvas>
               c.containsWorld(point),
         )
         .lastOrNull;
+    if (_textCard?.containsWorld(point) == true) return;
     final actions = card == null
         ? null
         : _cardHeaderActions[card.id]?.currentContext?.findRenderObject()
@@ -1157,7 +1286,7 @@ class StudyCanvasState extends State<StudyCanvas>
           (_pinchZoom! * (p[0] - p[1]).distance / math.max(1, _pinchDistance!))
               .clamp(.05, 8);
       d.camera = (p[0] + p[1]) / 2 - _pinchWorld! * d.zoom;
-      _cameraChanged();
+      _queueCameraChange();
       return;
     }
     if (_pointers.length > 1) return;
@@ -1166,7 +1295,7 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_pdfPinching) return;
     if (_panCamera != null) {
       d.camera = _panCamera! + e.localPosition - _start!;
-      _cameraChanged();
+      _queueCameraChange();
       return;
     }
     if (_drawingPointer == e.pointer) {
@@ -1462,7 +1591,7 @@ class StudyCanvasState extends State<StudyCanvas>
     _cameraChanged();
   }
 
-  void _fit() {
+  void _fit({bool animate = true}) {
     final d = document!;
     final cards = d.cards.where(
       (a) => a.onCanvas && d.visible(a.layer),
@@ -1480,7 +1609,14 @@ class StudyCanvasState extends State<StudyCanvas>
         )
         .clamp(.05, 1.5)
         .toDouble();
-    _flyTo(_viewport.center(Offset.zero) - r.center * zoom, zoom);
+    final camera = _viewport.center(Offset.zero) - r.center * zoom;
+    if (animate) {
+      _flyTo(camera, zoom);
+    } else {
+      d.camera = camera;
+      d.zoom = zoom;
+      _cameraChanged();
+    }
   }
 
   void _toast(String s) {
@@ -1604,6 +1740,7 @@ class StudyCanvasState extends State<StudyCanvas>
     String? courseware,
     bool wholeCourse = false,
     bool fromClipboard = false,
+    List<XFile> dropped = const [],
     Offset? at,
   }) async {
     if (_importing) return;
@@ -1617,7 +1754,14 @@ class StudyCanvasState extends State<StudyCanvas>
       _status = l10n.studyImporting;
     });
     try {
-      final files = <XFile>[];
+      final files = dropped.where((file) {
+        final suffix = filePath.extension(file.name).toLowerCase();
+        return suffix.isNotEmpty && _fileExtensions.contains(suffix.substring(1));
+      }).toList();
+      if (dropped.isNotEmpty && files.isEmpty) {
+        _toast(l10n.studyShelfUnsupported);
+        return;
+      }
       if (fromClipboard) {
         final paths = await widget.readClipboardFiles();
         for (final path in paths.toSet()) {
@@ -1631,12 +1775,12 @@ class StudyCanvasState extends State<StudyCanvas>
           if (mounted && paths.isNotEmpty) _toast(l10n.studyShelfUnsupported);
           return;
         }
-      } else if (courseware == null) {
-        final file = await openFile(acceptedTypeGroups: [
+      } else if (courseware == null && dropped.isEmpty) {
+        final selected = await openFiles(acceptedTypeGroups: [
           XTypeGroup(label: l10n.studyMaterials, extensions: _fileExtensions),
         ]);
-        if (file == null) return;
-        files.add(file);
+        if (selected.isEmpty) return;
+        files.addAll(selected);
       }
       if (!mounted || document != d) return;
       final center = at ?? _world(_viewport.center(Offset.zero));
@@ -1691,91 +1835,180 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  StudyCard? _liveTextCard(StudyDocument doc, StudyCard card) =>
+      doc.cards.where((c) => c.id == card.id && c.type == card.type &&
+          c.documentId == card.documentId && c.generation == card.generation).firstOrNull;
+
+  Future<Map> _readEditableNote(StudyCard card) async {
+    final current = await widget.api.get('/api/notes/${Uri.encodeComponent(card.documentId)}') as Map;
+    final scope = card.lessonNote ? widget._player?.lectureId : widget._player?.course?.id;
+    if (scope == null || current[card.lessonNote ? 'lecture_id' : 'course_id'] != scope) {
+      throw StateError(l10n.studyEvidenceMissing);
+    }
+    return current;
+  }
+
   Future<void> _text([StudyCard? card, TextRange? passage]) async {
-    final original = card?.text;
-    final input = TextEditingController(text: original ?? '');
-    if (passage != null &&
-        passage.isValid &&
-        passage.end <= input.text.length) {
-      input.selection = TextSelection(
-        baseOffset: passage.start,
-        extentOffset: passage.end,
-      );
+    if (_textSaving) return;
+    final request = ++_textOpenRequest;
+    if (card != null && _textCard?.id == card.id) {
+      _textFocus.requestFocus();
+      return;
     }
-    final text = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: Text(card == null ? l10n.studyAddText : l10n.studyEditText),
-        content: SizedBox(
-          width: 500,
-          child: TextField(
-            controller: input,
-            autofocus: true,
-            minLines: 5,
-            maxLines: 15,
-            maxLength: card?.markdownReader == true ? 800000 : 200000,
-            decoration: InputDecoration(hintText: l10n.studyTextHint),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, input.text),
-            child: Text(l10n.commonSave),
-          ),
-        ],
-      ),
-    );
-    // Dialog animations can retain the input after the route result completes.
-    Future.delayed(const Duration(milliseconds: 400), input.dispose);
-    if (!mounted || text == null) return;
+    if (_textCard != null && !await _saveText()) return;
+    if (!mounted || request != _textOpenRequest) return;
     final d = document!;
-    if (card != null && (!d.cards.contains(card) || card.text != original)) {
-      _toast(l10n.studySelectionChanged);
-      return;
-    }
-    if (utf8.encode(text).length > 800000) {
-      _toast(l10n.studyFileTooLarge);
-      return;
+    if (card != null) {
+      final shown = card.text;
+      if (card.linkedNote || card.lessonNote) {
+        try {
+          final note = await _readEditableNote(card);
+          if (!mounted || document != d || request != _textOpenRequest) return;
+          card = _liveTextCard(d, card);
+          if (card == null) return;
+          final body = note['body'] as String? ?? '';
+          if (body != shown) passage = null;
+          if (card.text != body) {
+            _rebaseMarkdownNotes(card, body);
+            card.text = body;
+            d.changed();
+          }
+        } catch (e) {
+          if (mounted && request == _textOpenRequest) _toast('$e');
+          return;
+        }
+      } else {
+        card = _liveTextCard(d, card);
+        if (card == null) return;
+      }
     }
     if (!d.editable(card?.layer ?? d.activeLayer)) {
       _toast(l10n.studyLocked);
       return;
     }
-    if (card?.lessonNote == true) {
+    final center = _world(_viewport.center(Offset.zero));
+    final target = card ?? StudyCard(
+      id: studyId(), type: 'text', layer: d.activeLayer,
+      rect: Rect.fromCenter(center: center, width: 480, height: 360),
+      title: l10n.studyTextCard, text: '',
+    );
+    if (target != _textCard) {
+      _textBase = target.text;
+      _textInput.value = TextEditingValue(
+        text: target.text,
+        selection: TextSelection.collapsed(offset: target.markdownReader ? 0 : target.text.length),
+      );
+    }
+    if (passage != null && passage.isValid && passage.end <= _textInput.text.length) {
+      _textInput.selection = TextSelection(baseOffset: passage.start, extentOffset: passage.end);
+    }
+    _clearSelection();
+    _update(() {
+      _textCard = target;
+      _newText = card == null;
+      _tool = StudyTool.select;
+      if (target.collapsed) _setCardCollapsed(target, false);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _textCard == target) _textFocus.requestFocus();
+    });
+  }
+
+  void _endText() {
+    _textFocus.unfocus();
+    _update(() {
+      _textCard = null;
+      _newText = false;
+    });
+  }
+
+  Future<bool> _saveText() async {
+    final editing = _textCard;
+    if (editing == null) return true;
+    if (_textSaving) return false;
+    final d = document!;
+    final text = _textInput.text;
+    if (text == _textBase) {
+      _endText();
+      return true;
+    }
+    var card = _newText ? editing : _liveTextCard(d, editing);
+    if (card == null) {
+      _toast(l10n.studyEvidenceMissing);
+      return false;
+    }
+    if (!card.linkedNote && !card.lessonNote && card.text != _textBase) {
+      _toast('这张卡片的正文已更新，当前输入已保留');
+      return false;
+    }
+    if (!d.editable(card.layer)) {
+      _toast(l10n.studyLocked);
+      return false;
+    }
+    if (utf8.encode(text).length > 800000) {
+      _toast(l10n.studyFileTooLarge);
+      return false;
+    }
+    if (card.lessonNote || card.linkedNote) {
+      _update(() => _textSaving = true);
       try {
-        final path = '/api/notes/${Uri.encodeComponent(card!.documentId)}';
-        final current = await widget.api.get(path) as Map;
-        if (current['lecture_id'] != widget.ctl.lectureId || current['body'] != original) throw StateError(l10n.studySelectionChanged);
-        await widget.api.put('/api/notes', {...current.cast<String,dynamic>(),'body':text,'base_body':original});
-      } catch (e) { if (mounted) _toast('$e'); return; }
-      if (!mounted || document != d || !d.cards.contains(card)) return;
+        final current = await _readEditableNote(card);
+        if (!mounted || document != d || _liveTextCard(d, card) == null) return false;
+        if ((current['body'] ?? '') != _textBase) {
+          _toast('讲义原文已更新，当前输入已保留。可复制草稿后重新编辑。');
+          return false;
+        }
+        await widget.api.put('/api/notes', {
+          ...current.cast<String, dynamic>(), 'body': text, 'base_body': _textBase,
+        });
+      } catch (e) {
+        if (mounted) _toast('$e');
+        return false;
+      } finally {
+        if (mounted) _update(() => _textSaving = false);
+      }
+      if (!mounted || document != d) return false;
+      card = _liveTextCard(d, card);
+      if (card == null) return false;
     } else {
       d.checkpoint();
     }
-    if (card != null) {
-      _rebaseMarkdownNotes(card, text);
-      card.text = text;
-    } else {
-      final p = _world(_viewport.center(Offset.zero));
-      final c = StudyCard(
-        id: studyId(),
-        type: 'text',
-        layer: d.activeLayer,
-        rect: Rect.fromLTWH(p.dx - 100, p.dy - 100, 480, 360),
-        title: l10n.studyTextCard,
-        text: text,
-      );
-      d.cards.add(c);
-      _selection
-        ..clear()
-        ..add(c.id);
-    }
+    _rebaseMarkdownNotes(card, text);
+    card.text = text;
+    if (_newText) d.cards.add(card);
+    _endText();
     d.changed();
+    return true;
   }
+
+  Widget _textEditor(StudyCard card) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.keyS, meta: true): () => unawaited(_saveText()),
+      const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => unawaited(_saveText()),
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (!_textSaving && _textInput.value.composing.isCollapsed) _endText();
+      },
+    },
+    child: Column(children: [
+      Expanded(child: TextField(
+        key: const ValueKey('study-inline-text'),
+        controller: _textInput, focusNode: _textFocus, autofocus: true,
+        readOnly: _textSaving, maxLines: null, minLines: null, expands: true,
+        textAlignVertical: TextAlignVertical.top,
+        maxLength: card.markdownReader ? 800000 : 200000,
+        decoration: InputDecoration(
+          border: InputBorder.none, counterText: '',
+          contentPadding: const EdgeInsets.all(12), hintText: l10n.studyTextHint,
+        ),
+      )),
+      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+        IconButton(tooltip: l10n.commonCancel, icon: const Icon(Icons.close, size: 18),
+          onPressed: _textSaving ? null : _endText),
+        IconButton(tooltip: l10n.commonSave, icon: const Icon(Icons.check, size: 18),
+          onPressed: _textSaving ? null : _saveText),
+      ]),
+    ]),
+  );
 
   Future<void> _ask() async {
     if (_selectionReady &&
@@ -1938,7 +2171,6 @@ class StudyCanvasState extends State<StudyCanvas>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.fullscreen) return widget.video;
     if (_loadError != null)
       return Center(
         child: Column(
@@ -1951,6 +2183,11 @@ class StudyCanvasState extends State<StudyCanvas>
       );
     final d = document;
     if (d == null) return const Center(child: CircularProgressIndicator());
+    for (final card in d.cards) {
+      if (card.passageLinked && card.collapsed && card.unfoldedLayoutWidth == null) {
+        _fitFoldedAside(card);
+      }
+    }
     _enabledPlugins = _activePlugins();
     _hasCanvasTools = _canvasToolContributions(context).isNotEmpty;
     return LayoutBuilder(
@@ -1967,13 +2204,15 @@ class StudyCanvasState extends State<StudyCanvas>
         if (_selectionToolbarDocked) {
           _viewport = Size(size.maxWidth, math.max(0, size.maxHeight - 56));
         }
-        return Column(
+        final reader = _focusedMaterial;
+        final previousReader = _returnToMaterial;
+        final canvas = Column(
           children: [
             Expanded(
               child: GlassBackdropScope(
                 enabled:
                     defaultTargetPlatform != TargetPlatform.android ||
-                    !_writing,
+                    (!_writing && !_pdfPinching),
                 child: _canvas(d),
               ),
             ),
@@ -1981,6 +2220,33 @@ class StudyCanvasState extends State<StudyCanvas>
               SizedBox(height: 56, child: _selectionToolbar(docked: true)),
           ],
         );
+        final overlay = widget.fullscreen
+            ? widget.video
+            : reader != null ? _materialReader(reader) : null;
+        return Stack(fit: StackFit.expand, children: [
+          TickerMode(enabled: overlay == null, child: ExcludeFocus(
+            excluding: overlay != null,
+            child: Offstage(
+              offstage: overlay != null,
+              child: DropTarget(
+                enable: overlay == null && !_importing &&
+                    ModalRoute.isCurrentOf(context) == true,
+                onDragDone: (details) {
+                  final files = details.files.whereType<DropItemFile>().toList();
+                  if (files.isNotEmpty) {
+                    unawaited(_importDroppedFiles(files, _world(details.localPosition)));
+                  }
+                },
+                child: canvas,
+              ),
+            ),
+          )),
+          if (previousReader != null)
+            TickerMode(enabled: false, child: ExcludeFocus(
+              child: Offstage(offstage: true, child: _materialReader(previousReader)),
+            )),
+          if (overlay != null) overlay,
+        ]);
       },
     );
   }
@@ -2008,17 +2274,41 @@ class StudyCanvasState extends State<StudyCanvas>
 
   Widget _canvas(StudyDocument d) {
     final view = _visibleWorld;
-    _previewVideoId = d.cards.where((card) => card.type == 'video' && !card.collapsed &&
-        d.visible(card.layer) && card.visualBounds.overlaps(view)).firstOrNull?.id;
+    final videos = d.cards.where((c) => c.type == 'video');
+    _multipleLocalVideos = videos.take(2).length == 2;
+    _previewVideoId = _multipleLocalVideos ? null : videos.where((card) =>
+        !card.collapsed && d.visible(card.layer) && card.visualBounds.overlaps(view)).firstOrNull?.id;
     final cardIds = d.cards.map((c) => c.id).toSet();
     _cardHeaderActions.removeWhere((id, _) => !cardIds.contains(id));
     _pdfBodies.removeWhere((id, _) => !cardIds.contains(id));
     _localVideoKeys.removeWhere((id, _) => !cardIds.contains(id));
+    _documentReaders.removeWhere((id, _) => !cardIds.contains(id));
     _localVideoTimes.removeWhere((id, _) => !cardIds.contains(id));
     final stage = _visibleWorld.inflate(
       math.max(_viewport.width, _viewport.height) / d.zoom,
     );
     _stageRect = stage;
+    // Budget the temporary textures together. Very large or offscreen cards
+    // stay live. Video textures stay attached to their own compositor.
+    var remainingPixels = 6 * 1024 * 1024.0;
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    Widget cardContents(StudyCard c) {
+      final child = _card(c);
+      if (defaultTargetPlatform != TargetPlatform.android ||
+          !(const {'text', 'pdf', 'pdfdoc', 'conversation'}.contains(c.type))) {
+        return child;
+      }
+      final size = c.contentRect.size / c.contentScale;
+      // A zoomed-out card needs only its on-screen resolution. Freeze the
+      // raster scale for the gesture so each pointer sample can reuse it.
+      final ratio = pixelRatio * math.min(1.0, (_pinchZoom ?? d.zoom) * c.contentScale);
+      final pixels = size.width * size.height * ratio * ratio;
+      final capture = _pdfPinching && c.visualBounds.overlaps(view) &&
+          pixels <= remainingPixels && size.longestSide * ratio <= 4096;
+      if (capture) remainingPixels -= pixels;
+      return _PinchCardPreview(active: capture, pixelRatio: ratio, child: child);
+    }
+
     return RepaintBoundary(
       key: _inputSurface,
       child: ClipRect(
@@ -2135,7 +2425,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                         ),
                                       ),
                                     ),
-                                    for (final c in d.cards.where(
+                                    for (final c in [...d.cards, if (_newText) _textCard!].where(
                                       (a) =>
                                           a.onCanvas &&
                                           d.visible(a.layer) &&
@@ -2169,7 +2459,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                                     height:
                                                         c.contentRect.height /
                                                         c.contentScale,
-                                                    child: _card(c),
+                                                    child: cardContents(c),
                                                   ),
                                                 ),
                                               ),
@@ -2200,6 +2490,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                                 _inlinePDF,
                                                 _dark,
                                               );
+                                              if (ink.isEmpty) return const SizedBox.shrink();
                                               final tail = preview
                                                   ? 0
                                                   : ink.length ~/ 64 * 64;
@@ -2425,7 +2716,100 @@ class StudyCanvasState extends State<StudyCanvas>
     );
   }
 
+  String _cardHeader(StudyCard card) {
+    if (card.headerTitle.isNotEmpty) return card.headerTitle;
+    if (card.passageAside) return _asideLabel(card);
+    if (card.type == 'pdf' && card.pdfColumn.isNotEmpty) {
+      return l10n.studyCardPdfPage(card.title, card.page, card.pageCount);
+    }
+    return card.title;
+  }
+
+  Future<String?> _askCardTitle(String initial) async {
+    var title = initial;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        void submit() {
+          final value = title.trim();
+          if (value.isNotEmpty && value.runes.length <= 240) Navigator.pop(ctx, value);
+        }
+        return StatefulBuilder(builder: (context, rebuild) => AlertDialog(
+          title: Text(l10n.commonRename),
+          content: TextFormField(
+            initialValue: initial,
+            autofocus: true,
+            maxLength: 240,
+            onChanged: (value) => rebuild(() => title = value),
+            onFieldSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.commonCancel)),
+            FilledButton(onPressed: title.trim().isEmpty || title.trim().runes.length > 240 ? null : submit, child: Text(l10n.commonSave)),
+          ],
+        ));
+      },
+    );
+  }
+
+  Future<void> _renameCard(StudyCard card) async {
+    final d = document!;
+    final initial = _cardHeader(card);
+    final value = await _askCardTitle(initial);
+    if (!mounted || document != d || !d.cards.contains(card) || !d.editable(card.layer) ||
+        value == null || value == initial) return;
+    d.checkpoint();
+    card.headerTitle = value;
+    if (card.collapsed && card.passageLinked) _fitFoldedAside(card);
+    d.changed();
+  }
+
+  String _asideLabel(StudyCard card) {
+    final question = _threadSummary[card.id]?['first'] as String?;
+    return question == null || question.isEmpty
+        ? l10n.studyHandoutAside
+        : '${l10n.studyHandoutAside} · $question';
+  }
+
+  void _fitFoldedAside(StudyCard card) {
+    card.rect = StudyCardTransform(card).withLayoutHeight(_asideCollapsedHeight);
+    final expanded = card.unfoldedLayoutWidth ??= card.contentRect.width / card.contentScale;
+    final title = TextPainter(
+      text: TextSpan(text: _cardHeader(card), style: Theme.of(context).textTheme.labelLarge),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout(maxWidth: 288);
+    // Reserve the same button widths the header lays out on every platform.
+    final chrome = Space.md + 16 + Space.sm * 2 + _passageActionWidth * (card.sources.isEmpty ? 2 : 3);
+    final width = math.min(expanded, title.width.ceilToDouble() + chrome + 2);
+    title.dispose();
+    if ((width * card.contentScale - card.contentRect.width).abs() > .01) {
+      card.rect = card.withLayoutWidth(width);
+    }
+  }
+
   void _setCardCollapsed(StudyCard card, bool collapsed) {
+    if (card.passageLinked) {
+      if (collapsed && _editingPassage == card.id) {
+        _editingPassage = null;
+        _passageEditCheckpoint = null;
+      }
+      if (!collapsed && card.unfoldedLayoutWidth != null) {
+        card.rect = card.withLayoutWidth(card.unfoldedLayoutWidth!);
+        card.unfoldedLayoutWidth = null;
+      }
+      card.rect = StudyCardTransform(card).withLayoutHeight(
+        collapsed
+            ? _asideCollapsedHeight
+            : card.fitsAsideHeight
+            ? _asideOpeningHeight
+            : card.expandedH / card.contentScale,
+      );
+      card.collapsed = collapsed;
+      if (collapsed) _fitFoldedAside(card);
+      return;
+    }
     if (collapsed) card.expandedH = card.rect.height;
     final minHeight = card.type == 'conversation' ? 160.0 : 240.0;
     card
@@ -2437,6 +2821,62 @@ class StudyCanvasState extends State<StudyCanvas>
         collapsed ? 60 : math.max(minHeight, card.expandedH),
       );
   }
+
+  void _fitAsideHeight(StudyCard card, double bodyHeight) {
+    final d = document;
+    if (!mounted ||
+        _disposed ||
+        _transformSession != null ||
+        card.collapsed ||
+        !card.fitsAsideHeight ||
+        d?.cards.contains(card) != true) {
+      return;
+    }
+    final transform = StudyCardTransform(card);
+    final rect = transform.withLayoutHeight(
+      (_cardHeaderHeight + bodyHeight).clamp(card.passageNote ? _cardHeaderHeight + 24 : _asideMinHeight, _asideMaxHeight),
+    );
+    final fittedHeight = card.quarterTurns.isEven ? rect.height : rect.width;
+    if ((card.contentRect.height - fittedHeight).abs() <= .5 * card.contentScale) {
+      return;
+    }
+    _update(() {
+      card.rect = rect;
+      if (_selection.contains(card.id)) {
+        _selectionBounds = _boundsOfSelection();
+        if (_selectionReady) _regionSelection = _selectionBounds;
+      }
+    });
+    _scene.value++;
+  }
+
+  Widget _plainCardText(StudyCard c) => SingleChildScrollView(
+    key: ValueKey('${c.id}:$_cardTextEpoch'),
+    padding: EdgeInsets.all(c.passageNote ? Space.md : 20),
+    child: Align(
+      alignment: Alignment.topLeft,
+      child: SelectableText(
+        c.text,
+        onSelectionChanged: (selection, cause) {
+          if (!selection.isCollapsed) {
+            _selection
+              ..clear()
+              ..add(c.id);
+            _detail.clear();
+            _detail
+              ..objectId = c.id
+              ..start = selection.start
+              ..end = selection.end;
+          }
+        },
+        style: TextStyle(
+          fontSize: 16,
+          height: 1.65,
+          color: StudyChrome.of(context).paperInk,
+        ),
+      ),
+    ),
+  );
 
   Widget _card(StudyCard c) {
     final d = document!,
@@ -2452,20 +2892,39 @@ class StudyCanvasState extends State<StudyCanvas>
         width: selected ? 2 : 1,
       ),
     );
-    Widget action(String tooltip, IconData icon, VoidCallback? onPressed) =>
-        IconButton(
-          tooltip: tooltip,
-          onPressed: onPressed,
-          iconSize: 16,
-          visualDensity: VisualDensity.compact,
-          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-          padding: EdgeInsets.zero,
-          color: cs.onSurfaceVariant,
-          icon: Icon(icon),
-        );
+    Widget action(String tooltip, IconData icon, VoidCallback? onPressed) {
+      final button = IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        iconSize: 16,
+        visualDensity: VisualDensity.compact,
+        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+        padding: EdgeInsets.zero,
+        color: cs.onSurfaceVariant,
+        icon: Icon(icon),
+      );
+      return c.passageLinked
+          ? SizedBox(width: _passageActionWidth, child: button)
+          : button;
+    }
     final pdfColumn = c.type == 'pdfdoc' && c.pdfColumn.isNotEmpty;
+    final aside = c.passageAside;
+    final fitAside = !c.collapsed && c.fitsAsideHeight;
+    Widget titleLabel(String label, {String? tooltip}) => Tooltip(
+      message: tooltip ?? label,
+      ignorePointer: true,
+      waitDuration: const Duration(milliseconds: 600),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge
+            ?.copyWith(color: chrome.ink),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
+      (l10n.commonRename, Icons.drive_file_rename_outline, () => _renameCard(c)),
       if (!c.generated)
         for (final source in c.sources.skip(c.passageLinked ? 1 : 0))
           (
@@ -2475,7 +2934,17 @@ class StudyCanvasState extends State<StudyCanvas>
             Icons.link,
             () => _focusSource(source),
           ),
-      if (!pdfColumn && c.quarterTurns == 0)
+      if (c.passageLinked && !c.fitsAsideHeight && !c.collapsed && d.canTransformCard(c))
+        (
+          l10n.studyCardFitContent,
+          Icons.fit_screen_outlined,
+          () {
+            d.checkpoint();
+            c.expandedH = 0;
+            d.changed();
+          },
+        ),
+      if (!c.passageLinked && !pdfColumn && c.quarterTurns == 0)
         (
           c.collapsed ? l10n.studyCardExpand : l10n.studyCardCollapse,
           c.collapsed ? Icons.unfold_more_rounded : Icons.unfold_less_rounded,
@@ -2497,23 +2966,32 @@ class StudyCanvasState extends State<StudyCanvas>
           Icons.edit_outlined,
           () => _editKnowledge(c),
         ),
+      if (c.passageNote) ...[
+        (l10n.studyEditAnnotation, Icons.edit_outlined, () {
+          if (c.collapsed) {
+            d.checkpoint();
+            _setCardCollapsed(c, false);
+            d.changed();
+          }
+          _update(() {
+            _editingPassage = c.id;
+            _passageEditCheckpoint = null;
+          });
+        }),
+        (l10n.studyThreadNew, Icons.add_comment_outlined,
+            () => _chooseConversation(c, newConversation: true)),
+      ],
       if (c.type == 'text' && !c.passageNote)
         (
           c.markdownReader ? l10n.studyEditMarkdown : l10n.studyEditText,
           Icons.edit_outlined,
           () => _text(c),
         ),
-      if (c.type != 'lecture' && !pdfColumn && d.canTransformCard(c))
+      if (d.canRemoveCard(c))
         (
           l10n.studyCardDelete,
           Icons.delete_outline_rounded,
-          () {
-            d.checkpoint();
-            d.cards.removeWhere((v) => v.id == c.id);
-            d.connections.removeWhere((v) => v.from == c.id || v.to == c.id);
-            d.strokes.removeWhere((v) => v.anchor == c.id);
-            d.changed();
-          },
+          () => _removeCards({c.id}),
         ),
     ];
     return IgnorePointer(
@@ -2539,10 +3017,10 @@ class StudyCanvasState extends State<StudyCanvas>
         child: Column(
           children: [
             SizedBox(
-              height: 36,
+              height: _cardHeaderHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: c.type == 'lecture'
+                  color: c.type == 'lecture' || c.type == 'video'
                       ? chrome.accentSoft
                       : Colors.transparent,
                   border: Border(
@@ -2554,11 +3032,12 @@ class StudyCanvasState extends State<StudyCanvas>
                 child: Row(
                   children: [
                     const SizedBox(width: Space.md),
-                    if (c.type != 'text') ...[
+                    if (c.type != 'text' || c.passageNote) ...[
                       Icon(
                         switch (c.type) {
                           'lecture' || 'video' => Icons.smart_display_outlined,
                           'conversation' => Icons.forum_outlined,
+                          'text' => Icons.sticky_note_2_outlined,
                           'image' => Icons.image_outlined,
                           'note' ||
                           'explanation' ||
@@ -2574,24 +3053,14 @@ class StudyCanvasState extends State<StudyCanvas>
                       const SizedBox(width: Space.sm),
                     ],
                     Expanded(
-                      child: Tooltip(
-                        message: c.title,
-                        ignorePointer: true,
-                        waitDuration: const Duration(milliseconds: 600),
-                        child: Text(
-                          c.type == 'pdf' && c.pdfColumn.isNotEmpty
-                              ? l10n.studyCardPdfPage(
-                                  c.title,
-                                  c.page,
-                                  c.pageCount,
-                                )
-                              : c.title,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: chrome.ink),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      child: aside
+                          ? ValueListenableBuilder<int>(
+                              valueListenable: _threadTick,
+                              builder: (_, _, _) {
+                                return titleLabel(_cardHeader(c));
+                              },
+                            )
+                          : titleLabel(_cardHeader(c)),
                     ),
                     Row(
                       key: _cardHeaderActions.putIfAbsent(
@@ -2600,6 +3069,9 @@ class StudyCanvasState extends State<StudyCanvas>
                       ),
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (_canOpenMaterial(c))
+                          action(l10n.studyOpenMaterial, Icons.open_in_full_rounded,
+                            () => _openMaterialReader(c)),
                         if (_inlinePDF && c.type == 'pdfdoc')
                           PopupMenuButton<String>(
                             tooltip: l10n.pdfCardView,
@@ -2641,22 +3113,21 @@ class StudyCanvasState extends State<StudyCanvas>
                             Icons.reply_rounded,
                             () => _focusSource(c.sources.first),
                           ),
-                        if (c.passageNote)
+                        if (c.passageLinked)
                           action(
-                            _editingPassage == c.id
-                                ? l10n.commonSave
-                                : l10n.studyEditAnnotation,
-                            _editingPassage == c.id
-                                ? Icons.check
-                                : Icons.edit_outlined,
-                            () => _update(() {
-                              _editingPassage = _editingPassage == c.id
-                                  ? null
-                                  : c.id;
-                              _passageEditCheckpoint = null;
-                            }),
+                            c.collapsed
+                                ? l10n.studyCardExpand
+                                : l10n.commonCollapse,
+                            c.collapsed
+                                ? Icons.keyboard_arrow_down_rounded
+                                : Icons.keyboard_arrow_up_rounded,
+                            () {
+                              d.checkpoint();
+                              _setCardCollapsed(c, !c.collapsed);
+                              d.changed();
+                            },
                           ),
-                        if (c.type != 'conversation')
+                        if (c.type != 'conversation' && !c.passageNote)
                           Draggable<String>(
                             data: c.id,
                             feedback: Material(
@@ -2682,7 +3153,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                         maxWidth: 220,
                                       ),
                                       child: Text(
-                                        c.title,
+                                        _cardHeader(c),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -2702,9 +3173,33 @@ class StudyCanvasState extends State<StudyCanvas>
                               ),
                             ),
                           ),
-                        if (more.isNotEmpty)
+                        if (aside || more.isNotEmpty)
                           MenuAnchor(
                             menuChildren: [
+                              if (aside)
+                                Builder(
+                                  builder: (context) {
+                                    final thread =
+                                        _conversationKeys[c.id]?.currentState;
+                                    final enabled =
+                                        thread?.usesCourseSources ?? false;
+                                    return MenuItemButton(
+                                      leadingIcon: Icon(
+                                        enabled
+                                            ? Icons.check_box_outlined
+                                            : Icons.check_box_outline_blank,
+                                        size: 18,
+                                      ),
+                                      onPressed:
+                                          thread == null ||
+                                              thread.data == null ||
+                                              thread.busy
+                                          ? null
+                                          : () => thread.setCourseScope(!enabled),
+                                      child: Text(l10n.studyCourseScopeChip),
+                                    );
+                                  },
+                                ),
                               for (final (label, icon, run) in more)
                                 MenuItemButton(
                                   leadingIcon: Icon(icon, size: 18),
@@ -2727,8 +3222,17 @@ class StudyCanvasState extends State<StudyCanvas>
             ),
             Expanded(
               child: OverflowBox(
-                minHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
-                maxHeight: c.collapsed ? math.max(480, c.expandedH) - 56 : null,
+                alignment: c.passageLinked ? Alignment.topCenter : Alignment.center,
+                minHeight: fitAside
+                    ? 0
+                    : c.collapsed
+                    ? math.max(480, c.expandedH) - 56
+                    : null,
+                maxHeight: fitAside
+                    ? _asideMaxHeight - _cardHeaderHeight
+                    : c.collapsed
+                    ? math.max(480, c.expandedH) - 56
+                    : null,
                 child: Offstage(
                   offstage: c.collapsed,
                   child: IgnorePointer(
@@ -2736,16 +3240,8 @@ class StudyCanvasState extends State<StudyCanvas>
                         _tool == StudyTool.region ||
                         (_tool == StudyTool.pan && c.readingSurface),
                     child: switch (c.type) {
-                      'pdfdoc' when _inlinePDF && !c.collapsed => _CanvasPdf(
-                        key: _pdfBodies.putIfAbsent(
-                          c.id,
-                          () => GlobalKey<_CanvasPdfState>(),
-                        ),
-                        owner: this,
-                        card: c,
-                      ),
-                      'pdfdoc' when _inlinePDF => const SizedBox.shrink(),
-                      'pdfdoc' => _PDFBody(owner: this, card: c),
+                      _ when _textCard == c && _focusedMaterial != c => _textEditor(c),
+                      'lecture' || 'video' || 'pdfdoc' => _cardMaterial(c),
                       'conversation' when c.passageAside => _ConversationBody(
                         key: _conversationKeys.putIfAbsent(c.id, () => GlobalKey<_ConversationBodyState>()),
                         owner: this, card: c, active: false,
@@ -2754,46 +3250,12 @@ class StudyCanvasState extends State<StudyCanvas>
                           'visuals': <Map<String,dynamic>>[],
                         }),
                       ),
-                      'text' when c.passageNote && _editingPassage == c.id => _passageEditor(c),
+                      'text' when c.passageNote => _AnnotationMeasure(
+                        onHeight: (height) => _fitAsideHeight(c, height),
+                        child: _editingPassage == c.id ? _passageEditor(c) : _plainCardText(c),
+                      ),
                       'conversation' => _ThreadNode(owner: this, card: c),
-                      'lecture' => Column(
-                        children: [
-                          Expanded(
-                            child: _snapshotVideo(c, _videoInput(widget.video)),
-                          ),
-                          TextButton.icon(
-                            key: const ValueKey('study-video-shelf'),
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 48),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                            ),
-                            onPressed: () => _toggleShelf(_ShelfTab.transcript),
-                            icon: const Icon(
-                              Icons.subtitles_outlined,
-                              size: 16,
-                            ),
-                            label: Text(
-                              l10n.studyShelfFromVideo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      'pdf' when _pdfPageCard(c) => _CanvasPdf(
-                        key: _pdfBodies.putIfAbsent(
-                          c.id,
-                          () => GlobalKey<_CanvasPdfState>(),
-                        ),
-                        owner: this,
-                        card: c,
-                        root: document!.cards.firstWhere(
-                          (p) => p.id == c.pdfColumn,
-                        ),
-                      ),
+                      'pdf' when _pdfPageCard(c) => _cardMaterial(c),
                       'image' || 'pdf' => Image(
                         image: ResizeImage(
                           NetworkImage(widget.api.fileUrl(c.path)),
@@ -2805,37 +3267,7 @@ class StudyCanvasState extends State<StudyCanvas>
                         errorBuilder: (_, error, stack) =>
                             Center(child: Text(l10n.studyImageFailed)),
                       ),
-                      'video' => _snapshotVideo(
-                        c,
-                        _videoInput(
-                          _LocalVideo(
-                            key: _localVideoKeys.putIfAbsent(
-                              c.id,
-                              () => GlobalKey<_LocalVideoState>(),
-                            ),
-                            url: c.path.isEmpty
-                                ? widget.api.studyMediaUrl(
-                                    widget.ctl.lectureId,
-                                    c.id,
-                                  )
-                                : widget.api.fileUrl(c.path),
-                            prepare: flush,
-                            preview: _previewVideoId == c.id || _bookmarks.lastOrNull?.video == c.id,
-                            initialMs: _localVideoTimes[c.id] ?? 0,
-                            onPosition: (ms) => _localVideoTimes[c.id] = ms,
-                          ),
-                        ),
-                      ),
-                      'text' when c.lessonNote => _lessonReader(c),
-                      'text' when c.readerCard => SingleChildScrollView(
-                        key: PageStorageKey('study-reader/${c.id}'),
-                        primary: false,
-                        physics: _pdfPinching
-                            ? const NeverScrollableScrollPhysics()
-                            : null,
-                        padding: const EdgeInsets.all(18),
-                        child: _markdownPassage(c, c.text),
-                      ),
+                      'text' when c.markdownReader => _cardMaterial(c),
                       'note' ||
                       'explanation' ||
                       'knowledge' ||
@@ -2862,49 +3294,10 @@ class StudyCanvasState extends State<StudyCanvas>
                           },
                         ),
                       ),
-                      _ => SingleChildScrollView(
-                        key: ValueKey('${c.id}:$_cardTextEpoch'),
-                        padding: const EdgeInsets.all(20),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: SelectableText(
-                            c.text,
-                            onSelectionChanged: (selection, cause) {
-                              if (!selection.isCollapsed) {
-                                _selection
-                                  ..clear()
-                                  ..add(c.id);
-                                _detail.clear();
-                                _detail
-                                  ..objectId = c.id
-                                  ..start = selection.start
-                                  ..end = selection.end;
-                              }
-                            },
-                            style: TextStyle(
-                              fontSize: 16,
-                              height: 1.65,
-                              color: chrome.paperInk,
-                            ),
-                          ),
-                        ),
-                      ),
+                      _ => _plainCardText(c),
                     },
                   ),
                 ),
-              ),
-            ),
-            SizedBox(
-              height: 16,
-              child: Align(
-                alignment: Alignment.bottomRight,
-                child: c.quarterTurns != 0
-                    ? null
-                    : Icon(
-                        Icons.south_east,
-                        size: 12,
-                        color: selected ? chrome.accent : chrome.inkFaint,
-                      ),
               ),
             ),
           ],
@@ -2920,12 +3313,16 @@ class _LocalVideo extends StatefulWidget {
     required this.url,
     required this.initialMs,
     required this.prepare,
+    required this.focused,
+    required this.api,
+    required this.title,
     required this.preview,
     required this.onPosition,
   });
-  final String url;
+  final String url, title;
+  final Api api;
   final int initialMs;
-  final bool preview;
+  final bool preview, focused;
   final Future<bool> Function() prepare;
   final ValueChanged<int> onPosition;
   @override
@@ -2933,14 +3330,12 @@ class _LocalVideo extends StatefulWidget {
 }
 
 class _LocalVideoState extends State<_LocalVideo> {
-  late final player = Player();
-  late final controller = VideoController(player);
-  StreamSubscription? _errors;
+  LecturePlayer? _session;
   StreamSubscription? _positions;
-  bool _failed = false;
+  bool _failed = false, _fullscreen = false;
   Future<bool>? _ready;
-  bool get isPlaying => _ready != null && player.state.playing;
-  int? get positionMs => _ready == null ? null : player.state.position.inMilliseconds;
+  bool get isPlaying => _session?.playing == true;
+  int? get positionMs => _session?.positionMs;
 
   @override
   void initState() {
@@ -2954,28 +3349,17 @@ class _LocalVideoState extends State<_LocalVideo> {
     if (widget.preview && _ready == null) _ensureOpen();
   }
 
-  Future<bool> _ensureOpen() => _ready ??= _subscribeAndOpen();
-  Future<bool> _subscribeAndOpen() {
-    _errors = player.stream.error.listen((error) {
-      if (mounted) setState(() => _failed = true);
-    });
-    _positions = player.stream.position.listen(
-      (p) => widget.onPosition(p.inMilliseconds),
-    );
-    return _open();
-  }
-
+  Future<bool> _ensureOpen() => _ready ??= _open();
   Future<bool> _open() async {
     try {
-      // The media route resolves saved canvas objects. Publishing the reference
-      // must finish before the player requests its authenticated URL.
       if (!await widget.prepare()) throw const FormatException('Save failed');
       if (!mounted) return false;
-      await controller.platform.future;
+      final prefs = context.read<UiPrefs?>() ?? await UiPrefs.load();
       if (!mounted) return false;
-      await player.open(Media(widget.url), play: false);
-      if (mounted && widget.initialMs > 0)
-        await player.seek(Duration(milliseconds: widget.initialMs));
+      final ctl = _session ??= LecturePlayer(api: widget.api, lectureId: '', prefs: prefs);
+      _positions ??= ctl.player.stream.position.listen((p) => widget.onPosition(p.inMilliseconds));
+      await ctl.openMaterial(Source(label: widget.title, uri: widget.url, local: true), widget.initialMs);
+      if (mounted) setState(() {});
       return mounted && !_failed;
     } catch (_) {
       if (mounted) setState(() => _failed = true);
@@ -2983,73 +3367,75 @@ class _LocalVideoState extends State<_LocalVideo> {
     }
   }
 
+  Future<void> pause() async => _session?.pause();
+
+  Future<void> play({int? ticket}) async {
+    final request = ticket ?? PlaybackFocus.instance.request();
+    if (await _ensureOpen() && mounted) await _session?.play(ticket: request);
+  }
+
   Future<void> seekPaused(int milliseconds) async {
     final pending = _ensureOpen();
     if (mounted) setState(() {});
     if (!await pending || !mounted || _failed)
       throw FormatException(l10n.studyVideoUnavailable);
-    await player.seek(Duration(milliseconds: milliseconds));
-    await player.pause();
+    await _session!.player.seek(Duration(milliseconds: milliseconds));
+    await _session!.pause();
   }
 
   @override
   void dispose() {
-    _errors?.cancel();
     _positions?.cancel();
-    if (_ready != null) unawaited(player.dispose());
+    if (_session case final ctl?) unawaited(ctl.close());
     super.dispose();
+  }
+
+  Future<void> _openFullscreen() async {
+    if (_fullscreen || _session == null) return;
+    setState(() => _fullscreen = true);
+    try {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (route) => Scaffold(backgroundColor: Colors.black, body: PlayerView(
+          ctl: _session!, fullscreen: true,
+          onBack: () => Navigator.pop(route), onFullscreen: () => Navigator.pop(route),
+        )),
+      ));
+    } finally {
+      if (mounted) setState(() => _fullscreen = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) => _ready == null
-      ? Center(child: IconButton(
-          tooltip: l10n.playerPlayTooltip,
-          icon: const Icon(Icons.play_circle_outline),
-          onPressed: () async {
-            final pending = _ensureOpen();
-            setState(() {});
-            if (await pending && mounted) await player.play();
+      ? EmbeddedVideoPreview(
+          onPlay: play,
+          onExpand: () async {
+            if (await _ensureOpen() && mounted) await _openFullscreen();
           },
-        ))
-      : !_failed
-      ? MaterialDesktopVideoControlsTheme(
-          normal: const MaterialDesktopVideoControlsThemeData(
-            modifyVolumeOnScroll: false,
-            playAndPauseOnTap: false,
-            toggleFullscreenOnDoublePress: false,
-            primaryButtonBar: [],
-            topButtonBar: [],
-            buttonBarHeight: 48,
-            seekBarContainerHeight: 36,
-            bottomButtonBarMargin: EdgeInsets.zero,
-          ),
-          fullscreen: const MaterialDesktopVideoControlsThemeData(),
-          child: MaterialVideoControlsTheme(
-            normal: const MaterialVideoControlsThemeData(
-              volumeGesture: false,
-              brightnessGesture: false,
-              seekGesture: false,
-              seekOnDoubleTap: false,
-              speedUpOnLongPress: false,
-              primaryButtonBar: [],
-              topButtonBar: [],
-              bottomButtonBar: [
-                MaterialPlayOrPauseButton(),
-                MaterialPositionIndicator(),
-                Spacer(),
-                MaterialFullscreenButton(),
-              ],
-              buttonBarHeight: 48,
-              seekBarContainerHeight: 36,
-              bottomButtonBarMargin: EdgeInsets.zero,
-            ),
-            fullscreen: const MaterialVideoControlsThemeData(),
-            child: VideoCardHoldRegion(
-              bottomControlsHeight: 84,
-              child: Video(controller: controller),
-            ),
-          ),
         )
+      : !_failed
+      ? _session == null || _fullscreen
+          ? const SizedBox.shrink()
+          : widget.focused
+          ? CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.keyK): () => _session!.togglePlayback(),
+                const SingleActivator(LogicalKeyboardKey.space): () => _session!.togglePlayback(),
+                const SingleActivator(LogicalKeyboardKey.keyF): _openFullscreen,
+              },
+              child: Focus(autofocus: true, child: PlayerView(
+                ctl: _session!, fullscreen: false, onBack: null,
+                onFullscreen: _openFullscreen,
+              )),
+            )
+          : PlayerView(
+              ctl: _session!,
+              embedded: true,
+              fullscreen: false,
+              onBack: null,
+              onFullscreen: _openFullscreen,
+            )
       : Center(child: Text(l10n.studyLocalVideoError));
 }
 
@@ -3062,6 +3448,47 @@ Color studyPaperTone(int color, ColorScheme cs) =>
         cs.surfaceContainerLow,
       )
     : Color(color);
+
+/// Reuse the card pixels only while two fingers move the camera. Its live
+/// widget tree stays mounted so scroll position, selection and editing survive.
+class _PinchCardPreview extends StatefulWidget {
+  const _PinchCardPreview({required this.active, required this.pixelRatio, required this.child});
+  final double pixelRatio;
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_PinchCardPreview> createState() => _PinchCardPreviewState();
+}
+
+class _PinchCardPreviewState extends State<_PinchCardPreview> {
+  late final _controller = SnapshotController(allowSnapshotting: widget.active);
+
+  @override
+  void didUpdateWidget(_PinchCardPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.allowSnapshotting = widget.active;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: widget.active ? media.copyWith(devicePixelRatio: widget.pixelRatio) : media,
+      child: SnapshotWidget(
+        controller: _controller,
+        mode: SnapshotMode.permissive,
+        child: MediaQuery(data: media, child: widget.child),
+      ),
+    );
+  }
+}
 
 class _Paper extends CustomPainter {
   _Paper({

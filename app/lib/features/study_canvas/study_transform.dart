@@ -54,6 +54,18 @@ class StudyCardTransform {
     toWorld(Offset(layoutSize.width, layoutSize.height)),
     toWorld(Offset(0, layoutSize.height)),
   ];
+
+  /// Changes the local height while leaving the top edge in place.
+  Rect withLayoutHeight(double height) {
+    final worldHeight = math.max(24.0, height * card.contentScale);
+    return Rect.fromCenter(
+      center: toWorld(
+        Offset(layoutSize.width / 2, worldHeight / card.contentScale / 2),
+      ),
+      width: card.quarterTurns.isEven ? card.rect.width : worldHeight,
+      height: card.quarterTurns.isEven ? worldHeight : card.rect.height,
+    );
+  }
 }
 
 /// Selected geometry is previewed from one snapshot. No edit or history entry
@@ -85,10 +97,10 @@ class StudyTransformSession {
   late final bool allowed;
   double _scale = 1, _angle = 0;
   Offset _translation = Offset.zero;
-  Rect? _readingFrame;
+  Rect? _resizedFrame;
   bool _closed = false;
   bool get changed =>
-      (_readingFrame != null && _readingFrame != originals.single.rect) ||
+      (_resizedFrame != null && _resizedFrame != originals.single.rect) ||
       (_scale - 1).abs() > 1e-9 ||
       studyAngle(_angle).abs() > 1e-9 ||
       _translation.distance > 1e-9;
@@ -107,13 +119,12 @@ class StudyTransformSession {
     return value.clamp(lo, hi);
   }
 
-  bool get resizesReadingFrame =>
-      singleCard && originals.length == 1 && originals.single.markdownReader;
+  bool get resizesSingleCard => singleCard && originals.length == 1;
 
   void previewCorner(int corner, Offset delta) {
     if (!delta.dx.isFinite || !delta.dy.isFinite) return;
-    if (!resizesReadingFrame) {
-      throw StateError('Free resize requires one Markdown card');
+    if (!resizesSingleCard) {
+      throw StateError('Free resize requires one card');
     }
     final old = originals.single;
     final t = StudyCardTransform(old);
@@ -124,10 +135,16 @@ class StudyTransformSession {
     final dy = corner < 2 ? -1.0 : 1.0;
     final size = old.contentRect.size;
     final w = (size.width + dx * local.dx)
-        .clamp(math.min(size.width, 240 * old.contentScale), 100000.0)
+        .clamp(
+          math.max(24.0, math.min(size.width, 240 * old.contentScale)),
+          100000.0,
+        )
         .toDouble();
     final h = (size.height + dy * local.dy)
-        .clamp(math.min(size.height, 120 * old.contentScale), 100000.0)
+        .clamp(
+          math.max(24.0, math.min(size.height, 120 * old.contentScale)),
+          100000.0,
+        )
         .toDouble();
     final dw = w - size.width, dh = h - size.height;
     Offset offset(double x, double y) => Offset(
@@ -139,9 +156,9 @@ class StudyTransformSession {
       width: old.quarterTurns.isEven ? w : h,
       height: old.quarterTurns.isEven ? h : w,
     );
-    // Ink keeps its geometry relative to the reading frame's top-left.
+    // Canvas ink keeps its geometry relative to the card's top-left.
     _preview(
-      readingFrame: frame,
+      resizedFrame: frame,
       translation: offset(dx < 0 ? -dw : 0, dy < 0 ? -dh : 0),
     );
   }
@@ -156,7 +173,7 @@ class StudyTransformSession {
     double scale = 1,
     double angle = 0,
     Offset translation = Offset.zero,
-    Rect? readingFrame,
+    Rect? resizedFrame,
   }) {
     if (_closed ||
         !allowed ||
@@ -165,7 +182,7 @@ class StudyTransformSession {
         !translation.dx.isFinite ||
         !translation.dy.isFinite)
       return;
-    _readingFrame = readingFrame;
+    _resizedFrame = resizedFrame;
     _scale = limitScale(scale);
     _angle = angle;
     _translation = translation;
@@ -181,7 +198,7 @@ class StudyTransformSession {
       final card = document.cards.where((c) => c.id == old.id).firstOrNull;
       if (card == null) continue;
       card.rect =
-          readingFrame ??
+          resizedFrame ??
           Rect.fromCenter(
             center: map(old.rect.center),
             width: old.rect.width * _scale,
@@ -189,7 +206,13 @@ class StudyTransformSession {
           );
       card.contentScale = old.contentScale * _scale;
       card.rotation = studyAngle(old.rotation + angle);
-      card.expandedH = old.expandedH * _scale;
+      final height = card.contentRect.height;
+      card.expandedH =
+          resizedFrame != null &&
+              old.passageLinked &&
+              (height - old.contentRect.height).abs() > .5
+          ? height
+          : old.expandedH * _scale;
     }
     if (originalInk.isEmpty) return;
     final ink = {for (final s in originalInk) s.id: s};
@@ -239,10 +262,10 @@ class StudyTransformSession {
         scale: _scale,
         angle: _angle,
         translation: _translation,
-        readingFrame: _readingFrame,
+        resizedFrame: _resizedFrame,
       );
       if (originals.any((c) => (c.contentScale * _scale - 1).abs() > 1e-9))
-        document.formatVersion = 7;
+        document.formatVersion = math.max(format, 7);
       else if (_angle != 0 && originals.isNotEmpty)
         document.formatVersion = math.max(format, 6);
       document.changed();

@@ -54,6 +54,31 @@ func TestStudyCanvasPersistenceRevisionAndLimits(t *testing.T) {
 	}
 }
 
+func TestLectureCardHeaderAndRemovalPersist(t *testing.T) {
+	l, _ := reviewFixture(t)
+	ctx := t.Context()
+	d, err := l.StudyCanvas(ctx, "one")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Objects[0].HeaderTitle = "进程与线程"
+	d, err = l.SaveStudyCanvas(ctx, "one", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err = l.StudyCanvas(ctx, "one")
+	if err != nil || len(d.Objects) != 1 || d.Objects[0].HeaderTitle != "进程与线程" || d.Objects[0].Title != "课程视频" {
+		t.Fatal(err, d)
+	}
+	d.Objects = []StudyObject{}
+	if _, err = l.SaveStudyCanvas(ctx, "one", d); err != nil {
+		t.Fatal(err)
+	}
+	if d, err = l.StudyCanvas(ctx, "one"); err != nil || len(d.Objects) != 0 {
+		t.Fatal(err, d)
+	}
+}
+
 func TestStudyCanvasPositionLockVersion(t *testing.T) {
 	l, _ := reviewFixture(t)
 	ctx := t.Context()

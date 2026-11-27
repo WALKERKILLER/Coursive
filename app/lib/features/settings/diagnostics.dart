@@ -376,7 +376,7 @@ class _Summary extends StatelessWidget {
       child: Row(
         children: [
           AnimatedContainer(
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             width: 56,
             height: 56,

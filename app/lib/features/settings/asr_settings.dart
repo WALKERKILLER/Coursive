@@ -170,7 +170,7 @@ class _ChannelCard extends StatelessWidget {
     final lastErr = '${c['last_error'] ?? ''}';
     final local = c['local'] == true;
     return AnimatedOpacity(
-      duration: Motion.medium1,
+      duration: Motion.durationOf(context, Motion.medium1),
       opacity: enabled ? 1 : 0.6,
       child: Container(
         padding: const EdgeInsets.fromLTRB(Space.lg, Space.md, Space.sm, Space.md),
@@ -307,7 +307,7 @@ class _Mark extends StatelessWidget {
     if (icon != null && icon.endsWith('.svg')) {
       return TweenAnimationBuilder<double>(
         tween: Tween(end: busy ? 1 : 0),
-        duration: Motion.long2,
+        duration: Motion.durationOf(context, Motion.long2),
         curve: Motion.emphasized,
         builder: (_, t, child) => CustomPaint(painter: _MarkPainter(t, cs.surfaceContainerLowest), child: child),
         child: SizedBox.square(dimension: 40, child: Center(child: AsrMarkImage(mark!, size: 22, label: text))),
@@ -316,7 +316,7 @@ class _Mark extends StatelessWidget {
     if (icon != null) {
       return TweenAnimationBuilder<double>(
         tween: Tween(end: busy ? 1 : 0),
-        duration: Motion.long2,
+        duration: Motion.durationOf(context, Motion.long2),
         curve: Motion.emphasized,
         builder: (_, t, child) => ClipPath(clipper: _MarkClipper(t), child: child),
         child: Image.asset(icon, width: 40, height: 40, fit: BoxFit.cover, filterQuality: FilterQuality.medium, semanticLabel: text),
@@ -324,7 +324,7 @@ class _Mark extends StatelessWidget {
     }
     return TweenAnimationBuilder<double>(
       tween: Tween(end: busy ? 1 : 0),
-      duration: Motion.long2,
+      duration: Motion.durationOf(context, Motion.long2),
       curve: Motion.emphasized,
       builder: (_, t, child) => CustomPaint(
         painter: _MarkPainter(t, cs.secondaryContainer),

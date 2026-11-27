@@ -764,7 +764,7 @@ class _OutlineReviewState extends State<_OutlineReview> {
                     tween: Tween(
                       end: stats.total == 0 ? 0 : stats.reviewed / stats.total,
                     ),
-                    duration: Motion.medium2,
+                    duration: Motion.durationOf(context, Motion.medium2),
                     curve: Motion.emphasized,
                     builder: (_, v, _) => LinearProgressIndicator(
                       value: v,
@@ -1043,7 +1043,7 @@ class _OutlineReviewState extends State<_OutlineReview> {
               onExit: (_) => owner._previewEvidence(null),
               child: AnimatedContainer(
                 key: _rowKeys.putIfAbsent(id, GlobalKey.new),
-                duration: Motion.short4,
+                duration: Motion.durationOf(context, Motion.short4),
                 curve: Motion.standard,
                 margin: const EdgeInsets.only(bottom: Space.xxs),
                 padding: const EdgeInsets.fromLTRB(
@@ -1456,7 +1456,7 @@ class _OutlineReviewState extends State<_OutlineReview> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           AnimatedSize(
-            duration: Motion.short4,
+            duration: Motion.durationOf(context, Motion.short4),
             curve: Motion.standard,
             alignment: Alignment.topCenter,
             child: status == null
@@ -1608,7 +1608,7 @@ class _ReviewTick extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(Space.xxs),
           child: AnimatedSwitcher(
-            duration: Motion.short4,
+            duration: Motion.durationOf(context, Motion.short4),
             switchInCurve: Motion.emphasizedDecelerate,
             transitionBuilder: (child, a) => ScaleTransition(
               scale: Tween(begin: .6, end: 1.0).animate(a),

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -13,7 +14,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/core/api.dart';
-import '../lib/core/models.dart';
+import '../lib/core/models.dart' hide Source;
 import '../lib/features/player/lecture_player.dart';
 import '../lib/features/study_canvas/study_canvas.dart';
 import '../lib/features/study_canvas/study_document.dart';
@@ -21,10 +22,18 @@ import '../lib/features/study_canvas/study_canvas_surface.dart';
 import '../lib/theme/glass.dart';
 import '../lib/theme/prefs.dart';
 import '../lib/theme/theme.dart';
+import '../lib/widgets/timestamp_links.dart';
+import '../lib/widgets/md_reader.dart';
 
 class FixtureApi extends Api {
   FixtureApi(this.doc) : super('http://127.0.0.1:9', 'fixture');
   Map<String, dynamic> doc;
+  final responses = <String, dynamic>{};
+
+  @override
+  Future<dynamic> get(String path, [Map<String, String>? query]) async =>
+      responses.containsKey(path) ? responses[path] : super.get(path, query);
+
   final syncEvents = StreamController<Map<String, dynamic>>.broadcast();
   Map? savedDraft;
   int saveConflicts = 0;
@@ -159,13 +168,64 @@ class FixtureApi extends Api {
   };
 }
 
+class DropFixtureApi extends FixtureApi {
+  DropFixtureApi(super.doc);
+  final imports = <String>[];
+
+  @override
+  Future<dynamic> importStudyAsset(
+    String id, String name, Stream<List<int>> data, int length,
+  ) async {
+    expectSync((await data.single).length, length);
+    imports.add(name);
+    return {
+      'objects': [
+        StudyCard(
+          id: 'dropped-${imports.length}', type: 'text', layer: 'main',
+          rect: const Rect.fromLTWH(0, 0, 200, 320), title: name,
+        ).json(),
+      ],
+    };
+  }
+}
+
 class FixturePlayer implements LecturePlayer {
   @override
   final lectureId = 'fixture';
   @override
+  final course = Course({'id': 'test-course'});
+  @override
+  List<Note> notes = [];
+  @override
   Lecture? get lecture => null;
   @override
   List<CoursewareFile> get courseware => [];
+  @override
+  bool get mediaLoading => false;
+  @override
+  Object? get mediaError => null;
+  @override
+  Source? source;
+  int? requestedPlayback;
+  int? seekedMs;
+  @override
+  bool get playing => false;
+  @override
+  void seekTo(int ms) {
+    seekedMs = ms;
+    position.value = Duration(milliseconds: ms);
+  }
+
+  bool pausedAfterCitation = false;
+  @override
+  Future<void> playFrom(int ms, {int? ticket}) async {
+    requestedPlayback = ms;
+  }
+
+  @override
+  Future<void> pause() async {
+    pausedAfterCitation = true;
+  }
   @override
   List<Segment> get segments => [];
   @override
@@ -180,6 +240,7 @@ Future<GlobalKey<StudyCanvasState>> open(
   GlobalKey? capture,
   Brightness brightness = Brightness.light,
   bool resetPreferences = true,
+  bool seedLessonMaterials = false,
   LecturePlayer? player,
   Widget? video,
   Future<List<String>> Function()? clipboard,
@@ -201,6 +262,7 @@ Future<GlobalKey<StudyCanvasState>> open(
           child: StudyCanvas(
             key: key,
             api: api,
+            seedLessonMaterials: seedLessonMaterials,
             ctl: player ?? FixturePlayer(),
             video: video ?? const Text('视频占位'),
             readClipboardFiles: clipboard ?? () async => [],
@@ -239,6 +301,245 @@ class CountingStroke extends StudyStroke {
 }
 
 void main() {
+  testWidgets('the primary recording header supports rename, delete and undo', (t) async {
+    final player = FixturePlayer();
+    final doc = StudyDocument()..cards.add(StudyCard(id: 'lecture', type: 'lecture',
+        layer: 'main', rect: const Rect.fromLTWH(40, 120, 450, 280), title: '课程视频'));
+    final api = FixtureApi(doc.json());
+    final canvas = await open(t, api, player: player);
+    Future<void> menu() async {
+      await t.tap(find.byTooltip('更多').first);
+      await t.pumpAndSettle();
+    }
+    await menu();
+    await t.tap(find.text('重命名'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byType(TextFormField), '进程与线程');
+    await t.tap(find.text('保存'));
+    await t.pumpAndSettle();
+    expect(find.text('进程与线程'), findsOneWidget);
+    final current = canvas.currentState!.document!;
+    expect(StudyDocument.fromJson(current.json()).cards.single.headerTitle, '进程与线程');
+    expect(current.cards.single.title, '课程视频');
+    await menu();
+    await t.tap(find.text('删除模块'));
+    await t.pumpAndSettle();
+    expect(current.cards, isEmpty);
+    expect(player.pausedAfterCitation, isTrue);
+    await t.tap(find.byTooltip('撤销'));
+    await t.pumpAndSettle();
+    expect(find.text('进程与线程'), findsOneWidget);
+  });
+
+  testWidgets('Expanded Markdown keeps the reader and returns to the canvas', (t) async {
+    final doc = StudyDocument()
+      ..cards.clear()
+      ..cards.add(StudyCard(
+        id: 'handout', type: 'text', layer: 'main',
+        rect: const Rect.fromLTWH(100, 100, 620, 520),
+        title: '复习讲义.md', source: 'study-assets/fixture/source.md',
+        text: '# 概述\n\n${List.generate(80, (index) => '第 $index 段正文').join('\n\n')}\n\n## 练习\n问题',
+      ));
+
+    final key = await open(t, FixtureApi(doc.json()));
+    final initialCamera = key.currentState!.document!.camera;
+    final reader = find.byKey(const PageStorageKey('study-reader/handout'));
+    final scroll = find.descendant(of: reader, matching: find.byType(Scrollable)).first;
+    final scrollState = t.state<ScrollableState>(scroll);
+
+    await t.drag(reader, const Offset(0, -280));
+    await t.pumpAndSettle();
+    final offset = scrollState.position.pixels;
+    expect(offset, greaterThan(0));
+    await t.tap(find.byTooltip('展开阅读或播放'));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, '复习讲义.md'), findsOneWidget);
+    expect(find.byType(ReaderToc), findsOneWidget);
+    expect(find.byType(MarkdownReader), findsOneWidget);
+    await t.tap(find.byIcon(Icons.search_rounded));
+    await t.pumpAndSettle();
+    expect(find.byType(ReaderSearchBar), findsOneWidget);
+    await t.tap(find.byType(BackButton));
+    await t.pumpAndSettle();
+    expect(find.byType(AppBar), findsNothing);
+    expect(t.state<ScrollableState>(scroll), same(scrollState));
+    expect(scrollState.position.pixels, closeTo(offset, 1));
+    expect(key.currentState!.document!.camera, initialCamera);
+    expect(t.takeException(), isNull);
+  });
+
+
+  for (final expand in [false, true]) {
+    testWidgets('Recording card opens the course player via ${expand ? 'header' : 'poster'}', (t) async {
+      final player = FixturePlayer()
+        ..source = Source(label: 'fixture', uri: 'file:///recording.mp4');
+      final doc = StudyDocument()
+        ..cards.clear()
+        ..cards.addAll([
+          StudyCard(id: 'lecture', type: 'lecture', layer: 'main',
+              rect: const Rect.fromLTWH(40, 120, 450, 280), title: '主课堂'),
+          StudyCard(id: 'copy', type: 'video', layer: 'main',
+              rect: const Rect.fromLTWH(580, 120, 500, 320), title: '同节录像',
+              sourceLectureId: 'fixture', originalPath: 'lesson/recording.mp4'),
+        ]);
+      final api = FixtureApi(doc.json())..responses['/api/lectures/fixture'] = {
+        'assets': [
+          {'kind': 'video', 'path': 'lesson/recording.mp4'},
+        ],
+      };
+      final canvas = await open(t, api, player: player);
+      final camera = canvas.currentState!.document!.camera;
+      expect(find.text('字幕 · 资料 · 练习'), findsNothing);
+      final openCard = expand
+          ? find.descendant(
+              of: find.ancestor(of: find.text('同节录像'), matching: find.byType(Row)).first,
+              matching: find.byTooltip('展开阅读或播放'),
+            )
+          : find.byIcon(Icons.play_arrow_rounded);
+      await t.tap(openCard);
+      await t.pumpAndSettle();
+      expect(player.requestedPlayback, player.position.value.inMilliseconds);
+      expect(find.widgetWithText(AppBar, '主课堂'), findsOneWidget);
+      await t.tap(find.byType(BackButton));
+      await t.pumpAndSettle();
+      expect(canvas.currentState!.document!.camera, camera);
+      expect(find.text('同节录像'), findsOneWidget);
+    });
+  }
+
+  testWidgets('a canvas recording link pans to the recording and seeks in place', (t) async {
+    final player = FixturePlayer();
+    final doc = StudyDocument()..cards.clear()..cards.addAll([
+      StudyCard(id: 'lecture', type: 'lecture', layer: 'main',
+        rect: const Rect.fromLTWH(1900, 120, 450, 280), title: '课程录像'),
+      StudyCard(id: 'handout', type: 'text', layer: 'main',
+        rect: const Rect.fromLTWH(600, 120, 550, 420),
+        title: '讲义.md', source: 'study-assets/fixture/source.md',
+        text: '[课堂录像](coursive://lecture/fixture?t=83)'),
+    ]);
+    final key = await open(t, FixtureApi(doc.json()), player: player);
+    final canvas = key.currentState!;
+    final before = canvas.document!.camera;
+    await t.tap(find.byType(TimestampChip));
+    await t.pumpAndSettle();
+    expect(player.seekedMs, 83000);
+    expect(player.pausedAfterCitation, isTrue);
+    expect(player.requestedPlayback, isNull);
+    expect(canvas.document!.camera.dx, lessThan(before.dx));
+    expect(find.byType(AppBar), findsNothing);
+    final frame = find.byKey(const ValueKey('study-card/lecture'));
+    expect(t.getCenter(frame).dx, inInclusiveRange(0, 1600));
+    expect(canvas.returnFromSource(), isTrue);
+    await t.pumpAndSettle();
+    expect(canvas.document!.camera, before);
+  });
+
+  testWidgets('A recording citation returns to the expanded handout', (t) async {
+    final player = FixturePlayer()
+      ..source = Source(label: 'fixture', uri: 'file:///fixture.mp4');
+    final doc = StudyDocument()
+      ..cards.clear()
+      ..cards.addAll([
+        StudyCard(
+          id: 'lecture', type: 'lecture', layer: 'main',
+          rect: const Rect.fromLTWH(80, 120, 450, 280), title: '课程录像',
+        ),
+        StudyCard(
+          id: 'handout', type: 'text', layer: 'main',
+          rect: const Rect.fromLTWH(600, 120, 550, 420),
+          title: '讲义.md', source: 'study-assets/fixture/source.md',
+          text: '[回听原文](coursive://lecture/fixture?t=83)\n\n讲义正文',
+        ),
+      ]);
+
+    await open(t, FixtureApi(doc.json()), player: player);
+    final openHandout = find.descendant(
+      of: find.ancestor(of: find.text('讲义.md'), matching: find.byType(Row)).first,
+      matching: find.byTooltip('展开阅读或播放'),
+    );
+    await t.tap(openHandout);
+    await t.pumpAndSettle();
+    final reader = find.byType(MarkdownReader);
+    final scroll = find.descendant(of: reader, matching: find.byType(Scrollable)).first;
+    final scrollState = t.state<ScrollableState>(scroll);
+    await t.tap(find.byIcon(Icons.search_rounded));
+    await t.pumpAndSettle();
+    final search = find.descendant(of: find.byType(ReaderSearchBar), matching: find.byType(TextField));
+    await t.enterText(search, '正文');
+    await t.pumpAndSettle();
+    await t.tap(find.byType(TimestampChip));
+    await t.pumpAndSettle();
+    expect(player.requestedPlayback, 83000);
+    expect(find.widgetWithText(AppBar, '课程录像'), findsOneWidget);
+    await t.tap(find.byType(BackButton));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, '讲义.md'), findsOneWidget);
+    expect(t.state<ScrollableState>(scroll), same(scrollState));
+    expect(t.widget<TextField>(search).controller!.text, '正文');
+    expect(player.pausedAfterCitation, isTrue);
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets('First-open materials yield to a canvas saved on another device', (t) async {
+    final recording = StudyCard(
+      id: 'lecture', type: 'lecture', layer: 'main',
+      rect: const Rect.fromLTWH(0, 0, 880, 550), title: '课程录像',
+    );
+    final doc = StudyDocument()..cards.add(recording);
+    final api = FixtureApi(doc.json());
+    final note = {
+      'id': 'seed-note', 'course_id': 'test-course', 'lecture_id': 'fixture',
+      'title': '新的讲义', 'body': '原文',
+    };
+    api.responses['/api/notes/seed-note'] = note;
+    api.responses['/api/lectures/fixture/courseware'] = [];
+    final player = FixturePlayer()..notes = [Note(note)];
+
+    final key = await open(t, api, player: player, seedLessonMaterials: true);
+    expect(key.currentState!.document!.cards.any((c) => c.documentId == 'seed-note'), isTrue);
+    final remote = StudyDocument()
+      ..revision = 1
+      ..baseHash = 'remote'
+      ..cards.addAll([
+        recording,
+        StudyCard(
+          id: 'existing', type: 'text', layer: 'main',
+          rect: const Rect.fromLTWH(950, 30, 350, 220), title: '远端已编辑',
+        ),
+      ]);
+    api.doc = remote.json();
+    await t.pump(const Duration(seconds: 1));
+    await t.pumpAndSettle();
+    expect(key.currentState!.document!.cards.map((c) => c.id), ['lecture', 'existing']);
+    expect(api.doc['revision'], 1);
+    expect(api.savedDraft, isNull);
+  });
+
+  testWidgets('Dropping mixed files imports supported materials once', (t) async {
+    final api = DropFixtureApi(StudyDocument().json());
+    final key = await open(t, api);
+    final target = t.widget<DropTarget>(find.byType(DropTarget));
+    expect(target.enable, isTrue);
+    const point = Offset(500, 300);
+    target.onDragDone!(DropDoneDetails(
+      files: [
+        for (final name in ['课件.pdf', '复习 讲义.MD', '课堂.mp4', '略过.exe'])
+          DropItemFile.fromData(Uint8List.fromList([1]), path: name),
+      ],
+      localPosition: point,
+      globalPosition: point,
+    ));
+    await t.pumpAndSettle();
+    for (var i = 0; i < 12 && api.imports.length < 3; i++) {
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    await t.pumpAndSettle();
+    final notices = t.widgetList<SnackBar>(find.byType(SnackBar)).map((v) => (v.content as Text).data).toList();
+    expect(api.imports, ['课件.pdf', '复习 讲义.MD', '课堂.mp4'], reason: '$notices');
+    expect(key.currentState!.document!.cards.map((c) => c.title), api.imports);
+    expect((api.doc['objects'] as List).length, 3);
+  });
+
   testWidgets(
     'Command V reads Finder only on the active canvas outside text entry',
     (t) async {
@@ -347,51 +648,36 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
-  for (final scale in [.6, 1.0, 1.2]) {
-    testWidgets('video footer fits text at zoom $scale and opens shelf', (
+  testWidgets('video fills the card body and the top shelf button opens materials', (t) async {
+    final doc = StudyDocument()
+      ..camera = const Offset(100, 120)
+      ..cards.add(
+        StudyCard(
+          id: 'lecture',
+          type: 'lecture',
+          layer: 'main',
+          rect: const Rect.fromLTWH(100, 100, 700, 500),
+        ),
+      );
+    const videoKey = ValueKey('test-course-video');
+    await open(
       t,
-    ) async {
-      final doc = StudyDocument()
-        ..camera = const Offset(100, 120)
-        ..zoom = scale
-        ..cards.add(
-          StudyCard(
-            id: 'lecture',
-            type: 'lecture',
-            layer: 'main',
-            rect: const Rect.fromLTWH(100, 100, 700, 500),
-          ),
-        );
-      await open(t, FixtureApi(doc.json()));
-      final button = find.byKey(const ValueKey('study-video-shelf'));
-      final label = find.descendant(of: button, matching: find.byType(Text));
-      final bounds = t.getRect(button);
-      final text = t.getRect(label);
-      expect(bounds.contains(text.topLeft), isTrue);
-      expect(bounds.contains(text.bottomRight), isTrue);
-      final rich = find.descendant(of: label, matching: find.byType(RichText));
-      final paragraph = t.widget<RichText>(rich);
-      final render = t.renderObject<RenderParagraph>(rich);
-      final measured = TextPainter(
-        text: paragraph.text,
-        textDirection: paragraph.textDirection ?? TextDirection.ltr,
-        textScaler: paragraph.textScaler,
-        maxLines: 1,
-      )..layout(maxWidth: render.size.width);
-      expect(render.size.height, greaterThanOrEqualTo(measured.height));
-      measured.dispose();
-      expect(find.byTooltip('问 AI'), findsNothing);
-      expect(find.byKey(const ValueKey('study-ai-tab')), findsOneWidget);
-      await t.tap(find.byKey(const ValueKey('study-tool-select')));
-      await t.pumpAndSettle();
-      await t.tap(button);
-      await t.pumpAndSettle();
-      expect(find.text('这节课还没有字幕'), findsOneWidget);
-      expect(t.takeException(), isNull);
-      await t.pumpWidget(const SizedBox());
-      await t.pumpAndSettle();
-    });
-  }
+      FixtureApi(doc.json()),
+      video: const ColoredBox(key: videoKey, color: Colors.black),
+    );
+    final video = t.getRect(find.byKey(videoKey));
+    final card = t.getRect(find.byKey(const ValueKey('study-card/lecture')));
+    expect(video.bottom, closeTo(card.bottom, 1));
+    expect(video.top, greaterThan(card.top));
+    expect(find.text('字幕 · 资料 · 练习'), findsNothing);
+    await t.tap(find.byKey(const ValueKey('study-open-shelf')));
+    await t.pumpAndSettle();
+    expect(find.text('这节课还没有字幕'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+  });
+
   testWidgets(
     'paper appearance survives reopening without editing the course',
     (t) async {

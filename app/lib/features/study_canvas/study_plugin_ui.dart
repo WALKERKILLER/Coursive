@@ -48,21 +48,55 @@ extension _StudyPlugins on StudyCanvasState {
         top: o.rect.top - stage.top,
         width: o.rect.width,
         height: o.rect.height,
-        child: IgnorePointer(
-          child: RepaintBoundary(
-            child: RotatedBox(
-              quarterTurns: o.quarterTurns,
-              child: ClipRect(
-                child: active
-                    ? _StudyPluginCard(
-                        object: o,
-                        plugin: _pluginTitle(o.pluginId),
-                      )
-                    : SingleChildScrollView(
-                        physics: const NeverScrollableScrollPhysics(),
-                        child: CanvasFallback(model: o.fallback),
+        child: RepaintBoundary(
+          child: RotatedBox(
+            quarterTurns: o.quarterTurns,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                IgnorePointer(
+                  child: ClipRect(
+                    child: active
+                        ? _StudyPluginCard(
+                            object: o,
+                            plugin: _pluginTitle(o.pluginId),
+                          )
+                        : SingleChildScrollView(
+                            physics: const NeverScrollableScrollPhysics(),
+                            child: CanvasFallback(model: o.fallback),
+                          ),
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: PopupMenuButton<String>(
+                    tooltip: l10n.commonMore,
+                    icon: const Icon(Icons.more_horiz, size: 16),
+                    onSelected: (value) async {
+                      final d = document!;
+                      if (value == 'delete') {
+                        d.removePluginObject(o.id);
+                        return;
+                      }
+                      final title = await _askCardTitle(o.title);
+                      if (mounted && document == d && title != null) {
+                        d.renamePluginObject(o, title);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'rename',
+                        child: Text(l10n.commonRename),
                       ),
-              ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.studyCardDelete),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),

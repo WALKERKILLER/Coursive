@@ -153,10 +153,12 @@ extension _StudyModules on StudyCanvasState {
       builder: (c) => SimpleDialog(
         title: const Text('视频模块'),
         children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(c, 'lecture'),
-            child: const Text('定位当前课程视频'),
-          ),
+          if (!widget.standalone)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'lecture'),
+              child: Text(document!.cards.any((c) => c.type == 'lecture')
+                  ? '定位当前课程视频' : l10n.studyAddLectureCard),
+            ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(c, 'import'),
             child: const Text('导入本地视频'),
@@ -172,7 +174,20 @@ extension _StudyModules on StudyCanvasState {
     if (action == 'import') await _import();
     if (action == 'course') await _courseMaterials();
     if (action == 'lecture') {
-      final card = document!.cards.firstWhere((c) => c.type == 'lecture');
+      final d = document!;
+      var card = d.cards.where((c) => c.type == 'lecture').firstOrNull;
+      if (card == null) {
+        if (!d.editable(d.activeLayer)) {
+          _toast(l10n.studyLayerUnavailable);
+          return;
+        }
+        card = StudyCard(id: 'lecture', type: 'lecture', layer: d.activeLayer,
+            title: l10n.studyBoundLecture,
+            rect: Rect.fromCenter(center: _world(_viewport.center(Offset.zero)), width: 880, height: 550));
+        d.checkpoint();
+        d.cards.add(card);
+        d.changed();
+      }
       document!.camera =
           _viewport.center(Offset.zero) - card.rect.center * document!.zoom;
       _cameraChanged();
@@ -343,12 +358,21 @@ class _ConversationBodyState extends State<_ConversationBody> {
   bool busy = false, loading = false;
   bool _stopRequested = false;
   Timer? saveTimer, pollTimer;
+  int _asideAnswerVersion = 0;
   Future<void> saving = Future.value();
   Map<String, dynamic> get query =>
       jsonDecode(jsonEncode(data!['query'])) as Map<String, dynamic>;
   List get turns => data!['turns'] as List;
   StudyAnchor? get _asideAnchor =>
       widget.card.passageAside ? widget.card.sources.firstOrNull : null;
+  bool get usesCourseSources => data?['context_scope'] == 'course';
+
+  void setCourseScope(bool enabled) {
+    if (data == null || busy || usesCourseSources == enabled) return;
+    setState(() => data!['context_scope'] = enabled ? 'course' : 'selected');
+    unawaited(save());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -364,7 +388,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       if (!mounted) return;
       data = Map<String, dynamic>.from(value as Map);
       data!['draft_attachments'] ??= <dynamic>[];
-      data!['context_scope'] ??= 'selected';
+      data!['context_scope'] ??= widget.card.passageAside && !owner.widget.standalone && (data!['revision'] ?? 0) == 0 ? 'course' : 'selected';
       final draft = '${data!['draft'] ?? ''}', passage = _asideAnchor;
       // Earlier builds placed their suggested question in the editable draft.
       final generatedDraft =
@@ -413,11 +437,35 @@ class _ConversationBodyState extends State<_ConversationBody> {
   /// Tells this conversation's node how far it went.
   void _summarize() {
     if (data == null || owner._disposed) return;
-    owner._threadSummary[widget.card.id] = {
+    final summary = <String, Object>{
       'turns': turns.length,
       'last': turns.isEmpty ? '' : '${(turns.last as Map)['question'] ?? ''}',
     };
+    if (widget.card.passageAside && turns.isNotEmpty) {
+      var question = '${(turns.first as Map)['question'] ?? ''}';
+      // Older drafts embedded the source quotation before the question.
+      final quote = _asideAnchor?.quote ?? '';
+      final prefix = '「$quote」\n';
+      if (quote.isNotEmpty && question.startsWith(prefix)) {
+        question = question.substring(prefix.length);
+      }
+      summary['first'] = question.trim().replaceAll(RegExp(r'\s+'), ' ');
+    }
+    if (mapEquals(owner._threadSummary[widget.card.id], summary)) return;
+    owner._threadSummary[widget.card.id] = summary;
     owner._threadTick.value++;
+    if (widget.card.collapsed && widget.card.passageAside) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !widget.card.collapsed) return;
+        owner._update(() {
+          owner._fitFoldedAside(widget.card);
+          if (owner._selection.contains(widget.card.id)) {
+            owner._selectionBounds = owner._boundsOfSelection();
+          }
+        });
+        owner._scene.value++;
+      });
+    }
   }
 
   Future<bool> save() async {
@@ -833,7 +881,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
     try {
       final selection = query;
       final passage = _asideAnchor;
-      final agentQuestion =
+      final needsExcerpt =
           passage != null &&
               passage.quote.isNotEmpty &&
               (selection['objects'] as List?)?.contains(passage.objectId) ==
@@ -842,17 +890,19 @@ class _ConversationBodyState extends State<_ConversationBody> {
                   passage.objectId &&
               !(selection['selections'] as Map? ?? const {}).containsKey(
                 passage.objectId,
-              ) &&
-              !question.contains(passage.quote)
-          ? '「${passage.quote}」\n$question'
-          : question;
+              );
       final out = await owner.widget.api.startCanvasRun({
         'lecture_id': owner.widget.ctl.lectureId,
         'conversation_id': widget.card.conversationId,
         'task': ?task,
         'turn_id': turn['id'],
-        'question': agentQuestion,
-        if (context.read<AssistantController?>()?.selected case final choice?)
+        'question': question,
+        if (needsExcerpt)
+          'selected_excerpt': {
+            'object_id': passage.objectId,
+            'text': passage.quote,
+          },
+        if (context.read<AssistantController?>()?.explicitModelChoice case final choice?)
           'model_choice': {
             'provider': choice['provider'],
             'model': choice['model'],
@@ -1019,7 +1069,12 @@ class _ConversationBodyState extends State<_ConversationBody> {
           },
         };
         runId = null;
-        setState(() => busy = false);
+        setState(() {
+          busy = false;
+          if (widget.card.passageAside && identical(turn, turns.lastOrNull)) {
+            _asideAnswerVersion++;
+          }
+        });
         await save();
         // A finished draft opens for review; nothing is written until then.
         if (mounted && outlineProposal(turn) != null) {
@@ -1076,14 +1131,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
       pendingSnapshots: pendingSnapshots,
       contextScope: scope,
       onContextScope:
-          ready && !busy && (_asideAnchor == null || scope == 'course')
-          ? (course) {
-              setState(
-                () => data!['context_scope'] = course ? 'course' : 'selected',
-              );
-              unawaited(save());
-            }
-          : null,
+          ready && !busy && !owner.widget.standalone ? setCourseScope : null,
       onSnapshotRetry: attachSnapshot,
       onRemoveAttachment: (a) {
         setState(() => attachments.remove(a));
@@ -1093,6 +1141,7 @@ class _ConversationBodyState extends State<_ConversationBody> {
         if (!a.uploading) setState(() => pendingSnapshots.remove(a));
       },
       turns: ready ? turns : const [],
+      asideAnswerVersion: _asideAnswerVersion,
       sources: preview?['sources'] as List? ?? const [],
       busy: busy,
       loading: loading || (!ready && error == null),

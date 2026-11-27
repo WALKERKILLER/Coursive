@@ -62,6 +62,9 @@ final _toolLabels = {
   'list_courseware': (l10n.toolListCourseware, Icons.folder_open_outlined),
   'read_courseware': (l10n.toolReadCourseware, Icons.article_outlined),
   'search_courseware': (l10n.toolSearchCourseware, Icons.plagiarism_outlined),
+  'list_course_files': (l10n.toolListCourseware, Icons.folder_open_outlined),
+  'read_course_file': (l10n.toolReadCourseware, Icons.article_outlined),
+  'organize_course_files': (l10n.toolOrganizeCourses, Icons.drive_file_move_outlined),
   'view_slides': (l10n.toolListSlides, Icons.slideshow_outlined),
   'view_images': (l10n.toolViewImage, Icons.image_outlined),
   'create_quiz': (l10n.toolCreateQuiz, Icons.quiz_outlined),
@@ -182,7 +185,12 @@ class _AssistantPanelState extends State<AssistantPanel> {
   }
 
   void _toBottom() {
-    if (_scroll.hasClients) _scroll.animateTo(0, duration: Motion.medium2, curve: Motion.emphasized);
+    if (!_scroll.hasClients) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _scroll.jumpTo(0);
+    } else {
+      _scroll.animateTo(0, duration: Motion.short4, curve: Motion.emphasized);
+    }
   }
 
   void runAction(Map<String, dynamic> act) {
@@ -214,6 +222,11 @@ class _AssistantPanelState extends State<AssistantPanel> {
         if (lectureId.isEmpty) return showSnack(context, l10n.botNoLecture);
         leaveFullscreenPanel();
         root.push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: lectureId, startMs: secs == null ? null : secs * 1000)));
+      case 'open_canvas':
+        final cardId = '${act['card_id'] ?? ''}';
+        if (lectureId.isEmpty || cardId.isEmpty) return showSnack(context, l10n.botNoLecture);
+        leaveFullscreenPanel();
+        root.push(MaterialPageRoute(builder: (_) => PlayerPage(lectureId: lectureId, canvasCardId: cardId)));
       case 'open_course':
         if (courseId.isEmpty) return showSnack(context, l10n.botNoCourse);
         leaveFullscreenPanel();
@@ -248,7 +261,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
           Positioned.fill(child: _body(context, a)),
           // Session history slides over the conversation.
           AnimatedPositioned(
-            duration: Motion.medium4,
+            duration: Motion.durationOf(context, Motion.medium4),
             curve: Motion.emphasized,
             top: 0,
             bottom: 0,
@@ -628,7 +641,7 @@ class _AssistantPanelState extends State<AssistantPanel> {
             ListenableBuilder(
               listenable: _input,
               builder: (context, _) => AnimatedSwitcher(
-                duration: Motion.short4,
+                duration: Motion.durationOf(context, Motion.short4),
                 transitionBuilder: (c, an) => ScaleTransition(scale: an, child: c),
                 child: a.busy
                     ? IconButton.filledTonal(key: const ValueKey('stop'), tooltip: l10n.commonStop, onPressed: a.stop, icon: const Icon(Icons.stop_rounded))
@@ -863,7 +876,7 @@ class _ModeChips extends StatelessWidget {
         if ((store.byId(e.pluginId)?['status'] as Map?)?['active'] == true) e,
     ];
     return AnimatedSize(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       curve: Motion.emphasized,
       alignment: Alignment.topLeft,
       child: on.isEmpty
@@ -1018,7 +1031,7 @@ class _ContextMeter extends StatelessWidget {
                 height: 22,
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(end: frac),
-                  duration: Motion.long2,
+                  duration: Motion.durationOf(context, Motion.long2),
                   curve: Motion.emphasized,
                   builder: (_, v, _) => CircularProgressIndicator(
                     value: v,
@@ -1108,22 +1121,32 @@ class _AssistantTurn extends StatelessWidget {
               onUndo: () => a.undoProposal(b),
             ));
           }
-          if (d?['schedule'] is Map && b.name == 'mark_schedule') {
-            children.add(ScheduleChatCard(data: (d!['schedule'] as Map).cast<String, dynamic>(), duplicate: d['duplicate'] == true));
+          final result = d?['result'] as Map?;
+          if (result?['note_id'] is String && result?['card_id'] is String) {
+            children.add(_Actions(actions: [
+              {'kind': 'open_note', 'label': l10n.commonNotes, 'note_id': result!['note_id']},
+              {'kind': 'open_canvas', 'label': l10n.studyOpenCanvas, 'lecture_id': result['lecture_id'], 'card_id': result['card_id']},
+            ], onAction: onAction));
+          }
+          if ((result?['item'] ?? d?['schedule']) is Map && b.name == 'mark_schedule') {
+            final item = (result?['item'] ?? d?['schedule']) as Map;
+            children.add(ScheduleChatCard(data: item.cast<String, dynamic>(), duplicate: (result?['duplicate'] ?? d?['duplicate']) == true));
           }
           if (b.name == 'view_slides' && d?['slides'] is List) {
             children.add(_SlideStrip(lectureId: '${d!['lecture_id'] ?? ''}', slides: [for (final x in d['slides'] as List) (x as num).toInt()], mode: '${d['mode'] ?? ''}'));
           }
-          if (b.name == 'create_quiz' && d?['quiz'] is Map) {
-            final q = Quiz((d!['quiz'] as Map).cast<String, dynamic>());
+          if (b.name == 'create_quiz' && (result?['quiz'] ?? d?['quiz']) is Map) {
+            final q = Quiz(((result?['quiz'] ?? d?['quiz']) as Map).cast<String, dynamic>());
             children.add(QuizCard(key: ValueKey(q.id), quiz: q, live: true));
           }
-          if (b.name == 'save_note' && d?['note'] is Map) {
-            children.add(_NoteCard(note: (d!['note'] as Map).cast<String, dynamic>(), onAction: onAction));
+          if (b.name == 'save_note' && (result?['note'] ?? d?['note']) is Map) {
+            final note = (result?['note'] ?? d?['note']) as Map;
+            children.add(_NoteCard(note: note.cast<String, dynamic>(), onAction: onAction));
           }
           if (d?['view'] is Map) children.add(PluginView(view: (d!['view'] as Map).cast<String, dynamic>()));
-          if (d?['timeline'] is List && (d!['timeline'] as List).isNotEmpty) {
-            children.add(_OutlineCard(lectureId: '${d['lecture_id'] ?? ''}', chapters: jsonList(d['timeline']), onAction: onAction));
+          final timeline = result?['timeline'] ?? d?['timeline'];
+          if (timeline is List && timeline.isNotEmpty) {
+            children.add(_OutlineCard(lectureId: '${result?['lecture_id'] ?? d?['lecture_id'] ?? ''}', chapters: jsonList(timeline), onAction: onAction));
           }
         default:
           if (b.text.isNotEmpty) {
@@ -1265,7 +1288,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
     final tt = Theme.of(context).textTheme;
     final open = _open ?? widget.live;
     return AnimatedContainer(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       curve: Motion.emphasized,
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh.withValues(alpha: open ? 1 : 0.6),
@@ -1284,14 +1307,14 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
               const SizedBox(width: 4),
               AnimatedRotation(
                 turns: open ? 0.5 : 0,
-                duration: Motion.medium1,
+                duration: Motion.durationOf(context, Motion.medium1),
                 child: Icon(Icons.expand_more_rounded, size: 18, color: cs.onSurfaceVariant),
               ),
             ]),
           ),
         ),
         AnimatedSize(
-          duration: Motion.medium2,
+          duration: Motion.durationOf(context, Motion.medium2),
           curve: Motion.emphasized,
           alignment: Alignment.topCenter,
           child: open
@@ -1336,7 +1359,7 @@ class _ToolCardState extends State<_ToolCard> {
         borderRadius: BorderRadius.circular(Corners.full),
         onTap: () => setState(() => _open = !_open),
         child: AnimatedContainer(
-          duration: Motion.medium1,
+          duration: Motion.durationOf(context, Motion.medium1),
           padding: const EdgeInsets.symmetric(horizontal: Space.md, vertical: 6),
           decoration: BoxDecoration(
             color: b.error ? cs.errorContainer : cs.secondaryContainer.withValues(alpha: b.running ? 1 : 0.55),
@@ -1353,7 +1376,7 @@ class _ToolCardState extends State<_ToolCard> {
         ),
       ),
       AnimatedSize(
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         curve: Motion.emphasized,
         alignment: Alignment.topLeft,
         child: _open

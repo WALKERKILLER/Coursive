@@ -44,6 +44,7 @@ class StudyCard {
     required this.layer,
     required this.rect,
     this.title = '',
+    this.headerTitle = '',
     this.text = '',
     this.path = '',
     this.source = '',
@@ -71,7 +72,7 @@ class StudyCard {
        blocks = blocks ?? [],
        sources = sources ?? [];
   final String id, type;
-  String layer, title, text, path, source;
+  String layer, title, headerTitle, text, path, source;
   Rect rect;
   String documentId, generation, conversationId, sourceLectureId, originalPath;
   String pdfColumn;
@@ -79,6 +80,20 @@ class StudyCard {
   bool collapsed;
   bool positionLocked;
   double expandedH;
+  // A folded aside is drawn at its title width. The saved frame keeps the
+  // unfolded layout width so opening an older canvas needs no migration.
+  double? unfoldedLayoutWidth;
+
+  Rect withLayoutWidth(double width) {
+    final worldWidth = width * contentScale;
+    final delta = (worldWidth - contentRect.width) / 2;
+    final angle = rotation + quarterTurns * math.pi / 2;
+    return Rect.fromCenter(
+      center: rect.center + Offset(delta * math.cos(angle), delta * math.sin(angle)),
+      width: quarterTurns.isEven ? worldWidth : rect.width,
+      height: quarterTurns.isEven ? rect.height : worldWidth,
+    );
+  }
   int page, pageCount, quarterTurns;
   double rotation, contentScale;
   double pageAspect;
@@ -126,12 +141,15 @@ class StudyCard {
   List<StudyAnchor> sources;
   Map<String, String> responses;
   bool get lessonNote => type == 'text' && generation == 'lesson-note' && RegExp(r'^lesson-[0-9a-f]{32}$').hasMatch(documentId);
+  bool get linkedNote => type == 'text' && generation == 'linked-note' && documentId.isNotEmpty;
   bool get markdownReader =>
       type == 'text' &&
-      (lessonNote || pinnedAnswer ||
+      (lessonNote || linkedNote || pinnedAnswer ||
           source.toLowerCase().endsWith('.md') ||
           source.toLowerCase().endsWith('.markdown'));
   bool get passageAside => type == 'conversation' && generation == 'markdown-aside';
+  // For asides, a zero saved expanded height means fit the content.
+  bool get fitsAsideHeight => passageLinked && expandedH == 0;
   bool get passageNote => type == 'text' && generation == 'markdown-annotation';
   bool get passageLinked => passageAside || passageNote;
   bool get onCanvas => type != 'conversation' || passageAside;
@@ -173,6 +191,7 @@ class StudyCard {
       _n(m['h'], 440),
     ),
     title: '${m['title'] ?? ''}',
+    headerTitle: '${m['header_title'] ?? ''}',
     text: '${m['text'] ?? ''}',
     path: '${m['path'] ?? ''}',
     source: '${m['source'] ?? ''}',
@@ -208,6 +227,7 @@ class StudyCard {
     layer: layer,
     rect: rect,
     title: title,
+    headerTitle: headerTitle,
     text: text,
     path: path,
     source: source,
@@ -231,17 +251,22 @@ class StudyCard {
     blocks: [for (final block in blocks) block.copy()],
     sources: List.of(sources),
     responses: Map.of(responses),
-  );
-  Map<String, dynamic> json() => {
+  )..unfoldedLayoutWidth = unfoldedLayoutWidth;
+  Map<String, dynamic> json() {
+    final frame = collapsed && unfoldedLayoutWidth != null
+        ? withLayoutWidth(unfoldedLayoutWidth!)
+        : rect;
+    return {
     'id': id,
     'type': type,
     'layer': layer,
-    'x': rect.left,
-    'y': rect.top,
-    'w': rect.width,
-    'h': rect.height,
+    'x': frame.left,
+    'y': frame.top,
+    'w': frame.width,
+    'h': frame.height,
     'title': title,
-    'text': text,
+    if (headerTitle.isNotEmpty) 'header_title': headerTitle,
+    if (!linkedNote) 'text': text,
     'path': path,
     'source': source,
     'document_id': documentId,
@@ -264,7 +289,8 @@ class StudyCard {
     'responses': responses,
     'blocks': blocks.map((b) => b.json()).toList(),
     'sources': sources.map((a) => a.json()).toList(),
-  };
+    };
+  }
 }
 
 class InkPoint {
@@ -540,6 +566,13 @@ class StudyDocument extends ChangeNotifier {
           !inkOnCard(card.id).any(
             (s) => layers.any((l) => l.id == s.layer && l.locked),
           ));
+  bool canRemoveCard(StudyCard card) {
+    bool removable(StudyCard c) => canTransformCard(c) &&
+        inkOnCard(c.id).every((stroke) => editable(stroke.layer));
+    return removable(card) && (card.pdfColumn != card.id ||
+        cards.where((c) => c.pdfColumn == card.id).every(removable));
+  }
+
   factory StudyDocument.fromJson(Map m) {
     final version = m['version'];
     if (version is! int || version < 1 || version > currentFormatVersion) {
@@ -718,6 +751,19 @@ class StudyDocument extends ChangeNotifier {
     connections.removeWhere(
       (c) => deleted.contains(c.from) || deleted.contains(c.to),
     );
+    pluginRevision++;
+    changed();
+  }
+
+  void renamePluginObject(StudyPluginObject object, String title) {
+    final index = pluginObjects.indexOf(object);
+    if (index < 0 || object.title == title) return;
+    final raw = object.json();
+    raw['content']['title'] = title;
+    raw['revision'] = object.revision + 1;
+    final renamed = StudyPluginObject.fromJson(raw);
+    checkpoint();
+    pluginObjects = [...pluginObjects]..[index] = renamed;
     pluginRevision++;
     changed();
   }

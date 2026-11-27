@@ -6,13 +6,14 @@
 // docs/specs/0016-agent-acts.md
 import { Type } from "typebox";
 import { validateTask } from "./tasks.mjs";
+import { courseFileTools } from "./course-files.mjs";
 
 const bad = (message, status = 400) => Object.assign(new Error(message), { status });
 const text = (t, details = {}) => ({ content: [{ type: "text", text: t }], details });
 const enc = encodeURIComponent;
 const lit = (values) => Type.Union(values.map((v) => Type.Literal(v)));
 
-const MB = 1 << 20;
+
 // Hex values of the app's seed palette (kSeedPalette in app/lib/theme/prefs.dart).
 export const COURSE_COLORS = {
 	none: "",
@@ -49,13 +50,6 @@ export const SETTINGS = {
 	showSubtitles: { where: "app", label: "显示字幕", type: "boolean" },
 	subtitleScale: { where: "app", label: "字幕大小", min: 0.6, max: 2 },
 	lecturesNewestFirst: { where: "app", label: "课程页最新一节在前", type: "boolean" },
-	"download.video_parallel": { where: "daemon", label: "同时下载的视频数", min: 1, max: 4, int: true, fallback: 2 },
-	"download.max_conns": { where: "daemon", label: "单个视频的并发连接", min: 1, max: 16, int: true, fallback: 8 },
-	"download.rate_limit": { where: "daemon", label: "总速度上限（字节/秒，0 不限）", enum: [0, 2 * MB, 5 * MB, 10 * MB, 20 * MB], fallback: 0 },
-	"download.stream": { where: "daemon", label: "下载哪个画面（空为自动）", enum: ["", "屏幕", "教师", "学生"], fallback: "" },
-	"transcript.delete_video": { where: "daemon", label: "转写完成后删除视频", type: "boolean", fallback: false },
-	"asr.strategy": { where: "daemon", label: "转写渠道分配（balance 或渠道 id）", type: "string", fallback: "balance" },
-	"asr.concurrency": { where: "daemon", label: "同时识别的段数", min: 1, max: 4, int: true, fallback: 2 },
 	model: { where: "agent", label: "助手默认模型（provider/model）", type: "string" },
 	thinking: { where: "agent", label: "思考强度", enum: ["off", "minimal", "low", "medium", "high", "xhigh"] },
 };
@@ -83,6 +77,13 @@ export function checkSetting(key, value) {
 	return Math.round(n * 100) / 100;
 }
 
+function ordinaryPrefs(value, where) {
+	return Object.fromEntries(Object.entries(value ?? {}).map(([key, val]) => {
+		if (SETTINGS[key]?.where !== where) throw bad(`不能修改 ${key}`);
+		return [key, checkSetting(key, val)];
+	}));
+}
+
 const show = (v) => (typeof v === "boolean" ? (v ? "开" : "关") : v === "" ? "（自动）" : String(v));
 
 /**
@@ -93,11 +94,51 @@ const show = (v) => (typeof v === "boolean" ? (v ? "开" : "关") : v === "" ? "
 export async function runOp(op, deps) {
 	switch (op.type) {
 		case "app":
-			return { app: op.set };
+			return { app: ordinaryPrefs(op.set, "app") };
+		case "native_command":
+			return { app_op: op.command };
+		case "save_note":
+			return { note: await deps.api("PUT", "/api/notes", op.note) };
+		case "new_schedule":
+			return deps.api("POST", "/api/schedule", op.item);
+		case "new_quiz":
+			return { quiz: await deps.api("POST", "/api/quizzes", op.quiz) };
+		case "sync_courses":
+			return { courses: ((await deps.api("GET", "/api/courses?sync=1")) ?? []).length };
+		case "delete_schedule": {
+			const item = (await deps.api("GET", "/api/schedule")).find((i) => i.id === op.id);
+			if (!item || item.source !== "agent" || JSON.stringify(item) !== op.base) throw bad("这条日程已修改，请重新查看");
+			return deps.api("DELETE", `/api/schedule/${enc(op.id)}`);
+		}
+		case "edit_schedule": {
+			const item = (await deps.api("GET", "/api/schedule")).find(row => row.id === op.id);
+			if (!op.expected || !item || Object.entries(op.expected).some(([key, value]) => item[key] !== value))
+				throw bad("日程已变化或操作卡已过期，请重新查看", 409);
+			return deps.api("PATCH", `/api/schedule/${enc(op.id)}`, item.source === "lms" ? op.patch : {...op.patch, base:op.expected});
+		}
+		case "restore_card_position": {
+			const d = await deps.api("GET", `/api/lectures/${enc(op.lecture_id)}/study-canvas`);
+			const card = d.objects?.find(c => c.id === op.card_id);
+			if (!card || card.position_locked || card.x !== op.expected.x || card.y !== op.expected.y)
+				throw bad("卡片位置已变化，请在画布中查看", 409);
+			return { app_op: {op:"canvas", action:"move", card_id:op.card_id, lecture_id:op.lecture_id, x:op.x, y:op.y, base_hash:d.base_hash ?? ""} };
+		}
+		case "save_outline": {
+			const path = `/api/lectures/${enc(op.lecture_id)}/timeline`;
+			if (JSON.stringify(await deps.api("GET", path)) !== op.base) throw bad("大纲已修改，请重新读取");
+			return { timeline: await deps.api("PUT", path, { text: op.text }), lecture_id: op.lecture_id };
+		}
+		case "course_review":
+			return deps.api("POST", `/api/courses/${enc(op.course_id)}/review-handout`, { lecture_id: op.lecture_id, body: op.body });
+		case "course_folder":
+			return deps.api("POST", `/api/courses/${enc(op.course_id)}/material-folder`, { name: op.name });
+		case "canvas_note":
+			return deps.api("POST", `/api/courses/${enc(op.course_id)}/canvas-note`, { lecture_id: op.lecture_id, note_id: op.note_id });
 		case "settings": {
-			if (op.daemon && Object.keys(op.daemon).length) await deps.api("PUT", "/api/settings", op.daemon);
-			if (op.agent && Object.keys(op.agent).length) {
-				const patch = { ...op.agent };
+			if (op.daemon && Object.keys(op.daemon).length) throw bad("运行配置只能由用户在设置页调整");
+			const app = ordinaryPrefs(op.app, "app");
+			const patch = ordinaryPrefs(op.agent, "agent");
+			if (Object.keys(patch).length) {
 				if (patch.model) {
 					const at = patch.model.indexOf("/");
 					patch.provider = patch.model.slice(0, at);
@@ -105,7 +146,7 @@ export async function runOp(op, deps) {
 				}
 				await deps.pipeline.setPrefs(patch);
 			}
-			return op.app && Object.keys(op.app).length ? { app: op.app } : { ok: true };
+			return Object.keys(app).length ? { app } : { ok: true };
 		}
 		case "jobs":
 			return deps.api("POST", "/api/jobs/bulk", { action: op.action, ids: op.ids });
@@ -139,13 +180,18 @@ export async function runOp(op, deps) {
 			const t = await deps.tasks.create(op.task);
 			return { task_id: t.id };
 		}
+		case "delete_memory": {
+			const change = await deps.memory.remove(op.path, op.base_hash);
+			deps.memoryChanged(change);
+			return { memory: change };
+		}
 		case "delete_task":
 			await deps.tasks.remove(op.id);
 			return { ok: true };
-		case "plugin":
-			await deps.plugins.update(op.id, { enabled: op.enabled });
-			deps.changed?.();
-			return { ok: true };
+		case "course_files":
+			return deps.api("POST", `/api/material-file-batches/${enc(op.id)}/apply`, {});
+		case "undo_course_files":
+			return deps.api("POST", `/api/material-file-batches/${enc(op.id)}/undo`, {});
 		default:
 			throw bad(`未知操作 ${op.type}`);
 	}
@@ -156,8 +202,8 @@ export async function runOp(op, deps) {
  * and cards), api, appState() (the app's last pushed preferences), pipeline
  * (prefs.approval: "ask" turns changes into cards), tasks, plugins, changed().
  */
-export function operateTools(deps) {
-	const { bot, api } = deps;
+export function operationAct(deps) {
+	const { bot } = deps;
 	const card = async (p) => {
 		const saved = await bot.propose(p);
 		return { proposal: bot.view(saved) };
@@ -176,36 +222,36 @@ export function operateTools(deps) {
 	 * a function of the result; app replaces the chip's operation; said(result)
 	 * is what the model reads.
 	 */
-	const act = async ({ doneTitle, said, app, confirm = asking(), undo, ...p }) => {
-		if (confirm) {
+	return async ({ doneTitle, said, app, confirm = asking(), forceConfirm, undo, ...p }) => {
+		if (confirm || forceConfirm) {
 			const details = await card({ ...p, undo: typeof undo === "function" ? undefined : undo });
 			return text(`已在聊天里生成卡片「${p.title}」，用户点「应用」后才会执行，不要声称已经完成。`, details);
 		}
 		const result = await runOp(p.op, deps);
 		const view = await done({ ...p, title: doneTitle, undo: typeof undo === "function" ? undo(result) : undo }, result);
-		const chip = { ...(app ?? { op: "done" }), label: doneTitle, ...(view.undoable ? { proposal_id: view.id } : {}) };
-		return text(`${said(result)}${view.undoable ? "（用户可以撤销）" : ""}。`, { app: chip });
+		const chip = { ...(result.app_op ?? app ?? { op: "done" }), label: doneTitle, ...(view.undoable ? { proposal_id: view.id } : {}) };
+		return text(`${said(result)}${view.undoable ? "（用户可以撤销）" : ""}。`, { app: chip, result });
 	};
+}
+
+export function operateTools(deps, conv) {
+	const { api } = deps;
+	const act = operationAct(deps);
+	const asking = () => deps.pipeline.prefs.approval === "ask";
+
+	const command = (op, title, lines = [], options = {}) => act({
+		...options,
+		kind: "native_command", title, doneTitle: `已发送：${title}`, lines,
+		op: { type: "native_command", command: op }, said: () => `已发送应用指令「${title}」`,
+	});
 
 	const currentSettings = async () => {
 		const app = deps.appState() ?? {};
-		let server = {};
-		try {
-			server = (await api("GET", "/api/settings")) ?? {};
-		} catch {
-			// daemon unreachable: report app and agent settings only.
-		}
-		const agentPrefs = deps.pipeline.prefs;
-		const out = {};
-		for (const [key, s] of Object.entries(SETTINGS)) {
-			if (s.where === "app") out[key] = app[key];
-			else if (s.where === "daemon") out[key] = server[key] ?? s.fallback;
-			else if (key === "model") out[key] = agentPrefs.provider && agentPrefs.model ? `${agentPrefs.provider}/${agentPrefs.model}` : "";
-			else out[key] = agentPrefs[key];
-		}
-		return out;
+		const agent = deps.pipeline.prefs;
+		return Object.fromEntries(Object.entries(SETTINGS).map(([key, s]) => [key,
+			s.where === "app" ? app[key] : key === "model" && agent.provider && agent.model ? `${agent.provider}/${agent.model}` : agent[key],
+		]));
 	};
-
 	/** Lectures by id, or a course's recorded lectures narrowed by date or the latest n; oldest first. */
 	const pickLectures = async ({ lecture_ids, course_id, from, to, latest }) => {
 		for (const d of [from, to]) if (d !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw bad("from 和 to 的格式应为 YYYY-MM-DD");
@@ -238,10 +284,10 @@ export function operateTools(deps) {
 			name: "open_page",
 			label: "打开页面",
 			description:
-				"Navigate the app for the user. targets: home, courses, course (course_id), lecture (lecture_id, optional t seconds), note (note_id), schedule (optional day YYYY-MM-DD), downloads, library, sources, lms, tasks, plugins, settings (optional section), activity, usage, bot.",
+				"Navigate the app for the user. targets: home, courses, course (course_id), lecture (lecture_id, optional t seconds), canvas (lecture_id), note (note_id), schedule (optional day YYYY-MM-DD), downloads, library, sources, lms, tasks, plugins, settings (optional section), activity, usage, bot.",
 			promptSnippet: "open_page(target, …): navigate the app (course, lecture, note, schedule, downloads, settings, …)",
 			parameters: Type.Object({
-				target: lit(["home", "courses", "course", "lecture", "note", "schedule", "downloads", "library", "sources", "lms", "tasks", "plugins", "settings", "activity", "usage", "bot"]),
+				target: lit(["home", "courses", "course", "lecture", "canvas", "note", "schedule", "downloads", "library", "sources", "lms", "tasks", "plugins", "settings", "activity", "usage", "bot"]),
 				course_id: Type.Optional(Type.String()),
 				lecture_id: Type.Optional(Type.String()),
 				note_id: Type.Optional(Type.String()),
@@ -250,11 +296,12 @@ export function operateTools(deps) {
 				section: Type.Optional(lit(["appearance", "player", "assistant", "models", "plugins", "downloads", "transcript", "courseware", "knowledge", "storage", "obsidian", "notion", "sync", "backup", "notifications", "diagnostics"])),
 			}),
 			execute: async (_id, p) => {
-				const need = { course: "course_id", lecture: "lecture_id", note: "note_id" }[p.target];
+				const need = { course: "course_id", lecture: "lecture_id", canvas: "lecture_id", note: "note_id" }[p.target];
 				if (need && !p[need]) throw bad(`打开 ${p.target} 需要 ${need}`);
+				if (p.t != null && (!Number.isFinite(p.t) || p.t < 0 || p.t > 7 * 86400)) throw bad("播放时间超出有效范围");
 				if (p.day && !/^\d{4}-\d{2}-\d{2}$/.test(p.day)) throw bad("day 格式应为 YYYY-MM-DD");
 				const app = { op: "open", ...p };
-				return text(`已在应用里打开 ${p.target}。`, { app });
+				return command(app, `打开 ${p.target}`, [p.course_id ?? p.lecture_id ?? p.note_id ?? p.target]);
 			},
 		},
 		{
@@ -267,9 +314,46 @@ export function operateTools(deps) {
 				rate: Type.Optional(Type.Number()),
 			}),
 			execute: async (_id, p) => {
-				if (p.action === "seek" && !(p.seconds >= 0)) throw bad("seek 需要 seconds");
+				if (p.action === "seek" && (!Number.isFinite(p.seconds) || !(p.seconds >= 0 && p.seconds <= 7 * 86400))) throw bad("seek 需要 seconds");
 				if (p.action === "speed" && !(p.rate >= 0.5 && p.rate <= 3)) throw bad("speed 需要 0.5–3 之间的 rate");
-				return text(`已发送播放器指令 ${p.action}。`, { app: { op: "player", ...p } });
+				const lecture_id = conv?.context?.player_lecture_id || conv?.context?.lecture_id;
+				if (conv && !lecture_id) throw bad("请先打开要操作的播放器");
+				const title = { play: "播放视频", pause: "暂停视频", seek: `跳到 ${p.seconds} 秒`, speed: `设为 ${p.rate} 倍速` }[p.action];
+				return command({ op: "player", ...p, lecture_id }, title);
+			},
+		},
+		{
+			name: "canvas_control",
+			label: "操作画布与 PDF",
+			description: "Use the open lecture canvas. List cards first. Move or reshape one card, turn to a PDF page, or change PDF reading view. Use coordinates in canvas units. Requires the student's current request.",
+			parameters: Type.Object({
+				action: lit(["list", "move", "resize", "pdf_page", "pdf_view"]),
+				card_id: Type.Optional(Type.String()),
+				x: Type.Optional(Type.Number()), y: Type.Optional(Type.Number()),
+				width: Type.Optional(Type.Number()), height: Type.Optional(Type.Number()),
+				page: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000 })),
+				view: Type.Optional(lit(["scroll", "paged", "column"])),
+			}),
+			execute: async (_id, p) => {
+				const lecture_id = conv?.context?.lecture_id || conv?.context?.player_lecture_id;
+				if (!lecture_id || conv?.context?.study_canvas !== "yes") throw bad("请先打开要操作的课程画布");
+				const d = await api("GET", `/api/lectures/${enc(lecture_id)}/study-canvas`);
+				const view = ({ id, header_title, title, type, x, y, w, h, page, page_count, position_locked }) => ({ id, title: header_title || title, type, x, y, w, h, page, page_count, position_locked });
+				if (p.action === "list") return text(JSON.stringify((d.objects ?? []).slice(0, 60).map(view)));
+				if (!/移动|位置|放到|拖到|缩放|调整|大小|放大|缩小|页|滚动|展开|视图|move|resize|page|view/i.test(conv.lastUser ?? "")) throw bad("需要用户请求操作画布或 PDF");
+				const target = d.objects?.find((c) => c.id === p.card_id);
+				if (!target) throw bad("找不到目标卡片");
+				const geometry = p.action === "move" ? [p.x, p.y] : p.action === "resize" ? [p.width, p.height] : [];
+				if (geometry.some((v) => !Number.isFinite(v))) throw bad("缺少卡片位置或尺寸");
+				if (["move", "resize"].includes(p.action) && target.position_locked) throw bad("卡片已锁定位置");
+				if (p.action.startsWith("pdf_") && target.type !== "pdfdoc") throw bad("目标不是 PDF 文档");
+				if (p.action === "pdf_page" && (!Number.isInteger(p.page) || p.page < 1 || p.page > target.page_count)) throw bad("页码超出文档范围");
+				if (p.action === "pdf_view" && !["scroll", "paged", "column"].includes(p.view)) throw bad("阅读视图无效");
+				const action = { move: "移动", resize: "调整大小", pdf_page: `翻到第 ${p.page} 页：`, pdf_view: "切换 PDF 视图：" }[p.action];
+				const reversible = p.action === "move";
+				return command({ op: "canvas", ...p, lecture_id, base_hash: d.base_hash ?? "" }, `${action}「${target.header_title || target.title}」`,
+					reversible ? [] : ["聊天中无法撤销此项画布操作"],
+					reversible ? {undo: {type:"restore_card_position", lecture_id, card_id:p.card_id, x:target.x, y:target.y, expected:{x:p.x,y:p.y}}} : {forceConfirm:true});
 			},
 		},
 		{
@@ -290,7 +374,7 @@ export function operateTools(deps) {
 		{
 			name: "change_settings",
 			label: "修改设置",
-			description: "Change settings by registry key (see read_settings): appearance, player, downloads, transcription, default model and thinking level. The user can undo.",
+			description: "Change ordinary appearance, playback, default model and thinking settings by registry key (see read_settings).",
 			parameters: Type.Object({
 				changes: Type.Array(Type.Object({ key: Type.String(), value: Type.Any() }), { minItems: 1, maxItems: 10 }),
 			}),
@@ -316,6 +400,7 @@ export function operateTools(deps) {
 					kind: "settings",
 					title: `修改${names}`,
 					doneTitle: `已调整${names}`,
+					forceConfirm: clean.length > 1,
 					lines,
 					op,
 					undo,
@@ -362,7 +447,8 @@ export function operateTools(deps) {
 					kind: "downloads",
 					title: `${verb} ${ids.length} 个下载`,
 					doneTitle: `已${verb} ${ids.length} 个下载`,
-					lines: jobs.slice(0, 8).map((j) => `${j.title || j.lecture_id} · ${KIND_LABEL[j.kind] ?? j.kind}`),
+					forceConfirm: jobs.length > 1,
+					lines: jobs.map((j) => `${j.title || j.lecture_id} · ${KIND_LABEL[j.kind] ?? j.kind}`),
 					op: { type: "jobs", action, ids },
 					undo,
 					said: () => `已${verb} ${ids.length} 个下载任务`,
@@ -413,7 +499,8 @@ export function operateTools(deps) {
 					kind: "download",
 					title: `下载 ${what}`,
 					doneTitle: `已开始下载 ${what}`,
-					lines: [...lectureLines(queued), ...notes],
+					lines: [...lectureLines(queued, MAX_DOWNLOAD), ...notes],
+					forceConfirm: p.redownload === true,
 					op: { type: "download", groups: [...groups].map(([key, ls]) => ({ lecture_ids: ls.map((l) => l.id), kinds: key.split(",") })) },
 					undo: (r) => {
 						const fresh = (r.ids ?? []).filter((id) => !before.has(id));
@@ -439,7 +526,7 @@ export function operateTools(deps) {
 				return act({
 					kind: "delete_files",
 					title,
-					lines: [...(lectures.length > 1 ? lectureLines(lectures, 8) : []), "删除后无法撤销，需要重新下载才能恢复"],
+					lines: [...(lectures.length > 1 ? lectureLines(lectures, MAX_DOWNLOAD) : []), "删除后无法撤销，需要重新下载才能恢复"],
 					op: { type: "delete_files", lecture_ids: lectures.map((l) => l.id), kinds: ks },
 					confirm: true,
 				});
@@ -486,8 +573,11 @@ export function operateTools(deps) {
 			description: "Refresh the course list from signed-in sources.",
 			parameters: Type.Object({}),
 			execute: async () => {
-				const list = (await api("GET", "/api/courses?sync=1")) ?? [];
-				return text(`已同步，共 ${list.length} 门课程。`);
+				return act({
+					kind: "sync_courses", title: "刷新已登录来源的课程", doneTitle: "课程已刷新",
+					lines: ["更新已登录来源的课程列表"], forceConfirm: true,
+					op: { type: "sync_courses" }, said: (r) => `已同步，共 ${r.courses} 门课程`,
+				});
 			},
 		},
 		{
@@ -508,6 +598,7 @@ export function operateTools(deps) {
 				const when = t.schedule.type === "daily" ? `每天 ${t.schedule.time}` : t.schedule.type === "weekly" ? `每周${t.schedule.days.map((d) => "一二三四五六日"[d - 1]).join("、")} ${t.schedule.time}` : t.schedule.at.replace("T", " ");
 				return act({
 					kind: "task",
+					forceConfirm: t.writes.length > 0,
 					title: `创建定时任务「${t.name}」`,
 					doneTitle: `已创建定时任务「${t.name}」`,
 					lines: [when, t.prompt.slice(0, 120), `可写入：${t.writes.length ? t.writes.join("、") : "无"} · 上限 $${t.budget_usd}`],
@@ -517,33 +608,13 @@ export function operateTools(deps) {
 				});
 			},
 		},
-		{
-			name: "toggle_plugin",
-			label: "开关插件",
-			description: "Enable or disable an installed plugin. The user can undo. Installing new plugins is done by the user on the plugins page (open_page target plugins).",
-			parameters: Type.Object({ id: Type.String(), enabled: Type.Boolean() }),
-			execute: async (_id, { id, enabled }) => {
-				const p = (await deps.plugins.list()).find((x) => x.id === id);
-				if (!p) throw bad(`没有安装插件 ${id}。安装请让用户在插件页完成。`);
-				if (p.enabled === enabled) return text(`插件 ${p.name ?? id} 已经是${enabled ? "启用" : "停用"}状态。`);
-				const verb = enabled ? "启用" : "停用";
-				return act({
-					kind: "plugin",
-					title: `${verb}插件「${p.name ?? id}」`,
-					doneTitle: `已${verb}插件「${p.name ?? id}」`,
-					lines: [p.description ?? ""].filter(Boolean),
-					op: { type: "plugin", id, enabled },
-					undo: { type: "plugin", id, enabled: !enabled },
-					said: () => `已${verb}插件「${p.name ?? id}」`,
-				});
-			},
-		},
+		...(conv ? courseFileTools(deps, conv, act) : []),
 	];
 }
 
 export const OPERATE_GROUP = {
 	label: "操作应用",
-	tools: ["player", "read_settings", "change_settings", "list_downloads", "manage_downloads", "download", "delete_files", "manage_course", "sync_courses", "create_task", "toggle_plugin"],
+	tools: ["player", "read_settings", "change_settings", "list_downloads", "manage_downloads", "download", "delete_files", "manage_course", "sync_courses", "create_task", "canvas_control"],
 	with: ["course"],
 	words: "设置 字号 主题 深色 倍速 字幕 播放 暂停 下载 进度 取消 删除 置顶 隐藏 改名 颜色 同步 定时 任务 插件 打开 settings player download plugin",
 };

@@ -136,7 +136,7 @@ class _EdgeButton extends StatelessWidget {
         curve: visible ? Motion.emphasizedDecelerate : Motion.emphasizedAccelerate,
         child: AnimatedScale(
           scale: visible ? 1 : 0.8,
-          duration: Motion.medium1,
+          duration: Motion.durationOf(context, Motion.medium1),
           curve: Motion.emphasized,
           child: Material(
             color: cs.surfaceContainerHighest,

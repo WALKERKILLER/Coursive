@@ -128,7 +128,7 @@ class _WorkspaceSetupPageState extends State<WorkspaceSetupPage> {
                         ),
                       ),
                       AnimatedSize(
-                        duration: Motion.medium2,
+                        duration: Motion.durationOf(context, Motion.medium2),
                         curve: Motion.emphasized,
                         child: ws.error == null
                             ? const SizedBox(width: double.infinity)

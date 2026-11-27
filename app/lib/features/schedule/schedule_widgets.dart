@@ -149,7 +149,7 @@ class DoneCheck extends StatelessWidget {
           child: Center(
             child: TweenAnimationBuilder<double>(
               tween: Tween(end: done ? 1 : 0),
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Curves.easeOutBack,
               builder: (_, t, _) => Container(
                 width: 22,
@@ -192,7 +192,7 @@ class ScheduleTile extends StatelessWidget {
       if (item.courseTitle.isNotEmpty) item.courseTitle,
     ];
     return AnimatedOpacity(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       opacity: item.done ? 0.6 : 1,
       child: Material(
         color: cs.surfaceContainerLow,
@@ -488,11 +488,11 @@ class ScheduleChatCard extends StatelessWidget {
     final st = KindStyle.of(context, it.kind);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: Motion.long2,
+      duration: Motion.durationOf(context, Motion.long2),
       curve: Motion.emphasizedDecelerate,
       builder: (_, t, child) => Opacity(opacity: t, child: Transform.translate(offset: Offset(0, 8 * (1 - t)), child: child)),
       child: AnimatedContainer(
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         margin: const EdgeInsets.symmetric(vertical: Space.xs),
         padding: const EdgeInsets.fromLTRB(Space.md, Space.md, Space.sm, Space.xs),
         decoration: BoxDecoration(

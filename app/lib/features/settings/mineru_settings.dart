@@ -152,7 +152,7 @@ class _MinerUSettingsState extends State<MinerUSettings> {
               ]),
             ),
           AnimatedSize(
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             alignment: Alignment.topCenter,
             child: !configured || _editing

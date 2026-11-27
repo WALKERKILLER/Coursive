@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:coursive/core/api.dart';
 import 'package:coursive/features/library/note_reader.dart';
 import 'package:coursive/widgets/md_reader.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -135,6 +136,21 @@ void main() {
     expect(CoursiveRef.parse('https://example.com'), isNull);
   });
 
+  testWidgets('a saved answer table follows its checked recording link', (t) async {
+    const url = 'coursive://lecture/L3?v=1&t=4798&q=%E8%BF%90&start_ms=4798000&end_ms=4802000';
+    var followed = 0;
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: CoursiveMarkdown(
+        '| 出处 | 回听 |\n|---|---|\n| 课堂原声 | [01:19:58]($url) |',
+        verifiedLinks: {url: () => followed++},
+      )),
+    ));
+    await t.tap(find.textContaining('01:19:58', findRichText: true));
+    await t.pump();
+    expect(followed, 1);
+    expect(find.text('这个链接无法打开'), findsNothing);
+  });
+
   testWidgets('every link in a message responds to a tap', (t) async {
     final refs = <CoursiveRef>[];
     await t.pumpWidget(MaterialApp(
@@ -152,6 +168,77 @@ void main() {
     await t.tap(find.textContaining('未知链接', findRichText: true));
     await t.pump();
     expect(find.text('这个链接无法打开'), findsOneWidget);
+  });
+
+  testWidgets('the section reader handles encoded and repeated headings', (t) async {
+    final controller = MdReaderController();
+    final fragment = Uri.encodeComponent('分页-1');
+    final doc = MdDoc('## 目录\n\n[去第二个分页](#$fragment)\n\n'
+        '## 分页\n\n${List.filled(25, '前一节的正文。').join('\n\n')}\n\n'
+        '### **分页**\n\n第二个标题的正文。\n\n${List.filled(25, '后一节的正文。').join('\n\n')}');
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarkdownReader(doc: doc, controller: controller)),
+    ));
+    await t.tap(find.text('去第二个分页', findRichText: true));
+    await t.pumpAndSettle();
+    expect(find.text('第二个标题的正文。', findRichText: true).hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('far headings stay reachable across uneven chapter heights', (t) async {
+    final controller = MdReaderController();
+    final md = StringBuffer();
+    for (var i = 0; i < 80; i++) {
+      md.writeln('## 章节 $i');
+      md.writeln(i == 32 ? List.filled(200, '较长的一章。').join('\n\n') : '正文 $i');
+    }
+    final doc = MdDoc(md.toString());
+    final saved = <Map<String, dynamic>>[];
+    await t.pumpWidget(MaterialApp(
+      home: Scaffold(body: MarkdownReader(doc: doc, controller: controller, onBookmark: saved.add)),
+    ));
+    for (final target in [55, 19, 64, 79, 1, 32, 36, 62]) {
+      saved.clear();
+      controller.jumpToSection(target);
+      await t.pumpAndSettle();
+      expect(find.text('章节 $target', findRichText: true).hitTestable(),
+          findsOneWidget, reason: 'jump to section $target');
+      expect(saved, hasLength(1));
+      if (target == 79) expect(controller.current, target);
+    }
+    controller.jumpToSection(3);
+    controller.jumpToSection(48);
+    await t.pumpAndSettle();
+    expect(find.text('章节 48', findRichText: true).hitTestable(), findsOneWidget);
+    await t.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets('wheel input takes over a pending search jump', (t) async {
+    final controller = MdReaderController();
+    final doc = MdDoc(List.generate(100, (i) => '## Part $i\n\nBody $i').join('\n\n'));
+    await t.pumpWidget(MaterialApp(home: Scaffold(body: MarkdownReader(doc: doc, controller: controller))));
+    final pos = t.state<ScrollableState>(find.byType(Scrollable).first).position;
+    expect(controller.reveal('Body 90'), isTrue);
+    await t.sendEventToBinding(const PointerScrollEvent(
+      position: Offset(200, 200), scrollDelta: Offset(0, -160),
+    ));
+    final userOffset = pos.pixels;
+    await t.pumpAndSettle();
+    expect(pos.pixels, closeTo(userOffset, 1));
+    await t.pump(const Duration(seconds: 2));
+    expect(pos.pixels, closeTo(userOffset, 1));
+    await t.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
+
+  testWidgets('missing local headings do not invoke the external link route', (t) async {
+    await t.pumpWidget(const MaterialApp(home: Scaffold(body: SingleChildScrollView(
+      child: CoursiveMarkdown('[找不到](#missing)\n\n## 标题\n\n正文'),
+    ))));
+    await t.tap(find.text('找不到', findRichText: true));
+    await t.pumpAndSettle();
+    expect(find.text('找不到链接指向的标题'), findsOneWidget);
+    expect(find.text('这个链接无法打开'), findsNothing);
   });
 
   test('coursive-app:// links from exported notes parse like coursive://', () {

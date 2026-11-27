@@ -814,6 +814,12 @@ abstract class AppLocalizations {
   /// **'这个链接无法打开'**
   String get linkCannotOpen;
 
+  /// No description provided for @linkHeadingNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到链接指向的标题'**
+  String get linkHeadingNotFound;
+
   /// No description provided for @markdownImageUnavailable.
   ///
   /// In zh, this message translates to:
@@ -2511,6 +2517,30 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'我的笔记'**
   String get noteMine;
+
+  /// No description provided for @noteSnapshotNumber.
+  ///
+  /// In zh, this message translates to:
+  /// **'课堂快照 · 第 {idx} 张'**
+  String noteSnapshotNumber(int idx);
+
+  /// No description provided for @notePDFPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'{file} · 第 {page} 页'**
+  String notePDFPage(String file, int page);
+
+  /// No description provided for @lessonShowHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'看提示'**
+  String get lessonShowHint;
+
+  /// No description provided for @lessonNextTopic.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一主题'**
+  String get lessonNextTopic;
 
   /// No description provided for @noteSlideRef.
   ///
@@ -10825,7 +10855,7 @@ abstract class AppLocalizations {
   /// No description provided for @approvalDeleteNote.
   ///
   /// In zh, this message translates to:
-  /// **'删除文件在两种模式下都会先问你'**
+  /// **'永久删除、覆盖原件和批量修改都会先问你'**
   String get approvalDeleteNote;
 
   /// No description provided for @approvalSwitchHint.
@@ -11721,6 +11751,18 @@ abstract class AppLocalizations {
   /// **'围绕指定资料持续提问，回答和整理结果都保留在此对话中。'**
   String get studyConversationEmpty;
 
+  /// No description provided for @studyOpenMaterial.
+  ///
+  /// In zh, this message translates to:
+  /// **'展开阅读或播放'**
+  String get studyOpenMaterial;
+
+  /// No description provided for @studyCreateBlankCanvas.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建空白画布'**
+  String get studyCreateBlankCanvas;
+
   /// No description provided for @studyOpenCanvas.
   ///
   /// In zh, this message translates to:
@@ -11985,6 +12027,18 @@ abstract class AppLocalizations {
   /// **'展开模块'**
   String get studyCardExpand;
 
+  /// No description provided for @studyCardFitContent.
+  ///
+  /// In zh, this message translates to:
+  /// **'适应内容高度'**
+  String get studyCardFitContent;
+
+  /// No description provided for @studyAddLectureCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加当前课程视频'**
+  String get studyAddLectureCard;
+
   /// No description provided for @studyCardCollapse.
   ///
   /// In zh, this message translates to:
@@ -12056,12 +12110,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'课次素材'**
   String get studyShelf;
-
-  /// No description provided for @studyShelfFromVideo.
-  ///
-  /// In zh, this message translates to:
-  /// **'字幕 · 资料 · 练习'**
-  String get studyShelfFromVideo;
 
   /// No description provided for @studyShelfHint.
   ///
@@ -13383,12 +13431,6 @@ abstract class AppLocalizations {
   /// **'依据 {parts}'**
   String studyCoverageLead(String parts);
 
-  /// No description provided for @studyCoverageNone.
-  ///
-  /// In zh, this message translates to:
-  /// **'未引用资料原文，内容可能来自常识或推断'**
-  String get studyCoverageNone;
-
   /// No description provided for @studySuggestOpen.
   ///
   /// In zh, this message translates to:
@@ -14468,6 +14510,18 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'角度吸附'**
   String get studyAngleSnapping;
+
+  /// No description provided for @modelsReviewGuidance.
+  ///
+  /// In zh, this message translates to:
+  /// **'复习讲义写法'**
+  String get modelsReviewGuidance;
+
+  /// No description provided for @modelsReviewGuidanceHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：讲每种算法时，先带我做一个例子。'**
+  String get modelsReviewGuidanceHint;
 }
 
 class _AppLocalizationsDelegate

@@ -131,7 +131,7 @@ class _LmsCourseSectionState extends State<LmsCourseSection> {
   @override
   Widget build(BuildContext context) {
     return AnimatedSize(
-      duration: Motion.medium2,
+      duration: Motion.durationOf(context, Motion.medium2),
       curve: Motion.emphasized,
       alignment: Alignment.topCenter,
       child: Column(

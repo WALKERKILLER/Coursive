@@ -46,7 +46,7 @@ void main() {
   // Selected content remains writable; movement belongs to the title.
   for (final type in ['text', 'note', 'image', 'pdfdoc']) {
     testWidgets(
-      '$type title moves, four grips scale, selected pen still writes',
+      '$type title moves, corners resize, selected pen still writes',
       (t) async {
         final d = sheet()
           ..cards.add(
@@ -67,14 +67,14 @@ void main() {
         final opposite = actual.cards.single.rect.topLeft;
         final grip = find.byKey(const ValueKey('study-resize-handle-2'));
         expect(t.getSize(grip), const Size(44, 44));
-        await t.drag(grip, const Offset(80, 60));
+        await t.drag(grip, const Offset(80, 36));
         await t.pumpAndSettle();
-        expect(actual.cards.single.contentScale, closeTo(1.2, .001));
+        expect(actual.cards.single.contentScale, 1);
+        expect(actual.cards.single.rect.size, const Size(480, 336));
         expect(
           (actual.cards.single.rect.topLeft - opposite).distance,
           lessThan(.001),
         );
-        expect(actual.json()['version'], 7);
         // Finger body never moves a reader or its attached ink.
         final scaled = actual.cards.single.rect;
         if (type == 'text' || type == 'note' || type == 'pdfdoc') {
@@ -94,8 +94,8 @@ void main() {
           StudyDocument.fromJson(key.currentState!.document!.json())
               .cards
               .single
-              .contentScale,
-          closeTo(1.2, .001),
+              .rect,
+          scaled,
         );
         await close(t);
       },

@@ -105,7 +105,7 @@ func (s *Server) Handler() http.Handler {
 				writeErr(w, err)
 				return
 			}
-			if s.Data != nil && r.Method != "GET" && !strings.HasPrefix(r.URL.Path, "/api/sync") && !strings.HasPrefix(r.URL.Path, "/api/data") {
+			if s.Data != nil && r.Method != "GET" && pattern != "POST /api/courses/{id}/material-files/batches" && !strings.HasPrefix(r.URL.Path, "/api/sync") && !strings.HasPrefix(r.URL.Path, "/api/data") {
 				s.Data.Soon(s.Ctx)
 			}
 			if v != nil {
@@ -335,6 +335,16 @@ func (s *Server) Handler() http.Handler {
 	h("DELETE /api/lectures/{id}/courseware", s.deleteCourseware)
 	h("GET /api/lectures/{id}/courseware/text", s.coursewareText)
 	h("GET /api/lectures/{id}/courseware/search", s.searchCourseware)
+	h("GET /api/lectures/{id}/courseware/displayed-page", s.displayedCoursewarePage)
+	h("GET /api/lectures/{id}/courseware/page-preview", s.classroomPagePreview)
+	h("POST /api/courses/{id}/review-handout", s.courseReview)
+	h("POST /api/courses/{id}/canvas-note", s.linkCourseNote)
+	h("POST /api/courses/{id}/material-folder", s.courseFolder)
+	h("GET /api/courses/{id}/material-files", s.courseFiles)
+	h("GET /api/courses/{id}/material-files/read", s.readCourseFile)
+	h("POST /api/courses/{id}/material-files/batches", s.previewCourseFiles)
+	h("POST /api/material-file-batches/{id}/apply", s.applyCourseFiles)
+	h("POST /api/material-file-batches/{id}/undo", s.undoCourseFiles)
 	mux.HandleFunc("GET /api/lectures/{id}/slides/{idx}/image", s.slideImage)
 	mux.HandleFunc("GET /api/lectures/{id}/streams/{n}", s.relayStream)
 	h("GET /api/storage", s.storage)
@@ -653,7 +663,13 @@ func (s *Server) localVideoStream(r *http.Request, id string) *playStream {
 // files) so the player can show slides while streaming.
 func (s *Server) slides(_ http.ResponseWriter, r *http.Request) (any, error) {
 	ctx, id := r.Context(), r.PathValue("id")
-	sl, err := s.lectureSlides(ctx, id)
+	var sl []store.Slide
+	var err error
+	if r.URL.Query().Get("local") == "1" {
+		sl, err = s.St.Slides(ctx, id)
+	} else {
+		sl, err = s.lectureSlides(ctx, id)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1084,6 +1100,10 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) files(w http.ResponseWriter, r *http.Request) {
 	rel := path.Clean("/" + r.PathValue("rel"))
+	if first, _, _ := strings.Cut(strings.TrimPrefix(rel, "/"), "/"); first == ".course-material-batches" || first == ".mirror-journal" {
+		http.NotFound(w, r)
+		return
+	}
 	abs := s.Lib.Abs(strings.TrimPrefix(rel, "/"))
 	if !strings.HasPrefix(abs, filepath.Clean(s.Lib.Root)+string(filepath.Separator)) {
 		http.NotFound(w, r)
@@ -1092,6 +1112,15 @@ func (s *Server) files(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(abs, ".db") || strings.Contains(abs, "library.db") {
 		http.NotFound(w, r)
 		return
+	}
+	if _, err := os.Lstat(abs); os.IsNotExist(err) {
+		if f, err := s.Lib.OpenFormerCourseware(r.Context(), strings.TrimPrefix(rel, "/")); err == nil {
+			defer f.Close()
+			if info, err := f.Stat(); err == nil {
+				http.ServeContent(w, r, info.Name(), info.ModTime(), f)
+				return
+			}
+		}
 	}
 	http.ServeFile(w, r, abs)
 }

@@ -453,7 +453,7 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
           AnimatedSize(
-            duration: Motion.medium4,
+            duration: Motion.durationOf(context, Motion.medium4),
             curve: Motion.emphasized,
             child: docked
                 ? Padding(

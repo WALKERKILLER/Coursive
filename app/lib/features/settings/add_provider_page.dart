@@ -209,7 +209,7 @@ class _PresetTileState extends State<_PresetTile> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
-        duration: Motion.medium1,
+        duration: Motion.durationOf(context, Motion.medium1),
         curve: Motion.emphasized,
         height: 132,
         decoration: BoxDecoration(
@@ -225,7 +225,7 @@ class _PresetTileState extends State<_PresetTile> {
               padding: const EdgeInsets.all(Space.md),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  AnimatedScale(scale: _hover ? 1.08 : 1, duration: Motion.medium2, curve: Motion.emphasized, child: ProviderLogo(providerId: p.providerId, size: 44)),
+                  AnimatedScale(scale: _hover ? 1.08 : 1, duration: Motion.durationOf(context, Motion.medium2), curve: Motion.emphasized, child: ProviderLogo(providerId: p.providerId, size: 44)),
                   const Spacer(),
                   if (widget.added)
                     Icon(Icons.check_circle_rounded, size: 20, color: cs.primary)

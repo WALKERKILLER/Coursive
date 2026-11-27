@@ -11,6 +11,7 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../theme/prefs.dart';
 import '../../l10n/l10n.dart';
+import 'playback_focus.dart';
 
 /// One video source: a remote stream or the downloaded file.
 class Source {
@@ -26,12 +27,31 @@ class Source {
   final Map<String, String> headers;
 }
 
+/// Decide the initial media offset before opening the native player.
+int playbackStartMs({
+  int? requested,
+  required int saved,
+  required int duration,
+  required bool autoResume,
+}) {
+  if (requested != null) {
+    if (requested < 0) return 0;
+    return duration > 0 && requested > duration ? duration : requested;
+  }
+  return autoResume && saved > 10000 && (duration == 0 || saved < duration - 30000)
+      ? saved
+      : 0;
+}
+
 /// Owns the media_kit players and everything the player UI shows.
 class LecturePlayer extends ChangeNotifier implements PlayerHandle {
+  Future<bool> Function(Map<String, dynamic>)? canvasCommand;
   LecturePlayer({
     required this.api,
     required this.lectureId,
     required this.prefs,
+    this.initialPositionMs,
+    this.opensInCanvas = false,
   }) {
     _subs.addAll([
       player.stream.position.listen((p) {
@@ -91,15 +111,17 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
         if (done) save();
       }),
     ]);
-    _saver = Timer.periodic(const Duration(seconds: 10), (_) => save());
+    if (lectureId.isNotEmpty) _saver = Timer.periodic(const Duration(seconds: 10), (_) => save());
   }
 
   final Api api;
   @override
   final String lectureId;
   final UiPrefs prefs;
+  final int? initialPositionMs;
+  final bool opensInCanvas;
 
-  late final _watch = ActivityTracker.instance?.clock(
+  late final _watch = lectureId.isEmpty ? null : ActivityTracker.instance?.clock(
     'watch',
     lectureId: lectureId,
   );
@@ -140,21 +162,26 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   bool outlineBusy = false;
   String? outlineError;
   bool loading = true;
-  Object? loadError;
+  Object? loadError, mediaError;
+  bool mediaLoading = false;
   int resumedFrom = 0;
 
   final _subs = <StreamSubscription>[];
   Timer? _saver;
   int _lastSaved = -1;
+  final _focus = PlaybackFocus.instance;
+  int? _ticket, _starting;
   bool _disposed = false;
 
   Source? get source => sources.isEmpty ? null : sources[sourceIdx];
   @override
   int get positionMs => position.value.inMilliseconds;
 
-  Future<void> load() async {
+  Future<void> load({int? playbackTicket}) async {
+    final ticket = opensInCanvas ? null : (_ticket = playbackTicket ?? _focus.request());
     loading = true;
-    loadError = null;
+    loadError = mediaError = null;
+    mediaLoading = true;
     notifyListeners();
     try {
       final d = (await api.get('/api/lectures/$lectureId') as Map)
@@ -188,52 +215,71 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
       final pb = d['playback'];
       final resumeMs = pb is Map ? (pb['position_ms'] as num? ?? 0).toInt() : 0;
 
-      media = LectureMedia(
-        (await api.get('/api/lectures/$lectureId/media') as Map)
-            .cast<String, dynamic>(),
-      );
-      sources = [
-        for (final s in media!.streams)
-          Source(
-            label: s.label,
-            uri: media!.relayed
-                ? api.uri(s.url, {'token': api.token}).toString()
-                : s.url,
-            headers: media!.headers,
-          ),
-      ];
-      if (media!.localPath.isNotEmpty) {
-        sources.insert(
-          0,
-          Source(
-            label: localLabel.isEmpty ? l10n.commonLocal : localLabel,
-            uri: Uri.file(media!.localPath).toString(),
-            local: true,
-          ),
-        );
+      if (_disposed) return;
+      if (opensInCanvas) {
+        loading = false;
+        notifyListeners();
+        unawaited(_loadSide());
       }
-      if (sources.isEmpty) throw StateError(l10n.playerNoVideo);
-      sourceIdx = 0;
-      if (media!.duration > 0) duration = Duration(seconds: media!.duration);
-      loading = false;
-      notifyListeners();
-
-      final durMs = duration.inMilliseconds;
-      final start =
-          prefs.autoResume &&
-              resumeMs > 10000 &&
-              (durMs == 0 || resumeMs < durMs - 30000)
-          ? resumeMs
-          : 0;
-      resumedFrom = start;
-      await _open(source!, Duration(milliseconds: start));
-      await player.setRate(prefs.defaultSpeed);
-      unawaited(_loadSide());
+      try {
+        await _loadMedia(localLabel, resumeMs, ticket);
+      } catch (e) {
+        if (!opensInCanvas) rethrow;
+        mediaError = e;
+      } finally {
+        mediaLoading = false;
+        if (!_disposed) notifyListeners();
+      }
+      if (!opensInCanvas && !_disposed) unawaited(_loadSide());
     } catch (e) {
+      if (_disposed) return;
       loading = false;
       loadError = e;
       notifyListeners();
     }
+  }
+
+  Future<void> _loadMedia(String localLabel, int resumeMs, int? ticket) async {
+    media = LectureMedia(
+      (await api.get('/api/lectures/$lectureId/media') as Map)
+          .cast<String, dynamic>(),
+    );
+    sources = [
+      for (final s in media!.streams)
+        Source(
+          label: s.label,
+          uri: media!.relayed
+              ? api.uri(s.url, {'token': api.token}).toString()
+              : s.url,
+          headers: media!.headers,
+        ),
+    ];
+    if (media!.localPath.isNotEmpty) {
+      sources.insert(
+        0,
+        Source(
+          label: localLabel.isEmpty ? l10n.commonLocal : localLabel,
+          uri: Uri.file(media!.localPath).toString(),
+          local: true,
+        ),
+      );
+    }
+    if (_disposed) return;
+    if (sources.isEmpty) throw StateError(l10n.playerNoVideo);
+    sourceIdx = 0;
+    if (media!.duration > 0) duration = Duration(seconds: media!.duration);
+    loading = false;
+    notifyListeners();
+
+    final start = playbackStartMs(
+      requested: initialPositionMs,
+      saved: resumeMs,
+      duration: duration.inMilliseconds,
+      autoResume: prefs.autoResume,
+    );
+    resumedFrom = initialPositionMs == null ? start : 0;
+    await _open(source!, Duration(milliseconds: start), ticket: ticket);
+    if (!_disposed) await player.setRate(prefs.defaultSpeed);
   }
 
   Future<void> _loadSide() async {
@@ -358,12 +404,19 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     }
   }
 
+  /// An imported recording has its own playhead and no lecture progress record.
+  Future<void> openMaterial(Source material, int at) async {
+    assert(lectureId.isEmpty);
+    sources = [material];
+    await _open(material, Duration(milliseconds: at));
+  }
+
   Future<void> retryPlayback() async {
     final current = source;
     if (current == null) return;
     try {
       final previousRate = rate;
-      await _open(current, position.value);
+      await _open(current, position.value, ticket: _ticket = _focus.request());
       await player.setRate(previousRate);
     } catch (e) {
       error = e.toString();
@@ -371,7 +424,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     }
   }
 
-  Future<void> _open(Source s, Duration start) async {
+  Future<void> _open(Source s, Duration start, {int? ticket}) async {
     _codecCheck?.cancel();
     _openRevision++;
     _recoverableCodecError = false;
@@ -386,20 +439,21 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
         httpHeaders: s.headers,
         start: start > Duration.zero ? start : null,
       ),
+      play: false,
     );
+    if (ticket != null && !_disposed) await play(ticket: ticket);
   }
 
   Future<void> switchSource(int i) async {
     if (i == sourceIdx || i >= sources.length) return;
     final at = position.value;
-    final wasPlaying = playing;
+    final ticket = playing ? (_ticket = _focus.request()) : null;
     final r = rate;
     sourceIdx = i;
     if (pipIdx == i) await setPip(null);
     notifyListeners();
-    await _open(sources[i], at);
+    await _open(sources[i], at, ticket: ticket);
     await player.setRate(r);
-    if (!wasPlaying) await player.pause();
   }
 
   /// Shows a second camera in a floating window, kept in sync with the main one.
@@ -442,16 +496,49 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
 
   @override
   void seekTo(int ms) {
+    if (_starting != null) _focus.cancel(_starting);
+    unawaited(_seek(ms));
+  }
+
+  Future<void> _pauseNative() async {
+    await player.pause();
+    await pip?.pause();
+  }
+
+  Future<void> pause() {
+    _focus.cancel(_ticket);
+    return _disposed ? Future.value() : _focus.stop(this, _pauseNative);
+  }
+
+  Future<void> togglePlayback() =>
+      playing || (_starting != null && _focus.current(_starting!)) ? pause() : play();
+
+  Future<void> play({int? ticket}) => _start(ticket ?? _focus.request());
+  Future<void> playFrom(int ms, {int? ticket}) => _start(ticket ?? _focus.request(), at: ms);
+
+  Future<void> _start(int ticket, {int? at}) async {
+    if (_disposed || !_focus.current(ticket)) return;
+    _ticket = _starting = ticket;
+    try {
+      if (at != null) await _seek(at);
+      if (_disposed) return;
+      await _focus.start(ticket, this, pause: _pauseNative, play: player.play);
+    } finally {
+      if (_starting == ticket) _starting = null;
+    }
+  }
+
+  Future<void> _seek(int ms) async {
+    final requested = ms < 0 ? 0 : ms;
     final d = Duration(
-      milliseconds: ms.clamp(
+      milliseconds: requested.clamp(
         0,
-        duration.inMilliseconds > 0 ? duration.inMilliseconds : ms,
+        duration.inMilliseconds > 0 ? duration.inMilliseconds : requested,
       ),
     );
     position.value = d;
     seekEvents.value++;
-    player.seek(d);
-    pip?.seek(d);
+    await Future.wait([player.seek(d), if (pip case final companion?) companion.seek(d)]);
   }
 
   void seekBy(int seconds) => seekTo(positionMs + seconds * 1000);
@@ -522,6 +609,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   // ---- persistence ----
 
   Future<void> save() async {
+    if (lectureId.isEmpty) return;
     final ms = positionMs;
     if (ms <= 0 || (ms - _lastSaved).abs() < 2000) return;
     _lastSaved = ms;
@@ -579,16 +667,20 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   }
 
   Future<void> close() async {
+    if (_disposed) return;
+    _disposed = true;
+    _focus.cancel(_ticket);
     _watch?.stop();
     await save();
-    _disposed = true;
     _codecCheck?.cancel();
     _saver?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
-    await pip?.dispose();
-    await player.dispose();
+    await _focus.stop(this, () async {
+      await pip?.dispose();
+      await player.dispose();
+    });
     seekEvents.dispose();
     position.dispose();
     buffer.dispose();

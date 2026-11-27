@@ -43,6 +43,10 @@ Future<void> createDocument(BuildContext context, String courseId) async {
     );
     return;
   }
+  await createBlankCanvas(context, courseId);
+}
+
+Future<void> createBlankCanvas(BuildContext context, String courseId) async {
   String title = '';
   final name = await showDialog<String>(
     context: context,
@@ -103,7 +107,7 @@ class _NotebookPageState extends State<_NotebookPage> {
   final canvas = GlobalKey<StudyCanvasState>();
   bool leaving = false;
   Future<void> close() async {
-    if (leaving) return;
+    if (leaving || (canvas.currentState?.returnFromSource() ?? false)) return;
     leaving = true;
     if (await canvas.currentState?.flush() == false) {
       leaving = false;

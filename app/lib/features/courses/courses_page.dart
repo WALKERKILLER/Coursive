@@ -271,7 +271,7 @@ class _CoursesPageState extends State<CoursesPage> {
                               width: w,
                               child: AnimatedOpacity(
                                 opacity: course.hidden ? 0.55 : 1,
-                                duration: Motion.medium1,
+                                duration: Motion.durationOf(context, Motion.medium1),
                                 child: CourseCard(
                                   course: course,
                                   onTap: () => Navigator.of(context).push(
@@ -466,7 +466,7 @@ class _Swatch extends StatelessWidget {
       onTap: onTap,
       customBorder: const CircleBorder(),
       child: AnimatedContainer(
-        duration: Motion.short4,
+        duration: Motion.durationOf(context, Motion.short4),
         width: 44,
         height: 44,
         decoration: BoxDecoration(

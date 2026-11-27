@@ -225,6 +225,14 @@ class AssistantController extends ChangeNotifier {
   }
 
   /// Metadata of the selected model from the provider registry.
+  Map<String, dynamic>? get explicitModelChoice {
+    final prefs = models?['prefs'] as Map?;
+    final provider = prefs?['provider'];
+    final model = prefs?['model'];
+    if (provider is! String || provider.isEmpty || model is! String || model.isEmpty) return null;
+    return {'provider': provider, 'model': model};
+  }
+
   Map<String, dynamic>? get selectedModelInfo {
     final s = selected;
     if (s == null) return null;
@@ -444,10 +452,13 @@ class AssistantController extends ChangeNotifier {
     final id = '${b.proposal?['id']}';
     final r = (await app.api.post('/agent/proposals/$id/$action') as Map).cast<String, dynamic>();
     final p = {...?b.proposal, 'state': r['state']};
-    b.details = {...?b.details, 'proposal': p};
-    notifyListeners();
     final result = (r['result'] as Map?)?.cast<String, dynamic>();
+    b.details = {...?b.details, 'proposal': p, if (result != null) 'result': result};
+    notifyListeners();
     if (result?['app'] is Map) _appOps.add({'op': 'prefs', 'set': result!['app'], 'silent': true});
+    if (result?['app_op'] is Map) {
+      _appOps.add((result!['app_op'] as Map).cast<String, dynamic>());
+    }
     return r;
   }
 
@@ -468,6 +479,9 @@ class AssistantController extends ChangeNotifier {
     b.details = {...?b.details, 'app': {...?b.appOp, 'undone': true}};
     final result = (r['result'] as Map?)?.cast<String, dynamic>();
     if (result?['app'] is Map) _appOps.add({'op': 'prefs', 'set': result!['app'], 'silent': true});
+    if (result?['app_op'] is Map) {
+      _appOps.add((result!['app_op'] as Map).cast<String, dynamic>());
+    }
     notifyListeners();
   }
 
@@ -598,7 +612,7 @@ class AssistantController extends ChangeNotifier {
       'session_id': ?sessionId,
       if (sessionId == null && view == 'bot') 'agent': 'bot',
       if (sessionId == null && view != 'bot') 'course_id': ?pendingCourse?.id,
-      if (selected case final choice?) 'model_choice': {'provider':choice['provider'],'model':choice['model']},
+      if (explicitModelChoice case final choice?) 'model_choice': {'provider':choice['provider'],'model':choice['model']},
       'message': msg,
       'context': _context(),
     }).listen(

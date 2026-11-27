@@ -14,6 +14,11 @@ class _MarkdownPassage {
 
   bool matches(StudyAnchor anchor) {
     if (anchor.quote != quote) return false;
+    if (range != null && anchor.end > anchor.start &&
+        anchor.fingerprint.replaceFirst(RegExp(r'^source-'), '') ==
+            fingerprint.replaceFirst(RegExp(r'^source-'), '')) {
+      return anchor.start == range!.start && anchor.end == range!.end;
+    }
     if (anchor.fingerprint == fingerprint) return anchor.id == locator;
     if (anchor.fingerprint == 'source-$fingerprint' && range != null) {
       return anchor.start == range!.start && anchor.end == range!.end;
@@ -53,11 +58,11 @@ extension _StudyMarkdownEditing on StudyCanvasState {
     return _markdownMarks[card.id]?[block] ?? const [];
   }
 
-  Widget _markdownPassage(StudyCard card, String body, {int block = -1}) {
-    final content = CoursiveMarkdown(
+  Widget _markdownPassage(StudyCard card, String body, {int block = -1, int? sectionOffset, Widget? rendered}) {
+    final content = rendered ?? CoursiveMarkdown(
       body,
       lectureId: widget.standalone ? '' : widget.ctl.lectureId,
-      onRef: widget.standalone ? null : (ref) => _openMarkdownReference(ref),
+      onRef: _openMarkdownReference,
       linkDecorationStyle: TextDecorationStyle.dashed,
       baseDir: card.originalPath.isEmpty
           ? ''
@@ -79,6 +84,8 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       card: card,
       block: block,
       body: body,
+      sectionOffset: sectionOffset,
+      sourceText: sectionOffset == null ? null : card.text,
       selectable: selectable,
       marks: marks,
       findNote: (p) => document!.cards
@@ -90,19 +97,26 @@ extension _StudyMarkdownEditing on StudyCanvasState {
           )
           .firstOrNull,
       edit: card.markdownReader ? (p) => _text(card, p.range) : null,
-      annotate: (p, note) => _annotatePassage(card, p, note),
+      annotate: (p, note) {
+        if (sectionOffset != null) _closeMaterialReader();
+        _annotatePassage(card, p, note);
+      },
       linkedAsides: (p) => document!.cards.where(
         (c) =>
             c.passageAside &&
             document!.visible(c.layer) &&
             c.sources.any((a) => a.objectId == card.id && p.matches(a)),
       ),
-      reveal: _revealCard,
+      reveal: (target) {
+        if (sectionOffset != null) _closeMaterialReader();
+        _revealCard(target);
+      },
       evidence: _evidenceFocus,
       onPassageMissing: () => _toast(l10n.studyEvidenceStale),
       aside: widget.standalone
           ? null
           : (p) {
+              if (sectionOffset != null) _closeMaterialReader();
               final anchor = _passageAnchor(card, p);
               _startConversation(
                 beside: card,
@@ -115,22 +129,22 @@ extension _StudyMarkdownEditing on StudyCanvasState {
   }
 
   void _openMarkdownReference(CoursiveRef ref) {
-    final lectureId = widget.ctl.lectureId;
-    if (ref is TimeRef &&
-        (ref.lectureId.isEmpty || ref.lectureId == lectureId)) {
-      widget.ctl.seekTo(ref.seconds * 1000);
-      final d = document!;
-      final video = d.cards
-          .where((c) => c.type == 'lecture' && d.visible(c.layer))
-          .firstOrNull;
-      if (video != null) {
-        _revealCard(video);
-      } else {
-        widget.onClassic?.call();
-      }
+    final lectureId = widget._player?.lectureId ?? '';
+    if (_focusedMaterial == null && _followCanvasReference(ref, lectureId)) {
       return;
     }
-    openRef(context, ref, lectureId: lectureId);
+    openRef(
+      context,
+      ref,
+      lectureId: lectureId,
+      onSeek: (time) => _playReadingReference(
+        time.lectureId.isEmpty ? lectureId : time.lectureId,
+        time.startMs ?? time.seconds * 1000,
+      ),
+      onPlay: (id, ms) {
+        if (!_showCanvasRecording(id, ms)) unawaited(_playReadingReference(id, ms));
+      },
+    );
   }
 
   // Keep exact anchors in the unchanged prefix and suffix of a source edit.
@@ -191,7 +205,7 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       StudyAnchor(
         id: passage.locator,
         objectId: source.id,
-        workspaceId: widget.ctl.lectureId,
+        workspaceId: widget.notebookId ?? widget.ctl.lectureId,
         kind: source.type,
         start: passage.range?.start ?? 0,
         end: passage.range?.end ?? 0,
@@ -241,40 +255,86 @@ extension _StudyMarkdownEditing on StudyCanvasState {
       d.cards.add(note);
       d.changed();
     }
+    if (note.collapsed) {
+      d.checkpoint();
+      _setCardCollapsed(note, false);
+      d.changed();
+    }
     _passageEditCheckpoint = null;
     _editingPassage = note.id;
     _revealCard(note);
   }
 
   Widget _passageEditor(StudyCard card) => Padding(
-    padding: const EdgeInsets.all(Space.md),
-    child: TextFormField(
-      key: ObjectKey(card),
-      initialValue: card.text,
-      autofocus: true,
-      expands: true,
-      maxLines: null,
-      maxLength: 2000,
-      textAlignVertical: TextAlignVertical.top,
-      decoration: InputDecoration.collapsed(hintText: l10n.studyAnnotationHint),
-      onChanged: (value) {
-        final d = document!;
-        if (!d.editable(card.layer) || !d.cards.contains(card)) return;
-        if (_passageEditCheckpoint != card.id) {
-          d.checkpoint();
-          _passageEditCheckpoint = card.id;
-        }
-        card.text = value;
-        d.changed();
-      },
+    padding: const EdgeInsets.all(Space.sm),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: TextFormField(
+          key: ObjectKey(card),
+          initialValue: card.text,
+          autofocus: true,
+          minLines: 1,
+          maxLines: null,
+          maxLength: 2000,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+          decoration: InputDecoration.collapsed(hintText: l10n.studyAnnotationHint),
+          onChanged: (value) {
+            final d = document!;
+            if (!d.editable(card.layer) || !d.cards.contains(card)) return;
+            if (_passageEditCheckpoint != card.id) {
+              d.checkpoint();
+              _passageEditCheckpoint = card.id;
+            }
+            card.text = value;
+            d.changed();
+          },
+        )),
+        IconButton(
+          tooltip: l10n.commonSave,
+          icon: const Icon(Icons.check, size: 18),
+          onPressed: () => _update(() {
+            _editingPassage = null;
+            _passageEditCheckpoint = null;
+          }),
+        ),
+      ],
     ),
   );
+}
+
+class _AnnotationMeasure extends SingleChildRenderObjectWidget {
+  const _AnnotationMeasure({required this.onHeight, required super.child});
+  final ValueChanged<double> onHeight;
+
+  @override
+  _AnnotationMeasureBox createRenderObject(BuildContext context) => _AnnotationMeasureBox(onHeight);
+  @override
+  void updateRenderObject(BuildContext context, _AnnotationMeasureBox box) => box.onHeight = onHeight;
+}
+
+class _AnnotationMeasureBox extends RenderProxyBox {
+  _AnnotationMeasureBox(this.onHeight);
+  ValueChanged<double> onHeight;
+  double? reported;
+  @override
+  void performLayout() {
+    super.performLayout();
+    final height = size.height;
+    if (reported == height) return;
+    reported = height;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (attached && reported == height) onHeight(height);
+    });
+  }
 }
 
 class _SelectableMarkdownPassage extends StatefulWidget {
   const _SelectableMarkdownPassage({
     super.key,
     required this.card,
+    this.sectionOffset,
+    this.sourceText,
     required this.block,
     required this.body,
     required this.selectable,
@@ -292,6 +352,8 @@ class _SelectableMarkdownPassage extends StatefulWidget {
   final StudyCard card;
   final String body;
   final int block;
+  final int? sectionOffset;
+  final String? sourceText;
   final bool selectable;
   final List<_MarkdownMark> marks;
   final Widget child;
@@ -349,8 +411,9 @@ class _SelectableMarkdownPassageState
 
   Iterable<({RenderParagraph paragraph, Rect box})> _rangeBoxes(
     TextRange range,
-    List<({RenderParagraph paragraph, int start, String text})> fragments,
-  ) sync* {
+    List<({RenderParagraph paragraph, int start, String text})> fragments, {
+    ui.BoxHeightStyle boxHeightStyle = ui.BoxHeightStyle.tight,
+  }) sync* {
     var offset = 0;
     for (final fragment in fragments) {
       final from = math.max(0, range.start - offset);
@@ -362,6 +425,7 @@ class _SelectableMarkdownPassageState
             baseOffset: fragment.start + from,
             extentOffset: fragment.start + to,
           ),
+          boxHeightStyle: boxHeightStyle,
         )) {
           yield (paragraph: fragment.paragraph, box: box.toRect());
         }
@@ -381,13 +445,46 @@ class _SelectableMarkdownPassageState
     for (final mark in widget.marks) {
       final range = _renderedRange(mark.anchor, rendered);
       if (range == null) continue;
-      for (final (:paragraph, :box) in _rangeBoxes(range, fragments)) {
-        yield (
-          box: MatrixUtils.transformRect(paragraph.getTransformTo(root), box),
-          highlight: mark.highlight,
-        );
+      final boxes =
+          _rangeBoxes(
+            range,
+            fragments,
+            boxHeightStyle: mark.highlight
+                ? ui.BoxHeightStyle.tight
+                : ui.BoxHeightStyle.max,
+          ).map(
+            (part) => MatrixUtils.transformRect(
+              part.paragraph.getTransformTo(root),
+              part.box,
+            ),
+          );
+      for (final box in mark.highlight ? boxes : _joinUnderlineRuns(boxes)) {
+        yield (box: box, highlight: mark.highlight);
       }
     }
+  }
+
+  // Continue the dash pattern across adjacent font runs on the same line.
+  Iterable<Rect> _joinUnderlineRuns(Iterable<Rect> boxes) sync* {
+    final ordered = boxes.toList()
+      ..sort((a, b) {
+        final byLine = a.top.compareTo(b.top);
+        return byLine == 0 ? a.left.compareTo(b.left) : byLine;
+      });
+    Rect? line;
+    for (final box in ordered) {
+      if (line != null) {
+        if (line.top == box.top &&
+            line.bottom == box.bottom &&
+            box.left <= line.right + .01) {
+          line = line.expandToInclude(box);
+          continue;
+        }
+        yield line;
+      }
+      line = box;
+    }
+    if (line != null) yield line;
   }
 
   // The selection offsets count selectable characters, which exclude the
@@ -467,8 +564,8 @@ class _SelectableMarkdownPassageState
   }
 
   TextRange? _renderedRange(StudyAnchor anchor, String rendered) {
-    final hash = _fingerprint ??= outlineNoteHash(widget.body);
-    if (anchor.fingerprint == hash) {
+    final hash = _fingerprint ??= outlineNoteHash(widget.sourceText ?? widget.body);
+    if (widget.sectionOffset == null && anchor.fingerprint == hash) {
       final parts = anchor.id.split('-');
       final start = int.tryParse(parts.elementAtOrNull(2) ?? '');
       final end = int.tryParse(parts.elementAtOrNull(3) ?? '');
@@ -505,16 +602,16 @@ class _SelectableMarkdownPassageState
     return null;
   }
 
-  int get _sourceBase => widget.block < 0
+  int get _sourceBase => widget.sectionOffset ?? (widget.block < 0
       ? 0
       : widget.card.blocks
             .take(widget.block)
-            .fold<int>(0, (n, b) => n + b.plainText.length + 1);
+            .fold<int>(0, (n, b) => n + b.plainText.length + 1));
 
   @override
   void didUpdateWidget(_SelectableMarkdownPassage old) {
     super.didUpdateWidget(old);
-    if (old.body != widget.body) {
+    if (old.body != widget.body || old.sectionOffset != widget.sectionOffset || old.sourceText != widget.sourceText) {
       _fingerprint = null;
       _lastPassage = null;
       _quote = '';
@@ -563,7 +660,9 @@ class _SelectableMarkdownPassageState
     return _lastPassage = _MarkdownPassage(
       _quote,
       locator,
-      _fingerprint ??= outlineNoteHash(body),
+      widget.sectionOffset != null
+          ? 'source-${_fingerprint ??= outlineNoteHash(widget.sourceText ?? widget.body)}'
+          : _fingerprint ??= outlineNoteHash(body),
       exact,
     );
   }

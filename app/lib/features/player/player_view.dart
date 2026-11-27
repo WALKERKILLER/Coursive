@@ -32,17 +32,14 @@ class PlayerView extends StatefulWidget {
     required this.onBack,
     this.panelOpen,
     this.onTogglePanel,
-    this.onCanvas,
     this.embedded = false,
   });
   final LecturePlayer ctl;
   final bool fullscreen, embedded;
-  final VoidCallback onFullscreen, onBack;
+  final VoidCallback onFullscreen;
+  final VoidCallback? onBack;
   final bool? panelOpen;
   final VoidCallback? onTogglePanel;
-
-  /// Opens the lecture on the study canvas; null inside the canvas.
-  final VoidCallback? onCanvas;
 
   @override
   State<PlayerView> createState() => PlayerViewState();
@@ -202,7 +199,7 @@ class PlayerViewState extends State<PlayerView> {
                     setState(() => _controls = !_controls);
                     if (_controls) _bump();
                   } else {
-                    ctl.player.playOrPause();
+                    ctl.togglePlayback();
                     _bump();
                   }
                 },
@@ -215,7 +212,7 @@ class PlayerViewState extends State<PlayerView> {
                         } else if (x > 0.65) {
                           seekBy(prefs.seekStepSec);
                         } else {
-                          ctl.player.playOrPause();
+                          ctl.togglePlayback();
                         }
                       }
                     : null,
@@ -315,7 +312,7 @@ class PlayerViewState extends State<PlayerView> {
               child: IgnorePointer(
                 child: Center(
                   child: AnimatedSwitcher(
-                    duration: Motion.short4,
+                    duration: Motion.durationOf(context, Motion.short4),
                     transitionBuilder: (c, a) => FadeTransition(
                       opacity: a,
                       child: ScaleTransition(
@@ -340,7 +337,7 @@ class PlayerViewState extends State<PlayerView> {
             Center(
               child: IgnorePointer(
                 child: AnimatedSwitcher(
-                  duration: Motion.short3,
+                  duration: Motion.durationOf(context, Motion.short3),
                   child: _dragSeekMs != null
                       ? _Pill(
                           key: const ValueKey('ds'),
@@ -369,12 +366,12 @@ class PlayerViewState extends State<PlayerView> {
             ),
             // Resume prompt: bottom-left, above the controls while they show.
             AnimatedPositioned(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Motion.emphasized,
               left: Space.lg,
               bottom: widget.embedded ? 44 : (showUi ? 152 : Space.lg),
               child: AnimatedSwitcher(
-                duration: Motion.medium2,
+                duration: Motion.durationOf(context, Motion.medium2),
                 switchInCurve: Motion.emphasizedDecelerate,
                 switchOutCurve: Motion.emphasizedAccelerate,
                 transitionBuilder: (c, a) => FadeTransition(
@@ -422,15 +419,7 @@ class PlayerViewState extends State<PlayerView> {
               : SystemMouseCursors.none,
           onHover: (_) => _bump(),
           child: widget.embedded
-              ? ColoredBox(
-                  color: const Color(0xff16181c),
-                  child: Column(
-                    children: [
-                      Expanded(child: picture),
-                      controls,
-                    ],
-                  ),
-                )
+              ? _EmbeddedVideoFrame(picture: picture, controls: controls)
               : picture,
         );
       },
@@ -470,7 +459,7 @@ class PlayerViewState extends State<PlayerView> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: AnimatedSwitcher(
-                  duration: Motion.medium2,
+                  duration: Motion.durationOf(context, Motion.medium2),
                   switchInCurve: Motion.emphasizedDecelerate,
                   transitionBuilder: (child, a) => FadeTransition(
                     opacity: a,
@@ -507,31 +496,16 @@ class PlayerViewState extends State<PlayerView> {
       child: SafeArea(
         bottom: false,
         child: Row(children: [
-          IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded), color: Colors.white, tooltip: l10n.commonBack),
+          if (widget.onBack != null) IconButton(onPressed: widget.onBack, icon: const Icon(Icons.arrow_back_rounded), color: Colors.white, tooltip: l10n.commonBack),
           const SizedBox(width: Space.xs),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-              Text(l?.shortTitle ?? '', style: tt.titleMedium?.copyWith(color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(l?.shortTitle ?? ctl.source?.label ?? '', style: tt.titleMedium?.copyWith(color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
               if (ctl.course != null)
                 Text(ctl.course!.title, style: tt.bodySmall?.copyWith(color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
             ]),
           ),
           if (ctl.sources.length > 1) _sourcePicker(context),
-          if (widget.onCanvas != null && !widget.fullscreen)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.xs),
-              child: TextButton.icon(
-                key: const ValueKey('player-open-canvas'),
-                onPressed: widget.onCanvas,
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  backgroundColor: Colors.white.withValues(alpha: .14),
-                  visualDensity: VisualDensity.compact,
-                ),
-                icon: const Icon(Icons.draw_outlined, size: 18),
-                label: Text(l10n.studyOpenCanvas),
-              ),
-            ),
           if (widget.onTogglePanel != null)
             IconButton(
               tooltip: widget.panelOpen == true ? l10n.playerCollapsePanel : l10n.playerExpandPanel,
@@ -622,7 +596,7 @@ class PlayerViewState extends State<PlayerView> {
                   children: [
                     _PlayButton(
                       playing: ctl.playing,
-                      onPressed: () => ctl.player.playOrPause(),
+                      onPressed: () => ctl.togglePlayback(),
                     ),
                     const SizedBox(width: Space.xs),
                     if (!compact) ...[
@@ -720,7 +694,7 @@ class PlayerViewState extends State<PlayerView> {
                               : Icons.closed_caption_off_outlined,
                         ),
                       ),
-                    if (!narrow)
+                    if (!narrow && ctl.lectureId.isNotEmpty)
                       IconButton(
                         tooltip: l10n.playerBookmarkTooltip,
                         onPressed: () async {
@@ -788,7 +762,7 @@ class _VolumeControlState extends State<_VolumeControl> {
           icon: Icon(v == 0 ? Icons.volume_off_rounded : v < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
         ),
         AnimatedContainer(
-          duration: Motion.medium1,
+          duration: Motion.durationOf(context, Motion.medium1),
           curve: Motion.emphasized,
           width: _hover ? 96 : 0,
           child: ClipRect(
@@ -816,7 +790,7 @@ class _Subtitle extends StatelessWidget {
         final seg = i >= 0 && ctl.segments[i].endMs + 600 >= p.inMilliseconds ? ctl.segments[i] : null;
         return Center(
           child: AnimatedSwitcher(
-            duration: Motion.short3,
+            duration: Motion.durationOf(context, Motion.short3),
             child: seg == null
                 ? const SizedBox.shrink()
                 : Container(
@@ -888,6 +862,59 @@ class _ResumePrompt extends StatelessWidget {
   }
 }
 
+class _EmbeddedVideoFrame extends StatelessWidget {
+  const _EmbeddedVideoFrame({required this.picture, required this.controls});
+  final Widget picture, controls;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0xff16181c),
+    child: Column(children: [Expanded(child: picture), controls]),
+  );
+}
+
+/// A recording at rest uses the embedded player frame without a native decoder.
+class EmbeddedVideoPreview extends StatelessWidget {
+  const EmbeddedVideoPreview({
+    super.key, this.poster, required this.onPlay, required this.onExpand,
+    this.durationMs = 0, this.positionMs = 0, this.onSeek,
+  });
+  final Widget? poster;
+  final VoidCallback onPlay, onExpand;
+  final int durationMs, positionMs;
+  final ValueChanged<int>? onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final position = positionMs.clamp(0, durationMs);
+    return _EmbeddedVideoFrame(
+      picture: VideoCardHoldRegion(child: GestureDetector(
+        onTap: onPlay, excludeFromSemantics: true,
+        child: ColoredBox(color: Colors.black, child: SizedBox.expand(child: poster)),
+      )),
+      controls: VideoCardControls(child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.sm, 0, Space.sm, Space.xs),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (durationMs > 0 && onSeek != null)
+            RecordingSeekBar(positionMs: position, durationMs: durationMs, onSeek: onSeek!),
+          Row(children: [
+            _PlayButton(playing: false, onPressed: onPlay),
+            if (durationMs > 0) ...[
+              const SizedBox(width: Space.sm),
+              Flexible(child: Text('${fmtClock(position)}  /  ${fmtClock(durationMs)}',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white))),
+            ],
+            const Spacer(),
+            IconButton(onPressed: onExpand, tooltip: l10n.playerFullscreen,
+              icon: const Icon(Icons.fullscreen_rounded, color: Colors.white)),
+          ]),
+        ]),
+      )),
+    );
+  }
+}
+
 /// Play/pause that morphs: a circle while paused, a rounded square while
 /// playing (M3 Expressive shape morph).
 class _PlayButton extends StatelessWidget {
@@ -900,7 +927,7 @@ class _PlayButton extends StatelessWidget {
     return Tooltip(
       message: playing ? l10n.playerPauseTooltip : l10n.playerPlayTooltip,
       child: AnimatedContainer(
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         curve: Motion.emphasized,
         width: 48,
         height: 48,
@@ -911,7 +938,7 @@ class _PlayButton extends StatelessWidget {
             borderRadius: r,
             onTap: onPressed,
             child: AnimatedSwitcher(
-              duration: Motion.short4,
+              duration: Motion.durationOf(context, Motion.short4),
               transitionBuilder: (c, a) => ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(a), child: FadeTransition(opacity: a, child: c)),
               child: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded, key: ValueKey(playing), size: 28, color: Colors.black87),
             ),

@@ -7,7 +7,7 @@ extension _StudyCardActions on StudyCanvasState {
     final destination = !busy && d.editable(d.activeLayer);
     final editable = !busy && d.canTransformCard(card);
     final removable =
-        editable && card.type != 'lecture' && card.pdfColumn.isEmpty;
+        !busy && d.canRemoveCard(card);
     final duplicable = !busy && card.duplicable;
     final actions = [
       if (editable &&
@@ -61,6 +61,7 @@ extension _StudyCardActions on StudyCanvasState {
         key: const ValueKey('study-card-selection-more'),
         icon: const Icon(Icons.more_horiz, size: 18),
         tooltip: l10n.studySelectionMore,
+        style: _actionBarButtonStyle(context),
         onSelected: (action) => action(),
         itemBuilder: (_) => [
           PopupMenuItem(
@@ -70,28 +71,11 @@ extension _StudyCardActions on StudyCanvasState {
         ],
       ),
     ];
-    return Material(
+    return KeyedSubtree(
       key: _cardActionsKey,
-      color: chrome.surface,
-      elevation: _dark ? 0 : 1,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Corners.lg),
-        side: BorderSide(color: chrome.line),
-      ),
-      child: SizedBox(
+      child: _floatingActionBar(
         key: const ValueKey('study-card-selection-bar'),
-        height: 44,
-        width: math.min(actions.length * 44, math.max(0, _viewport.width - 24)),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final action in actions)
-                SizedBox(width: 44, height: 44, child: action),
-            ],
-          ),
-        ),
+        actions: actions,
       ),
     );
   }

@@ -182,7 +182,7 @@ class _OutlineTabState extends State<OutlineTab> with AutomaticKeepAliveClientMi
         ]),
       ),
       AnimatedSwitcher(
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         child: ctl.outlineBusy ? const LinearProgressIndicator(minHeight: 2) : const SizedBox(height: 2),
       ),
       Expanded(
@@ -236,7 +236,7 @@ class _ChapterRow extends StatelessWidget {
           child: Column(children: [
             Container(width: 2, height: 14, color: first ? Colors.transparent : (state == _Pass.ahead ? cs.outlineVariant : cs.primary)),
             AnimatedContainer(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Motion.emphasized,
               width: now ? 24 : 20,
               height: now ? 24 : 20,
@@ -260,7 +260,7 @@ class _ChapterRow extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.only(bottom: Space.xs),
             child: AnimatedContainer(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               curve: Motion.emphasized,
               decoration: BoxDecoration(color: now ? cs.secondaryContainer : Colors.transparent, borderRadius: BorderRadius.circular(Corners.lg)),
               child: InkWell(
@@ -319,7 +319,17 @@ class _Drafting extends StatefulWidget {
 }
 
 class _DraftingState extends State<_Drafting> with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context) || !TickerMode.of(context)) {
+      _pulse.stop();
+      _pulse.value = 1;
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
 
   @override
   void dispose() {

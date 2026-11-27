@@ -660,7 +660,7 @@ class _CategoryTile extends StatelessWidget {
     final leading = account
         ? const UserAvatar(size: 40)
         : AnimatedContainer(
-            duration: Motion.medium1,
+            duration: Motion.durationOf(context, Motion.medium1),
             curve: Motion.emphasized,
             width: 40,
             height: 40,
@@ -900,7 +900,7 @@ class _Appearance extends StatelessWidget {
               ),
             AnimatedOpacity(
               opacity: hasSystem && p.dynamicColor ? 0.4 : 1,
-              duration: Motion.medium1,
+              duration: Motion.durationOf(context, Motion.medium1),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -920,7 +920,7 @@ class _Appearance extends StatelessWidget {
                               x.dynamicColor = false;
                             }),
                             child: AnimatedContainer(
-                              duration: Motion.medium1,
+                              duration: Motion.durationOf(context, Motion.medium1),
                               curve: Motion.emphasized,
                               width: 44,
                               height: 44,

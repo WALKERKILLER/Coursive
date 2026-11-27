@@ -97,7 +97,7 @@ class _SheetState extends State<_Sheet> {
             ]),
           ),
           AnimatedSize(
-            duration: Motion.medium2,
+            duration: Motion.durationOf(context, Motion.medium2),
             curve: Motion.emphasized,
             alignment: Alignment.topCenter,
             child: widget.deleteVideo && _sel.contains('transcript') && ffmpeg
@@ -141,7 +141,7 @@ class _Option extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final on = selected && enabled;
     return AnimatedContainer(
-      duration: Motion.medium1,
+      duration: Motion.durationOf(context, Motion.medium1),
       curve: Motion.emphasized,
       decoration: BoxDecoration(
         color: on ? cs.secondaryContainer : cs.surfaceContainerHigh,
@@ -166,7 +166,7 @@ class _Option extends StatelessWidget {
                   ]),
                 ),
                 AnimatedSwitcher(
-                  duration: Motion.short4,
+                  duration: Motion.durationOf(context, Motion.short4),
                   transitionBuilder: (c, a) => ScaleTransition(scale: a, child: c),
                   child: on
                       ? Icon(Icons.check_circle_rounded, key: const ValueKey(1), color: cs.primary)

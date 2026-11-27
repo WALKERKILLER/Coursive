@@ -47,7 +47,7 @@ class ThinkingControl extends StatelessWidget {
       ),
       const SizedBox(height: Space.sm),
       AnimatedSwitcher(
-        duration: Motion.short3,
+        duration: Motion.durationOf(context, Motion.short3),
         child: Text(_hints[value] ?? '', key: ValueKey(value), style: tt.bodySmall?.copyWith(color: muted)),
       ),
     ]);

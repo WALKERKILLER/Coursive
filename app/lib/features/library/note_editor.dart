@@ -221,7 +221,7 @@ class _NoteEditorState extends State<NoteEditor> {
         const SizedBox(height: Space.sm),
         Expanded(
           child: AnimatedSwitcher(
-            duration: Motion.medium1,
+            duration: Motion.durationOf(context, Motion.medium1),
             child: _preview
                 ? Container(
                     key: const ValueKey('p'),
@@ -277,7 +277,7 @@ class _NoteEditorState extends State<NoteEditor> {
             const Spacer(),
             AnimatedOpacity(
               opacity: _dirty ? 1 : 0,
-              duration: Motion.short4,
+              duration: Motion.durationOf(context, Motion.short4),
               child: Text(
                 l10n.noteUnsaved,
                 style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),

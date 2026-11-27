@@ -78,7 +78,7 @@ extension _StudyTransforms on StudyCanvasState {
     final d = document!, session = _transformSession!;
     final p = _world(_surfacePoint(e.position));
     _pointers[e.pointer] = _surfacePoint(e.position);
-    if (_transformCorner != null && session.resizesReadingFrame) {
+    if (_transformCorner != null && session.resizesSingleCard) {
       session.previewCorner(_transformCorner!, p - _transformStart);
     } else if (_transformCorner != null) {
       final v = p - session.pivot;
@@ -179,11 +179,12 @@ extension _StudyTransforms on StudyCanvasState {
         (direction.distance < 1
             ? const Offset(0, -32)
             : direction / direction.distance * 32);
+    const hitRadius = 22.0;
     Widget handle(Offset at, {int? corner}) => Positioned(
-      left: at.dx - 22,
-      top: at.dy - 22,
-      width: 44,
-      height: 44,
+      left: at.dx - hitRadius,
+      top: at.dy - hitRadius,
+      width: hitRadius * 2,
+      height: hitRadius * 2,
       child: Listener(
         key: ValueKey(
           corner == null
@@ -245,8 +246,14 @@ extension _StudyTransforms on StudyCanvasState {
                 _topBarsBottom,
                 [
                   ..._selectionObstacles,
-                  if (showGrips) Rect.fromCircle(center: grip, radius: 22),
+                  if (showGrips) ...[
+                    Rect.fromCircle(center: grip, radius: hitRadius),
+                    if (showCorners)
+                      for (final corner in points)
+                        Rect.fromCircle(center: corner, radius: hitRadius),
+                  ],
                 ],
+                keepAbove: true,
               ),
               child: _cardSelectionBar(card),
             ),

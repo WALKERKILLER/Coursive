@@ -93,6 +93,7 @@ extension _StudySelectionTools on StudyCanvasState {
     return PopupMenuButton<String>(
       key: const ValueKey('study-selection-actions'),
       tooltip: l10n.studySelectionMore,
+      style: _actionBarButtonStyle(context),
       enabled: !_selectionBusy,
       icon: Icon(
         _selectionBusy ? Icons.hourglass_top : Icons.more_horiz,

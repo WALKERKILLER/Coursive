@@ -45,3 +45,7 @@ macOS build 2026110804 was updated in place and launched with 92 affected user-f
 The following UI capture uses synthetic test content and demonstrates selection handles and menu placement. It is not real-model evidence and contains no user course data.
 
 ![Synthetic canvas selection controls](../images/course-selection-controls.png)
+
+### Classroom sources in a passage question
+
+A course-scoped passage question can list the lecture's local files and the course's shared slide decks. The host uses the lecture roster to bound transcript searches and uses the teaching plugin's evidence reader for projected slides. A verified passage may carry a `teaching_ref` to its lecture, slide or courseware page. Its lecture identifier must match the evidence anchor. The source pane checks the quoted transcript and its time range, or the slide revision, before offering the recording. Selection-only conversations keep their existing boundary.

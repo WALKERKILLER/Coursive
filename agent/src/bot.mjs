@@ -236,7 +236,8 @@ export class Bot {
 				if (result !== undefined) p.result = result;
 				return { state: p.state, result };
 			} catch (e) {
-				if (p.state === "pending") p.state = "failed";
+				const syncBusy = p.op.type === "course_files" && e?.status === 409 && e.message === "资料正在同步，请稍后重试";
+				if (p.state === "pending" && !syncBusy) p.state = "failed";
 				p.result = { error: String(e?.message ?? e) };
 				throw e;
 			} finally {

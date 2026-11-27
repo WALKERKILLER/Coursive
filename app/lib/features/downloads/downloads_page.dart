@@ -111,7 +111,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
             Text(l10n.commonDownload, style: compact ? tt.headlineMedium : tt.displaySmall),
             const SizedBox(height: Space.xs),
             AnimatedSwitcher(
-              duration: Motion.short4,
+              duration: Motion.durationOf(context, Motion.short4),
               child: Text(
                 key: ValueKey(running > 0),
                 running > 0
@@ -592,7 +592,7 @@ class _JobTile extends StatelessWidget {
     final Widget lead = pickMode
         ? AnimatedContainer(
             key: const ValueKey('pick'),
-            duration: Motion.short4,
+            duration: Motion.durationOf(context, Motion.short4),
             width: 44,
             height: 44,
             decoration: BoxDecoration(
@@ -603,14 +603,14 @@ class _JobTile extends StatelessWidget {
             child: picked ? Icon(Icons.check_rounded, color: cs.onPrimary) : null,
           )
         : Container(
-            key: const ValueKey('kind'),
+            key: ValueKey(done ? 'done' : failed ? 'failed' : 'kind'),
             width: 44,
             height: 44,
             decoration: BoxDecoration(
               color: done ? cs.tertiaryContainer : failed ? cs.errorContainer : cs.secondaryContainer,
               borderRadius: BorderRadius.circular(Corners.md),
             ),
-            child: Icon(done ? Icons.download_done_rounded : _icon,
+            child: Icon(done ? Icons.download_done_rounded : failed ? Icons.error_outline_rounded : _icon,
                 color: done ? cs.onTertiaryContainer : failed ? cs.onErrorContainer : cs.onSecondaryContainer),
           );
 
@@ -631,7 +631,7 @@ class _JobTile extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.fromLTRB(Space.lg, Space.md, pickMode ? Space.lg : Space.sm, Space.md),
             child: Row(children: [
-              AnimatedSwitcher(duration: Motion.short4, child: lead),
+              AnimatedSwitcher(duration: Motion.durationOf(context, Motion.short4), child: lead),
               const SizedBox(width: Space.lg),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -729,7 +729,7 @@ class _JobProgress extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       TweenAnimationBuilder<double>(
         tween: Tween(end: job.progress),
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         builder: (_, v, _) => LinearProgressIndicator(
           value: running && !known ? null : v,
           color: running ? cs.primary : retryAt != null ? cs.error : cs.outline,

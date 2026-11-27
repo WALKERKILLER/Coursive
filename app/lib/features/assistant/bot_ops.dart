@@ -6,6 +6,7 @@ import '../../app.dart';
 import '../../core/app_state.dart';
 import '../../shell.dart';
 import '../../theme/prefs.dart';
+import '../../widgets/states.dart';
 import '../activity/activity_page.dart';
 import '../courses/course_page.dart';
 import '../library/note_reader.dart';
@@ -28,6 +29,7 @@ final kOpenTargets = <String, String>{
   'courses': l10n.commonCourses,
   'course': l10n.commonCourses,
   'lecture': l10n.commonLecture,
+  'canvas': l10n.studyOpenCanvas,
   'note': l10n.commonNotes,
   'schedule': l10n.commonSchedule,
   'downloads': l10n.commonDownload,
@@ -78,22 +80,34 @@ abstract final class BotOps {
   /// Whether [op] opened the page [back] would leave (older chips cannot).
   static bool canGoBackFrom(Map<String, dynamic> op) => canGoBack && mapEquals(op, _lastOpen);
 
-  static void run(BuildContext context, Map<String, dynamic> op) {
+  static Future<void> run(BuildContext context, Map<String, dynamic> op) async {
     switch (op['op']) {
       case 'open':
         _open(context, op);
       case 'player':
         final h = context.read<PlayerHub>().value;
-        if (h is! LecturePlayer) return;
+        if (h is! LecturePlayer || (op['lecture_id'] != null && h.lectureId != op['lecture_id'])) {
+          showSnack(context, l10n.botNoLecture);
+          return;
+        }
         switch (op['action']) {
           case 'play':
-            h.player.play();
+            await h.play();
           case 'pause':
-            h.player.pause();
+            await h.pause();
           case 'seek':
-            h.seekTo(((op['seconds'] as num?) ?? 0).round() * 1000);
+            h.seekTo((((op['seconds'] as num?) ?? 0) * 1000).round());
           case 'speed':
             h.setRate(((op['rate'] as num?) ?? 1).toDouble());
+        }
+      case 'canvas':
+        final player = context.read<PlayerHub>().value;
+        final execute = player is LecturePlayer ? player.canvasCommand : null;
+        try {
+          final completed = execute != null && await execute(op);
+          if (!completed && context.mounted) showSnack(context, l10n.studySelectionChanged);
+        } catch (_) {
+          if (context.mounted) showSnack(context, l10n.studySelectionChanged);
         }
       case 'prefs':
         final set = (op['set'] as Map?)?.cast<String, dynamic>();
@@ -141,6 +155,8 @@ abstract final class BotOps {
       case 'lecture':
         final t = (op['t'] as num?)?.round();
         pushRoot(PlayerPage(lectureId: '${op['lecture_id']}', startMs: t == null ? null : t * 1000));
+      case 'canvas':
+        pushRoot(PlayerPage(lectureId: '${op['lecture_id']}', canvasCardId: ''));
       case 'activity':
         pushRoot(const ActivityPage());
       case 'usage':

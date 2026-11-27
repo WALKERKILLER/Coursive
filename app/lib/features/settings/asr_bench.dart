@@ -146,7 +146,7 @@ class _AsrBenchBoardState extends State<AsrBenchBoard> {
             behavior: HitTestBehavior.opaque,
             onTap: widget.onSelect == null ? null : () => widget.onSelect!(r.id),
             child: AnimatedContainer(
-              duration: Motion.short4,
+              duration: Motion.durationOf(context, Motion.short4),
               curve: Motion.standard,
               margin: const EdgeInsets.only(bottom: Space.xxs),
               padding: const EdgeInsets.symmetric(horizontal: Space.sm, vertical: Space.sm),

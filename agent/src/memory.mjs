@@ -219,10 +219,12 @@ export class MemoryStore {
 		});
 	}
 
-	remove(path) {
+	remove(path, baseHash) {
 		checkPath(path);
 		return this.serial(async () => {
-			if ((await this.current(path)) === null) throw bad(`没有记忆文件 ${path}`, 404);
+			const old = await this.current(path);
+			if (old === null) throw bad(`没有记忆文件 ${path}`, 404);
+			if (baseHash !== undefined && baseHash !== hashOf(old)) throw this.conflict(path, old);
 			await this.markCorrection(path);
 			await rm(join(this.dir, path));
 			return { path, action: "deleted" };
@@ -296,7 +298,7 @@ const text = (t, details = {}) => ({ content: [{ type: "text", text: t }], detai
  * Memory tools over store. onChange receives each change ({path, action});
  * without allowDelete there is no memory_delete (consolidation).
  */
-export function memoryTools(store, { allowDelete = true, onChange = () => {}, evidenceSince } = {}) {
+export function memoryTools(store, { allowDelete = true, onChange = () => {}, evidenceSince, onDelete } = {}) {
 	const changed = (r) => {
 		onChange(r);
 		return text(`已${{ created: "新建", updated: "更新", appended: "追加到", deleted: "删除" }[r.action]} ${r.path}${r.hash ? `（版本 ${r.hash}）` : ""}`, { memory: r });
@@ -352,7 +354,7 @@ export function memoryTools(store, { allowDelete = true, onChange = () => {}, ev
 			label: "删除记忆",
 			description: "Delete a memory file. Only when the user asks to forget it.",
 			parameters: Type.Object({ path: pathParam }),
-			execute: async (_id, { path }) => changed(await store.remove(path)),
+			execute: async (_id, { path }) => onDelete ? onDelete(path) : changed(await store.remove(path)),
 		});
 	}
 	return tools;

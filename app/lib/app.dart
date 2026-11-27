@@ -50,7 +50,7 @@ class CoursiveApp extends StatelessWidget {
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: prefs.themeMode,
-          themeAnimationDuration: Motion.medium2,
+          themeAnimationDuration: prefs.reduceMotion ? Duration.zero : Motion.durationOf(context, Motion.short4),
           themeAnimationCurve: Motion.standard,
           builder: (context, child) {
             l10n = AppLocalizations.of(context);
@@ -109,16 +109,23 @@ class RootGate extends StatelessWidget {
       child = const AppShell(key: ValueKey('shell'));
       WidgetsBinding.instance.addPostFrameCallback((_) => DeepLinks.ready());
     }
+    if (MediaQuery.disableAnimationsOf(context)) return child;
     return AnimatedSwitcher(
-      duration: Motion.long2,
+      duration: Motion.short4,
+      reverseDuration: Motion.short2,
+      layoutBuilder: (current, outgoing) => Stack(
+        alignment: Alignment.center,
+        children: [
+          for (final old in outgoing)
+            ExcludeFocus(child: ExcludeSemantics(child: IgnorePointer(child: old))),
+          ?current,
+        ],
+      ),
       switchInCurve: Motion.emphasizedDecelerate,
       switchOutCurve: Motion.emphasizedAccelerate,
       transitionBuilder: (c, a) => FadeTransition(
         opacity: a,
-        child: ScaleTransition(
-          scale: Tween(begin: 0.96, end: 1.0).animate(a),
-          child: c,
-        ),
+        child: c,
       ),
       child: child,
     );

@@ -54,6 +54,10 @@ abstract final class Motion {
   static const Duration long2 = Duration(milliseconds: 500);
   static const Duration long4 = Duration(milliseconds: 600);
 
+  /// Apply the system and in-app motion preference to a visual transition.
+  static Duration durationOf(BuildContext context, Duration normal) =>
+      MediaQuery.maybeDisableAnimationsOf(context) == true ? Duration.zero : normal;
+
   /// Expressive "fast spatial" spring, as a Flutter spring description.
   static const SpringDescription springFast = SpringDescription(mass: 1, stiffness: 1400, damping: 67);
   static const SpringDescription springDefault = SpringDescription(mass: 1, stiffness: 700, damping: 48);

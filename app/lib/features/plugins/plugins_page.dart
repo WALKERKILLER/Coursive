@@ -233,7 +233,7 @@ class _PluginsPageState extends State<PluginsPage> {
           _header(store, sources, pad, compact),
           Expanded(
             child: AnimatedSwitcher(
-              duration: Motion.medium2,
+              duration: Motion.durationOf(context, Motion.medium2),
               switchInCurve: Motion.emphasizedDecelerate,
               switchOutCurve: Motion.emphasizedAccelerate,
               layoutBuilder: _fill,
@@ -299,7 +299,7 @@ class _PluginsPageState extends State<PluginsPage> {
       borderRadius: Corners.all(Corners.xl),
       clipBehavior: Clip.antiAlias,
       child: AnimatedSwitcher(
-        duration: Motion.medium2,
+        duration: Motion.durationOf(context, Motion.medium2),
         switchInCurve: Motion.emphasizedDecelerate,
         switchOutCurve: Motion.emphasizedAccelerate,
         layoutBuilder: _fill,
@@ -418,7 +418,7 @@ class _PluginsPageState extends State<PluginsPage> {
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: list),
         AnimatedContainer(
-          duration: Motion.medium4,
+          duration: Motion.durationOf(context, Motion.medium4),
           curve: Motion.emphasized,
           width: _picked == null ? 0 : paneW + pad,
           child: ClipRect(

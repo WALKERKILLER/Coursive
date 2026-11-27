@@ -164,7 +164,12 @@ class _StudyEdgeDockState extends State<StudyEdgeDock>
   }
 
   void _end() {
-    if (_center != null) _snap.forward(from: 0);
+    if (_center == null) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _snap.value = 1;
+    } else {
+      _snap.forward(from: 0);
+    }
   }
 
   void _cancel() {
