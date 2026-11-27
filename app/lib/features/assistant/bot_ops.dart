@@ -92,9 +92,9 @@ abstract final class BotOps {
         }
         switch (op['action']) {
           case 'play':
-            h.player.play();
+            await h.play();
           case 'pause':
-            h.player.pause();
+            await h.pause();
           case 'seek':
             h.seekTo((((op['seconds'] as num?) ?? 0) * 1000).round());
           case 'speed':

@@ -11,6 +11,7 @@ import '../../core/app_state.dart';
 import '../../core/models.dart';
 import '../../theme/prefs.dart';
 import '../../l10n/l10n.dart';
+import 'playback_focus.dart';
 
 /// One video source: a remote stream or the downloaded file.
 class Source {
@@ -168,14 +169,16 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   final _subs = <StreamSubscription>[];
   Timer? _saver;
   int _lastSaved = -1;
-  int _playRequest = 0;
+  final _focus = PlaybackFocus.instance;
+  int? _ticket, _starting;
   bool _disposed = false;
 
   Source? get source => sources.isEmpty ? null : sources[sourceIdx];
   @override
   int get positionMs => position.value.inMilliseconds;
 
-  Future<void> load() async {
+  Future<void> load({int? playbackTicket}) async {
+    final ticket = opensInCanvas ? null : (_ticket = playbackTicket ?? _focus.request());
     loading = true;
     loadError = mediaError = null;
     mediaLoading = true;
@@ -219,7 +222,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
         unawaited(_loadSide());
       }
       try {
-        await _loadMedia(localLabel, resumeMs);
+        await _loadMedia(localLabel, resumeMs, ticket);
       } catch (e) {
         if (!opensInCanvas) rethrow;
         mediaError = e;
@@ -236,7 +239,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     }
   }
 
-  Future<void> _loadMedia(String localLabel, int resumeMs) async {
+  Future<void> _loadMedia(String localLabel, int resumeMs, int? ticket) async {
     media = LectureMedia(
       (await api.get('/api/lectures/$lectureId/media') as Map)
           .cast<String, dynamic>(),
@@ -275,7 +278,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
       autoResume: prefs.autoResume,
     );
     resumedFrom = initialPositionMs == null ? start : 0;
-    await _open(source!, Duration(milliseconds: start), play: !opensInCanvas);
+    await _open(source!, Duration(milliseconds: start), ticket: ticket);
     if (!_disposed) await player.setRate(prefs.defaultSpeed);
   }
 
@@ -405,7 +408,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   Future<void> openMaterial(Source material, int at) async {
     assert(lectureId.isEmpty);
     sources = [material];
-    await _open(material, Duration(milliseconds: at), play: false);
+    await _open(material, Duration(milliseconds: at));
   }
 
   Future<void> retryPlayback() async {
@@ -413,7 +416,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     if (current == null) return;
     try {
       final previousRate = rate;
-      await _open(current, position.value);
+      await _open(current, position.value, ticket: _ticket = _focus.request());
       await player.setRate(previousRate);
     } catch (e) {
       error = e.toString();
@@ -421,7 +424,7 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
     }
   }
 
-  Future<void> _open(Source s, Duration start, {bool play = true}) async {
+  Future<void> _open(Source s, Duration start, {int? ticket}) async {
     _codecCheck?.cancel();
     _openRevision++;
     _recoverableCodecError = false;
@@ -436,21 +439,21 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
         httpHeaders: s.headers,
         start: start > Duration.zero ? start : null,
       ),
-      play: play,
+      play: false,
     );
+    if (ticket != null && !_disposed) await play(ticket: ticket);
   }
 
   Future<void> switchSource(int i) async {
     if (i == sourceIdx || i >= sources.length) return;
     final at = position.value;
-    final wasPlaying = playing;
+    final ticket = playing ? (_ticket = _focus.request()) : null;
     final r = rate;
     sourceIdx = i;
     if (pipIdx == i) await setPip(null);
     notifyListeners();
-    await _open(sources[i], at);
+    await _open(sources[i], at, ticket: ticket);
     await player.setRate(r);
-    if (!wasPlaying) await player.pause();
   }
 
   /// Shows a second camera in a floating window, kept in sync with the main one.
@@ -493,19 +496,36 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
 
   @override
   void seekTo(int ms) {
-    _playRequest++;
+    if (_starting != null) _focus.cancel(_starting);
     unawaited(_seek(ms));
   }
 
-  Future<void> pause() {
-    _playRequest++;
-    return player.pause();
+  Future<void> _pauseNative() async {
+    await player.pause();
+    await pip?.pause();
   }
 
-  Future<void> playFrom(int ms) async {
-    final request = ++_playRequest;
-    await _seek(ms);
-    if (!_disposed && request == _playRequest) await player.play();
+  Future<void> pause() {
+    _focus.cancel(_ticket);
+    return _disposed ? Future.value() : _focus.stop(this, _pauseNative);
+  }
+
+  Future<void> togglePlayback() =>
+      playing || (_starting != null && _focus.current(_starting!)) ? pause() : play();
+
+  Future<void> play({int? ticket}) => _start(ticket ?? _focus.request());
+  Future<void> playFrom(int ms, {int? ticket}) => _start(ticket ?? _focus.request(), at: ms);
+
+  Future<void> _start(int ticket, {int? at}) async {
+    if (_disposed || !_focus.current(ticket)) return;
+    _ticket = _starting = ticket;
+    try {
+      if (at != null) await _seek(at);
+      if (_disposed) return;
+      await _focus.start(ticket, this, pause: _pauseNative, play: player.play);
+    } finally {
+      if (_starting == ticket) _starting = null;
+    }
   }
 
   Future<void> _seek(int ms) async {
@@ -647,17 +667,20 @@ class LecturePlayer extends ChangeNotifier implements PlayerHandle {
   }
 
   Future<void> close() async {
-    _playRequest++;
+    if (_disposed) return;
+    _disposed = true;
+    _focus.cancel(_ticket);
     _watch?.stop();
     await save();
-    _disposed = true;
     _codecCheck?.cancel();
     _saver?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
-    await pip?.dispose();
-    await player.dispose();
+    await _focus.stop(this, () async {
+      await pip?.dispose();
+      await player.dispose();
+    });
     seekEvents.dispose();
     position.dispose();
     buffer.dispose();

@@ -209,7 +209,7 @@ class FixturePlayer implements LecturePlayer {
   int? requestedPlayback;
   bool pausedAfterCitation = false;
   @override
-  Future<void> playFrom(int ms) async {
+  Future<void> playFrom(int ms, {int? ticket}) async {
     requestedPlayback = ms;
   }
 
@@ -350,6 +350,8 @@ void main() {
       };
       final canvas = await open(t, api, player: player);
       final camera = canvas.currentState!.document!.camera;
+      expect(find.byKey(const ValueKey('study-video-shelf-copy')), findsOneWidget);
+      expect(find.byKey(const ValueKey('study-video-shelf')), findsOneWidget);
       final openCard = expand
           ? find.descendant(
               of: find.ancestor(of: find.text('同节录像'), matching: find.byType(Row)).first,

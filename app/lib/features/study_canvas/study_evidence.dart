@@ -403,7 +403,7 @@ extension _StudyEvidence on StudyCanvasState {
       if (card.type == 'lecture') {
         mark.videoBefore = widget.ctl.position.value.inMilliseconds;
         widget.ctl.seekTo(a.timeStartMs);
-        unawaited(widget.ctl.player.pause());
+        unawaited(widget.ctl.pause());
       } else {
         _activeLocalVideo = card.id;
         final local = _localVideoKeys[card.id]?.currentState;

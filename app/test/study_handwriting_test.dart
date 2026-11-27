@@ -329,9 +329,14 @@ void main() {
       );
       await t.pump(); // Reader scrolling freezes once when the second finger joins.
       final element = t.element(cardFinder), widget = t.widget(cardFinder);
+      var notifications = 0;
+      key.currentState!.cameraUpdates.addListener(() => notifications++);
       for (var i = 1; i <= 10; i++) {
-        await g2.moveTo(Offset(550 + i * 10, 600));
+        for (var j = 1; j <= 5; j++) {
+          await g2.moveTo(Offset(550 + (i - 1) * 10 + j * 2, 600));
+        }
         await t.pump(const Duration(milliseconds: 16));
+        expect(notifications, i, reason: 'publish the latest pinch transform once per frame');
       }
       expect(identical(t.element(cardFinder), element), true);
       expect(

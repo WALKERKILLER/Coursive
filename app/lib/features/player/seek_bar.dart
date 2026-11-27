@@ -136,6 +136,41 @@ class _SeekBarState extends State<SeekBar> {
   }
 }
 
+/// The same track and playhead as the active player, usable before decoding.
+class RecordingSeekBar extends StatefulWidget {
+  const RecordingSeekBar({super.key, required this.positionMs, required this.durationMs, required this.onSeek});
+  final int positionMs, durationMs;
+  final ValueChanged<int> onSeek;
+
+  @override
+  State<RecordingSeekBar> createState() => _RecordingSeekBarState();
+}
+
+class _RecordingSeekBarState extends State<RecordingSeekBar> {
+  double? _drag;
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, bounds) {
+    double fraction(double x) => (x / bounds.maxWidth).clamp(0.0, 1.0);
+    void seek(double value) => widget.onSeek((value * widget.durationMs).round());
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapUp: (e) => seek(fraction(e.localPosition.dx)),
+      onHorizontalDragStart: (e) => setState(() => _drag = fraction(e.localPosition.dx)),
+      onHorizontalDragUpdate: (e) => setState(() => _drag = fraction(e.localPosition.dx)),
+      onHorizontalDragCancel: () => setState(() => _drag = null),
+      onHorizontalDragEnd: (_) {
+        if (_drag case final value?) seek(value);
+        setState(() => _drag = null);
+      },
+      child: CustomPaint(size: Size(bounds.maxWidth, 32), painter: _BarPainter(
+        played: _drag ?? widget.positionMs / widget.durationMs, buffered: 0,
+        slides: const [], bookmarks: const [], chapters: const [], marks: const [],
+        hover: null, thick: _drag != null, cs: Theme.of(context).colorScheme,
+      )),
+    );
+  });
+}
+
 class _BarPainter extends CustomPainter {
   _BarPainter({
     required this.played,

@@ -199,7 +199,7 @@ class PlayerViewState extends State<PlayerView> {
                     setState(() => _controls = !_controls);
                     if (_controls) _bump();
                   } else {
-                    ctl.player.playOrPause();
+                    ctl.togglePlayback();
                     _bump();
                   }
                 },
@@ -212,7 +212,7 @@ class PlayerViewState extends State<PlayerView> {
                         } else if (x > 0.65) {
                           seekBy(prefs.seekStepSec);
                         } else {
-                          ctl.player.playOrPause();
+                          ctl.togglePlayback();
                         }
                       }
                     : null,
@@ -419,15 +419,7 @@ class PlayerViewState extends State<PlayerView> {
               : SystemMouseCursors.none,
           onHover: (_) => _bump(),
           child: widget.embedded
-              ? ColoredBox(
-                  color: const Color(0xff16181c),
-                  child: Column(
-                    children: [
-                      Expanded(child: picture),
-                      controls,
-                    ],
-                  ),
-                )
+              ? _EmbeddedVideoFrame(picture: picture, controls: controls)
               : picture,
         );
       },
@@ -604,7 +596,7 @@ class PlayerViewState extends State<PlayerView> {
                   children: [
                     _PlayButton(
                       playing: ctl.playing,
-                      onPressed: () => ctl.player.playOrPause(),
+                      onPressed: () => ctl.togglePlayback(),
                     ),
                     const SizedBox(width: Space.xs),
                     if (!compact) ...[
@@ -866,6 +858,59 @@ class _ResumePrompt extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+class _EmbeddedVideoFrame extends StatelessWidget {
+  const _EmbeddedVideoFrame({required this.picture, required this.controls});
+  final Widget picture, controls;
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0xff16181c),
+    child: Column(children: [Expanded(child: picture), controls]),
+  );
+}
+
+/// A recording at rest uses the embedded player frame without a native decoder.
+class EmbeddedVideoPreview extends StatelessWidget {
+  const EmbeddedVideoPreview({
+    super.key, this.poster, required this.onPlay, required this.onExpand,
+    this.durationMs = 0, this.positionMs = 0, this.onSeek,
+  });
+  final Widget? poster;
+  final VoidCallback onPlay, onExpand;
+  final int durationMs, positionMs;
+  final ValueChanged<int>? onSeek;
+
+  @override
+  Widget build(BuildContext context) {
+    final position = positionMs.clamp(0, durationMs);
+    return _EmbeddedVideoFrame(
+      picture: VideoCardHoldRegion(child: GestureDetector(
+        onTap: onPlay, excludeFromSemantics: true,
+        child: ColoredBox(color: Colors.black, child: SizedBox.expand(child: poster)),
+      )),
+      controls: VideoCardControls(child: Padding(
+        padding: const EdgeInsets.fromLTRB(Space.sm, 0, Space.sm, Space.xs),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (durationMs > 0 && onSeek != null)
+            RecordingSeekBar(positionMs: position, durationMs: durationMs, onSeek: onSeek!),
+          Row(children: [
+            _PlayButton(playing: false, onPressed: onPlay),
+            if (durationMs > 0) ...[
+              const SizedBox(width: Space.sm),
+              Flexible(child: Text('${fmtClock(position)}  /  ${fmtClock(durationMs)}',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white))),
+            ],
+            const Spacer(),
+            IconButton(onPressed: onExpand, tooltip: l10n.playerFullscreen,
+              icon: const Icon(Icons.fullscreen_rounded, color: Colors.white)),
+          ]),
+        ]),
+      )),
     );
   }
 }

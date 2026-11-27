@@ -60,11 +60,13 @@ class PlayerPage extends StatefulWidget {
     this.startMs,
     this.canvasCardId,
     this.startInCanvas = false,
+    this.openTranscript = false,
+    this.playbackTicket,
   });
   final String lectureId;
-  final int? startMs;
+  final int? startMs, playbackTicket;
   final String? canvasCardId;
-  final bool startInCanvas;
+  final bool startInCanvas, openTranscript;
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
@@ -105,12 +107,13 @@ class _PlayerPageState extends State<PlayerPage> {
       opensInCanvas: _canvasMode,
       prefs: context.read<UiPrefs>(),
     );
+    if (widget.openTranscript) ctl.panelTab.value = 'transcript';
     ctl.canvasCommand = (op) async {
       final state = _canvas.currentState;
       return state != null && await state.runAssistantCommand(op);
     };
     ctl.addListener(_onCtl);
-    ctl.load().then((_) {
+    ctl.load(playbackTicket: widget.playbackTicket).then((_) {
       if (mounted && ModalRoute.isCurrentOf(context) == true) _hub.value = ctl;
     });
     _sub = app.events.listen((e) {
@@ -227,7 +230,7 @@ class _PlayerPageState extends State<PlayerPage> {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent)
       return KeyEventResult.ignored;
     if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK) {
-      if (e is KeyDownEvent) ctl.player.playOrPause();
+      if (e is KeyDownEvent) ctl.togglePlayback();
     } else if (k == LogicalKeyboardKey.arrowLeft ||
         k == LogicalKeyboardKey.keyJ) {
       v?.seekBy(-prefs.seekStepSec);

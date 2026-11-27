@@ -31,6 +31,7 @@ import '../../l10n/l10n.dart';
 import '../player/lecture_player.dart';
 import '../player/player_page.dart' show PlayerPage;
 import '../player/player_view.dart';
+import '../player/playback_focus.dart';
 import '../../theme/prefs.dart';
 import '../library/note_reader.dart' show NotePage, openRef;
 import '../plugins/canvas_fallback.dart';
@@ -222,6 +223,7 @@ class StudyCanvasState extends State<StudyCanvas>
   final _penItemKeys = <int, GlobalKey>{};
   final _eraserKey = GlobalKey();
   final _eraserLasso = <Offset>[], _lasso = <Offset>[];
+  int? _cameraFrame;
   final _camera = ValueNotifier(0), _cursor = ValueNotifier(0);
 
   /// Carries the view to a new place instead of cutting to it; see [_flyTo].
@@ -390,8 +392,8 @@ class StudyCanvasState extends State<StudyCanvas>
   final _dockKey = GlobalKey(), _zoomKey = GlobalKey();
   bool _multipleLocalVideos = false;
   String? _activeLocalVideo, _previewVideoId;
-  bool _openingVideo = false;
   final _localVideoKeys = <String, GlobalKey<_LocalVideoState>>{};
+  final _recordings = <(String, String), Future<({int duration, int position})?>>{};
   final _localVideoTimes = <String, int>{};
   Rect? _regionSelection, _sourceHighlight;
   void _update(VoidCallback action) => setState(action);
@@ -882,6 +884,7 @@ class StudyCanvasState extends State<StudyCanvas>
     unawaited(_stylusEvents?.cancel());
     _fly.dispose();
     _holdCue.dispose();
+    if (_cameraFrame case final frame?) WidgetsBinding.instance.cancelFrameCallbackWithId(frame);
     _camera.dispose();
     _cursor.dispose();
     _threadTick.dispose();
@@ -914,8 +917,26 @@ class StudyCanvasState extends State<StudyCanvas>
   bool get _ink => _tool == StudyTool.pen || _tool == StudyTool.highlighter;
   bool get _writing =>
       _ink || _tool == StudyTool.eraser || _tool == StudyTool.region;
+  // Pointer samples can arrive several times before the display paints.
+  // Keep the world transform current for hit testing, publish once per vsync.
+  @visibleForTesting
+  Listenable get cameraUpdates => _camera;
+
+  void _queueCameraChange() {
+    document!.edit++;
+    if (_cameraFrame != null) return;
+    _cameraFrame = WidgetsBinding.instance.scheduleFrameCallback((_) {
+      _cameraFrame = null;
+      if (mounted && document != null) _publishCamera();
+    });
+  }
+
   void _cameraChanged() {
     document!.edit++;
+    _publishCamera();
+  }
+
+  void _publishCamera() {
     _camera.value++;
     final stage = _stageRect, view = _visibleWorld;
     if (stage == null ||
@@ -1245,7 +1266,7 @@ class StudyCanvasState extends State<StudyCanvas>
           (_pinchZoom! * (p[0] - p[1]).distance / math.max(1, _pinchDistance!))
               .clamp(.05, 8);
       d.camera = (p[0] + p[1]) / 2 - _pinchWorld! * d.zoom;
-      _cameraChanged();
+      _queueCameraChange();
       return;
     }
     if (_pointers.length > 1) return;
@@ -1254,7 +1275,7 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_pdfPinching) return;
     if (_panCamera != null) {
       d.camera = _panCamera! + e.localPosition - _start!;
-      _cameraChanged();
+      _queueCameraChange();
       return;
     }
     if (_drawingPointer == e.pointer) {
@@ -2162,22 +2183,24 @@ class StudyCanvasState extends State<StudyCanvas>
     );
     _stageRect = stage;
     // Budget the temporary textures together. Very large or offscreen cards
-    // stay live, as do video and interactive conversations.
+    // stay live. Video textures stay attached to their own compositor.
     var remainingPixels = 6 * 1024 * 1024.0;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     Widget cardContents(StudyCard c) {
       final child = _card(c);
       if (defaultTargetPlatform != TargetPlatform.android ||
-          !(c.type == 'text' || c.type == 'pdf' || c.type == 'pdfdoc')) {
+          !(const {'text', 'pdf', 'pdfdoc', 'conversation'}.contains(c.type))) {
         return child;
       }
       final size = c.contentRect.size / c.contentScale;
-      final pixels = size.width * size.height * pixelRatio * pixelRatio;
+      // A zoomed-out card needs only its on-screen resolution. Freeze the
+      // raster scale for the gesture so each pointer sample can reuse it.
+      final ratio = pixelRatio * math.min(1.0, (_pinchZoom ?? d.zoom) * c.contentScale);
+      final pixels = size.width * size.height * ratio * ratio;
       final capture = _pdfPinching && c.visualBounds.overlaps(view) &&
-          pixels <= remainingPixels &&
-          size.longestSide * pixelRatio <= 4096;
+          pixels <= remainingPixels && size.longestSide * ratio <= 4096;
       if (capture) remainingPixels -= pixels;
-      return _PinchCardPreview(active: capture, child: child);
+      return _PinchCardPreview(active: capture, pixelRatio: ratio, child: child);
     }
 
     return RepaintBoundary(
@@ -2848,7 +2871,7 @@ class StudyCanvasState extends State<StudyCanvas>
               height: _cardHeaderHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: c.type == 'lecture'
+                  color: c.type == 'lecture' || c.type == 'video'
                       ? chrome.accentSoft
                       : Colors.transparent,
                   border: Border(
@@ -3091,33 +3114,7 @@ class StudyCanvasState extends State<StudyCanvas>
                         child: _editingPassage == c.id ? _passageEditor(c) : _plainCardText(c),
                       ),
                       'conversation' => _ThreadNode(owner: this, card: c),
-                      'lecture' => Column(
-                        children: [
-                          Expanded(
-                            child: _cardMaterial(c),
-                          ),
-                          TextButton.icon(
-                            key: const ValueKey('study-video-shelf'),
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 48),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 10,
-                              ),
-                            ),
-                            onPressed: () => _toggleShelf(_ShelfTab.transcript),
-                            icon: const Icon(
-                              Icons.subtitles_outlined,
-                              size: 16,
-                            ),
-                            label: Text(
-                              l10n.studyShelfFromVideo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
+                      'lecture' || 'video' => _videoCard(c),
                       'pdf' when _pdfPageCard(c) => _cardMaterial(c),
                       'image' || 'pdf' => Image(
                         image: ResizeImage(
@@ -3130,7 +3127,6 @@ class StudyCanvasState extends State<StudyCanvas>
                         errorBuilder: (_, error, stack) =>
                             Center(child: Text(l10n.studyImageFailed)),
                       ),
-                      'video' => _cardMaterial(c),
                       'text' when c.markdownReader => _cardMaterial(c),
                       'note' ||
                       'explanation' ||
@@ -3247,8 +3243,9 @@ class _LocalVideoState extends State<_LocalVideo> {
 
   Future<void> pause() async => _session?.pause();
 
-  Future<void> play() async {
-    if (await _ensureOpen() && mounted) await _session?.player.play();
+  Future<void> play({int? ticket}) async {
+    final request = ticket ?? PlaybackFocus.instance.request();
+    if (await _ensureOpen() && mounted) await _session?.play(ticket: request);
   }
 
   Future<void> seekPaused(int milliseconds) async {
@@ -3285,23 +3282,20 @@ class _LocalVideoState extends State<_LocalVideo> {
 
   @override
   Widget build(BuildContext context) => _ready == null
-      ? Center(child: IconButton(
-          tooltip: l10n.playerPlayTooltip,
-          icon: const Icon(Icons.play_circle_outline),
-          onPressed: () async {
-            final pending = _ensureOpen();
-            setState(() {});
-            if (await pending && mounted) await _session!.player.play();
+      ? EmbeddedVideoPreview(
+          onPlay: play,
+          onExpand: () async {
+            if (await _ensureOpen() && mounted) await _openFullscreen();
           },
-        ))
+        )
       : !_failed
       ? _session == null || _fullscreen
           ? const SizedBox.shrink()
           : widget.focused
           ? CallbackShortcuts(
               bindings: {
-                const SingleActivator(LogicalKeyboardKey.keyK): () => _session!.player.playOrPause(),
-                const SingleActivator(LogicalKeyboardKey.space): () => _session!.player.playOrPause(),
+                const SingleActivator(LogicalKeyboardKey.keyK): () => _session!.togglePlayback(),
+                const SingleActivator(LogicalKeyboardKey.space): () => _session!.togglePlayback(),
                 const SingleActivator(LogicalKeyboardKey.keyF): _openFullscreen,
               },
               child: Focus(autofocus: true, child: PlayerView(
@@ -3332,7 +3326,8 @@ Color studyPaperTone(int color, ColorScheme cs) =>
 /// Reuse the card pixels only while two fingers move the camera. Its live
 /// widget tree stays mounted so scroll position, selection and editing survive.
 class _PinchCardPreview extends StatefulWidget {
-  const _PinchCardPreview({required this.active, required this.child});
+  const _PinchCardPreview({required this.active, required this.pixelRatio, required this.child});
+  final double pixelRatio;
   final bool active;
   final Widget child;
 
@@ -3356,11 +3351,17 @@ class _PinchCardPreviewState extends State<_PinchCardPreview> {
   }
 
   @override
-  Widget build(BuildContext context) => SnapshotWidget(
-    controller: _controller,
-    mode: SnapshotMode.permissive,
-    child: widget.child,
-  );
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: widget.active ? media.copyWith(devicePixelRatio: widget.pixelRatio) : media,
+      child: SnapshotWidget(
+        controller: _controller,
+        mode: SnapshotMode.permissive,
+        child: MediaQuery(data: media, child: widget.child),
+      ),
+    );
+  }
 }
 
 class _Paper extends CustomPainter {

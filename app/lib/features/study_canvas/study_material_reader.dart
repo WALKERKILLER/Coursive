@@ -99,57 +99,92 @@ extension _StudyMaterialReader on StudyCanvasState {
         : body;
   }
 
-  Widget _videoPoster(StudyCard card) {
-    final hasPoster = card.source.toLowerCase().endsWith('.jpg');
-    return Stack(fit: StackFit.expand, children: [
-      if (hasPoster)
-        Image.network(widget.api.fileUrl(card.source), fit: BoxFit.contain,
-            cacheWidth: 448, excludeFromSemantics: true,
-            errorBuilder: (_, _, _) => const SizedBox.shrink()),
-      Center(child: IconButton.filledTonal(
-        tooltip: l10n.playerPlayTooltip,
-        icon: const Icon(Icons.play_arrow_rounded),
-        onPressed: () => _openVideo(card, expanded: false),
-      )),
-    ]);
+  Future<({int duration, int position})?> _recordingInfo(StudyCard card) {
+    final key = (card.sourceLectureId, card.originalPath);
+    return _recordings.putIfAbsent(key, () async {
+      try {
+        final detail = await widget.api.get('/api/lectures/${Uri.encodeComponent(key.$1)}');
+        final videos = (detail['assets'] as List? ?? const [])
+            .whereType<Map>().where((asset) => asset['kind'] == 'video');
+        // The lecture player resolves the first recording. Attachments can
+        // share the lecture directory without sharing its timeline.
+        if (videos.firstOrNull?['path'] != key.$2) return null;
+        final lecture = detail['lecture'] as Map?;
+        final playback = detail['playback'] as Map?;
+        return (
+          duration: (lecture?['duration_s'] as num? ?? 0).toInt() * 1000,
+          position: (playback?['position_ms'] as num? ?? 0).toInt(),
+        );
+      } catch (_) {
+        _recordings.remove(key); // Retry offline metadata on the next action.
+        return null;
+      }
+    });
   }
 
-  // A lecture can also contain unrelated video attachments. Only its actual
-  // recording gets the lecture's transcript, timeline and saved playhead.
-  Future<void> _openVideo(StudyCard card, {required bool expanded}) async {
-    if (_openingVideo) return;
-    _openingVideo = true;
+  Widget _videoCard(StudyCard card) {
+    final primary = card.type == 'lecture';
+    final linked = card.sourceLectureId.isNotEmpty && card.originalPath.isNotEmpty;
+    final body = _cardMaterial(card);
+    Widget frame(bool hasShelf) => Column(children: [
+      Expanded(child: body),
+      if (hasShelf) TextButton.icon(
+        key: ValueKey(primary ? 'study-video-shelf' : 'study-video-shelf-${card.id}'),
+        style: TextButton.styleFrom(minimumSize: const Size(0, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
+        onPressed: primary || (!widget.standalone && card.sourceLectureId == widget.ctl.lectureId)
+            ? () => _toggleShelf(_ShelfTab.transcript)
+            : () => _openVideo(card, expanded: true, transcript: true),
+        icon: const Icon(Icons.subtitles_outlined, size: 16),
+        label: Text(l10n.studyShelfFromVideo, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ),
+    ]);
+    if (primary || !linked) return frame(primary);
+    return FutureBuilder(future: _recordingInfo(card),
+      builder: (_, snapshot) => frame(snapshot.hasData));
+  }
+
+  Widget _videoPoster(StudyCard card) {
+    final poster = card.source.toLowerCase().endsWith('.jpg')
+        ? Image.network(widget.api.fileUrl(card.source), fit: BoxFit.contain,
+            cacheWidth: 448, excludeFromSemantics: true,
+            errorBuilder: (_, _, _) => const SizedBox.shrink())
+        : null;
+    return FutureBuilder(
+      future: card.sourceLectureId.isEmpty || card.originalPath.isEmpty
+          ? null : _recordingInfo(card),
+      builder: (_, snapshot) => EmbeddedVideoPreview(
+        poster: poster,
+        durationMs: snapshot.data?.duration ?? 0,
+        positionMs: _localVideoTimes[card.id] ?? snapshot.data?.position ?? 0,
+        onPlay: () => _openVideo(card, expanded: false),
+        onExpand: () => _openVideo(card, expanded: true),
+        onSeek: (ms) => _openVideo(card, expanded: false, at: ms),
+      ),
+    );
+  }
+
+  Future<void> _openVideo(StudyCard card, {required bool expanded, int? at, bool transcript = false}) async {
+    final focus = PlaybackFocus.instance;
+    final ticket = focus.request();
     try {
-      var recording = false;
-      if (card.sourceLectureId.isNotEmpty && card.originalPath.isNotEmpty) {
-        try {
-          final detail = await widget.api.get(
-            '/api/lectures/${Uri.encodeComponent(card.sourceLectureId)}',
-          );
-          final assets = detail['assets'] as List? ?? const [];
-          final videos = assets.whereType<Map>().where((a) => a['kind'] == 'video');
-          recording = videos.firstOrNull?['path'] == card.originalPath;
-        } on ApiError {
-          // A detached or offline attachment can still play its own file.
-        }
-      }
-      if (!mounted || document?.cards.contains(card) != true ||
+      final recording = card.sourceLectureId.isNotEmpty && card.originalPath.isNotEmpty &&
+          await _recordingInfo(card) != null;
+      if (!focus.current(ticket) || !mounted || document?.cards.contains(card) != true ||
           ModalRoute.isCurrentOf(context) != true) return;
       if (recording) {
-        await _playReadingReference(card.sourceLectureId, _localVideoTimes[card.id]);
+        await _playReadingReference(card.sourceLectureId, at ?? _localVideoTimes[card.id], transcript: transcript, ticket: ticket);
       } else if (expanded) {
         _focusReader(card);
       } else {
         _update(() => _activeLocalVideo = card.id);
         await WidgetsBinding.instance.endOfFrame;
         if (mounted && _activeLocalVideo == card.id) {
-          await _localVideoKeys[card.id]?.currentState?.play();
+          await _localVideoKeys[card.id]?.currentState?.play(ticket: ticket);
         }
       }
     } catch (_) {
       if (mounted) _toast(l10n.studyVideoUnavailable);
-    } finally {
-      _openingVideo = false;
     }
   }
 
@@ -218,13 +253,11 @@ extension _StudyMaterialReader on StudyCanvasState {
     },
   );
 
-  Future<void> _playReadingReference(String lecture, int? ms) async {
+  Future<void> _playReadingReference(String lecture, int? ms, {bool transcript = false, int? ticket}) async {
     if (!mounted || lecture.isEmpty) return;
-    for (final key in _localVideoKeys.values.toList()) {
-      final local = key.currentState;
-      if (local != null && local.isPlaying) await local.pause();
-    }
-    if (!mounted) return;
+    final focus = PlaybackFocus.instance;
+    final request = ticket ?? focus.request();
+    if (!focus.current(request)) return;
     final recording = widget.standalone || lecture != widget.ctl.lectureId
         ? null
         : document!.cards.where((card) => card.type == 'lecture').firstOrNull;
@@ -235,17 +268,17 @@ extension _StudyMaterialReader on StudyCanvasState {
       _returnToMaterial = _focusedMaterial;
       _openMaterialReader(recording);
       try {
-        await widget.ctl.playFrom(ms ?? widget.ctl.position.value.inMilliseconds);
+        await widget.ctl.playFrom(ms ?? widget.ctl.position.value.inMilliseconds, ticket: request);
       } catch (_) {
         if (mounted) _toast(l10n.studyVideoUnavailable);
       }
       return;
     }
     if (!widget.standalone) await widget.ctl.pause();
-    if (!mounted || ModalRoute.isCurrentOf(context) != true) return;
+    if (!mounted || !focus.current(request) || ModalRoute.isCurrentOf(context) != true) return;
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) => PlayerPage(lectureId: lecture, startMs: ms),
+        builder: (_) => PlayerPage(lectureId: lecture, startMs: ms, openTranscript: transcript, playbackTicket: request),
       ),
     );
   }

@@ -159,6 +159,8 @@ class SeekPlayer extends fixture.FixturePlayer {
   @override
   Player get player => fake;
   @override
+  Future<void> pause() => fake.pause();
+  @override
   void seekTo(int ms) {
     seeks.add(ms);
     position.value = Duration(milliseconds: ms);
