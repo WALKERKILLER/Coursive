@@ -48,15 +48,20 @@ void main() {
     await selectCard(t, key.currentState!.document!.cards.single);
     final more = find.byKey(const ValueKey('study-card-selection-more'));
     final bounds = t.getRect(more);
-    final layer = (capture.currentContext!.findRenderObject()
-        as RenderRepaintBoundary).layer! as OffsetLayer;
+    final boundary =
+        capture.currentContext!.findRenderObject() as RenderRepaintBoundary;
     // The pill has a 6 dp inset, but the button's touch area is 44 dp.
-    final sample = Rect.fromLTWH(bounds.center.dx, bounds.top + 3, 1, 1);
+    final sample = boundary.globalToLocal(
+      Offset(bounds.center.dx, bounds.top + 3),
+    );
     Future<int> paperPixel() async => (await t.runAsync(() async {
-      final image = await layer.toImage(sample);
+      final image = await boundary.toImage();
       try {
-        final bytes = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
-        return bytes.getUint32(0);
+        final bytes = (await image.toByteData(
+          format: ui.ImageByteFormat.rawRgba,
+        ))!;
+        final pixel = sample.dy.floor() * image.width + sample.dx.floor();
+        return bytes.getUint32(pixel * 4);
       } finally {
         image.dispose();
       }
