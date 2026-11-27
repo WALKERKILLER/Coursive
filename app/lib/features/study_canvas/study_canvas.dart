@@ -3241,7 +3241,7 @@ class StudyCanvasState extends State<StudyCanvas>
                         (_tool == StudyTool.pan && c.readingSurface),
                     child: switch (c.type) {
                       _ when _textCard == c && _focusedMaterial != c => _textEditor(c),
-                      'pdfdoc' => _cardMaterial(c),
+                      'lecture' || 'video' || 'pdfdoc' => _cardMaterial(c),
                       'conversation' when c.passageAside => _ConversationBody(
                         key: _conversationKeys.putIfAbsent(c.id, () => GlobalKey<_ConversationBodyState>()),
                         owner: this, card: c, active: false,
@@ -3255,7 +3255,6 @@ class StudyCanvasState extends State<StudyCanvas>
                         child: _editingPassage == c.id ? _passageEditor(c) : _plainCardText(c),
                       ),
                       'conversation' => _ThreadNode(owner: this, card: c),
-                      'lecture' || 'video' => _videoCard(c),
                       'pdf' when _pdfPageCard(c) => _cardMaterial(c),
                       'image' || 'pdf' => Image(
                         image: ResizeImage(
@@ -3301,20 +3300,6 @@ class StudyCanvasState extends State<StudyCanvas>
                 ),
               ),
             ),
-            if (!c.passageLinked)
-              SizedBox(
-                height: 16,
-                child: Align(
-                  alignment: Alignment.bottomRight,
-                  child: c.quarterTurns != 0
-                      ? null
-                      : Icon(
-                          Icons.south_east,
-                          size: 12,
-                          color: selected ? chrome.accent : chrome.inkFaint,
-                        ),
-                ),
-              ),
           ],
         ),
       ),

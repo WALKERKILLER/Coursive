@@ -128,28 +128,6 @@ extension _StudyMaterialReader on StudyCanvasState {
     });
   }
 
-  Widget _videoCard(StudyCard card) {
-    final primary = card.type == 'lecture';
-    final linked = card.sourceLectureId.isNotEmpty && card.originalPath.isNotEmpty;
-    final body = _cardMaterial(card);
-    Widget frame(bool hasShelf) => Column(children: [
-      Expanded(child: body),
-      if (hasShelf) TextButton.icon(
-        key: ValueKey(primary ? 'study-video-shelf' : 'study-video-shelf-${card.id}'),
-        style: TextButton.styleFrom(minimumSize: const Size(0, 48),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)),
-        onPressed: primary || (!widget.standalone && card.sourceLectureId == widget.ctl.lectureId)
-            ? () => _toggleShelf(_ShelfTab.transcript)
-            : () => _openVideo(card, expanded: true, transcript: true),
-        icon: const Icon(Icons.subtitles_outlined, size: 16),
-        label: Text(l10n.studyShelfFromVideo, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
-    ]);
-    if (primary || !linked) return frame(primary);
-    return FutureBuilder(future: _recordingInfo(card),
-      builder: (_, snapshot) => frame(snapshot.hasData));
-  }
-
   Widget _videoPoster(StudyCard card) {
     final poster = card.source.toLowerCase().endsWith('.jpg')
         ? Image.network(widget.api.fileUrl(card.source), fit: BoxFit.contain,
@@ -170,7 +148,11 @@ extension _StudyMaterialReader on StudyCanvasState {
     );
   }
 
-  Future<void> _openVideo(StudyCard card, {required bool expanded, int? at, bool transcript = false}) async {
+  Future<void> _openVideo(
+    StudyCard card, {
+    required bool expanded,
+    int? at,
+  }) async {
     final focus = PlaybackFocus.instance;
     final ticket = focus.request();
     try {
@@ -179,7 +161,11 @@ extension _StudyMaterialReader on StudyCanvasState {
       if (!focus.current(ticket) || !mounted || document?.cards.contains(card) != true ||
           ModalRoute.isCurrentOf(context) != true) return;
       if (recording) {
-        await _playReadingReference(card.sourceLectureId, at ?? _localVideoTimes[card.id], transcript: transcript, ticket: ticket);
+        await _playReadingReference(
+          card.sourceLectureId,
+          at ?? _localVideoTimes[card.id],
+          ticket: ticket,
+        );
       } else if (expanded) {
         _focusReader(card);
       } else {
@@ -259,7 +245,11 @@ extension _StudyMaterialReader on StudyCanvasState {
     },
   );
 
-  Future<void> _playReadingReference(String lecture, int? ms, {bool transcript = false, int? ticket}) async {
+  Future<void> _playReadingReference(
+    String lecture,
+    int? ms, {
+    int? ticket,
+  }) async {
     if (!mounted || lecture.isEmpty) return;
     final focus = PlaybackFocus.instance;
     final request = ticket ?? focus.request();
@@ -284,7 +274,11 @@ extension _StudyMaterialReader on StudyCanvasState {
     if (!mounted || !focus.current(request) || ModalRoute.isCurrentOf(context) != true) return;
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
-        builder: (_) => PlayerPage(lectureId: lecture, startMs: ms, openTranscript: transcript, playbackTicket: request),
+        builder: (_) => PlayerPage(
+          lectureId: lecture,
+          startMs: ms,
+          playbackTicket: request,
+        ),
       ),
     );
   }

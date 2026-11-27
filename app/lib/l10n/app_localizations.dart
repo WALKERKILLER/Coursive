@@ -12111,12 +12111,6 @@ abstract class AppLocalizations {
   /// **'课次素材'**
   String get studyShelf;
 
-  /// No description provided for @studyShelfFromVideo.
-  ///
-  /// In zh, this message translates to:
-  /// **'字幕 · 资料 · 练习'**
-  String get studyShelfFromVideo;
-
   /// No description provided for @studyShelfHint.
   ///
   /// In zh, this message translates to:

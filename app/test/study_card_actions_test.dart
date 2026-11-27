@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,6 +38,43 @@ class _CropApi extends ToolsApi {
 }
 
 void main() {
+  testWidgets('hovering the more button leaves the paper above the toolbar clear', (t) async {
+    final capture = GlobalKey();
+    final key = await fixture.open(
+      t,
+      fixture.FixtureApi((sheet()..cards.add(card())).json()),
+      capture: capture,
+    );
+    await selectCard(t, key.currentState!.document!.cards.single);
+    final more = find.byKey(const ValueKey('study-card-selection-more'));
+    final bounds = t.getRect(more);
+    final layer = (capture.currentContext!.findRenderObject()
+        as RenderRepaintBoundary).layer! as OffsetLayer;
+    // The pill has a 6 dp inset, but the button's touch area is 44 dp.
+    final sample = Rect.fromLTWH(bounds.center.dx, bounds.top + 3, 1, 1);
+    Future<int> paperPixel() async => (await t.runAsync(() async {
+      final image = await layer.toImage(sample);
+      try {
+        final bytes = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+        return bytes.getUint32(0);
+      } finally {
+        image.dispose();
+      }
+    }))!;
+    final before = await paperPixel();
+    final mouse = await t.createGesture(kind: ui.PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1300, 400));
+    await mouse.moveTo(bounds.center);
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 240));
+    expect(await paperPixel(), before);
+    await t.tap(more);
+    await t.pumpAndSettle();
+    expect(find.text('取消选择'), findsOneWidget);
+    await mouse.removePointer();
+    await close(t);
+  });
+
   testWidgets('the card toolbar locks and unlocks a saved position', (t) async {
     final api = fixture.FixtureApi((sheet()..cards.add(card())).json());
     final key = await fixture.open(t, api);
@@ -77,20 +115,28 @@ void main() {
     await close(t);
   });
 
-  testWidgets('the card toolbar yields to the top controls if needed', (
-    t,
-  ) async {
-    final nearTop = card()..rect = const Rect.fromLTWH(260, 100, 340, 230);
-    final key = await fixture.open(
-      t,
-      fixture.FixtureApi((sheet()..cards.add(nearTop)).json()),
-    );
-    await selectCard(t, key.currentState!.document!.cards.single);
-    final bar = find.byKey(const ValueKey('study-card-selection-bar'));
-    expect(t.getTopLeft(bar).dy, greaterThan(nearTop.rect.bottom));
-    expect(find.byTooltip('锁定位置').hitTestable(), findsOneWidget);
-    await close(t);
-  });
+  for (final type in ['lecture', 'video', 'text', 'pdf', 'image', 'conversation']) {
+    testWidgets('the toolbar for a $type card docks at the top edge', (t) async {
+      final nearTop = card(id: type == 'lecture' ? 'lecture' : 'source', type: type)
+        ..rect = const Rect.fromLTWH(260, 100, 340, 230);
+      if (type == 'video') nearTop.sourceLectureId = 'fixture';
+      if (type == 'conversation') {
+        nearTop.generation = 'markdown-aside';
+        nearTop.conversationId = 'test-aside';
+      }
+      final key = await fixture.open(
+        t,
+        fixture.FixtureApi((sheet()..cards.add(nearTop)).json()),
+      );
+      await selectCard(t, key.currentState!.document!.cards.single);
+      final bar = t.getRect(find.byKey(const ValueKey('study-card-selection-bar')));
+      final tools = t.getRect(find.byKey(const ValueKey('study-top-tools')));
+      expect(bar.top, greaterThanOrEqualTo(tools.bottom));
+      expect(bar.top, lessThan(nearTop.rect.top));
+      expect(find.byTooltip('锁定位置').hitTestable(), findsOneWidget);
+      await close(t);
+    });
+  }
 
   test('a lock in a legacy document raises the format even after unlock', () {
     final legacy = (sheet()..cards.add(card()..positionLocked = true)).json()

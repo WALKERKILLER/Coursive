@@ -329,20 +329,6 @@ class _ConnectionPainter extends CustomPainter {
           ..strokeWidth = 2 / d.zoom,
       );
       canvas.drawCircle(end, 4 / d.zoom, Paint()..color = chrome.accent);
-      final label = TextPainter(
-        text: TextSpan(
-          text: link.label,
-          style: TextStyle(
-            color: chrome.onAccentSoft,
-            fontSize: 12 / d.zoom,
-            backgroundColor: chrome.accentSoft,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-        maxLines: 2,
-      )..layout(maxWidth: 180 / d.zoom);
-      label.paint(canvas, mid - Offset(label.width / 2, label.height / 2));
-      label.dispose();
     }
     canvas.restore();
   }

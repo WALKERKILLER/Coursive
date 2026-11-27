@@ -453,17 +453,26 @@ extension _StudyInteraction on StudyCanvasState {
     }
   }
 
+  bool get _showSelectionControls =>
+      _selectionReady || (_tool == StudyTool.select && _wholeCardSelected);
+
   void _measureSelectionControls() {
-    if (_selectionMeasurePending || !_selectionReady) return;
+    if (_selectionMeasurePending || !_showSelectionControls) return;
     _selectionMeasurePending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _selectionMeasurePending = false;
-      if (!mounted || !_selectionReady) return;
+      if (!mounted || !_showSelectionControls) return;
       final surface =
           _inputSurface.currentContext?.findRenderObject() as RenderBox?;
       if (surface == null || !surface.hasSize) return;
       final obstacles = <Rect>[];
-      for (final key in [_dockKey, _zoomKey, _shelfKey, ..._stageKeys]) {
+      for (final key in [
+        _dockKey,
+        _zoomKey,
+        _shelfKey,
+        _reviewKey,
+        ..._stageKeys,
+      ]) {
         final box = key.currentContext?.findRenderObject() as RenderBox?;
         if (box != null && box.hasSize && box.attached) {
           obstacles.add(
@@ -488,8 +497,11 @@ extension _StudyInteraction on StudyCanvasState {
       math.max(_topBarsBottom + 12, _viewport.height - 12),
     );
     final size = Size(
-      math.min(_barWidth(_selectionButtons().length), viewport.width),
-      44,
+      math.min(
+        _actionBarWidth(_selectionButtons().length, _regionFirstActionWidth),
+        viewport.width,
+      ),
+      _actionSize,
     );
     final position = studyFloatingPosition(
       Rect.fromPoints(
@@ -519,7 +531,7 @@ extension _StudyInteraction on StudyCanvasState {
         );
         final child = _Appear(
           key: _selectionMenuKey,
-          child: _quickAsk ? _quickComposer(context) : _selectionBar(context),
+          child: _quickAsk ? _quickComposer(context) : _selectionBar(),
         );
         // No room beside the selection: the bar waits below the canvas.
         if (docked) return Center(child: child);
@@ -537,7 +549,10 @@ extension _StudyInteraction on StudyCanvasState {
     );
   }
 
-  double _barWidth(int count) => count * 44.0 + (widget.standalone ? 0 : 14);
+  static const _actionSize = 44.0;
+  double get _regionFirstActionWidth => widget.standalone ? _actionSize : 58;
+  double _actionBarWidth(int count, double firstActionWidth) =>
+      (count - 1) * _actionSize + firstActionWidth;
 
   List<Widget> _selectionButtons() {
     final ink = _detail.strokeIds.isNotEmpty;
@@ -573,6 +588,7 @@ extension _StudyInteraction on StudyCanvasState {
       if (ink)
         PopupMenuButton<int>(
           tooltip: l10n.studySelectionColor,
+          style: _actionBarButtonStyle(context),
           icon: const Icon(Icons.palette_outlined, size: 16),
           itemBuilder: (_) => [
             for (final c in _penPalette.take(20))
@@ -613,14 +629,23 @@ extension _StudyInteraction on StudyCanvasState {
     ];
   }
 
-  Widget _selectionBar(BuildContext context) {
+  Widget _selectionBar() => _floatingActionBar(
+    key: const ValueKey('study-selection-bar'),
+    actions: _selectionButtons(),
+    firstActionWidth: _regionFirstActionWidth,
+  );
+
+  Widget _floatingActionBar({
+    required Key key,
+    required List<Widget> actions,
+    double firstActionWidth = _actionSize,
+  }) {
     final chrome = StudyChrome.of(context);
-    final actions = _selectionButtons();
     return SizedBox(
-      key: const ValueKey('study-selection-bar'),
-      height: 44,
+      key: key,
+      height: _actionSize,
       width: math.min(
-        _barWidth(actions.length),
+        _actionBarWidth(actions.length, firstActionWidth),
         math.max(0, _viewport.width - 24),
       ),
       child: Stack(
@@ -646,8 +671,8 @@ extension _StudyInteraction on StudyCanvasState {
                 children: [
                   for (final (i, action) in actions.indexed)
                     SizedBox(
-                      width: i == 0 && !widget.standalone ? 58 : 44,
-                      height: 44,
+                      width: i == 0 ? firstActionWidth : _actionSize,
+                      height: _actionSize,
                       child: action,
                     ),
                 ],
@@ -987,7 +1012,36 @@ class _BoundChip extends StatelessWidget {
   }
 }
 
-/// A selection-bar verb; the primary one is filled.
+ButtonStyle _actionBarButtonStyle(BuildContext context, {Color? color}) {
+  final colors = Theme.of(context).colorScheme;
+  final normal = color ?? colors.onSurface;
+  final active = color == null
+      ? colors.primary
+      : Color.lerp(color, colors.onSurface, .24)!;
+  final foreground = WidgetStateProperty.resolveWith<Color>((states) {
+    if (states.contains(WidgetState.disabled)) {
+      return normal.withValues(alpha: .38);
+    }
+    if (states.contains(WidgetState.pressed)) {
+      return active.withValues(alpha: .72);
+    }
+    if (states.contains(WidgetState.hovered) ||
+        states.contains(WidgetState.focused)) {
+      return active;
+    }
+    return normal;
+  });
+  return ButtonStyle(
+    foregroundColor: foreground,
+    iconColor: foreground,
+    overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+    splashFactory: NoSplash.splashFactory,
+    minimumSize: const WidgetStatePropertyAll(Size.zero),
+    padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+  );
+}
+
+/// One action in the floating selection bar.
 class _BarAction extends StatelessWidget {
   const _BarAction({
     this.label,
@@ -1005,16 +1059,16 @@ class _BarAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    child: InkWell(
-      onTap: onPressed,
-      customBorder: const StadiumBorder(),
+    child: TextButton(
+      onPressed: onPressed,
+      style: _actionBarButtonStyle(context, color: color),
       child: Center(
         child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 16),
+              Icon(icon, size: 16),
               if (label != null) ...[
                 const SizedBox(width: 3),
                 Text(label!, style: Theme.of(context).textTheme.labelSmall),
@@ -1031,9 +1085,15 @@ class _BarAction extends StatelessWidget {
 /// Based on tldraw's contextual toolbar (https://tldraw.dev/examples/contextual-toolbar)
 /// and Material 3's floating toolbar (https://m3.material.io/components/toolbars/guidelines).
 class _FloatingLayout extends SingleChildLayoutDelegate {
-  _FloatingLayout(this.anchor, this.topInset, this.obstacles);
+  _FloatingLayout(
+    this.anchor,
+    this.topInset,
+    this.obstacles, {
+    this.keepAbove = false,
+  });
   final Rect anchor;
   final double topInset;
+  final bool keepAbove;
 
   /// Docks, the sidebar and other fixed controls it must not cover.
   final List<Rect> obstacles;
@@ -1050,14 +1110,22 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size child) {
+    final viewport = Rect.fromLTRB(
+      edge,
+      topInset + edge,
+      size.width - edge,
+      size.height - edge,
+    );
     final free = studyFloatingPosition(
       anchor,
-      Rect.fromLTRB(
-        edge,
-        topInset + edge,
-        size.width - edge,
-        size.height - edge,
-      ),
+      keepAbove
+          ? Rect.fromLTRB(
+              viewport.left,
+              viewport.top,
+              viewport.right,
+              math.min(viewport.bottom, anchor.top - gap),
+            )
+          : viewport,
       obstacles,
       child,
       gap: gap,
@@ -1067,7 +1135,18 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
       edge,
       math.max(edge, size.width - child.width - edge),
     );
-    final top = topInset + edge, bottom = size.height - edge;
+    final top = viewport.top, bottom = viewport.bottom;
+    if (keepAbove) {
+      // Near the window edge, keep the actions next to the top controls.
+      final row = Rect.fromLTRB(
+        viewport.left,
+        top,
+        viewport.right,
+        math.min(bottom, top + child.height),
+      );
+      return studyFloatingPosition(anchor, row, obstacles, child, gap: gap) ??
+          Offset(x.toDouble(), math.min(top, math.max(0.0, size.height - child.height)));
+    }
     var y = anchor.top - gap - child.height;
     if (y < top) y = anchor.bottom + gap;
     // Neither side has room: stay inside the window over the selection.
@@ -1084,6 +1163,7 @@ class _FloatingLayout extends SingleChildLayoutDelegate {
   bool shouldRelayout(_FloatingLayout old) =>
       old.anchor != anchor ||
       old.topInset != topInset ||
+      old.keepAbove != keepAbove ||
       !listEquals(old.obstacles, obstacles);
 }
 

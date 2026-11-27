@@ -389,8 +389,7 @@ void main() {
       };
       final canvas = await open(t, api, player: player);
       final camera = canvas.currentState!.document!.camera;
-      expect(find.byKey(const ValueKey('study-video-shelf-copy')), findsOneWidget);
-      expect(find.byKey(const ValueKey('study-video-shelf')), findsOneWidget);
+      expect(find.text('字幕 · 资料 · 练习'), findsNothing);
       final openCard = expand
           ? find.descendant(
               of: find.ancestor(of: find.text('同节录像'), matching: find.byType(Row)).first,
@@ -649,51 +648,36 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
-  for (final scale in [.6, 1.0, 1.2]) {
-    testWidgets('video footer fits text at zoom $scale and opens shelf', (
+  testWidgets('video fills the card body and the top shelf button opens materials', (t) async {
+    final doc = StudyDocument()
+      ..camera = const Offset(100, 120)
+      ..cards.add(
+        StudyCard(
+          id: 'lecture',
+          type: 'lecture',
+          layer: 'main',
+          rect: const Rect.fromLTWH(100, 100, 700, 500),
+        ),
+      );
+    const videoKey = ValueKey('test-course-video');
+    await open(
       t,
-    ) async {
-      final doc = StudyDocument()
-        ..camera = const Offset(100, 120)
-        ..zoom = scale
-        ..cards.add(
-          StudyCard(
-            id: 'lecture',
-            type: 'lecture',
-            layer: 'main',
-            rect: const Rect.fromLTWH(100, 100, 700, 500),
-          ),
-        );
-      await open(t, FixtureApi(doc.json()));
-      final button = find.byKey(const ValueKey('study-video-shelf'));
-      final label = find.descendant(of: button, matching: find.byType(Text));
-      final bounds = t.getRect(button);
-      final text = t.getRect(label);
-      expect(bounds.contains(text.topLeft), isTrue);
-      expect(bounds.contains(text.bottomRight), isTrue);
-      final rich = find.descendant(of: label, matching: find.byType(RichText));
-      final paragraph = t.widget<RichText>(rich);
-      final render = t.renderObject<RenderParagraph>(rich);
-      final measured = TextPainter(
-        text: paragraph.text,
-        textDirection: paragraph.textDirection ?? TextDirection.ltr,
-        textScaler: paragraph.textScaler,
-        maxLines: 1,
-      )..layout(maxWidth: render.size.width);
-      expect(render.size.height, greaterThanOrEqualTo(measured.height));
-      measured.dispose();
-      expect(find.byTooltip('问 AI'), findsNothing);
-      expect(find.byKey(const ValueKey('study-ai-tab')), findsOneWidget);
-      await t.tap(find.byKey(const ValueKey('study-tool-select')));
-      await t.pumpAndSettle();
-      await t.tap(button);
-      await t.pumpAndSettle();
-      expect(find.text('这节课还没有字幕'), findsOneWidget);
-      expect(t.takeException(), isNull);
-      await t.pumpWidget(const SizedBox());
-      await t.pumpAndSettle();
-    });
-  }
+      FixtureApi(doc.json()),
+      video: const ColoredBox(key: videoKey, color: Colors.black),
+    );
+    final video = t.getRect(find.byKey(videoKey));
+    final card = t.getRect(find.byKey(const ValueKey('study-card/lecture')));
+    expect(video.bottom, closeTo(card.bottom, 1));
+    expect(video.top, greaterThan(card.top));
+    expect(find.text('字幕 · 资料 · 练习'), findsNothing);
+    await t.tap(find.byKey(const ValueKey('study-open-shelf')));
+    await t.pumpAndSettle();
+    expect(find.text('这节课还没有字幕'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+    await t.pumpAndSettle();
+  });
+
   testWidgets(
     'paper appearance survives reopening without editing the course',
     (t) async {

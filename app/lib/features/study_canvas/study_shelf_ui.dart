@@ -30,9 +30,9 @@ extension _StudyShelf on StudyCanvasState {
   /// edge on phones, where dragging needs a long press.
   bool get _shelfSide => _viewport.width >= 720;
 
-  void _toggleShelf([_ShelfTab? tab]) => _update(() {
-    _shelfTab = _shelfTab == null || (tab != null && tab != _shelfTab)
-        ? (tab ?? _shelfShown ?? _ShelfTab.transcript)
+  void _toggleShelf() => _update(() {
+    _shelfTab = _shelfTab == null
+        ? _shelfShown ?? _ShelfTab.transcript
         : null;
     _shelfShown = _shelfTab ?? _shelfShown;
   });

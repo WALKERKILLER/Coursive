@@ -6956,9 +6956,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyShelf => '课次素材';
 
   @override
-  String get studyShelfFromVideo => '字幕 · 资料 · 练习';
-
-  @override
   String get studyShelfHint => '拖到画布上，或点 ＋ 放到视野中央';
 
   @override

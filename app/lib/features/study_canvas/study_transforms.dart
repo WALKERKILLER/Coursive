@@ -242,25 +242,18 @@ extension _StudyTransforms on StudyCanvasState {
           Positioned.fill(
             child: CustomSingleChildLayout(
               delegate: _FloatingLayout(
-                showGrips
-                    ? Rect.fromLTRB(
-                        screenBounds.left,
-                        math.min(
-                          showCorners
-                              ? screenBounds.top - hitRadius
-                              : screenBounds.top,
-                          grip.dy - hitRadius,
-                        ),
-                        screenBounds.right,
-                        screenBounds.bottom,
-                      )
-                    : screenBounds,
+                screenBounds,
                 _topBarsBottom,
                 [
                   ..._selectionObstacles,
-                  if (showGrips)
+                  if (showGrips) ...[
                     Rect.fromCircle(center: grip, radius: hitRadius),
+                    if (showCorners)
+                      for (final corner in points)
+                        Rect.fromCircle(center: corner, radius: hitRadius),
+                  ],
                 ],
+                keepAbove: true,
               ),
               child: _cardSelectionBar(card),
             ),
