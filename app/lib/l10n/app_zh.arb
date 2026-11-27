@@ -4267,6 +4267,7 @@
   "studyConversationFull": "这段对话已满 300 轮，请开始新对话",
   "studyCardExpand": "展开模块",
   "studyCardFitContent": "适应内容高度",
+  "studyAddLectureCard": "添加当前课程视频",
   "studyCardCollapse": "折叠模块",
   "studyCardFoldColumn": "收起整列",
   "studyCardSelectText": "选择文档文字",

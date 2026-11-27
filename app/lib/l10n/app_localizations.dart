@@ -12033,6 +12033,12 @@ abstract class AppLocalizations {
   /// **'适应内容高度'**
   String get studyCardFitContent;
 
+  /// No description provided for @studyAddLectureCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加当前课程视频'**
+  String get studyAddLectureCard;
+
   /// No description provided for @studyCardCollapse.
   ///
   /// In zh, this message translates to:

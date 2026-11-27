@@ -2610,6 +2610,54 @@ class StudyCanvasState extends State<StudyCanvas>
     );
   }
 
+  String _cardHeader(StudyCard card) {
+    if (card.headerTitle.isNotEmpty) return card.headerTitle;
+    if (card.passageAside) return _asideLabel(card);
+    if (card.type == 'pdf' && card.pdfColumn.isNotEmpty) {
+      return l10n.studyCardPdfPage(card.title, card.page, card.pageCount);
+    }
+    return card.title;
+  }
+
+  Future<String?> _askCardTitle(String initial) async {
+    var title = initial;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        void submit() {
+          final value = title.trim();
+          if (value.isNotEmpty && value.runes.length <= 240) Navigator.pop(ctx, value);
+        }
+        return StatefulBuilder(builder: (context, rebuild) => AlertDialog(
+          title: Text(l10n.commonRename),
+          content: TextFormField(
+            initialValue: initial,
+            autofocus: true,
+            maxLength: 240,
+            onChanged: (value) => rebuild(() => title = value),
+            onFieldSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(l10n.commonCancel)),
+            FilledButton(onPressed: title.trim().isEmpty || title.trim().runes.length > 240 ? null : submit, child: Text(l10n.commonSave)),
+          ],
+        ));
+      },
+    );
+  }
+
+  Future<void> _renameCard(StudyCard card) async {
+    final d = document!;
+    final initial = _cardHeader(card);
+    final value = await _askCardTitle(initial);
+    if (!mounted || document != d || !d.cards.contains(card) || !d.editable(card.layer) ||
+        value == null || value == initial) return;
+    d.checkpoint();
+    card.headerTitle = value;
+    if (card.collapsed && card.passageLinked) _fitFoldedAside(card);
+    d.changed();
+  }
+
   String _asideLabel(StudyCard card) {
     final question = _threadSummary[card.id]?['first'] as String?;
     return question == null || question.isEmpty
@@ -2621,7 +2669,7 @@ class StudyCanvasState extends State<StudyCanvas>
     card.rect = StudyCardTransform(card).withLayoutHeight(_asideCollapsedHeight);
     final expanded = card.unfoldedLayoutWidth ??= card.contentRect.width / card.contentScale;
     final title = TextPainter(
-      text: TextSpan(text: card.passageNote ? card.title : _asideLabel(card), style: Theme.of(context).textTheme.labelLarge),
+      text: TextSpan(text: _cardHeader(card), style: Theme.of(context).textTheme.labelLarge),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
       maxLines: 1,
@@ -2770,6 +2818,7 @@ class StudyCanvasState extends State<StudyCanvas>
     );
     // Rare actions live in one menu so the header never runs out of room.
     final more = <(String, IconData, VoidCallback?)>[
+      (l10n.commonRename, Icons.drive_file_rename_outline, () => _renameCard(c)),
       if (!c.generated)
         for (final source in c.sources.skip(c.passageLinked ? 1 : 0))
           (
@@ -2832,17 +2881,11 @@ class StudyCanvasState extends State<StudyCanvas>
           Icons.edit_outlined,
           () => _text(c),
         ),
-      if (c.type != 'lecture' && !pdfColumn && d.canTransformCard(c))
+      if (d.canRemoveCard(c))
         (
           l10n.studyCardDelete,
           Icons.delete_outline_rounded,
-          () {
-            d.checkpoint();
-            d.cards.removeWhere((v) => v.id == c.id);
-            d.connections.removeWhere((v) => v.from == c.id || v.to == c.id);
-            d.strokes.removeWhere((v) => v.anchor == c.id);
-            d.changed();
-          },
+          () => _removeCards({c.id}),
         ),
     ];
     return IgnorePointer(
@@ -2908,19 +2951,10 @@ class StudyCanvasState extends State<StudyCanvas>
                           ? ValueListenableBuilder<int>(
                               valueListenable: _threadTick,
                               builder: (_, _, _) {
-                                return titleLabel(_asideLabel(c));
+                                return titleLabel(_cardHeader(c));
                               },
                             )
-                          : titleLabel(
-                              c.type == 'pdf' && pdfColumn
-                                  ? l10n.studyCardPdfPage(
-                                      c.title,
-                                      c.page,
-                                      c.pageCount,
-                                    )
-                                  : c.title,
-                              tooltip: c.title,
-                            ),
+                          : titleLabel(_cardHeader(c)),
                     ),
                     Row(
                       key: _cardHeaderActions.putIfAbsent(
@@ -3013,7 +3047,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                         maxWidth: 220,
                                       ),
                                       child: Text(
-                                        c.title,
+                                        _cardHeader(c),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),

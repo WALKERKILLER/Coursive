@@ -153,10 +153,12 @@ extension _StudyModules on StudyCanvasState {
       builder: (c) => SimpleDialog(
         title: const Text('视频模块'),
         children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(c, 'lecture'),
-            child: const Text('定位当前课程视频'),
-          ),
+          if (!widget.standalone)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(c, 'lecture'),
+              child: Text(document!.cards.any((c) => c.type == 'lecture')
+                  ? '定位当前课程视频' : l10n.studyAddLectureCard),
+            ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(c, 'import'),
             child: const Text('导入本地视频'),
@@ -172,7 +174,20 @@ extension _StudyModules on StudyCanvasState {
     if (action == 'import') await _import();
     if (action == 'course') await _courseMaterials();
     if (action == 'lecture') {
-      final card = document!.cards.firstWhere((c) => c.type == 'lecture');
+      final d = document!;
+      var card = d.cards.where((c) => c.type == 'lecture').firstOrNull;
+      if (card == null) {
+        if (!d.editable(d.activeLayer)) {
+          _toast(l10n.studyLayerUnavailable);
+          return;
+        }
+        card = StudyCard(id: 'lecture', type: 'lecture', layer: d.activeLayer,
+            title: l10n.studyBoundLecture,
+            rect: Rect.fromCenter(center: _world(_viewport.center(Offset.zero)), width: 880, height: 550));
+        d.checkpoint();
+        d.cards.add(card);
+        d.changed();
+      }
       document!.camera =
           _viewport.center(Offset.zero) - card.rect.center * document!.zoom;
       _cameraChanged();

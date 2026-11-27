@@ -7,7 +7,7 @@ extension _StudyCardActions on StudyCanvasState {
     final destination = !busy && d.editable(d.activeLayer);
     final editable = !busy && d.canTransformCard(card);
     final removable =
-        editable && card.type != 'lecture' && card.pdfColumn.isEmpty;
+        !busy && d.canRemoveCard(card);
     final duplicable = !busy && card.duplicable;
     final actions = [
       if (editable &&

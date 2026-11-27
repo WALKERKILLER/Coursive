@@ -303,27 +303,30 @@ extension _StudyInteraction on StudyCanvasState {
     d.changed();
   }
 
-  void _deleteSelection() {
+  void _deleteSelection() => _removeCards(_selection, includeSelectedInk: true);
+
+  void _removeCards(Set<String> ids, {bool includeSelectedInk = false}) {
     final d = document!;
     final cards = d.cards
         .where(
           (c) =>
-              _selection.contains(c.id) &&
-              c.type != 'lecture' &&
-              d.canTransformCard(c),
+              ids.contains(c.id) && d.canRemoveCard(c),
         )
         .map((c) => c.id)
         .toSet();
+    final selected = Set<String>.of(cards);
+    cards.addAll(d.cards.where((c) => selected.contains(c.pdfColumn)).map((c) => c.id));
     final ink = d.strokes
         .where(
           (s) =>
               d.editable(s.layer) &&
-              (_detail.strokeIds.contains(s.id) || cards.contains(s.anchor)),
+              ((includeSelectedInk && _detail.strokeIds.contains(s.id)) || cards.contains(s.anchor)),
         )
         .map((s) => s.id)
         .toSet();
     if (cards.isEmpty && ink.isEmpty) return;
     d.checkpoint();
+    if (cards.contains('lecture')) unawaited(widget.ctl.pause());
     d.cards.removeWhere((c) => cards.contains(c.id));
     d.strokes.removeWhere((s) => ink.contains(s.id));
     d.connections.removeWhere(
@@ -357,8 +360,8 @@ extension _StudyInteraction on StudyCanvasState {
             (_selection.contains(c.id) || _detail.objectId == c.id))
           _Bound(
             id: c.id,
-            label: c.title.isNotEmpty
-                ? c.title
+            label: _cardHeader(c).isNotEmpty
+                ? _cardHeader(c)
                 : c.type == 'lecture'
                 ? l10n.studyBoundLecture
                 : l10n.studyBoundCard,

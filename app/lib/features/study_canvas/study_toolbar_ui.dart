@@ -412,7 +412,7 @@ extension _StudyToolbars on StudyCanvasState {
                               : Icons.description_outlined,
                         ),
                         title: Text(
-                          card.title.isEmpty ? card.type : card.title,
+                          _cardHeader(card).isEmpty ? card.type : _cardHeader(card),
                           maxLines: 2,
                         ),
                         onTap: () => Navigator.pop(c, card.id),

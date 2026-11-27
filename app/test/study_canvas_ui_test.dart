@@ -292,6 +292,36 @@ class CountingStroke extends StudyStroke {
 }
 
 void main() {
+  testWidgets('the primary recording header supports rename, delete and undo', (t) async {
+    final player = FixturePlayer();
+    final doc = StudyDocument()..cards.add(StudyCard(id: 'lecture', type: 'lecture',
+        layer: 'main', rect: const Rect.fromLTWH(40, 120, 450, 280), title: '课程视频'));
+    final api = FixtureApi(doc.json());
+    final canvas = await open(t, api, player: player);
+    Future<void> menu() async {
+      await t.tap(find.byTooltip('更多').first);
+      await t.pumpAndSettle();
+    }
+    await menu();
+    await t.tap(find.text('重命名'));
+    await t.pumpAndSettle();
+    await t.enterText(find.byType(TextFormField), '进程与线程');
+    await t.tap(find.text('保存'));
+    await t.pumpAndSettle();
+    expect(find.text('进程与线程'), findsOneWidget);
+    final current = canvas.currentState!.document!;
+    expect(StudyDocument.fromJson(current.json()).cards.single.headerTitle, '进程与线程');
+    expect(current.cards.single.title, '课程视频');
+    await menu();
+    await t.tap(find.text('删除模块'));
+    await t.pumpAndSettle();
+    expect(current.cards, isEmpty);
+    expect(player.pausedAfterCitation, isTrue);
+    await t.tap(find.byTooltip('撤销'));
+    await t.pumpAndSettle();
+    expect(find.text('进程与线程'), findsOneWidget);
+  });
+
   testWidgets('Expanded Markdown keeps the reader and returns to the canvas', (t) async {
     final doc = StudyDocument()
       ..cards.clear()

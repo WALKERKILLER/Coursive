@@ -78,7 +78,7 @@ extension _StudyMaterialReader on StudyCanvasState {
           : Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         leading: BackButton(onPressed: _closeMaterialReader),
-        title: Text(card.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(_cardHeader(card), maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: _materialBody(card),
     );
@@ -324,7 +324,8 @@ extension _StudyMaterialReader on StudyCanvasState {
           .where((n) => n.lectureId == player.lectureId)
           .firstOrNull;
       final cards = <StudyCard>[];
-      final video = d.cards.firstWhere((c) => c.type == 'lecture');
+      final video = d.cards.where((c) => c.type == 'lecture').firstOrNull;
+      if (video == null) return;
       final right = Offset(video.rect.right + 36, video.rect.top);
       if (note != null) {
         try {

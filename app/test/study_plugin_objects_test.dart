@@ -99,6 +99,21 @@ StudyDocument withObjects(List<Map<String, dynamic>> objects) =>
     });
 
 void main() {
+  test(
+    'renaming a plugin card preserves its payload and participates in undo',
+    () {
+      final d = withObjects([object('deck-1')]);
+      final before = d.pluginObjects.single;
+      d.renamePluginObject(before, '期末复习');
+      final again = StudyDocument.fromJson(d.json()).pluginObjects.single;
+      expect(again.title, '期末复习');
+      expect(again.revision, before.revision + 1);
+      expect(again.text, before.text);
+      d.undo();
+      expect(d.pluginObjects.single.json(), before.json());
+    },
+  );
+
   test('the canvas validates every shared fixture as the daemon does', () {
     final f = _fixtures();
     expect(f['schema'], 'coursive/canvas-object@$canvasSchemaVersion');

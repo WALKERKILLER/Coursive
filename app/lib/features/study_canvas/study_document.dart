@@ -44,6 +44,7 @@ class StudyCard {
     required this.layer,
     required this.rect,
     this.title = '',
+    this.headerTitle = '',
     this.text = '',
     this.path = '',
     this.source = '',
@@ -71,7 +72,7 @@ class StudyCard {
        blocks = blocks ?? [],
        sources = sources ?? [];
   final String id, type;
-  String layer, title, text, path, source;
+  String layer, title, headerTitle, text, path, source;
   Rect rect;
   String documentId, generation, conversationId, sourceLectureId, originalPath;
   String pdfColumn;
@@ -190,6 +191,7 @@ class StudyCard {
       _n(m['h'], 440),
     ),
     title: '${m['title'] ?? ''}',
+    headerTitle: '${m['header_title'] ?? ''}',
     text: '${m['text'] ?? ''}',
     path: '${m['path'] ?? ''}',
     source: '${m['source'] ?? ''}',
@@ -225,6 +227,7 @@ class StudyCard {
     layer: layer,
     rect: rect,
     title: title,
+    headerTitle: headerTitle,
     text: text,
     path: path,
     source: source,
@@ -262,6 +265,7 @@ class StudyCard {
     'w': frame.width,
     'h': frame.height,
     'title': title,
+    if (headerTitle.isNotEmpty) 'header_title': headerTitle,
     if (!linkedNote) 'text': text,
     'path': path,
     'source': source,
@@ -562,6 +566,13 @@ class StudyDocument extends ChangeNotifier {
           !inkOnCard(card.id).any(
             (s) => layers.any((l) => l.id == s.layer && l.locked),
           ));
+  bool canRemoveCard(StudyCard card) {
+    bool removable(StudyCard c) => canTransformCard(c) &&
+        inkOnCard(c.id).every((stroke) => editable(stroke.layer));
+    return removable(card) && (card.pdfColumn != card.id ||
+        cards.where((c) => c.pdfColumn == card.id).every(removable));
+  }
+
   factory StudyDocument.fromJson(Map m) {
     final version = m['version'];
     if (version is! int || version < 1 || version > currentFormatVersion) {
@@ -740,6 +751,19 @@ class StudyDocument extends ChangeNotifier {
     connections.removeWhere(
       (c) => deleted.contains(c.from) || deleted.contains(c.to),
     );
+    pluginRevision++;
+    changed();
+  }
+
+  void renamePluginObject(StudyPluginObject object, String title) {
+    final index = pluginObjects.indexOf(object);
+    if (index < 0 || object.title == title) return;
+    final raw = object.json();
+    raw['content']['title'] = title;
+    raw['revision'] = object.revision + 1;
+    final renamed = StudyPluginObject.fromJson(raw);
+    checkpoint();
+    pluginObjects = [...pluginObjects]..[index] = renamed;
     pluginRevision++;
     changed();
   }

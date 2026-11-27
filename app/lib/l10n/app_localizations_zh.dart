@@ -6915,6 +6915,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get studyCardFitContent => '适应内容高度';
 
   @override
+  String get studyAddLectureCard => '添加当前课程视频';
+
+  @override
   String get studyCardCollapse => '折叠模块';
 
   @override

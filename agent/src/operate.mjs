@@ -338,7 +338,7 @@ export function operateTools(deps, conv) {
 				const lecture_id = conv?.context?.lecture_id || conv?.context?.player_lecture_id;
 				if (!lecture_id || conv?.context?.study_canvas !== "yes") throw bad("请先打开要操作的课程画布");
 				const d = await api("GET", `/api/lectures/${enc(lecture_id)}/study-canvas`);
-				const view = ({ id, title, type, x, y, w, h, page, page_count, position_locked }) => ({ id, title, type, x, y, w, h, page, page_count, position_locked });
+				const view = ({ id, header_title, title, type, x, y, w, h, page, page_count, position_locked }) => ({ id, title: header_title || title, type, x, y, w, h, page, page_count, position_locked });
 				if (p.action === "list") return text(JSON.stringify((d.objects ?? []).slice(0, 60).map(view)));
 				if (!/移动|位置|放到|拖到|缩放|调整|大小|放大|缩小|页|滚动|展开|视图|move|resize|page|view/i.test(conv.lastUser ?? "")) throw bad("需要用户请求操作画布或 PDF");
 				const target = d.objects?.find((c) => c.id === p.card_id);
@@ -351,7 +351,7 @@ export function operateTools(deps, conv) {
 				if (p.action === "pdf_view" && !["scroll", "paged", "column"].includes(p.view)) throw bad("阅读视图无效");
 				const action = { move: "移动", resize: "调整大小", pdf_page: `翻到第 ${p.page} 页：`, pdf_view: "切换 PDF 视图：" }[p.action];
 				const reversible = p.action === "move";
-				return command({ op: "canvas", ...p, lecture_id, base_hash: d.base_hash ?? "" }, `${action}「${target.title}」`,
+				return command({ op: "canvas", ...p, lecture_id, base_hash: d.base_hash ?? "" }, `${action}「${target.header_title || target.title}」`,
 					reversible ? [] : ["聊天中无法撤销此项画布操作"],
 					reversible ? {undo: {type:"restore_card_position", lecture_id, card_id:p.card_id, x:target.x, y:target.y, expected:{x:p.x,y:p.y}}} : {forceConfirm:true});
 			},
