@@ -218,6 +218,12 @@ class StudyCanvasState extends State<StudyCanvas>
     StudyDockEdge.right,
     .34,
   );
+  StudyCard? _textCard;
+  final _textInput = TextEditingController();
+  final _textFocus = FocusNode();
+  String _textBase = '';
+  int _textOpenRequest = 0;
+  bool _newText = false, _textSaving = false;
   String? _editingPassage, _passageEditCheckpoint;
   bool _dockSmall = false;
   final _penItemKeys = <int, GlobalKey>{};
@@ -530,6 +536,7 @@ class StudyCanvasState extends State<StudyCanvas>
   }
 
   bool get _editingCanvas =>
+      _textCard != null ||
       _transformSession != null ||
       _lessonBusy ||
       _importing ||
@@ -553,7 +560,7 @@ class StudyCanvasState extends State<StudyCanvas>
       final draft = prefs.getString(widget.draftKey);
       if (!mounted) return;
       if (replacingSeed != null) {
-        if (document?.edit != replacingSeed || _pointers.isNotEmpty) return;
+        if (document?.edit != replacingSeed || _pointers.isNotEmpty || _textCard != null) return;
       } else if (synced != null && _editingCanvas) {
         return;
       }
@@ -655,6 +662,15 @@ class StudyCanvasState extends State<StudyCanvas>
 
   void _changed() {
     if (_disposed) return;
+    // Undo and canvas operations may replace card instances while preserving IDs.
+    final editing = _textCard;
+    if (editing != null && !_newText) {
+      _textCard = _liveTextCard(document!, editing) ?? editing;
+    }
+    final focused = _focusedMaterial;
+    if (focused != null && focused.markdownReader) {
+      _focusedMaterial = _liveTextCard(document!, focused);
+    }
     if (_selectionReady) {
       final strokes = document!.strokes.map((s) => s.id).toSet();
       final cards = document!.cards.map((c) => c.id).toSet();
@@ -677,11 +693,12 @@ class StudyCanvasState extends State<StudyCanvas>
     if (_drawingPointer != null || _erasing || _dragCard != null) {
       _saveTimer = Timer(const Duration(seconds: 1), _saveWhenIdle);
     } else {
-      unawaited(flush());
+      unawaited(flush(commitEditor: false));
     }
   }
 
-  Future<bool> flush() async {
+  Future<bool> flush({bool commitEditor = true}) async {
+    if (commitEditor && !await _saveText()) return false;
     if (_transformSession != null) return false;
     _saveTimer?.cancel();
     for (final key in _pdfBodies.values.toList()) {
@@ -888,6 +905,8 @@ class StudyCanvasState extends State<StudyCanvas>
     _camera.dispose();
     _cursor.dispose();
     _threadTick.dispose();
+    _textInput.dispose();
+    _textFocus.dispose();
     _composerFocus.dispose();
     _idleInput.dispose();
     _quickInput.dispose();
@@ -948,7 +967,7 @@ class StudyCanvasState extends State<StudyCanvas>
     _saveTimer = Timer(const Duration(milliseconds: 700), () {
       if (!mounted) return;
       setState(() {}); // Re-cull only after the gesture settles.
-      unawaited(flush());
+      unawaited(flush(commitEditor: false));
     });
   }
 
@@ -1039,6 +1058,7 @@ class StudyCanvasState extends State<StudyCanvas>
               c.containsWorld(point),
         )
         .lastOrNull;
+    if (_textCard?.containsWorld(point) == true) return;
     final actions = card == null
         ? null
         : _cardHeaderActions[card.id]?.currentContext?.findRenderObject()
@@ -1815,94 +1835,180 @@ class StudyCanvasState extends State<StudyCanvas>
     }
   }
 
+  StudyCard? _liveTextCard(StudyDocument doc, StudyCard card) =>
+      doc.cards.where((c) => c.id == card.id && c.type == card.type &&
+          c.documentId == card.documentId && c.generation == card.generation).firstOrNull;
+
+  Future<Map> _readEditableNote(StudyCard card) async {
+    final current = await widget.api.get('/api/notes/${Uri.encodeComponent(card.documentId)}') as Map;
+    final scope = card.lessonNote ? widget._player?.lectureId : widget._player?.course?.id;
+    if (scope == null || current[card.lessonNote ? 'lecture_id' : 'course_id'] != scope) {
+      throw StateError(l10n.studyEvidenceMissing);
+    }
+    return current;
+  }
+
   Future<void> _text([StudyCard? card, TextRange? passage]) async {
-    final original = card?.text;
-    final input = TextEditingController(text: original ?? '');
-    if (passage != null &&
-        passage.isValid &&
-        passage.end <= input.text.length) {
-      input.selection = TextSelection(
-        baseOffset: passage.start,
-        extentOffset: passage.end,
-      );
+    if (_textSaving) return;
+    final request = ++_textOpenRequest;
+    if (card != null && _textCard?.id == card.id) {
+      _textFocus.requestFocus();
+      return;
     }
-    final text = await showDialog<String>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: Text(card == null ? l10n.studyAddText : l10n.studyEditText),
-        content: SizedBox(
-          width: 500,
-          child: TextField(
-            controller: input,
-            autofocus: true,
-            minLines: 5,
-            maxLines: 15,
-            maxLength: card?.markdownReader == true ? 800000 : 200000,
-            decoration: InputDecoration(hintText: l10n.studyTextHint),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(c, input.text),
-            child: Text(l10n.commonSave),
-          ),
-        ],
-      ),
-    );
-    // Dialog animations can retain the input after the route result completes.
-    Future.delayed(const Duration(milliseconds: 400), input.dispose);
-    if (!mounted || text == null) return;
+    if (_textCard != null && !await _saveText()) return;
+    if (!mounted || request != _textOpenRequest) return;
     final d = document!;
-    if (card != null && (!d.cards.contains(card) || card.text != original)) {
-      _toast(l10n.studySelectionChanged);
-      return;
-    }
-    if (utf8.encode(text).length > 800000) {
-      _toast(l10n.studyFileTooLarge);
-      return;
+    if (card != null) {
+      final shown = card.text;
+      if (card.linkedNote || card.lessonNote) {
+        try {
+          final note = await _readEditableNote(card);
+          if (!mounted || document != d || request != _textOpenRequest) return;
+          card = _liveTextCard(d, card);
+          if (card == null) return;
+          final body = note['body'] as String? ?? '';
+          if (body != shown) passage = null;
+          if (card.text != body) {
+            _rebaseMarkdownNotes(card, body);
+            card.text = body;
+            d.changed();
+          }
+        } catch (e) {
+          if (mounted && request == _textOpenRequest) _toast('$e');
+          return;
+        }
+      } else {
+        card = _liveTextCard(d, card);
+        if (card == null) return;
+      }
     }
     if (!d.editable(card?.layer ?? d.activeLayer)) {
       _toast(l10n.studyLocked);
       return;
     }
-    if (card?.lessonNote == true || card?.linkedNote == true) {
+    final center = _world(_viewport.center(Offset.zero));
+    final target = card ?? StudyCard(
+      id: studyId(), type: 'text', layer: d.activeLayer,
+      rect: Rect.fromCenter(center: center, width: 480, height: 360),
+      title: l10n.studyTextCard, text: '',
+    );
+    if (target != _textCard) {
+      _textBase = target.text;
+      _textInput.value = TextEditingValue(
+        text: target.text,
+        selection: TextSelection.collapsed(offset: target.markdownReader ? 0 : target.text.length),
+      );
+    }
+    if (passage != null && passage.isValid && passage.end <= _textInput.text.length) {
+      _textInput.selection = TextSelection(baseOffset: passage.start, extentOffset: passage.end);
+    }
+    _clearSelection();
+    _update(() {
+      _textCard = target;
+      _newText = card == null;
+      _tool = StudyTool.select;
+      if (target.collapsed) _setCardCollapsed(target, false);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _textCard == target) _textFocus.requestFocus();
+    });
+  }
+
+  void _endText() {
+    _textFocus.unfocus();
+    _update(() {
+      _textCard = null;
+      _newText = false;
+    });
+  }
+
+  Future<bool> _saveText() async {
+    final editing = _textCard;
+    if (editing == null) return true;
+    if (_textSaving) return false;
+    final d = document!;
+    final text = _textInput.text;
+    if (text == _textBase) {
+      _endText();
+      return true;
+    }
+    var card = _newText ? editing : _liveTextCard(d, editing);
+    if (card == null) {
+      _toast(l10n.studyEvidenceMissing);
+      return false;
+    }
+    if (!card.linkedNote && !card.lessonNote && card.text != _textBase) {
+      _toast('这张卡片的正文已更新，当前输入已保留');
+      return false;
+    }
+    if (!d.editable(card.layer)) {
+      _toast(l10n.studyLocked);
+      return false;
+    }
+    if (utf8.encode(text).length > 800000) {
+      _toast(l10n.studyFileTooLarge);
+      return false;
+    }
+    if (card.lessonNote || card.linkedNote) {
+      _update(() => _textSaving = true);
       try {
-        final path = '/api/notes/${Uri.encodeComponent(card!.documentId)}';
-        final current = await widget.api.get(path) as Map;
-        final scoped = card.lessonNote
-            ? current['lecture_id'] == widget.ctl.lectureId
-            : current['course_id'] == widget.ctl.course?.id;
-        if (!scoped || (current['body'] ?? '') != original) throw StateError(l10n.studySelectionChanged);
-        await widget.api.put('/api/notes', {...current.cast<String,dynamic>(),'body':text,'base_body':original});
-      } catch (e) { if (mounted) _toast('$e'); return; }
-      if (!mounted || document != d || !d.cards.contains(card)) return;
+        final current = await _readEditableNote(card);
+        if (!mounted || document != d || _liveTextCard(d, card) == null) return false;
+        if ((current['body'] ?? '') != _textBase) {
+          _toast('讲义原文已更新，当前输入已保留。可复制草稿后重新编辑。');
+          return false;
+        }
+        await widget.api.put('/api/notes', {
+          ...current.cast<String, dynamic>(), 'body': text, 'base_body': _textBase,
+        });
+      } catch (e) {
+        if (mounted) _toast('$e');
+        return false;
+      } finally {
+        if (mounted) _update(() => _textSaving = false);
+      }
+      if (!mounted || document != d) return false;
+      card = _liveTextCard(d, card);
+      if (card == null) return false;
     } else {
       d.checkpoint();
     }
-    if (card != null) {
-      _rebaseMarkdownNotes(card, text);
-      card.text = text;
-    } else {
-      final p = _world(_viewport.center(Offset.zero));
-      final c = StudyCard(
-        id: studyId(),
-        type: 'text',
-        layer: d.activeLayer,
-        rect: Rect.fromLTWH(p.dx - 100, p.dy - 100, 480, 360),
-        title: l10n.studyTextCard,
-        text: text,
-      );
-      d.cards.add(c);
-      _selection
-        ..clear()
-        ..add(c.id);
-    }
+    _rebaseMarkdownNotes(card, text);
+    card.text = text;
+    if (_newText) d.cards.add(card);
+    _endText();
     d.changed();
+    return true;
   }
+
+  Widget _textEditor(StudyCard card) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.keyS, meta: true): () => unawaited(_saveText()),
+      const SingleActivator(LogicalKeyboardKey.keyS, control: true): () => unawaited(_saveText()),
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (!_textSaving && _textInput.value.composing.isCollapsed) _endText();
+      },
+    },
+    child: Column(children: [
+      Expanded(child: TextField(
+        key: const ValueKey('study-inline-text'),
+        controller: _textInput, focusNode: _textFocus, autofocus: true,
+        readOnly: _textSaving, maxLines: null, minLines: null, expands: true,
+        textAlignVertical: TextAlignVertical.top,
+        maxLength: card.markdownReader ? 800000 : 200000,
+        decoration: InputDecoration(
+          border: InputBorder.none, counterText: '',
+          contentPadding: const EdgeInsets.all(12), hintText: l10n.studyTextHint,
+        ),
+      )),
+      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+        IconButton(tooltip: l10n.commonCancel, icon: const Icon(Icons.close, size: 18),
+          onPressed: _textSaving ? null : _endText),
+        IconButton(tooltip: l10n.commonSave, icon: const Icon(Icons.check, size: 18),
+          onPressed: _textSaving ? null : _saveText),
+      ]),
+    ]),
+  );
 
   Future<void> _ask() async {
     if (_selectionReady &&
@@ -2319,7 +2425,7 @@ class StudyCanvasState extends State<StudyCanvas>
                                         ),
                                       ),
                                     ),
-                                    for (final c in d.cards.where(
+                                    for (final c in [...d.cards, if (_newText) _textCard!].where(
                                       (a) =>
                                           a.onCanvas &&
                                           d.visible(a.layer) &&
@@ -3134,6 +3240,7 @@ class StudyCanvasState extends State<StudyCanvas>
                         _tool == StudyTool.region ||
                         (_tool == StudyTool.pan && c.readingSurface),
                     child: switch (c.type) {
+                      _ when _textCard == c && _focusedMaterial != c => _textEditor(c),
                       'pdfdoc' => _cardMaterial(c),
                       'conversation' when c.passageAside => _ConversationBody(
                         key: _conversationKeys.putIfAbsent(c.id, () => GlobalKey<_ConversationBodyState>()),

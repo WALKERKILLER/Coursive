@@ -129,21 +129,21 @@ extension _StudyMarkdownEditing on StudyCanvasState {
   }
 
   void _openMarkdownReference(CoursiveRef ref) {
-    final lectureId = widget.standalone ? '' : widget.ctl.lectureId;
-    if (_focusedMaterial != null || widget.standalone) {
-      openRef(
-        context, ref, lectureId: lectureId,
-        onSeek: (time) => _playReadingReference(
-          time.lectureId.isEmpty ? lectureId : time.lectureId,
-          time.seconds * 1000,
-        ),
-        onPlay: _playReadingReference,
-      );
+    final lectureId = widget._player?.lectureId ?? '';
+    if (_focusedMaterial == null && _followCanvasReference(ref, lectureId)) {
       return;
     }
-    openRef(context, ref, lectureId: lectureId,
-      onSeek: (time) => _playReadingReference(time.lectureId.isEmpty ? lectureId : time.lectureId, time.seconds * 1000),
-      onPlay: _playReadingReference,
+    openRef(
+      context,
+      ref,
+      lectureId: lectureId,
+      onSeek: (time) => _playReadingReference(
+        time.lectureId.isEmpty ? lectureId : time.lectureId,
+        time.startMs ?? time.seconds * 1000,
+      ),
+      onPlay: (id, ms) {
+        if (!_showCanvasRecording(id, ms)) unawaited(_playReadingReference(id, ms));
+      },
     );
   }
 

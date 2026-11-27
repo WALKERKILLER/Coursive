@@ -302,7 +302,7 @@ extension _StudyEvidence on StudyCanvasState {
     if (evidence['teaching_ref'] case final String link) {
       final ref = CoursiveRef.parse(link);
       if (ref is TimeRef || ref is SlideRef || ref is CoursewareRef) {
-        openRef(context, ref!, lectureId: widget.ctl.lectureId, onPlay: _playReadingReference);
+        _openMarkdownReference(ref!);
       }
       return;
     }
@@ -530,8 +530,7 @@ extension _StudyEvidence on StudyCanvasState {
     final video = d.cards.where((c) => c.id == mark.video).firstOrNull;
     if (video != null) {
       if (video.type == 'lecture') {
-        final player = widget.ctl.player;
-        if (!player.state.playing &&
+        if (!widget.ctl.playing &&
             (widget.ctl.position.value.inMilliseconds - mark.videoAt).abs() <=
                 1500) {
           widget.ctl.seekTo(mark.videoBefore);

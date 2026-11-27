@@ -8,12 +8,14 @@ extension StudyAssistant on StudyCanvasState {
               (c) => c.linkedNote && (noteId == null || c.documentId == noteId),
             )
             .toList()) {
+      final priorText = card.text;
       try {
         final n = await widget.api.get(
           '/api/notes/${Uri.encodeComponent(card.documentId)}',
         ) as Map;
         if (!mounted || document != d || !d.cards.contains(card)) return;
-        if (n['course_id'] != widget.ctl.course?.id) continue;
+        if (n['course_id'] != widget.ctl.course?.id || card.text != priorText ||
+            _textCard?.id == card.id) continue;
         final text = n['body'] as String? ?? '';
         final title = n['title'] as String? ?? card.title;
         if (card.text == text && card.title == title) continue;

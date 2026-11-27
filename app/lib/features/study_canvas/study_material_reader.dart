@@ -38,6 +38,12 @@ extension _StudyMaterialReader on StudyCanvasState {
     if (card.type == 'lecture' && widget.buildLectureReader != null) {
       return widget.buildLectureReader!(_closeMaterialReader);
     }
+    if (card == _textCard && card.markdownReader) {
+      return Scaffold(
+        appBar: AppBar(automaticallyImplyLeading: false, title: Text(_cardHeader(card))),
+        body: _textEditor(card),
+      );
+    }
     if (card.markdownReader) {
       final lessonActive =
           card.lessonNote && _lessonState['noteId'] == card.documentId;

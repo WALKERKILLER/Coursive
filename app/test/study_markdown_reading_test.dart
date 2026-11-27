@@ -72,6 +72,26 @@ class _AsideApi extends fixture.FixtureApi {
   };
 }
 
+class _LinkedHandoutApi extends fixture.FixtureApi {
+  _LinkedHandoutApi(super.doc, this.body);
+  String body;
+
+  @override
+  Future<dynamic> get(String path, [Map<String, String>? query]) async {
+    if (path != '/api/notes/handout') return super.get(path, query);
+    return {'body': body, 'course_id': 'test-course', 'id': 'handout'};
+  }
+
+  @override
+  Future<dynamic> put(String path, Object value) async {
+    final update = value as Map;
+    expect(path, '/api/notes');
+    expect(update['base_body'], body);
+    body = update['body'] as String;
+    return {...update};
+  }
+}
+
 Finder annotationInput() => find.descendant(
   of: find.byType(TextFormField),
   matching: find.byType(TextField),
@@ -81,6 +101,82 @@ void main() {
     expect(imported('assets/source.md').readerCard, isTrue);
     expect(StudyCard.fromJson(imported().json()).markdownReader, isTrue);
     expect(imported('assets/source.txt').markdownReader, isFalse);
+  });
+
+  testWidgets('new text edits inline and cancels without an empty card', (t) async {
+    final api = _AsideApi(sheet().json());
+    final key = await fixture.open(t, api);
+    final doc = key.currentState!.document!;
+    final initialCount = doc.cards.length;
+    final field = find.byKey(const ValueKey('study-inline-text'));
+    final insert = find.byTooltip('插入文字笔记');
+    await t.tap(insert);
+    await t.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(t.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    await t.enterText(field, '取消这份草稿');
+    await t.tap(find.byTooltip('取消'));
+    await t.pumpAndSettle();
+    expect(doc.cards.length, initialCount);
+    await t.tap(insert);
+    await t.pumpAndSettle();
+    await t.enterText(field, '课堂笔记\n保存第二行');
+    await t.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await t.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await t.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await t.pumpAndSettle();
+    expect(field, findsNothing);
+    expect(doc.cards.length, initialCount + 1);
+    expect(doc.cards.last.text, '课堂笔记\n保存第二行');
+    expect(await key.currentState!.flush(), isTrue);
+    expect(StudyDocument.fromJson(api.doc).cards.last.text, doc.cards.last.text);
+    await close(t);
+  });
+
+  testWidgets('a linked handout can be edited twice across a canvas refresh', (t) async {
+    final source = imported()..generation = 'linked-note'..documentId = 'handout';
+    final api = _LinkedHandoutApi((sheet()..cards.add(source)).json(), source.text);
+    final key = await fixture.open(t, api);
+    final doc = key.currentState!.document!;
+    final editor = find.byKey(const ValueKey('study-inline-text'));
+    Future<void> edit() async {
+      final frame = find.byKey(const ValueKey('study-card/md'));
+      await t.tap(find.descendant(of: frame, matching: find.byTooltip('更多')));
+      await t.pumpAndSettle();
+      await t.tap(find.text('编辑 Markdown'));
+      await t.pumpAndSettle();
+    }
+    await edit();
+    final first = '${source.text}第一次编辑';
+    await t.enterText(editor, first);
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, first);
+    await edit();
+    expect(t.widget<TextField>(editor).controller!.text, first);
+    final second = '${first}再写几个字';
+    await t.enterText(editor, second);
+    // Undoing an unrelated layout change restores new instances of the same cards.
+    doc.checkpoint();
+    doc.undo();
+    await t.pumpAndSettle();
+    expect(editor, findsOneWidget);
+    expect(t.widget<TextField>(editor).controller!.text, second);
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, second);
+    await edit();
+    await t.enterText(editor, '我的草稿');
+    api.body = '外部修改';
+    await t.tap(find.byTooltip('保存'));
+    await t.pumpAndSettle();
+    expect(api.body, '外部修改');
+    expect(t.widget<TextField>(editor).controller!.text, '我的草稿');
+    await t.tap(find.byTooltip('取消'));
+    await t.pumpAndSettle();
+    await edit();
+    expect(t.widget<TextField>(editor).controller!.text, '外部修改');
+    await close(t);
   });
 
   testWidgets('each new aside answer opens at its own first paragraph', (
@@ -242,14 +338,13 @@ void main() {
     await selectWord(t, 12, 19);
     await t.tap(find.text('编辑 Markdown'));
     await t.pumpAndSettle();
-    final editor = find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.byType(TextField),
-    );
+    expect(find.byType(AlertDialog), findsNothing);
+    final editor = find.byKey(const ValueKey('study-inline-text'));
+    expect(t.widget<TextField>(editor).focusNode!.hasFocus, isTrue);
     final control = t.widget<TextField>(editor).controller!;
     expect(control.selection.textInside(control.text), 'process');
     await t.enterText(editor, '# 新标题\n\n$raw');
-    await t.tap(find.text('保存').last);
+    await t.tap(find.byTooltip('保存').last);
     await t.pumpAndSettle();
     expect(d.cards.first.text, startsWith('# 新标题'));
     expect(

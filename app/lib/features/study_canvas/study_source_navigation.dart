@@ -13,6 +13,66 @@ extension _StudySourceNavigation on StudyCanvasState {
     'anchor': anchor.json(),
   });
 
+  bool _showCanvasRecording(String lecture, int? time) {
+    final d = document!;
+    if (lecture.isEmpty) return false;
+    final available = d.cards.where(
+      (card) => card.onCanvas && d.visible(card.layer),
+    );
+    final isCurrent = lecture == widget._player?.lectureId;
+    final card = (isCurrent
+        ? available.where((card) => card.type == 'lecture').firstOrNull
+        : null) ??
+        available.where(
+          (card) => card.type == 'video' && card.sourceLectureId == lecture,
+        ).firstOrNull;
+    if (card == null) return false;
+    _showCanvasReference(card, time: time);
+    return true;
+  }
+
+  bool _followCanvasReference(CoursiveRef ref, String lecture) {
+    if (ref is TimeRef && ref.quote == null) {
+      return _showCanvasRecording(
+        ref.lectureId.isEmpty ? lecture : ref.lectureId,
+        ref.startMs ?? ref.seconds * 1000,
+      );
+    }
+    if (ref is LectureRef) return _showCanvasRecording(ref.lectureId, null);
+    final d = document!;
+    final card = d.cards.where((card) {
+      if (!card.onCanvas || !d.visible(card.layer)) return false;
+      return switch (ref) {
+        CanvasRef() => ref.lectureId == lecture && ref.cardId == card.id,
+        NoteRef() => card.markdownReader && ref.noteId == card.documentId,
+        FileRef() => ref.path == card.originalPath || ref.path == card.path,
+        _ => false,
+      };
+    }).firstOrNull;
+    if (card == null) return false;
+    _showCanvasReference(card);
+    return true;
+  }
+
+  void _showCanvasReference(StudyCard card, {int? time}) {
+    if (_focusedMaterial != null) {
+      _update(() {
+        _focusedMaterial = null;
+        _returnToMaterial = null;
+      });
+    }
+    if (card.collapsed && document!.editable(card.layer)) {
+      _setCardCollapsed(card, false);
+      document!.changed();
+    }
+    unawaited(_focusSource(StudyAnchor(
+      id: studyId(),
+      objectId: card.id,
+      kind: time == null ? 'source' : 'video',
+      timeStartMs: time ?? 0,
+    )));
+  }
+
   /// A course passage is re-read by the daemon first; a second click while
   /// that runs joins it instead of importing the material twice.
   Future<void> _followCourseEvidence(Map evidence) {
@@ -48,7 +108,10 @@ extension _StudySourceNavigation on StudyCanvasState {
       final exactPDF = source['kind'] == 'pdf' && page > 0;
       final video = source['video_path'] != null;
       if (video && (source['time_end_ms'] as num? ?? 0) > (source['time_start_ms'] as num? ?? 0)) {
-        await _playReadingReference(lecture, (source['time_start_ms'] as num? ?? 0).toInt());
+        final time = (source['time_start_ms'] as num? ?? 0).toInt();
+        if (!_showCanvasRecording(lecture, time)) {
+          await _playReadingReference(lecture, time);
+        }
         return;
       }
       final excerpt = !video && !exactPDF;

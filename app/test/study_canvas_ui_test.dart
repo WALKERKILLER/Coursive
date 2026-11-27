@@ -207,6 +207,15 @@ class FixturePlayer implements LecturePlayer {
   @override
   Source? source;
   int? requestedPlayback;
+  int? seekedMs;
+  @override
+  bool get playing => false;
+  @override
+  void seekTo(int ms) {
+    seekedMs = ms;
+    position.value = Duration(milliseconds: ms);
+  }
+
   bool pausedAfterCitation = false;
   @override
   Future<void> playFrom(int ms, {int? ticket}) async {
@@ -398,6 +407,33 @@ void main() {
       expect(find.text('同节录像'), findsOneWidget);
     });
   }
+
+  testWidgets('a canvas recording link pans to the recording and seeks in place', (t) async {
+    final player = FixturePlayer();
+    final doc = StudyDocument()..cards.clear()..cards.addAll([
+      StudyCard(id: 'lecture', type: 'lecture', layer: 'main',
+        rect: const Rect.fromLTWH(1900, 120, 450, 280), title: '课程录像'),
+      StudyCard(id: 'handout', type: 'text', layer: 'main',
+        rect: const Rect.fromLTWH(600, 120, 550, 420),
+        title: '讲义.md', source: 'study-assets/fixture/source.md',
+        text: '[课堂录像](coursive://lecture/fixture?t=83)'),
+    ]);
+    final key = await open(t, FixtureApi(doc.json()), player: player);
+    final canvas = key.currentState!;
+    final before = canvas.document!.camera;
+    await t.tap(find.byType(TimestampChip));
+    await t.pumpAndSettle();
+    expect(player.seekedMs, 83000);
+    expect(player.pausedAfterCitation, isTrue);
+    expect(player.requestedPlayback, isNull);
+    expect(canvas.document!.camera.dx, lessThan(before.dx));
+    expect(find.byType(AppBar), findsNothing);
+    final frame = find.byKey(const ValueKey('study-card/lecture'));
+    expect(t.getCenter(frame).dx, inInclusiveRange(0, 1600));
+    expect(canvas.returnFromSource(), isTrue);
+    await t.pumpAndSettle();
+    expect(canvas.document!.camera, before);
+  });
 
   testWidgets('A recording citation returns to the expanded handout', (t) async {
     final player = FixturePlayer()
